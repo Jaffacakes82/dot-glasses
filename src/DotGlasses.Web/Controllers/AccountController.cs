@@ -8,8 +8,8 @@ namespace DotGlasses.Web.Controllers;
 
 /// <summary>
 /// Basic login page for the Admin Portal's cookie-authenticated MVC session. [OPEN]: no
-/// registration/self-service flow yet — admin users are provisioned via the role/claim seeding
-/// placeholder (see HostedServices/RoleAndDevUserSeeder.cs) pending the CEO conversation on the
+/// registration/self-service flow yet — admin users are provisioned via the dev user seeding
+/// placeholder (see HostedServices/DevUserSeeder.cs) pending the CEO conversation on the
 /// real permission matrix.
 /// </summary>
 public class AccountController(SignInManager<ApplicationUser> signInManager) : Controller

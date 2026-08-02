@@ -15,6 +15,10 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <!-- Design-time only: lets DesignTimeDbContextFactory read DotGlasses.Web's appsettings
+         instead of hardcoding a connection string. Not used by the app at runtime. -->
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.0" />
   </ItemGroup>
 
   <PropertyGroup>

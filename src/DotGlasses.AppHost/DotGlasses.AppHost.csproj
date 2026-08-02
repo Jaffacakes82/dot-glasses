@@ -5,7 +5,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.4.6" />
+    <!-- AddAzurePostgresFlexibleServer(...).RunAsContainer(...) replaces the plain
+         Aspire.Hosting.PostgreSQL AddPostgres() call: same local-dev container experience, but
+         now also generates Azure Database for PostgreSQL Flexible Server Bicep at publish time. -->
+    <PackageReference Include="Aspire.Hosting.Azure.PostgreSQL" Version="13.4.6" />
+    <!-- Explicit Azure Container Apps environment — required since Aspire 9.4 dropped the
+         "hybrid" mode where azd silently created/owned this environment. -->
+    <PackageReference Include="Aspire.Hosting.Azure.AppContainers" Version="13.4.6" />
   </ItemGroup>
 
   <PropertyGroup>

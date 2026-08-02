@@ -50,7 +50,7 @@ builder.Services
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 builder.Services.Configure<DevSeedOptions>(builder.Configuration.GetSection(DevSeedOptions.SectionName));
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
-builder.Services.AddHostedService<RoleAndDevUserSeeder>();
+builder.Services.AddHostedService<DevUserSeeder>();
 
 builder.Services.AddAuthentication()
     .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, _ => { });

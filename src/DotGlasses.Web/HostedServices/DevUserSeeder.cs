@@ -6,26 +6,21 @@ using Microsoft.Extensions.Options;
 namespace DotGlasses.Web.HostedServices;
 
 /// <summary>
-/// [OPEN] placeholder: seeds the three agreed role names and one dev admin user so the
-/// pipeline is exercisable end-to-end. Real seeding (who gets provisioned, at which org node,
-/// by whom) is pending the CEO conversation — do not treat DevSeedOptions as production
-/// account provisioning.
+/// [OPEN] placeholder: creates one dev admin user so the pipeline is exercisable end-to-end.
+/// The three agreed role names are seeded via migration now (see
+/// Persistence/Configurations/RoleSeedConfiguration.cs), not here — roles are non-secret
+/// reference data that needs to exist in every environment, whereas this dev admin account is
+/// gated behind DevSeedOptions being configured (never set in production) and its password is
+/// only ever a local-dev convenience. Real seeding (who gets provisioned, at which org node, by
+/// whom) is pending the CEO conversation — do not treat DevSeedOptions as production account
+/// provisioning.
 /// </summary>
-public class RoleAndDevUserSeeder(IServiceScopeFactory scopeFactory, IOptions<DevSeedOptions> devSeedOptions) : IHostedService
+public class DevUserSeeder(IServiceScopeFactory scopeFactory, IOptions<DevSeedOptions> devSeedOptions) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         using var scope = scopeFactory.CreateScope();
-        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-
-        foreach (var roleName in RoleNames.All)
-        {
-            if (!await roleManager.RoleExistsAsync(roleName))
-            {
-                await roleManager.CreateAsync(new IdentityRole<Guid>(roleName));
-            }
-        }
 
         var seed = devSeedOptions.Value;
         if (string.IsNullOrEmpty(seed.AdminUserName) || string.IsNullOrEmpty(seed.AdminPassword))

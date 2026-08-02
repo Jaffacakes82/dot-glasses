@@ -46,6 +46,16 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             }
 
             services.AddDbContext<DotGlassesDbContext>(options => options.UseInMemoryDatabase(DatabaseName));
+
+            // InMemory has no migrations, so it never applies the AspNetRoles HasData seed
+            // (RoleSeedConfiguration) the way a real Postgres migration would. Program.cs's
+            // DevUserSeeder hosted service assigns the dev admin user to the Admin role and
+            // starts before any hook we could register here would run, so the roles need to
+            // exist before the host starts — EnsureCreated() is InMemory's equivalent of
+            // "apply schema + seed data", done eagerly against a scoped snapshot of the
+            // services built so far rather than waiting for the full host.
+            using var seedScope = services.BuildServiceProvider().CreateScope();
+            seedScope.ServiceProvider.GetRequiredService<DotGlassesDbContext>().Database.EnsureCreated();
         });
     }
 }
