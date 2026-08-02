@@ -1,0 +1,23 @@
+@model DotGlasses.Web.Models.OrgNode
+@{
+    var depth = ViewData["Depth"] as int? ?? 0;
+    var selectedId = ViewData["SelectedId"] as string;
+    var isSelected = Model.Id == selectedId;
+}
+<div style="padding: 8px 12px; padding-left: @(12 + depth * 24)px; border-radius: var(--radius-sm); @(isSelected ? "background:rgba(249,103,21,0.12);" : "") display:flex; align-items:center; gap:8px;">
+    @if (Model.Children.Count > 0)
+    {
+        <span style="font-size:11px; color:var(--text-muted);">&#9662;</span>
+    }
+    else
+    {
+        <span style="width:11px;"></span>
+    }
+    <span style="width:8px; height:8px; border-radius:50%; background:@DotGlasses.Web.Models.OrgNode.TypeColor[Model.Type]; flex:0 0 8px;"></span>
+    <span style="font-weight:600;">@Model.Name</span>
+    <span class="dg-stat-label" style="margin-left:auto;">@Model.Type</span>
+</div>
+@foreach (var child in Model.Children)
+{
+    @await Html.PartialAsync("_OrgTreeNode", child, new ViewDataDictionary(ViewData) { ["Depth"] = depth + 1 })
+}

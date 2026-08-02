@@ -1,0 +1,99 @@
+@model DotGlasses.Web.Models.EventHistoryViewModel
+@{
+    ViewData["Title"] = "Event History";
+
+    string PillClass(string tab) => tab == Model.ActiveTab ? "dg-btn dg-btn-primary" : "dg-btn dg-btn-ghost";
+}
+
+@await Html.PartialAsync("_PageHeader", new DotGlasses.Web.Models.PageHeaderViewModel
+{
+    Crumb = "Detail",
+    Title = "Event History",
+})
+
+<div style="display:flex; gap:var(--space-2); margin-bottom:var(--space-5);">
+    <a class="@PillClass("sales")" style="padding:8px 20px; font-size:13px;" asp-action="Index" asp-route-tab="sales">Sales</a>
+    <a class="@PillClass("tests")" style="padding:8px 20px; font-size:13px;" asp-action="Index" asp-route-tab="tests">Tests</a>
+    <a class="@PillClass("leads")" style="padding:8px 20px; font-size:13px;" asp-action="Index" asp-route-tab="leads">Leads</a>
+    <a class="@PillClass("referrals")" style="padding:8px 20px; font-size:13px;" asp-action="Index" asp-route-tab="referrals">Referrals</a>
+</div>
+
+<div class="dg-card">
+    @if (Model.ActiveTab is "sales" or "tests")
+    {
+        var rows = Model.Events.Where(e => e.Type.Equals(Model.ActiveTab.TrimEnd('s'), StringComparison.OrdinalIgnoreCase)).ToList();
+        @if (rows.Count == 0)
+        {
+            <div class="dg-empty-state"><div class="dg-ring"></div><p>No events for the current filters.</p></div>
+        }
+        else
+        {
+            <table class="dg-table">
+                <thead><tr><th>Type</th><th>Name</th><th>Outlet</th><th>Country</th><th>Time</th></tr></thead>
+                <tbody>
+                @foreach (var row in rows)
+                {
+                    <tr>
+                        <td><span class="dg-badge" style="background:@(row.Type == "Sale" ? "var(--dot-green)" : "var(--dot-blue)");">@row.Type@(row.Custom ? " · Custom" : "")</span></td>
+                        <td>@row.Name</td>
+                        <td class="dg-muted">@row.Outlet</td>
+                        <td class="dg-muted">@row.Country</td>
+                        <td class="dg-muted">@row.Time</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    }
+    else if (Model.ActiveTab == "leads")
+    {
+        <input class="form-control" style="max-width:280px; margin-bottom:var(--space-4);" placeholder="Search by name" />
+        @if (Model.Leads.Count == 0)
+        {
+            <div class="dg-empty-state"><div class="dg-ring"></div><p>No leads logged yet.</p></div>
+        }
+        else
+        {
+            <table class="dg-table">
+                <thead><tr><th>Name</th><th>Phone</th><th>Outlet</th><th>Reason not purchased</th><th>Logged</th></tr></thead>
+                <tbody>
+                @foreach (var lead in Model.Leads)
+                {
+                    <tr>
+                        <td>@lead.Name</td>
+                        <td class="dg-muted">@lead.PhoneMasked</td>
+                        <td class="dg-muted">@lead.Outlet</td>
+                        <td class="dg-muted">@lead.Reason</td>
+                        <td class="dg-muted">@lead.Logged</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    }
+    else
+    {
+        <p style="color:var(--text-muted-2); margin-bottom:var(--space-4);">Tracked for government reporting requirements in several operating countries.</p>
+        @if (Model.Referrals.Count == 0)
+        {
+            <div class="dg-empty-state"><div class="dg-ring"></div><p>No referrals logged yet.</p></div>
+        }
+        else
+        {
+            <table class="dg-table">
+                <thead><tr><th>Outlet</th><th>Country</th><th>Reason</th><th>Time</th></tr></thead>
+                <tbody>
+                @foreach (var referral in Model.Referrals)
+                {
+                    <tr>
+                        <td>@referral.Outlet</td>
+                        <td class="dg-muted">@referral.Country</td>
+                        <td class="dg-muted">@referral.Reason</td>
+                        <td class="dg-muted">@referral.Time</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    }
+</div>

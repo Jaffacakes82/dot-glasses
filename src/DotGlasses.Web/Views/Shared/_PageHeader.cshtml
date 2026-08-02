@@ -1,0 +1,11 @@
+@model DotGlasses.Web.Models.PageHeaderViewModel
+<div class="dg-page-header">
+    <div>
+        <span class="dg-crumb">@Model.Crumb</span>
+        <h1 class="dg-page-title">@Model.Title</h1>
+    </div>
+    @if (!string.IsNullOrEmpty(Model.ActionText))
+    {
+        <a class="dg-btn dg-btn-primary" asp-controller="@Model.ActionController" asp-action="@Model.ActionAction">@Model.ActionText</a>
+    }
+</div>

@@ -1,47 +1,78 @@
-﻿<!DOCTYPE html>
+@using DotGlasses.Application.Common
+@inject ICurrentUserContext CurrentUser
+@{
+    var currentController = ViewContext.RouteData.Values["controller"]?.ToString();
+
+    bool IsActive(string controllerName) => string.Equals(currentController, controllerName, StringComparison.OrdinalIgnoreCase);
+
+    var initials = string.IsNullOrWhiteSpace(CurrentUser.UserName)
+        ? "?"
+        : string.Concat(CurrentUser.UserName.Split([' ', '.', '@'], StringSplitOptions.RemoveEmptyEntries)
+            .Take(2)
+            .Select(part => char.ToUpperInvariant(part[0])));
+
+    var roleLabel = CurrentUser.Roles.FirstOrDefault() ?? "—";
+}
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - DotGlasses.Web</title>
+    <title>@ViewData["Title"] - DOT Glasses Admin Portal</title>
     <script type="importmap"></script>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/dot-glasses.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/DotGlasses.Web.styles.css" asp-append-version="true" />
 </head>
 <body>
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container-fluid">
-                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">DotGlasses.Web</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Home</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
-                        </li>
-                    </ul>
+    @if (CurrentUser.IsAuthenticated)
+    {
+        <div class="dg-shell">
+            <aside class="dg-sidebar">
+                <a class="dg-sidebar-logo" asp-controller="Home" asp-action="Index">DOT Glasses</a>
+                <nav class="dg-nav">
+                    <a class="dg-nav-item @(IsActive("Home") ? "active" : "")" asp-controller="Home" asp-action="Index">
+                        <span class="dg-dot"></span> Dashboard
+                    </a>
+                    <a class="dg-nav-item @(IsActive("Organisations") ? "active" : "")" asp-controller="Organisations" asp-action="Index">
+                        <span class="dg-dot"></span> Organisations
+                    </a>
+                    <a class="dg-nav-item @(IsActive("EventHistory") ? "active" : "")" asp-controller="EventHistory" asp-action="Index">
+                        <span class="dg-dot"></span> Event History
+                    </a>
+                    <a class="dg-nav-item @(IsActive("UserDirectory") ? "active" : "")" asp-controller="UserDirectory" asp-action="Index">
+                        <span class="dg-dot"></span> User Directory
+                    </a>
+                    <a class="dg-nav-item @(IsActive("Catalogues") ? "active" : "")" asp-controller="Catalogues" asp-action="Index">
+                        <span class="dg-dot"></span> Preset Catalogues
+                    </a>
+                    <a class="dg-nav-item @(IsActive("CustomOrders") ? "active" : "")" asp-controller="CustomOrders" asp-action="Index">
+                        <span class="dg-dot"></span> Custom Orders
+                    </a>
+                    <a class="dg-nav-item @(IsActive("ReferenceData") ? "active" : "")" asp-controller="ReferenceData" asp-action="Index">
+                        <span class="dg-dot"></span> Reference Data
+                    </a>
+                </nav>
+                <div class="dg-user-chip">
+                    <div class="dg-avatar">@initials</div>
+                    <div>
+                        <div style="font-weight:600; font-size:13px;">@CurrentUser.UserName</div>
+                        <div style="font-size:11px; opacity:0.7; text-transform:uppercase;">@roleLabel</div>
+                    </div>
                 </div>
-            </div>
-        </nav>
-    </header>
-    <div class="container">
-        <main role="main" class="pb-3">
+            </aside>
+            <main class="dg-content" role="main">
+                @RenderBody()
+            </main>
+        </div>
+    }
+    else
+    {
+        <main role="main">
             @RenderBody()
         </main>
-    </div>
-
-    <footer class="border-top footer text-muted">
-        <div class="container">
-            &copy; 2026 - DotGlasses.Web - <a asp-area="" asp-controller="Home" asp-action="Privacy">Privacy</a>
-        </div>
-    </footer>
+    }
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>

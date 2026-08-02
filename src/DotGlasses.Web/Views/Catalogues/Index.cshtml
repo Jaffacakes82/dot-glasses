@@ -1,0 +1,50 @@
+@model IReadOnlyList<DotGlasses.Web.Models.Catalogue>
+@{
+    ViewData["Title"] = "Preset Catalogues";
+}
+
+<div class="dg-page-header">
+    <div>
+        <span class="dg-crumb">Configuration</span>
+        <h1 class="dg-page-title">Preset Catalogues</h1>
+    </div>
+    <button class="dg-btn dg-btn-primary" type="button">Create package</button>
+</div>
+
+<p class="dg-crumb" style="margin-bottom:var(--space-5);">Catalogue creation is restricted to DGI/Country-office level — retailers and outlets may only assign what's pushed to them.</p>
+
+<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-6);">
+    @foreach (var catalogue in Model)
+    {
+        <div class="dg-card">
+            <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin:0 0 var(--space-2);">@catalogue.Name</h3>
+            <p style="color:var(--text-muted-2); font-size:14px;">@catalogue.Description</p>
+            <p class="dg-crumb">Diopter range: @catalogue.DiopterRange</p>
+            <p class="dg-stat-label">Assigned to @catalogue.AssignedRetailers retailers</p>
+            <button class="dg-btn dg-btn-ghost" style="margin-top:var(--space-3);" type="button">Edit</button>
+        </div>
+    }
+</div>
+
+<div class="dg-card">
+    <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin-top:0;">Assign packages to a retailer</h3>
+    <div style="display:flex; gap:var(--space-3); flex-wrap:wrap; align-items:flex-end;">
+        <div style="flex:1; min-width:200px;">
+            <label class="dg-stat-label" style="display:block; margin-bottom:4px;">Retailer</label>
+            <select class="form-select">
+                @foreach (var catalogue in Model) { <option>@catalogue.Name</option> }
+            </select>
+        </div>
+        <div style="flex:1; min-width:200px;">
+            <label class="dg-stat-label" style="display:block; margin-bottom:4px;">Catalogues</label>
+            <select class="form-select" multiple size="2">
+                @foreach (var catalogue in Model) { <option>@catalogue.Name</option> }
+            </select>
+        </div>
+        <button class="dg-btn dg-btn-primary" type="button">Assign</button>
+    </div>
+    <p style="font-size:12px; color:var(--text-muted); margin: var(--space-3) 0 0;">
+        An outlet can hold more than one preset at once (e.g. during a stock transition). Keep
+        "Classical Optician" assigned wherever custom prescriptions are accepted.
+    </p>
+</div>

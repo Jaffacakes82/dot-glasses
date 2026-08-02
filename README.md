@@ -16,6 +16,12 @@ deliberately generic placeholder entity, `WidgetExample`, so the patterns are es
 before real entities are dropped in. See [CLAUDE.md](CLAUDE.md) for the behavioural rules this
 repo is built against.
 
+Both front ends now also have a full **UI skeleton** matching the design system handoff
+(colors/type/spacing tokens in each project's `wwwroot/css/dot-glasses.css`, component patterns
+described in `CLAUDE.md`): every screen from the design mockups is a real, navigable route, but
+populated with static placeholder data rather than a database — not wired to real domain
+entities for the same reason as above.
+
 ## Solution structure
 
 ```
@@ -38,8 +44,8 @@ DotGlasses.sln
     DotGlasses.Application.Tests    — xUnit
     DotGlasses.Infrastructure.Tests — xUnit, EF Core InMemory provider
     DotGlasses.Web.Tests             — xUnit, WebApplicationFactory
-  /infra                        — Bicep output from azd/Aspire (generated, not hand-authored;
-                                    doesn't exist yet — see "Deployment" below)
+  /infra                        — Bicep output from azd/Aspire (generated, not hand-authored —
+                                    regenerate with `azd infra gen --force`, don't hand-edit)
 ```
 
 Dependency direction: `Web`/`App` → `Application`/`Contracts`; `Application` → `Domain`;
@@ -117,8 +123,19 @@ to `POST /api/v1/client-logs` — you can watch them arrive in the Aspire dashbo
 
 ## Deployment
 
-Not yet wired up. `azd provision` (reading the `DotGlasses.AppHost` model) will generate
-`/infra` when the project is ready to deploy to Azure Container Apps — see
-[CLAUDE.md](CLAUDE.md) for what's still `[OPEN]` before that happens (production JWT signing
-key, Application Insights connection string, and confirming Azure Database for PostgreSQL
-Flexible Server as the target, among others).
+Two independent `azd` projects, deployed separately:
+
+- **Root (`azure.yaml`)** — `DotGlasses.Web` (Admin Portal + API) to Azure Container Apps and
+  Postgres to Azure Database for PostgreSQL Flexible Server, both generated from the
+  `DotGlasses.AppHost` model. `/infra` is generated output (`azd infra gen`), not
+  hand-maintained — regenerate it after AppHost changes rather than editing it directly. Run
+  `azd up` from the repo root.
+- **`src/DotGlasses.App/azure.yaml`** — the Field App PWA to Azure Static Web Apps, kept
+  separate because `azd` doesn't currently allow mixing an Aspire-generated service with a
+  hand-declared one in the same project, and no Aspire hosting integration for Static Web Apps
+  exists to fold it into the root project instead. Run `azd up` from `src/DotGlasses.App`.
+
+Neither has been provisioned against a real subscription yet — see [CLAUDE.md](CLAUDE.md) for
+what's still `[OPEN]` before that happens (production JWT signing key, Application Insights
+connection string, and the PWA's `ApiBaseUrl` needing to point at the deployed API origin once
+that's known, among others).

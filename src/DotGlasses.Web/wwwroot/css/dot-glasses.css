@@ -1,0 +1,393 @@
+/* DOT Glasses design tokens — ported from design/_ds/.../tokens/*.css (gitignored source,
+   reference-only). Keep in sync by hand with src/DotGlasses.App/wwwroot/css/dot-glasses.css;
+   there's no shared static-asset project between Web and the WASM App to source one file from. */
+
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;900&display=swap');
+
+:root {
+    --dot-orange: #F96715;
+    --dot-black: #000000;
+    --dot-beige: #EFEADF;
+    --dot-blue: #4287C6;
+    --dot-yellow: #FFB600;
+    --dot-pink: #FF85BC;
+    --dot-green: #234B33;
+    --dot-white: #FFFFFF;
+
+    --brand-primary: var(--dot-orange);
+    --surface-page: var(--dot-beige);
+    --surface-inverse: var(--dot-black);
+    --surface-card: var(--dot-white);
+    --text-primary: var(--dot-black);
+    --text-inverse: var(--dot-white);
+    --text-muted: #888888;
+    --text-muted-2: #666666;
+    --border-default: rgba(0, 0, 0, 0.12);
+    --focus-ring: var(--dot-blue);
+
+    --font-display: "Poppins", system-ui, sans-serif;
+    --font-body: "Poppins", system-ui, sans-serif;
+
+    --text-headline-lg: clamp(2.25rem, 5vw, 3.75rem);
+    --text-headline-md: clamp(1.75rem, 3.5vw, 2.5rem);
+    --text-body-lg: 1.25rem;
+    --text-body: 1rem;
+    --text-small: 0.875rem;
+
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+    --space-7: 48px;
+
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-pill: 999px;
+    --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+body {
+    background: var(--surface-page);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+}
+
+/* -- Buttons -------------------------------------------------------------------------- */
+
+.dg-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    border: none;
+    border-radius: var(--radius-pill);
+    padding: 14px 28px;
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.dg-btn:hover {
+    transform: scale(1.03);
+}
+
+.dg-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.dg-btn-primary {
+    background: var(--dot-orange);
+    color: var(--dot-black);
+}
+
+.dg-btn-secondary {
+    background: var(--dot-black);
+    color: var(--dot-white);
+}
+
+.dg-btn-ghost {
+    background: transparent;
+    color: var(--dot-black);
+    box-shadow: inset 0 0 0 2px var(--dot-black);
+}
+
+/* -- Card ------------------------------------------------------------------------------ */
+
+.dg-card {
+    background: var(--surface-card);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+    padding: var(--space-5);
+}
+
+/* -- Badge ------------------------------------------------------------------------------ */
+
+.dg-badge {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 4px 12px;
+    border-radius: var(--radius-pill);
+    color: var(--dot-black);
+}
+
+/* -- Page header -------------------------------------------------------------------- */
+
+.dg-crumb {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--dot-orange);
+    margin-bottom: var(--space-2);
+}
+
+.dg-page-title {
+    font-family: var(--font-display);
+    font-weight: 900;
+    text-transform: uppercase;
+    font-size: var(--text-headline-md);
+    margin: 0;
+}
+
+.dg-page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+    flex-wrap: wrap;
+}
+
+/* -- Stat card ------------------------------------------------------------------------ */
+
+.dg-stat-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted-2);
+}
+
+.dg-stat-value {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 32px;
+    margin-top: var(--space-2);
+}
+
+/* -- Empty state ------------------------------------------------------------------------ */
+
+.dg-empty-state {
+    text-align: center;
+    padding: 64px 24px;
+}
+
+.dg-empty-state .dg-ring {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto var(--space-4);
+    border-radius: 50%;
+    border: 2px solid #cccccc;
+}
+
+.dg-empty-state p {
+    font-weight: 700;
+    color: var(--text-muted-2);
+}
+
+/* -- Table ------------------------------------------------------------------------------ */
+
+.dg-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.dg-table th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--border-default);
+}
+
+.dg-table td {
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--border-default);
+}
+
+.dg-table td.dg-muted {
+    color: var(--text-muted-2);
+}
+
+/* -- Admin shell: sidebar / top bar ----------------------------------------------------- */
+
+.dg-shell {
+    display: flex;
+    min-height: 100vh;
+}
+
+.dg-sidebar {
+    width: 240px;
+    flex: 0 0 240px;
+    background: var(--dot-black);
+    color: var(--dot-white);
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-5) var(--space-3);
+    position: sticky;
+    top: 0;
+    height: 100vh;
+}
+
+.dg-sidebar-logo {
+    color: var(--dot-white);
+    font-family: var(--font-display);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    padding: 0 var(--space-3) var(--space-5);
+    text-decoration: none;
+    display: block;
+}
+
+.dg-nav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    flex: 1;
+}
+
+.dg-nav-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 12px var(--space-3);
+    border-radius: var(--radius-md);
+    color: var(--dot-white);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.dg-nav-item .dg-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--dot-orange);
+    flex: 0 0 8px;
+}
+
+.dg-nav-item.active {
+    background: var(--dot-orange);
+    color: var(--dot-black);
+}
+
+.dg-nav-item.active .dg-dot {
+    background: var(--dot-black);
+}
+
+.dg-user-chip {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding-top: var(--space-4);
+    margin-top: var(--space-4);
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.dg-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--dot-orange);
+    color: var(--dot-black);
+    font-weight: 700;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 32px;
+}
+
+.dg-content {
+    flex: 1;
+    padding: 40px 48px;
+    max-width: 1440px;
+}
+
+@media (max-width: 991px) {
+    .dg-shell {
+        flex-direction: column;
+    }
+
+    .dg-sidebar {
+        width: 100%;
+        flex: none;
+        height: auto;
+        position: static;
+        flex-direction: row;
+        align-items: center;
+        overflow-x: auto;
+    }
+
+    .dg-sidebar-logo {
+        padding: 0 var(--space-3) 0 0;
+    }
+
+    .dg-nav {
+        flex-direction: row;
+    }
+
+    .dg-user-chip {
+        border-top: none;
+        border-left: 1px solid rgba(255, 255, 255, 0.15);
+        margin-top: 0;
+        padding-top: 0;
+        padding-left: var(--space-4);
+    }
+
+    .dg-content {
+        padding: var(--space-5) var(--space-4);
+    }
+}
+
+/* -- Auth pages (login) -------------------------------------------------------------- */
+
+.dg-auth-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-5);
+}
+
+.dg-auth-card {
+    width: 100%;
+    max-width: 380px;
+    text-align: center;
+}
+
+.dg-auth-card .dg-page-title {
+    font-size: 28px;
+    margin-bottom: var(--space-5);
+}
+
+.dg-auth-field {
+    text-align: left;
+    margin-bottom: var(--space-4);
+}
+
+.dg-auth-field label {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: var(--space-2);
+}
+
+.dg-auth-field input {
+    width: 100%;
+    font-size: var(--text-body);
+    font-weight: 500;
+    padding: 14px 16px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-default);
+    background: var(--dot-white);
+}
+
+.dg-auth-field input:focus {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 1px;
+}

@@ -1,0 +1,86 @@
+@model IReadOnlyList<DotGlasses.Web.Models.DirectoryUser>
+@{
+    ViewData["Title"] = "User Directory";
+    var statusColor = (Dictionary<string, string>)ViewData["StatusColor"]!;
+}
+
+<div class="dg-page-header">
+    <div>
+        <span class="dg-crumb">Access</span>
+        <h1 class="dg-page-title">User Directory</h1>
+    </div>
+    <button class="dg-btn dg-btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#inviteUserModal">Invite platform user</button>
+</div>
+
+<div class="dg-card">
+    <table class="dg-table">
+        <thead><tr><th>Name</th><th>Role</th><th>Scope</th><th>Last login</th><th>Sales</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var user in Model)
+        {
+            <tr>
+                <td>@user.Name</td>
+                <td class="dg-muted">@user.Role</td>
+                <td>
+                    @foreach (var scope in user.Scope)
+                    {
+                        <span class="dg-badge" style="background:var(--dot-beige); margin-right:4px;">@scope</span>
+                    }
+                </td>
+                <td class="dg-muted">@user.LastLogin</td>
+                <td class="dg-muted">@user.Sales</td>
+                <td><span class="dg-badge" style="background:@statusColor[user.Status];">@user.Status</span></td>
+                <td style="white-space:nowrap;">
+                    <button class="dg-btn dg-btn-ghost" style="padding:6px 14px; font-size:12px;" type="button">Reset password</button>
+                    <button class="dg-btn dg-btn-ghost" style="padding:6px 14px; font-size:12px;" type="button">Suspend</button>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+    <p style="font-size:12px; color:var(--text-muted); margin: var(--space-4) 0 0;">
+        An admin only sees history for users at or below their own scope. If a user is shared
+        across multiple locations, an admin only sees activity at the locations they have in
+        common with that user.
+    </p>
+</div>
+
+<div class="modal fade" id="inviteUserModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content" style="border-radius:var(--radius-md); border:none;">
+            <div class="modal-header">
+                <h2 class="dg-page-title" style="font-size:20px;">Invite platform user</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="dg-auth-field">
+                    <label>Email</label>
+                    <input class="form-control" type="email" />
+                </div>
+                <div class="dg-auth-field">
+                    <label>Hierarchy scope</label>
+                    <select class="form-select" multiple size="5">
+                        <option>DOT Glasses International</option>
+                        <option>— Kenya</option>
+                        <option>—— Classical Optician</option>
+                        <option>———— Kangemi Vision Centre</option>
+                        <option>———— Nakuru Central</option>
+                    </select>
+                </div>
+                <div class="dg-auth-field">
+                    <label>Role</label>
+                    <select class="form-select">
+                        <option>Admin</option>
+                        <option>Manager</option>
+                        <option selected>User</option>
+                    </select>
+                </div>
+                <p style="font-size:12px; color:var(--text-muted);">Managers can only add Users within their own scope.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="dg-btn dg-btn-ghost" type="button" data-bs-dismiss="modal">Cancel</button>
+                <button class="dg-btn dg-btn-primary" type="button">Send invite</button>
+            </div>
+        </div>
+    </div>
+</div>

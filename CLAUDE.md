@@ -40,6 +40,53 @@ Don't infer a shape from assumptions — check with the user before modelling th
 `WidgetExample` entity is a deliberately generic placeholder proving the pipeline; it is not a
 template to extend with real fields.
 
+## UI / design system
+
+- Design tokens (colors, type, spacing) live in `wwwroot/css/dot-glasses.css` in **both**
+  `Web` and `App` — hand-ported from `/design/_ds/.../tokens/*.css` (gitignored, reference-only,
+  never linked from either app). There's no shared static-asset project between a
+  server-rendered MVC app and a WASM app to source one file from, so the two copies must be
+  kept in sync **by hand**. If the token values ever change, update both.
+- Bootstrap is still present in both projects (grid utilities, form controls, the native modal
+  JS in `UserDirectory`) — the design system layers custom `dg-*` classes/tokens on top rather
+  than replacing it.
+- Admin Portal (`Web`) screens are skeletons over static placeholder data (in each
+  `Controllers/*Controller.cs`, not a database) — Dashboard, Organisations, Event History, User
+  Directory, Preset Catalogues, Custom Orders, Reference Data. `ConsultationForm.razor` in `App`
+  (and its `Web` modal equivalent, not yet built) is the same story — a visual skeleton with no
+  save wiring, since Test/Lead/Sale aren't designed entities yet (see Domain modelling above).
+  Don't wire these to a real data source without checking the shape against real entities first.
+- `HomeController` (Admin Portal Dashboard, the landing route) has **no `[Authorize]`** —
+  reachable without logging in. Same for the other new Admin controllers. Deliberately left
+  alone pending the RBAC permission matrix decision below; don't silently add authorization
+  attributes without checking which policy/role each screen should require.
+
+## Deployment (Azure)
+
+- `Web` deploys to Azure Container Apps; Postgres to Azure Database for PostgreSQL Flexible
+  Server (Entra ID auth via managed identity, not a connection-string password) — both modelled
+  explicitly in `AppHost.cs` (`AddAzureContainerAppEnvironment`, `AddAzurePostgresFlexibleServer`).
+  Local dev still runs Postgres as a container via `.RunAsContainer(...)`, using a password
+  parameter pinned by name (`postgres-password`, sourced from AppHost's user secrets, never
+  hardcoded) — pinning it, rather than leaving Aspire to auto-generate one per resource shape,
+  is what stops a future change to how the resource is declared from silently invalidating the
+  local Postgres data volume's credentials again.
+- **`DotGlasses.App` (the PWA) is a *separate* azd project** (`src/DotGlasses.App/azure.yaml`,
+  its own `azd up`), not a service inside the root `azure.yaml`. Two reasons, both structural,
+  not stylistic: azd (1.29.0) refuses to mix an Aspire-detected service with any hand-declared
+  one in one project, and no Aspire hosting integration for Azure Static Web Apps exists to
+  begin with (the only one, `CommunityToolkit.Aspire.Hosting.Azure.StaticWebApps`, is
+  local-emulator-only). Don't try to fold this into the AppHost model later without re-checking
+  whether that constraint has lifted.
+- `/infra` (root) is generated via `azd infra gen` from the AppHost model — treat it as
+  regenerable output, not hand-maintained source; re-run `azd infra gen --force` after AppHost
+  resource changes rather than hand-editing the Bicep.
+- **No infra is ever deployed from a developer machine** — only via GitHub Actions. `[OPEN]`:
+  `azd pipeline config` hasn't been run yet (needs to run once per azd project — twice, since
+  root and `DotGlasses.App` are separate projects — and needs the user's own Azure login, so
+  Claude shouldn't run it). Deliberately deferred; don't scaffold `azure-dev.yml`-style workflow
+  files ahead of that until asked again.
+
 ## Repo/public-repo constraints
 
 - This repo is public. `/design` (Claude Design handoff bundle) and local Claude Code settings
@@ -57,11 +104,25 @@ Aspire dashboard).
 
 ## `[OPEN]` items — implement simplest placeholder, flag, don't guess
 
-- RBAC permission matrix (roles are Admin/Manager/User; only one example policy is wired).
-- Role/claim seeding on first run.
+- RBAC permission matrix (roles are Admin/Manager/User; only one example policy is wired). The
+  three role names themselves now seed via migration (`RoleSeedConfiguration`, `HasData`), not a
+  hosted service — real per-user role/claim assignment is still open.
+- **None of the new Admin Portal controllers have `[Authorize]`** (Dashboard/Home, Organisations,
+  Event History, User Directory, Catalogues, Custom Orders, Reference Data) — needs gating once
+  the RBAC matrix above is decided, since the right policy per screen isn't obvious yet.
 - Offline sync conflict resolution (currently last-write-wins; don't hard-code away a future
   version/ETag column).
 - Azure Monitor/Application Insights exporter connection string.
+- `azd pipeline config` not run yet — see Deployment section below.
+- UI skeleton screens are static placeholder data, not wired to a database — see UI / design
+  system section above. In particular the Consultation Form skeleton is missing the lead-match
+  confirm popup, the "use test result" carry-over from Test to Sale, and progressive disclosure
+  for catalogues with >10 items (short list vs. searchable lookup) — all present in the design
+  mockups but not built.
+- Field App's `wwwroot/appsettings.json` `ApiBaseUrl` still points at `Web`'s local dev HTTPS
+  port — needs updating to the real deployed API origin once that exists.
+- Reference Data's "Referral reasons" seed list is a best guess — the real source of truth is
+  DOT Glasses' existing Kobo form (not in this repo); ask before finalizing.
 
 This file should grow as real architectural decisions get made — propose updates here when a
 significant decision is agreed, not as a one-time artifact.
