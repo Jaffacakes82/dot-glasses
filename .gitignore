@@ -424,7 +424,11 @@ test-results/
 
 # Mac bundle stuff
 *.dmg
-*.app
+# NOTE: the standard macOS gitignore block normally also has `*.app` here (for macOS .app
+# bundles), but a bare, unanchored `*.app` pattern matches ANY file or directory ending in
+# ".app" at any depth — including src/DotGlasses.App, which it silently excluded from git
+# entirely since the initial commit. Removed rather than re-added more narrowly: a macOS
+# application bundle has no reason to ever appear inside this .NET solution.
 
 # content below from: https://github.com/github/gitignore/blob/main/Global/macOS.gitignore
 # General
@@ -507,3 +511,4 @@ appsettings.Development.json
 # which said to commit it)
 /design/
 
+.azure

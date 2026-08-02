@@ -1,0 +1,254 @@
+/* DOT Glasses design tokens — ported from design/_ds/.../tokens/*.css (gitignored source,
+   reference-only). Keep in sync by hand with src/DotGlasses.Web/wwwroot/css/dot-glasses.css;
+   there's no shared static-asset project between Web and this WASM App to source one file from.
+   Field-app specific: larger touch targets / 16px input font throughout (avoids mobile
+   auto-zoom-on-focus, more legible on cheap Android screens) vs. the Admin Portal's tighter
+   14px/10-12px sizing. */
+
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;900&display=swap');
+
+:root {
+    --dot-orange: #F96715;
+    --dot-black: #000000;
+    --dot-beige: #EFEADF;
+    --dot-blue: #4287C6;
+    --dot-yellow: #FFB600;
+    --dot-pink: #FF85BC;
+    --dot-green: #234B33;
+    --dot-white: #FFFFFF;
+
+    --surface-page: var(--dot-beige);
+    --surface-card: var(--dot-white);
+    --text-primary: var(--dot-black);
+    --border-default: rgba(0, 0, 0, 0.12);
+    --focus-ring: var(--dot-blue);
+
+    --font-display: "Poppins", system-ui, sans-serif;
+    --font-body: "Poppins", system-ui, sans-serif;
+
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+
+    --radius-sm: 4px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-pill: 999px;
+    --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+html, body {
+    background: var(--surface-page);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+}
+
+/* -- Screen / TopStrip ------------------------------------------------------------------ */
+
+.dg-screen {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    background: var(--surface-page);
+}
+
+.dg-top-strip {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+}
+
+.dg-top-strip .back {
+    font-size: 22px;
+    background: none;
+    border: none;
+    padding: 0;
+    line-height: 1;
+    color: var(--text-primary);
+}
+
+.dg-top-strip h1 {
+    font-family: var(--font-display);
+    font-weight: 900;
+    text-transform: uppercase;
+    font-size: 20px;
+    margin: 0;
+}
+
+/* -- Status banner ------------------------------------------------------------------------ */
+
+.dg-status-banner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    border-radius: var(--radius-md);
+    padding: 10px 16px;
+    font-weight: 700;
+    font-size: 13px;
+    margin-bottom: var(--space-4);
+}
+
+.dg-status-banner.online {
+    background: var(--dot-blue);
+    color: var(--dot-white);
+}
+
+.dg-status-banner.offline {
+    background: var(--dot-black);
+    color: var(--dot-orange);
+}
+
+.dg-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: 0 0 8px;
+}
+
+.dg-status-banner.online .dg-status-dot {
+    background: var(--dot-white);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35);
+}
+
+.dg-status-banner.offline .dg-status-dot {
+    background: var(--dot-orange);
+    box-shadow: 0 0 0 3px rgba(249, 103, 21, 0.35);
+}
+
+.dg-status-warn {
+    margin-left: auto;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--dot-orange);
+    color: var(--dot-black);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 20px;
+}
+
+/* -- Action tile ------------------------------------------------------------------------ */
+
+.dg-action-tile {
+    display: block;
+    width: 100%;
+    min-height: 88px;
+    border: none;
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
+    text-align: left;
+    color: var(--dot-black);
+    margin-bottom: var(--space-3);
+    cursor: pointer;
+}
+
+.dg-action-tile .title {
+    font-family: var(--font-display);
+    font-weight: 900;
+    text-transform: uppercase;
+    font-size: 19px;
+    display: block;
+}
+
+.dg-action-tile .subtitle {
+    font-size: 13px;
+    opacity: 0.75;
+}
+
+/* -- Buttons ------------------------------------------------------------------------------ */
+
+.dg-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    border: none;
+    border-radius: var(--radius-pill);
+    padding: 14px 24px;
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 15px;
+    cursor: pointer;
+}
+
+.dg-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.dg-btn-primary {
+    background: var(--dot-orange);
+    color: var(--dot-black);
+}
+
+.dg-btn-secondary {
+    background: var(--dot-black);
+    color: var(--dot-white);
+}
+
+.dg-btn-ghost {
+    background: var(--dot-white);
+    color: var(--dot-black);
+    box-shadow: inset 0 0 0 2px var(--dot-black);
+}
+
+/* -- Field form controls ------------------------------------------------------------------ */
+
+.dg-field {
+    margin-bottom: 14px;
+}
+
+.dg-field label {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.dg-field input, .dg-field select {
+    width: 100%;
+    font-size: 16px;
+    font-weight: 500;
+    padding: 14px 16px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-default);
+    background: var(--dot-white);
+}
+
+.dg-field input:focus, .dg-field select:focus {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 1px;
+}
+
+/* -- Cards / tappable list rows ----------------------------------------------------------- */
+
+.dg-card {
+    background: var(--surface-card);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+    padding: var(--space-4);
+}
+
+.dg-outlet-button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 16px 18px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-default);
+    background: var(--dot-white);
+    font-weight: 600;
+    margin-bottom: var(--space-3);
+    cursor: pointer;
+}
+
+.dg-outlet-button.selected {
+    border: 2px solid var(--dot-orange);
+}

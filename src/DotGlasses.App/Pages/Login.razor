@@ -1,0 +1,77 @@
+@page "/login"
+@using DotGlasses.App.Auth
+@using DotGlasses.Contracts.Auth
+@inject HttpClient Http
+@inject AuthTokenStore TokenStore
+@inject NavigationManager Navigation
+
+<PageTitle>Log in</PageTitle>
+
+<div class="dg-screen" style="justify-content:center; align-items:center;">
+    <div style="width:100%; max-width:320px; text-align:center;">
+        <p style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; letter-spacing:0.02em; font-size:22px; margin-bottom:var(--space-5);">DOT Glasses</p>
+
+        @if (TokenStore.IsAuthenticated)
+        {
+            <div class="alert alert-success">Signed in — token expires @TokenStore.ExpiresAtUtc?.ToLocalTime().ToString("t").</div>
+        }
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="alert alert-danger">@_error</div>
+        }
+
+        <EditForm Model="_request" OnValidSubmit="HandleLoginAsync" style="text-align:left;">
+            <div class="dg-field">
+                <label>Email</label>
+                <InputText @bind-Value="_request.UserName" autocomplete="username" />
+            </div>
+            <div class="dg-field">
+                <label>PIN</label>
+                <InputText type="password" @bind-Value="_request.Password" autocomplete="current-password" />
+            </div>
+            <button type="submit" class="dg-btn dg-btn-primary" style="width:100%;" disabled="@_isSubmitting">Log in</button>
+        </EditForm>
+
+        <p style="font-size:12px; color:#888; margin-top:var(--space-4);">
+            Log in once online — you can keep working fully offline after that.
+        </p>
+    </div>
+</div>
+
+@code {
+    private readonly LoginRequest _request = new();
+    private string? _error;
+    private bool _isSubmitting;
+
+    private async Task HandleLoginAsync()
+    {
+        _isSubmitting = true;
+        _error = null;
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/v1/auth/login", _request);
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = "Invalid username or password.";
+                return;
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<LoginResponse>();
+            if (result is not null)
+            {
+                TokenStore.SetToken(result.AccessToken, result.ExpiresAtUtc);
+                Navigation.NavigateTo("/");
+            }
+        }
+        catch (Exception)
+        {
+            _error = "Could not reach the server — check your connection.";
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+}

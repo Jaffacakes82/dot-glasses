@@ -1,0 +1,32 @@
+@page "/messages"
+
+<PageTitle>Messages</PageTitle>
+
+<div class="dg-screen">
+    <div class="dg-top-strip">
+        <a class="back" href="/">&#8592;</a>
+        <h1>Messages</h1>
+    </div>
+    <p style="font-size:13px; color:#666; margin-bottom:var(--space-4);">Refreshes on sync. No push notifications in this release.</p>
+
+    @foreach (var announcement in _announcements)
+    {
+        <div class="dg-card" style="margin-bottom:var(--space-3);">
+            <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                <strong>@announcement.Title</strong>
+                <span style="font-size:12px; color:#999;">@announcement.RelativeTime</span>
+            </div>
+            <p style="margin:0; font-size:14px; color:#444;">@announcement.Body</p>
+        </div>
+    }
+</div>
+
+@code {
+    private record Announcement(string Title, string RelativeTime, string Body);
+
+    private readonly List<Announcement> _announcements =
+    [
+        new("Reference data updated", "2 days ago", "New frame color options added — sync to pick them up."),
+        new("Reminder", "1 week ago", "Please confirm price with the customer before every sale."),
+    ];
+}

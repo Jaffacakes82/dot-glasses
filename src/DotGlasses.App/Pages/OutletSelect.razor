@@ -1,0 +1,27 @@
+@page "/outlet-select"
+@inject NavigationManager Navigation
+
+<PageTitle>Select outlet</PageTitle>
+
+<div class="dg-screen">
+    <div class="dg-top-strip">
+        <h1>Select outlet</h1>
+    </div>
+    <p style="font-size:13px; color:#666; margin-bottom:var(--space-4);">
+        You're attached to more than one retail point — pick the one you're working from today.
+    </p>
+
+    @foreach (var outlet in _outlets)
+    {
+        <button class="dg-outlet-button" type="button" @onclick="() => SelectOutlet(outlet)">@outlet</button>
+    }
+</div>
+
+@code {
+    // Placeholder — only outlets assigned to *this* user, per the design brief; real
+    // assignment data isn't modelled yet (see CLAUDE.md). Shown only when a user has >1
+    // assigned outlet.
+    private readonly string[] _outlets = ["Kangemi Vision Centre", "Nakuru Central"];
+
+    private void SelectOutlet(string outlet) => Navigation.NavigateTo("/");
+}

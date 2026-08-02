@@ -1,0 +1,149 @@
+@page "/widget-examples"
+@using System.Text.Json
+@using DotGlasses.App.Sync
+@using DotGlasses.Contracts.Sync
+@using DotGlasses.Contracts.WidgetExamples
+@inject HttpClient Http
+@inject ISyncQueueStore OutboxStore
+@inject ISyncService SyncService
+
+<PageTitle>Widget Examples</PageTitle>
+
+<h1>Widget Examples</h1>
+<p class="text-muted">
+    Proves the offline outbox end-to-end: create one with your browser devtools set to
+    "Offline", confirm it shows as <em>Pending sync</em> below, then go back online and watch
+    it flip to <em>Synced</em>.
+</p>
+
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+<EditForm Model="_form" OnValidSubmit="HandleCreateAsync" class="row g-2 align-items-end mb-4">
+    <div class="col-auto">
+        <label class="form-label">Name</label>
+        <InputText class="form-control" @bind-Value="_form.Name" />
+    </div>
+    <div class="col-auto">
+        <label class="form-label">Description</label>
+        <InputText class="form-control" @bind-Value="_form.Description" />
+    </div>
+    <div class="col-auto">
+        <label class="form-label">Hierarchy path</label>
+        <InputText class="form-control" @bind-Value="_form.HierarchyPath" placeholder="/1/4/" />
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-primary">Create</button>
+    </div>
+</EditForm>
+
+<button class="btn btn-outline-secondary btn-sm mb-3" @onclick="RefreshAsync">Refresh</button>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Description</th>
+            <th>Hierarchy path</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var row in _rows.OrderBy(r => r.Name))
+        {
+            <tr>
+                <td>@row.Name</td>
+                <td>@row.Description</td>
+                <td>@row.HierarchyPath</td>
+                <td>
+                    @if (row.PendingOutboxId is null)
+                    {
+                        <span class="badge bg-success">Synced</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-warning text-dark">@row.PendingStatus</span>
+                    }
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    private readonly List<RowModel> _rows = [];
+    private readonly CreateWidgetExampleRequest _form = new() { HierarchyPath = "/1/" };
+    private string? _error;
+
+    protected override async Task OnInitializedAsync() => await RefreshAsync();
+
+    private async Task RefreshAsync()
+    {
+        _error = null;
+        _rows.Clear();
+
+        try
+        {
+            var serverItems = await Http.GetFromJsonAsync<List<WidgetExampleDto>>("api/v1/widget-examples") ?? [];
+            foreach (var item in serverItems)
+            {
+                _rows.Add(new RowModel(item.Id, item.Name, item.Description, item.HierarchyPath, null, null));
+            }
+        }
+        catch (Exception)
+        {
+            _error = "Couldn't reach the server — showing locally queued items only. This is expected while offline.";
+        }
+
+        var pending = await OutboxStore.GetPendingAsync();
+        foreach (var item in pending.Where(i => i.EntityType == "WidgetExample"))
+        {
+            var request = JsonSerializer.Deserialize<CreateWidgetExampleRequest>(item.PayloadJson, JsonOptions);
+            if (request is null || _rows.Any(r => r.Id == request.Id))
+            {
+                continue;
+            }
+
+            _rows.Add(new RowModel(request.Id, request.Name, request.Description, request.HierarchyPath, item.Id, item.Status.ToString()));
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task HandleCreateAsync()
+    {
+        var request = new CreateWidgetExampleRequest
+        {
+            Id = Guid.NewGuid(),
+            Name = _form.Name,
+            Description = _form.Description,
+            HierarchyPath = _form.HierarchyPath,
+        };
+
+        var outboxItem = new OutboxItem
+        {
+            Id = request.Id,
+            EntityType = "WidgetExample",
+            ApiRoute = "api/v1/widget-examples",
+            PayloadJson = JsonSerializer.Serialize(request, JsonOptions),
+        };
+
+        await OutboxStore.EnqueueAsync(outboxItem);
+
+        _form.Name = string.Empty;
+        _form.Description = null;
+
+        await RefreshAsync();
+
+        // Best-effort immediate attempt; if offline this simply leaves the item PendingSync
+        // for ConnectivitySyncTrigger to pick up on reconnect.
+        await SyncService.SyncPendingAsync();
+        await RefreshAsync();
+    }
+
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private record RowModel(Guid Id, string Name, string? Description, string HierarchyPath, Guid? PendingOutboxId, string? PendingStatus);
+}

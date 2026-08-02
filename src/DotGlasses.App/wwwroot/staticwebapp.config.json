@@ -1,0 +1,6 @@
+{
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/favicon.png", "/icon-*.png", "/manifest.webmanifest", "/service-worker*.js", "/_framework/*"]
+  }
+}

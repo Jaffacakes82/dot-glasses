@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+# Deliberately a second, independent azd project (its own azure.yaml, its own `azd up`) rather
+# than a service inside the root azure.yaml — azd 1.29.0 rejects mixing an Aspire-detected
+# service with any hand-declared one ("a project may only contain a single Aspire service and
+# no other services at this time"). No Aspire hosting integration for Azure Static Web Apps
+# exists either (the only one, CommunityToolkit.Aspire.Hosting.Azure.StaticWebApps, is local
+# emulator-only), so this can't be folded into the AppHost model in the future the way Web and
+# Postgres were. Run `azd up` from this directory (or `-C src/DotGlasses.App`) to deploy it.
+name: dot-glasses-field-app
+services:
+  field-app:
+    language: dotnet
+    project: .
+    host: staticwebapp
+    dist: wwwroot

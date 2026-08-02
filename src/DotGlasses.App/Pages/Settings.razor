@@ -1,0 +1,34 @@
+@page "/settings"
+
+<PageTitle>Settings</PageTitle>
+
+<div class="dg-screen">
+    <div class="dg-top-strip">
+        <a class="back" href="/">&#8592;</a>
+        <h1>Settings</h1>
+    </div>
+
+    <p style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:#666; margin-bottom:var(--space-2);">Active location</p>
+    @foreach (var outlet in _outlets)
+    {
+        <div class="dg-outlet-button @(outlet == _activeOutlet ? "selected" : "")">
+            @outlet @(outlet == _activeOutlet ? " ✓" : "")
+        </div>
+    }
+
+    <p style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:#666; margin: var(--space-4) 0 var(--space-2);">Toolkit</p>
+    @foreach (var item in _toolkitItems)
+    {
+        <div class="dg-outlet-button" style="color:#999; cursor:default;">
+            @item <span style="color:var(--dot-orange); font-weight:700;">· Coming soon</span>
+        </div>
+    }
+</div>
+
+@code {
+    // Placeholder — only the outlets assigned to *this* user, per the design brief; real
+    // assignment data isn't modelled yet (see CLAUDE.md).
+    private readonly string[] _outlets = ["Kangemi Vision Centre", "Nakuru Central"];
+    private readonly string _activeOutlet = "Kangemi Vision Centre";
+    private readonly string[] _toolkitItems = ["Talking points & FAQs", "Near-vision chart", "Distance-vision chart"];
+}

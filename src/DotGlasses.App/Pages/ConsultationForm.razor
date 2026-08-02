@@ -1,0 +1,244 @@
+@page "/consultation/{Type}"
+@inject NavigationManager Navigation
+
+<PageTitle>Record @Type</PageTitle>
+
+<div class="dg-screen">
+    <div class="dg-top-strip">
+        <a class="back" href="/">&#8592;</a>
+        <h1>Record @Type</h1>
+    </div>
+
+    @if (_showPriceConfirm)
+    {
+        <div class="dg-card" style="text-align:center;">
+            <p style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; font-size:16px;">Confirm price awareness</p>
+            <p style="color:#555;">Has the customer been told the price for this order?</p>
+            <div style="display:flex; gap:8px; margin-top:var(--space-4);">
+                <button class="dg-btn dg-btn-ghost" style="flex:1;" @onclick="() => _showPriceConfirm = false">Not yet</button>
+                <button class="dg-btn dg-btn-primary" style="flex:1;" @onclick="SaveAsync">Yes, save</button>
+            </div>
+        </div>
+    }
+    else
+    {
+        <EditForm Model="this" OnValidSubmit="HandleSubmit" style="display:flex; flex-direction:column; flex:1;">
+            <div class="dg-field">
+                <label>Age</label>
+                <input type="number" min="0" @bind="_age" />
+            </div>
+            <div class="dg-field">
+                <label>Gender</label>
+                <select @bind="_gender">
+                    <option>Female</option>
+                    <option>Male</option>
+                    <option>Other</option>
+                </select>
+            </div>
+
+            @if (IsTest)
+            {
+                <div class="dg-field">
+                    <label>Outcome</label>
+                    <select @bind="_testOutcome">
+                        <option>No glasses needed</option>
+                        <option>Needs glasses</option>
+                        <option>Referred</option>
+                    </select>
+                </div>
+
+                @if (_testOutcome == "Referred")
+                {
+                    <div class="dg-field">
+                        <label>Reason for referral</label>
+                        <select>
+                            <option>Suspected cataract</option>
+                            <option>Suspected glaucoma</option>
+                            <option>Other eye disease</option>
+                        </select>
+                    </div>
+                }
+                else if (_testOutcome == "Needs glasses")
+                {
+                    <div class="dg-field">
+                        <label>Did the customer share contact details?</label>
+                        <div style="display:flex; gap:8px;">
+                            <button type="button" class="dg-btn dg-btn-ghost" style="flex:1;" @onclick="() => _contactShared = false">No</button>
+                            <button type="button" class="dg-btn dg-btn-ghost" style="flex:1;" @onclick="() => _contactShared = true">Yes</button>
+                        </div>
+                        @if (_contactShared == true)
+                        {
+                            <a class="dg-btn dg-btn-primary" style="width:100%; margin-top:var(--space-3);" href="consultation/lead">Continue as Lead &rarr;</a>
+                        }
+                        else if (_contactShared == false)
+                        {
+                            <p style="font-size:12px; color:#888; margin-top:var(--space-2);">Recorded as a test only — not entered into the leads pipeline.</p>
+                        }
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="dg-field">
+                    <label>Full name</label>
+                    <input @bind="_name" />
+                </div>
+                <div class="dg-field">
+                    <label>Phone number</label>
+                    <input @bind="_phone" />
+                </div>
+
+                @if (IsSale)
+                {
+                    <div class="dg-field">
+                        <label>Occupation (optional)</label>
+                        <select>
+                            <option value="">—</option>
+                            <option>Farmer</option>
+                            <option>Teacher</option>
+                            <option>Driver</option>
+                            <option>Trader</option>
+                            <option>Student</option>
+                        </select>
+                    </div>
+                    <div class="dg-field">
+                        <label><input type="checkbox" @bind="_isCustom" style="width:auto; margin-right:8px;" />Custom / special lens</label>
+                    </div>
+                }
+                else
+                {
+                    <div class="dg-field">
+                        <label>Reason not purchased</label>
+                        <select>
+                            <option>Price</option>
+                            <option>Wanted to think about it</option>
+                            <option>Didn't like frame options</option>
+                            <option>Out of stock</option>
+                        </select>
+                    </div>
+                }
+
+                @if (_isCustom && IsSale)
+                {
+                    <div style="display:flex; gap:8px;">
+                        <div class="dg-field" style="flex:1;"><label>Sphere</label><input /></div>
+                        <div class="dg-field" style="flex:1;"><label>Cylinder</label><input /></div>
+                        <div class="dg-field" style="flex:1;"><label>Axis</label><input /></div>
+                    </div>
+                    @RenderFrameSwatches()
+                    <p style="font-size:12px; color:#888;">Routes to Retail Point for local lab fulfilment. No price recorded.</p>
+                }
+                else
+                {
+                    <div class="dg-field">
+                        <label>Eye power — OS (left)</label>
+                        <select @bind="_powerOs">
+                            @foreach (var p in EyePowers) { <option>@p</option> }
+                        </select>
+                    </div>
+                    <button type="button" class="dg-btn dg-btn-ghost" style="padding:8px 16px; font-size:12px; margin-bottom:var(--space-3);" @onclick="() => _powerOd = _powerOs">&hArr; Copy left specs to right</button>
+                    <div class="dg-field">
+                        <label>Eye power — OD (right)</label>
+                        <select @bind="_powerOd">
+                            @foreach (var p in EyePowers) { <option>@p</option> }
+                        </select>
+                    </div>
+                    <div class="dg-field">
+                        <label><input type="checkbox" @bind="_childFrame" style="width:auto; margin-right:8px;" />Child's frame</label>
+                        <select>
+                            @{
+                                var pdRange = _childFrame ? Enumerable.Range(0, 3) : Enumerable.Range(0, 5);
+                            }
+                            @foreach (var pd in pdRange) { <option>@pd mm</option> }
+                        </select>
+                    </div>
+
+                    @if (IsSale)
+                    {
+                        @RenderFrameSwatches()
+                    }
+
+                    <div class="dg-field">
+                        <label>Coating preferences</label>
+                        <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                            @foreach (var coating in CoatingOptions)
+                            {
+                                <label style="font-weight:500; display:flex; align-items:center; gap:4px;"><input type="checkbox" style="width:auto;" />@coating</label>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+
+            <div style="margin-top:auto; display:flex; gap:8px; padding-top:var(--space-4);">
+                <a class="dg-btn dg-btn-ghost" style="flex:1; text-align:center;" href="/">Cancel</a>
+                <button type="submit" class="dg-btn dg-btn-primary" style="flex:1;">@(IsTest ? "Save test" : "Save")</button>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [Parameter] public string Type { get; set; } = "test";
+
+    private bool IsTest => Type.Equals("test", StringComparison.OrdinalIgnoreCase);
+    private bool IsSale => Type.Equals("sale", StringComparison.OrdinalIgnoreCase);
+
+    private static readonly string[] EyePowers = ["Plano", "+0.50", "+1.00", "+1.50", "+2.00", "+2.50", "+3.00", "-0.50", "-1.00", "-1.50", "-2.00", "-2.50", "-3.00"];
+    private static readonly string[] CoatingOptions = ["Anti-glare", "Scratch-resistant", "UV protection"];
+    private static readonly (string Name, string Hex)[] FrameColors =
+    [
+        ("Black", "#000000"), ("Tortoise", "#7B4B2A"), ("Navy", "#233A5E"), ("Clear", "#DDDDDD"), ("Rose Gold", "#E0BFB8"),
+    ];
+
+    private int? _age;
+    private string _gender = "Female";
+    private string _testOutcome = "No glasses needed";
+    private bool? _contactShared;
+    private string? _name;
+    private string? _phone;
+    private bool _isCustom;
+    private bool _childFrame;
+    private string _powerOs = EyePowers[0];
+    private string _powerOd = EyePowers[0];
+    private string _frameColor = FrameColors[0].Hex;
+    private bool _showPriceConfirm;
+
+    private void HandleSubmit()
+    {
+        // Test saves immediately (per the design brief); Lead and non-custom Sale require the
+        // price-awareness confirmation step first.
+        if (IsTest)
+        {
+            SaveAsync();
+        }
+        else
+        {
+            _showPriceConfirm = true;
+        }
+    }
+
+    private void SaveAsync()
+    {
+        // [OPEN] No real Test/Lead/Sale domain entity exists yet (see CLAUDE.md) — this is a
+        // visual skeleton only. Wire this up to the real outbox/API once those entities land,
+        // following the same enqueue-then-sync pattern WidgetExamples.razor exercises.
+        Navigation.NavigateTo("/");
+    }
+
+    private RenderFragment RenderFrameSwatches() => @<div class="dg-field">
+        <label>Frame color</label>
+        <div style="display:flex; gap:10px; align-items:center;">
+            @foreach (var (name, hex) in FrameColors)
+            {
+                <button type="button" title="@name" @onclick="() => _frameColor = hex"
+                        style="width:32px; height:32px; border-radius:50%; background:@hex; cursor:pointer; border: @(_frameColor == hex ? "3px solid var(--dot-orange)" : "1px solid var(--border-default)");"></button>
+            }
+            <svg width="48" height="24" viewBox="0 0 48 24" style="margin-left:8px;">
+                <circle cx="12" cy="12" r="9" fill="none" stroke="@_frameColor" stroke-width="3" />
+                <circle cx="36" cy="12" r="9" fill="none" stroke="@_frameColor" stroke-width="3" />
+                <line x1="21" y1="12" x2="27" y2="12" stroke="@_frameColor" stroke-width="3" />
+            </svg>
+        </div>
+    </div>;
+}
