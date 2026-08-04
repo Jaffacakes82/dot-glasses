@@ -35,10 +35,31 @@ call the API directly from a Blazor page/component.
 
 ## Domain modelling
 
-Real domain entities (org hierarchy, lens catalogues, Test/Lead/Sale) are **not yet designed**.
-Don't infer a shape from assumptions — check with the user before modelling them. The
-`WidgetExample` entity is a deliberately generic placeholder proving the pipeline; it is not a
-template to extend with real fields.
+**[IN PROGRESS 2026-08-04]** Real domain entities are now settled (CEO follow-up conversation +
+`design/design_handoff_dot_glasses_platform/README.md` + same-day decisions on Custom Orders
+scope, preset catalogue assignment, Manager RBAC scope, and Kobo-sourced reference data — see
+plan `breezy-conjuring-galaxy.md` for full rationale) and are being built in checkpoints so
+progress survives a session running out mid-task. Status:
+- ✅ Checkpoint 1 — `DotGlasses.Domain/Entities` (`OrganisationNode`, `UserOrgAssignment`,
+  `ReferenceDataItem`, `PresetCatalogue`, `PresetCatalogueAssignment`, `LensOption`, `Customer`,
+  `Test`, `Lead`, `Sale`) and `DotGlasses.Domain/Enums` (`OrganisationLevel`, `Gender`,
+  `TestOutcome`, `LensRangeType`, `FrameCoverage`, `ReferenceDataCategory`) — solution builds.
+- ⬜ Checkpoint 2 — Infrastructure persistence: EF configs, `DbSet`s, reference-data + org-tree +
+  preset-catalogue seed migrations (sourced from the Kobo `choices` export, per today's decisions
+  — notably: no "Classical" lens-set option, hard-case colours are Orange/Green/Other not Kobo's
+  Blue/Pink/Purple/Black, coating list is Bradley's 5 not Kobo's 7, photophobia/vision-type/
+  multifocal-type dropped as legacy-only).
+- ⬜ Checkpoint 3 — RBAC: `OrgLevelRequirement`/`HierarchyDescendantRequirement` handlers + named
+  policies, `[Authorize]` on the Admin Portal controllers.
+- ⬜ Checkpoint 4 — `DevUserSeeder` extended with Manager/User test accounts for policy testing.
+- ⬜ Checkpoint 5 — remove the now-stale "Classical Optician" placeholder data from
+  `CataloguesController`/`OrganisationsController`, replace this whole section with the permanent
+  write-up, retire the two `[OPEN]` items below it makes obsolete.
+
+`WidgetExample` remains the architectural reference pattern (audit/soft-delete/hierarchy-scoping/
+offline-sync skeleton) and isn't being deleted — real entities exist alongside it, not instead of
+it, until the new entities have their own Application/Contracts/API/UI wiring (deliberately out of
+scope for this pass — no screen consumes them yet, see the plan file).
 
 ## UI / design system
 
