@@ -1,6 +1,7 @@
 using DotGlasses.App;
 using DotGlasses.App.Auth;
 using DotGlasses.App.Logging;
+using DotGlasses.App.ReferenceData;
 using DotGlasses.App.Sync;
 using DotGlasses.Contracts.Sync;
 using Microsoft.AspNetCore.Components.Web;
@@ -27,6 +28,8 @@ builder.Services.AddSingleton(sp => sp.GetRequiredService<IHttpClientFactory>().
 builder.Services.AddSingleton<ISyncQueueStore, IndexedDbOutboxStore>();
 builder.Services.AddSingleton<ISyncService, SyncService>();
 builder.Services.AddSingleton<ConnectivitySyncTrigger>();
+
+builder.Services.AddSingleton<IReferenceDataClient, ReferenceDataClient>();
 
 builder.Services.AddSingleton<IClientSessionContext, ClientSessionContext>();
 builder.Services.AddSingleton<BatchingLoggerProvider>();

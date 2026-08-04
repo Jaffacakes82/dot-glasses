@@ -1,0 +1,147 @@
+@using DotGlasses.App.ReferenceData
+@using DotGlasses.Contracts.Common
+@using DotGlasses.Contracts.PresetCatalogues
+@using DotGlasses.Contracts.ReferenceData
+
+<div class="dg-field">
+    <label>Lens range</label>
+    <select value="@SelectedRangeLabel" @onchange="OnRangeChanged">
+        @if (AllowNoPreference)
+        {
+            <option value="none">No preference yet</option>
+        }
+        <option value="six">6-Lens Set@(SixLensCatalogue is null ? " (not available)" : "")</option>
+        <option value="nine">9-Lens Set@(NineLensCatalogue is null ? " (not available)" : "")</option>
+        <option value="custom">Custom prescription</option>
+    </select>
+</div>
+
+@if (Model.LensRangeType is LensRangeType.SixLensSet or LensRangeType.NineLensSet)
+{
+    var catalogue = Model.LensRangeType == LensRangeType.SixLensSet ? SixLensCatalogue : NineLensCatalogue;
+    @if (catalogue is null)
+    {
+        <p style="color:#c00; font-size:12px;">This preset isn't assigned to your retail point.</p>
+    }
+    else
+    {
+        <div class="dg-field">
+            <label>Lens power — left eye</label>
+            <select value="@Model.LensOptionLeftId" @onchange="e => Model.LensOptionLeftId = ParseGuid(e.Value)">
+                <option value="">Select...</option>
+                @foreach (var option in catalogue.LensOptions.OrderBy(o => o.SortOrder))
+                {
+                    <option value="@option.Id">@FormatLensOption(option)</option>
+                }
+            </select>
+        </div>
+        <div class="dg-field">
+            <label>Lens power — right eye</label>
+            <select value="@Model.LensOptionRightId" @onchange="e => Model.LensOptionRightId = ParseGuid(e.Value)">
+                <option value="">Select...</option>
+                @foreach (var option in catalogue.LensOptions.OrderBy(o => o.SortOrder))
+                {
+                    <option value="@option.Id">@FormatLensOption(option)</option>
+                }
+            </select>
+        </div>
+    }
+}
+else if (Model.LensRangeType == LensRangeType.Custom)
+{
+    <div style="display:flex; gap:8px;">
+        <div class="dg-field" style="flex:1;"><label>Sphere — left</label><input type="number" step="0.25" @bind="Model.CustomSphereLeft" /></div>
+        <div class="dg-field" style="flex:1;"><label>Cylinder — left</label><input type="number" step="0.25" @bind="Model.CustomCylinderLeft" /></div>
+        <div class="dg-field" style="flex:1;"><label>Axis — left</label><input type="number" @bind="Model.CustomAxisLeft" /></div>
+        <div class="dg-field" style="flex:1;"><label>Add power — left</label><input type="number" step="0.25" @bind="Model.CustomAddPowerLeft" /></div>
+    </div>
+    <div style="display:flex; gap:8px;">
+        <div class="dg-field" style="flex:1;"><label>Sphere — right</label><input type="number" step="0.25" @bind="Model.CustomSphereRight" /></div>
+        <div class="dg-field" style="flex:1;"><label>Cylinder — right</label><input type="number" step="0.25" @bind="Model.CustomCylinderRight" /></div>
+        <div class="dg-field" style="flex:1;"><label>Axis — right</label><input type="number" @bind="Model.CustomAxisRight" /></div>
+        <div class="dg-field" style="flex:1;"><label>Add power — right</label><input type="number" step="0.25" @bind="Model.CustomAddPowerRight" /></div>
+    </div>
+    <div class="dg-field">
+        <label>Pupil distance (mm, 54–74)</label>
+        <input type="number" min="54" max="74" @bind="Model.PupilDistanceMm" />
+    </div>
+}
+
+<div class="dg-field">
+    <label><input type="checkbox" @bind="Model.ChildrensFrame" style="width:auto; margin-right:8px;" />Children's frame</label>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public LensRangeSelection Model { get; set; } = null!;
+    [Parameter, EditorRequired] public IReadOnlyList<PresetCatalogueDto> Catalogues { get; set; } = [];
+    [Parameter] public IReadOnlyList<ReferenceDataItemDto> Coatings { get; set; } = [];
+
+    /// <summary>A Lead can carry no product preference at all; a Sale must always have one.</summary>
+    [Parameter] public bool AllowNoPreference { get; set; }
+
+    // Matched by name against the two seeded catalogues ("6-Lens Set"/"9-Lens Set") — the domain
+    // model doesn't otherwise tie LensRangeType.SixLensSet/NineLensSet to a specific
+    // PresetCatalogueId, since only these two catalogue archetypes exist today. If DGI/Country
+    // admins ever create additional named catalogues, this matching needs to become explicit
+    // (e.g. a "kind" field on PresetCatalogue) rather than name-sniffing — flagged in CLAUDE.md.
+    private PresetCatalogueDto? SixLensCatalogue => Catalogues.FirstOrDefault(c => c.Name.Contains("6-Lens", StringComparison.OrdinalIgnoreCase));
+    private PresetCatalogueDto? NineLensCatalogue => Catalogues.FirstOrDefault(c => c.Name.Contains("9-Lens", StringComparison.OrdinalIgnoreCase));
+
+    private string SelectedRangeLabel => Model.LensRangeType switch
+    {
+        LensRangeType.SixLensSet => "six",
+        LensRangeType.NineLensSet => "nine",
+        LensRangeType.Custom => "custom",
+        _ => "none",
+    };
+
+    private void OnRangeChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+
+        // Switching range type invalidates whichever fields belonged to the previous one — the
+        // validator rejects preset+custom fields being set together.
+        Model.PresetCatalogueId = null;
+        Model.LensOptionLeftId = null;
+        Model.LensOptionRightId = null;
+        Model.CustomSphereLeft = null;
+        Model.CustomCylinderLeft = null;
+        Model.CustomAxisLeft = null;
+        Model.CustomAddPowerLeft = null;
+        Model.CustomSphereRight = null;
+        Model.CustomCylinderRight = null;
+        Model.CustomAxisRight = null;
+        Model.CustomAddPowerRight = null;
+
+        Model.LensRangeType = value switch
+        {
+            "six" => LensRangeType.SixLensSet,
+            "nine" => LensRangeType.NineLensSet,
+            "custom" => LensRangeType.Custom,
+            _ => null,
+        };
+
+        Model.PresetCatalogueId = Model.LensRangeType switch
+        {
+            LensRangeType.SixLensSet => SixLensCatalogue?.Id,
+            LensRangeType.NineLensSet => NineLensCatalogue?.Id,
+            _ => null,
+        };
+    }
+
+    private static Guid? ParseGuid(object? value) =>
+        Guid.TryParse(value?.ToString(), out var id) ? id : null;
+
+    private string FormatLensOption(LensOptionDto option)
+    {
+        var sphere = option.SphericalPower >= 0 ? $"+{option.SphericalPower:0.00}" : option.SphericalPower.ToString("0.00");
+        if (!option.IsBifocal)
+        {
+            return sphere;
+        }
+
+        var add = option.AddPower is { } addPower ? (addPower >= 0 ? $"+{addPower:0.00}" : addPower.ToString("0.00")) : "?";
+        var coatingLabel = Coatings.FirstOrDefault(c => c.Id == option.CoatingId)?.Label;
+        return coatingLabel is null ? $"{sphere} / {add} (Bifocal)" : $"{sphere} / {add} (Bifocal, {coatingLabel})";
+    }
+}
