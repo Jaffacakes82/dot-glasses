@@ -75,50 +75,61 @@ reason — no screen operates on a real per-user/per-org resource yet.
 
 ## Test/Lead/Sale API
 
-**[IN PROGRESS 2026-08-04]** Building the Application/Contracts/API vertical slice for Test/Lead/
-Sale (the first slice of the "deferred next phase" above), following `WidgetExampleService`/
-`WidgetExampleRepository`/`WidgetExamplesController` as the structural template but with three
-deliberate departures — see plan `breezy-conjuring-galaxy.md` for full rationale:
+Full Application/Contracts/API vertical slices exist for Test, Lead, and Sale (2026-08-04),
+following `WidgetExampleService`/`WidgetExampleRepository`/`WidgetExamplesController` as the
+structural template but with three deliberate departures:
 1. Create requests never accept `HierarchyPath`/`TechnicianUserId` from the client — the Web
    controller stamps both from `ICurrentUserContext` instead of trusting the request body.
 2. No public Update endpoint — Test/Lead/Sale are create-once atomic events; server-side linking
    (Test→Lead, Lead→Sale) happens inside the service layer, not via a PUT contract.
-3. New `IUnitOfWork` (`DotGlasses.Application/Common`, `DotGlassesDbContext` satisfies it
-   directly) lets a service batch multiple repository writes into one transaction — needed because
+3. `IUnitOfWork` (`DotGlasses.Application/Common`, `DotGlassesDbContext` satisfies it directly)
+   lets a service batch multiple repository writes into one transaction — needed because
    converting a Test into a Lead must set `Test.ConvertedToLeadId` atomically with creating the
-   Lead. `WidgetExampleRepository` is untouched; this is additive, not a retrofit.
+   Lead, and converting a Lead into a Sale must set `Lead.ConvertedFlag`/`SaleId` atomically with
+   creating the Sale. `WidgetExampleRepository` is untouched — this is additive, not a retrofit.
 
-Status:
-- ✅ Checkpoint 1 — shared plumbing: `IUnitOfWork`, `IReferenceDataLookupService`
-  (`DotGlasses.Application/ReferenceData`, backs category-correctness + "Other"-text-required
-  validation without validators touching Infrastructure), `ICustomerRepository`
-  (`DotGlasses.Application/Customers`, exact-match find-or-create only — no public API; fuzzy
-  matching is Field App UI work for later). Solution builds, `dotnet test` passes (18 tests).
-- ✅ Checkpoint 2 — Test vertical slice: `TestDto`/`CreateTestRequest` (Contracts), `IVisionTestRepository`/`IVisionTestService`/`VisionTestService` (Application — named "VisionTest" not "Test" to avoid colliding with the `DotGlasses.Application.Tests` xUnit project's own root namespace; the Domain entity is still `Test`), `TestRepository` (Infrastructure), `TestsController` (Web, `GET`/`GET {id}`/`POST` only). Found along the way: **Contracts must not reference Domain** — `DotGlasses.App` references only Contracts and must never transitively pull in Domain/Application, so wire-shape enums (`Contracts.Common.Gender`, `Contracts.Tests.TestOutcome`) are separate types from `Domain.Enums`, mapped in the Application layer (`GenderMapping` — shared across Test/Lead/Sale since Gender repeats; outcome/range-type enums are entity-specific and mapped inline in their own service). Validators needing DB-backed reference-data checks live in `DotGlasses.Web.Validation.*` (new — `AddValidatorsFromAssembly` now also scans the Web assembly), not co-located with the Contracts DTO like WidgetExample's was, for the same Contracts-must-not-reference-Application reason. Solution builds, `dotnet test` passes (18 tests).
-- ✅ Checkpoint 3 — Lead vertical slice: `LeadDto`/`CreateLeadRequest` (Contracts, + shared
-  `Contracts.Common.LensRangeType`/`Application.Common.LensRangeTypeMapping` since Sale reuses
-  both), `ILeadRepository`/`ILeadService`/`LeadService` (Application), `LeadRepository`
-  (Infrastructure), `LeadsController` (Web). `LeadService.CreateAsync` demonstrates the
-  `IUnitOfWork` pattern for real: finds-or-creates the `Customer` (exact name+phone match),
-  creates the `Lead`, and — if `SourceTestId` is set — loads and updates that `Test`'s
-  `ConvertedToLeadId`, all committed in one `SaveChangesAsync` call. Double-conversion (a Test
-  that's already been converted) is rejected in the validator, not the service. Solution builds,
-  `dotnet test` passes (18 tests).
-- ✅ Checkpoint 4 — Sale vertical slice: `SaleDto`/`CreateSaleRequest` (Contracts, + Sale-only
-  `Contracts.Sales.FrameCoverage` since nothing else needs it), `ISaleRepository`/`ISaleService`/
-  `SaleService` (Application), `SaleRepository` (Infrastructure), `SalesController` (Web). Same
-  Lead-linking transaction pattern as Test→Lead (Sale create + source Lead's
-  `ConvertedFlag`/`SaleId` update in one `SaveChangesAsync`). `IReferenceDataLookupService` grew a
-  `GetLensOptionCoatingIdAsync` — for a preset `LensRangeType`, `SaleService` derives
-  `CoatingRefId` from the chosen left-eye `LensOption`'s own forced coating and ignores any
-  client-submitted value entirely; only a `Custom` range actually uses the client's `CoatingRefId`.
-  Solution builds, `dotnet test` passes (18 tests).
-- ⬜ Checkpoint 5 — wrap-up: replace this block with a permanent write-up, retire the
-  Application/Contracts/API portion of the `[OPEN]` item below.
+Shared plumbing: `IReferenceDataLookupService` (`DotGlasses.Application/ReferenceData` — category
+correctness + "Other"-text-required checks, plus `LensOptionBelongsToCatalogueAsync`/
+`GetLensOptionCoatingIdAsync` for preset-range consistency) and `ICustomerRepository`
+(`DotGlasses.Application/Customers` — exact name+phone find-or-create only, no public API; fuzzy/
+suggested-match UX is Field App UI work for later). For a preset `LensRangeType`, `SaleService`
+derives `Sale.CoatingRefId` from the chosen left-eye `LensOption`'s own forced coating and ignores
+any client-submitted value — only a `Custom` range actually uses the client's `CoatingRefId`
+(known simplification if left/right eyes resolve to different coatings — `Sale` has one
+`CoatingRefId` column, not per-eye).
 
-No new xUnit tests are planned for this pass (flagged as a gap, not silently skipped) —
-verification is `dotnet build`/`dotnet test` per checkpoint plus a manual end-to-end smoke test
-against the real running stack once all three entities are wired.
+The `Test` Application-layer types are named `IVisionTestRepository`/`IVisionTestService`/
+`VisionTestService` (not `ITestRepository` etc.) — `ITestRepository` would collide with the
+`DotGlasses.Application.Tests` xUnit project's own root namespace. The Domain entity itself is
+still `Test`.
+
+No new xUnit tests were added for this pass (a gap, not silently skipped) — verified instead via
+`dotnet build`/`dotnet test` per checkpoint plus a full manual end-to-end run against the real
+stack: Test → Lead (`SourceTestId`) → Sale (`SourceLeadId`, preset range), confirming
+`ConvertedToLeadId`/`ConvertedFlag`/`SaleId` link atomically, the derived coating is correct, and
+a second Lead-from-the-same-Test attempt is rejected (400, "already been converted").
+
+**Two bugs found and fixed via that live run, not caught by any existing test:**
+- `AddFluentValidationAutoValidation()` (`Program.cs`) ran FluentValidation synchronously as part
+  of ASP.NET's model-binding pipeline, which can't invoke the async rules Test/Lead/Sale's
+  validators need for DB-backed checks (`AsyncValidatorInvokedSynchronouslyException` on every
+  `POST`). Every controller (`AuthController`, `WidgetExamplesController`, and all of
+  Test/Lead/Sale's) already called `ValidateAsync` explicitly, so auto-validation was fully
+  redundant even before this — removed outright, not worked around.
+- `AuditSaveChangesInterceptor` was never actually running through the real HTTP pipeline —
+  `CreatedAtUtc`/`CreatedBy` came back unset on every entity, including `WidgetExample`. It was
+  registered as `IInterceptor` in DI expecting EF Core's auto-discovery to wire it into
+  `DotGlassesDbContext` (resolved via Aspire's pooled `AddNpgsqlDbContext`), but that
+  auto-discovery silently doesn't fire for a pooled context. `AuditSaveChangesInterceptorTests`
+  never caught this because it constructs the interceptor directly via `AddInterceptors(...)`,
+  bypassing DI entirely. **Fixed in `Program.cs`**, not `DotGlassesDbContext.OnConfiguring` —
+  EF Core throws at startup ("`'OnConfiguring' cannot be used to modify DbContextOptions when
+  DbContext pooling is enabled`") for any attempt to override `OnConfiguring` on a pooled
+  context. The correct place is `AddNpgsqlDbContext`'s `configureDbContextOptions` callback,
+  building the interceptor from a fresh `HttpContextAccessor()` (safe to construct standalone —
+  its `.HttpContext` is backed by a static `AsyncLocal`, not instance state, so one built once at
+  startup stays correct for every future request; same reasoning the query filter already uses).
+  See `Program.cs`'s persistence section for the full comment.
 
 ## RBAC permission matrix
 
@@ -209,8 +220,11 @@ Aspire dashboard).
 
 - Real per-user role/claim assignment beyond the three seeded dev accounts (`DevUserSeeder`) is
   still open — no self-service provisioning flow exists yet.
-- Application/Contracts/API/UI wiring for the new domain entities (Test/Lead/Sale/OrganisationNode/
-  PresetCatalogue/ReferenceDataItem/Customer) — see Domain modelling above. Build screen by screen.
+- Test/Lead/Sale have a full Application/Contracts/API slice now (see Test/Lead/Sale API above),
+  but no UI consumes it yet — `ConsultationForm.razor`/its `Web` modal equivalent are still
+  static placeholder data. OrganisationNode/PresetCatalogue/ReferenceDataItem/Customer have no
+  public API surface at all yet (Customer is internal-only by design; the others are genuinely
+  unbuilt) — build screen by screen, checking field-level shape against the design README first.
 - Offline sync conflict resolution (currently last-write-wins; don't hard-code away a future
   version/ETag column).
 - Azure Monitor/Application Insights exporter connection string.
