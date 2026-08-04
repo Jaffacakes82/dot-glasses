@@ -2,6 +2,7 @@ using DotGlasses.Application.Common;
 using DotGlasses.Application.Customers;
 using DotGlasses.Application.ReferenceData;
 using DotGlasses.Application.Reporting;
+using DotGlasses.Application.VisionTests;
 using DotGlasses.Application.WidgetExamples;
 using DotGlasses.Infrastructure.Identity;
 using DotGlasses.Infrastructure.Persistence;
@@ -34,6 +35,9 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<DotGlassesDbContext>());
         services.AddScoped<IReferenceDataLookupService, ReferenceDataLookupService>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();
+
+        services.AddScoped<IVisionTestRepository, TestRepository>();
+        services.AddScoped<IVisionTestService, VisionTestService>();
 
         return services;
     }
