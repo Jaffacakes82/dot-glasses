@@ -39,28 +39,45 @@ public class DevUserSeeder(IServiceScopeFactory scopeFactory, IOptions<DevSeedOp
             return;
         }
 
-        await CreateIfMissingAsync(
+        await CreateOrUpdateAsync(
             userManager, seed.AdminUserName, seed.AdminPassword,
             OrganisationSeedConfiguration.DgiId, OrganisationSeedConfiguration.DgiPath, OrganisationLevel.Dgi,
             RoleNames.Admin);
 
-        await CreateIfMissingAsync(
+        await CreateOrUpdateAsync(
             userManager, KenyaManagerUserName, KenyaManagerPassword,
             OrganisationSeedConfiguration.KenyaId, OrganisationSeedConfiguration.KenyaPath, OrganisationLevel.Country,
             RoleNames.Manager);
 
-        await CreateIfMissingAsync(
+        await CreateOrUpdateAsync(
             userManager, RetailPointUserUserName, RetailPointUserPassword,
             OrganisationSeedConfiguration.KenyaRetailPointId, OrganisationSeedConfiguration.KenyaRetailPointPath, OrganisationLevel.RetailPoint,
             RoleNames.User);
     }
 
-    private static async Task CreateIfMissingAsync(
+    /// <summary>
+    /// Creates the dev account if missing, or backfills its org fields if it already exists —
+    /// the local Postgres data volume is deliberately persisted across sessions (see CLAUDE.md's
+    /// Deployment section), so an account created before OrgNodeId/OrgLevel existed on
+    /// ApplicationUser would otherwise stay stuck with nulls forever and silently fail every
+    /// OrgLevelRequirement check. Password is only set on first creation, never reset here.
+    /// </summary>
+    private static async Task CreateOrUpdateAsync(
         UserManager<ApplicationUser> userManager, string userName, string password,
         Guid orgNodeId, string hierarchyPath, OrganisationLevel orgLevel, string role)
     {
-        if (await userManager.FindByNameAsync(userName) is not null)
+        var existing = await userManager.FindByNameAsync(userName);
+        if (existing is not null)
         {
+            if (existing.OrgNodeId == orgNodeId && existing.HierarchyPath == hierarchyPath && existing.OrgLevel == orgLevel)
+            {
+                return;
+            }
+
+            existing.OrgNodeId = orgNodeId;
+            existing.HierarchyPath = hierarchyPath;
+            existing.OrgLevel = orgLevel;
+            await userManager.UpdateAsync(existing);
             return;
         }
 
