@@ -1,0 +1,189 @@
+using DotGlasses.Application.Common;
+using DotGlasses.Application.Customers;
+using DotGlasses.Application.Leads;
+using DotGlasses.Application.ReferenceData;
+using DotGlasses.Contracts.Sales;
+using DotGlasses.Domain.Entities;
+using DomainLensRangeType = DotGlasses.Domain.Enums.LensRangeType;
+using DomainFrameCoverage = DotGlasses.Domain.Enums.FrameCoverage;
+using ContractFrameCoverage = DotGlasses.Contracts.Sales.FrameCoverage;
+
+namespace DotGlasses.Application.Sales;
+
+public class SaleService(
+    ISaleRepository repository,
+    ILeadRepository leadRepository,
+    ICustomerRepository customerRepository,
+    IReferenceDataLookupService referenceData,
+    IUnitOfWork unitOfWork) : ISaleService
+{
+    public async Task<SaleDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var entity = await repository.GetByIdAsync(id, cancellationToken);
+        return entity is null ? null : ToDto(entity);
+    }
+
+    public async Task<IReadOnlyList<SaleDto>> ListAsync(CancellationToken cancellationToken = default)
+    {
+        var entities = await repository.ListAsync(cancellationToken);
+        return entities.Select(ToDto).ToList();
+    }
+
+    public async Task<SaleDto> CreateAsync(CreateSaleRequest request, Guid technicianUserId, string hierarchyPath, CancellationToken cancellationToken = default)
+    {
+        var existing = await repository.GetByIdAsync(request.Id, cancellationToken);
+        if (existing is not null)
+        {
+            return ToDto(existing);
+        }
+
+        var customerId = await FindOrCreateCustomerAsync(hierarchyPath, request.FullName, request.PhoneNumber, cancellationToken);
+        var lensRangeType = request.LensRangeType.ToDomain();
+        var coatingRefId = await ResolveCoatingRefIdAsync(lensRangeType, request, cancellationToken);
+
+        var entity = new Sale
+        {
+            Id = request.Id,
+            HierarchyPath = hierarchyPath,
+            TechnicianUserId = technicianUserId,
+            CustomerId = customerId,
+            SourceLeadId = request.SourceLeadId,
+            AgeYears = request.AgeYears,
+            Gender = request.Gender.ToDomain(),
+            OccupationRefId = request.OccupationRefId,
+            OccupationOtherText = request.OccupationOtherText,
+            ConsentGiven = request.ConsentGiven,
+            LensRangeType = lensRangeType,
+            PresetCatalogueId = request.PresetCatalogueId,
+            LensOptionLeftId = request.LensOptionLeftId,
+            LensOptionRightId = request.LensOptionRightId,
+            CustomSphereLeft = request.CustomSphereLeft,
+            CustomCylinderLeft = request.CustomCylinderLeft,
+            CustomAxisLeft = request.CustomAxisLeft,
+            CustomAddPowerLeft = request.CustomAddPowerLeft,
+            CustomSphereRight = request.CustomSphereRight,
+            CustomCylinderRight = request.CustomCylinderRight,
+            CustomAxisRight = request.CustomAxisRight,
+            CustomAddPowerRight = request.CustomAddPowerRight,
+            OrderFromDotGlasses = request.OrderFromDotGlasses,
+            PupilDistanceMm = request.PupilDistanceMm,
+            ChildrensFrame = request.ChildrensFrame,
+            FrameColourRefId = request.FrameColourRefId,
+            FrameColourOtherText = request.FrameColourOtherText,
+            FrameCoverage = ToDomainFrameCoverage(request.FrameCoverage),
+            CoatingRefId = coatingRefId,
+            HardCaseSold = request.HardCaseSold,
+            HardCaseColourRefId = request.HardCaseColourRefId,
+            HardCaseOtherColourText = request.HardCaseOtherColourText,
+        };
+
+        repository.Add(entity);
+
+        if (request.SourceLeadId is { } sourceLeadId)
+        {
+            var sourceLead = await leadRepository.GetByIdAsync(sourceLeadId, cancellationToken);
+            if (sourceLead is not null)
+            {
+                sourceLead.ConvertedFlag = true;
+                sourceLead.SaleId = entity.Id;
+                leadRepository.Update(sourceLead);
+            }
+        }
+
+        // Single SaveChangesAsync call: the Sale create and the source Lead's ConvertedFlag/
+        // SaleId update (if any) commit atomically — see CLAUDE.md's IUnitOfWork note.
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return ToDto(entity);
+    }
+
+    /// <summary>
+    /// Custom range: use the client-submitted CoatingRefId (validator requires + category-checks
+    /// it). Preset range: derive from the left-eye LensOption's own forced coating, ignoring any
+    /// client value entirely — matches the CEO call's "coating is pre-selected per lens" intent.
+    /// Known simplification if left/right eyes resolve to different coatings — see CLAUDE.md.
+    /// </summary>
+    private async Task<Guid> ResolveCoatingRefIdAsync(DomainLensRangeType lensRangeType, CreateSaleRequest request, CancellationToken cancellationToken)
+    {
+        if (lensRangeType == DomainLensRangeType.Custom)
+        {
+            return request.CoatingRefId!.Value;
+        }
+
+        var coatingId = await referenceData.GetLensOptionCoatingIdAsync(request.LensOptionLeftId!.Value, cancellationToken);
+        return coatingId!.Value;
+    }
+
+    /// <summary>Exact name+phone match within the retail point — see LeadService's identical helper.</summary>
+    private async Task<Guid> FindOrCreateCustomerAsync(string hierarchyPath, string fullName, string? phoneNumber, CancellationToken cancellationToken)
+    {
+        var existing = await customerRepository.FindByNameAndPhoneAsync(hierarchyPath, fullName, phoneNumber, cancellationToken);
+        if (existing is not null)
+        {
+            return existing.Id;
+        }
+
+        var customer = new Customer
+        {
+            Id = Guid.NewGuid(),
+            HierarchyPath = hierarchyPath,
+            FullName = fullName,
+            PhoneNumber = phoneNumber,
+        };
+
+        customerRepository.Add(customer);
+        return customer.Id;
+    }
+
+    private static SaleDto ToDto(Sale entity) => new()
+    {
+        Id = entity.Id,
+        HierarchyPath = entity.HierarchyPath,
+        TechnicianUserId = entity.TechnicianUserId,
+        CustomerId = entity.CustomerId,
+        SourceLeadId = entity.SourceLeadId,
+        AgeYears = entity.AgeYears,
+        Gender = entity.Gender.ToContract(),
+        OccupationRefId = entity.OccupationRefId,
+        OccupationOtherText = entity.OccupationOtherText,
+        ConsentGiven = entity.ConsentGiven,
+        LensRangeType = entity.LensRangeType.ToContract(),
+        PresetCatalogueId = entity.PresetCatalogueId,
+        LensOptionLeftId = entity.LensOptionLeftId,
+        LensOptionRightId = entity.LensOptionRightId,
+        CustomSphereLeft = entity.CustomSphereLeft,
+        CustomCylinderLeft = entity.CustomCylinderLeft,
+        CustomAxisLeft = entity.CustomAxisLeft,
+        CustomAddPowerLeft = entity.CustomAddPowerLeft,
+        CustomSphereRight = entity.CustomSphereRight,
+        CustomCylinderRight = entity.CustomCylinderRight,
+        CustomAxisRight = entity.CustomAxisRight,
+        CustomAddPowerRight = entity.CustomAddPowerRight,
+        OrderFromDotGlasses = entity.OrderFromDotGlasses,
+        PupilDistanceMm = entity.PupilDistanceMm,
+        ChildrensFrame = entity.ChildrensFrame,
+        FrameColourRefId = entity.FrameColourRefId,
+        FrameColourOtherText = entity.FrameColourOtherText,
+        FrameCoverage = ToContractFrameCoverage(entity.FrameCoverage),
+        CoatingRefId = entity.CoatingRefId,
+        HardCaseSold = entity.HardCaseSold,
+        HardCaseColourRefId = entity.HardCaseColourRefId,
+        HardCaseOtherColourText = entity.HardCaseOtherColourText,
+        CreatedAtUtc = entity.CreatedAtUtc,
+        ModifiedAtUtc = entity.ModifiedAtUtc,
+    };
+
+    private static DomainFrameCoverage ToDomainFrameCoverage(ContractFrameCoverage coverage) => coverage switch
+    {
+        ContractFrameCoverage.FullFrame => DomainFrameCoverage.FullFrame,
+        ContractFrameCoverage.EyeFrameRimsOnly => DomainFrameCoverage.EyeFrameRimsOnly,
+        _ => throw new ArgumentOutOfRangeException(nameof(coverage), coverage, null),
+    };
+
+    private static ContractFrameCoverage ToContractFrameCoverage(DomainFrameCoverage coverage) => coverage switch
+    {
+        DomainFrameCoverage.FullFrame => ContractFrameCoverage.FullFrame,
+        DomainFrameCoverage.EyeFrameRimsOnly => ContractFrameCoverage.EyeFrameRimsOnly,
+        _ => throw new ArgumentOutOfRangeException(nameof(coverage), coverage, null),
+    };
+}

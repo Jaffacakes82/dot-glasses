@@ -18,4 +18,10 @@ public class ReferenceDataLookupService(DotGlassesDbContext dbContext) : IRefere
 
     public async Task<bool> LensOptionBelongsToCatalogueAsync(Guid lensOptionId, Guid presetCatalogueId, CancellationToken cancellationToken = default) =>
         await dbContext.LensOptions.AnyAsync(x => x.Id == lensOptionId && x.PresetCatalogueId == presetCatalogueId, cancellationToken);
+
+    public async Task<Guid?> GetLensOptionCoatingIdAsync(Guid lensOptionId, CancellationToken cancellationToken = default) =>
+        await dbContext.LensOptions
+            .Where(x => x.Id == lensOptionId)
+            .Select(x => (Guid?)x.CoatingId)
+            .FirstOrDefaultAsync(cancellationToken);
 }
