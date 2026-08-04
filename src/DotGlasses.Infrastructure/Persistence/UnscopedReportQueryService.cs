@@ -16,4 +16,11 @@ public class UnscopedReportQueryService(DotGlassesDbContext dbContext) : IUnscop
             .OrderBy(x => x.HierarchyPath)
             .ThenBy(x => x.Name)
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<OrganisationNodePath>> GetOrganisationNodePathsUnscopedAsync(CancellationToken cancellationToken = default) =>
+        await dbContext.OrganisationNodes
+            .IgnoreQueryFilters()
+            .Where(x => !x.IsDeleted)
+            .Select(x => new OrganisationNodePath(x.Id, x.HierarchyPath))
+            .ToListAsync(cancellationToken);
 }
