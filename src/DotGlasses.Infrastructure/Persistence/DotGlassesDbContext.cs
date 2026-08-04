@@ -33,6 +33,17 @@ public class DotGlassesDbContext(DbContextOptions<DotGlassesDbContext> options, 
 
     public DbSet<WidgetExample> WidgetExamples => Set<WidgetExample>();
 
+    public DbSet<OrganisationNode> OrganisationNodes => Set<OrganisationNode>();
+    public DbSet<UserOrgAssignment> UserOrgAssignments => Set<UserOrgAssignment>();
+    public DbSet<ReferenceDataItem> ReferenceDataItems => Set<ReferenceDataItem>();
+    public DbSet<PresetCatalogue> PresetCatalogues => Set<PresetCatalogue>();
+    public DbSet<PresetCatalogueAssignment> PresetCatalogueAssignments => Set<PresetCatalogueAssignment>();
+    public DbSet<LensOption> LensOptions => Set<LensOption>();
+    public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<Test> Tests => Set<Test>();
+    public DbSet<Lead> Leads => Set<Lead>();
+    public DbSet<Sale> Sales => Set<Sale>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
