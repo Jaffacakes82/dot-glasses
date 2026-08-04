@@ -151,7 +151,16 @@ Status:
   join resolved in memory, not translatable as a single SQL predicate — see its code comment) —
   "which catalogues can this caller's retail point use," the reverse-direction query documented
   under Domain modelling above. Solution builds, `dotnet test` passes (18 tests).
-- ⬜ Checkpoint 2 — App reference-data client + shared `LensRangeSelector.razor`.
+- ✅ Checkpoint 2 — App reference-data client + shared `LensRangeSelector.razor`:
+  `IReferenceDataClient`/`ReferenceDataClient` (`DotGlasses.App/ReferenceData`, singleton,
+  fetch-once-per-session, no IndexedDB caching yet — see Checkpoint 1's note), `LensRangeSelector`
+  (`DotGlasses.App/Pages`, shared by the Lead and Sale sections) + its `LensRangeSelection`
+  mutable UI-state model. **Known rough edge, flagged for later**: `LensRangeType.SixLensSet`/
+  `NineLensSet` aren't otherwise tied to a specific `PresetCatalogueId` in the domain model — the
+  picker matches by catalogue **name** ("6-Lens Set"/"9-Lens Set") since only those two
+  catalogues exist today; if DGI/Country admins ever create additional named catalogues this
+  needs an explicit "kind" field on `PresetCatalogue` instead of name-sniffing. Solution builds,
+  `dotnet test` passes (18 tests).
 - ⬜ Checkpoint 3 — Test sub-form.
 - ⬜ Checkpoint 4 — Lead sub-form.
 - ⬜ Checkpoint 5 — Sale sub-form.
