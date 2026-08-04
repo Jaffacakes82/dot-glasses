@@ -70,7 +70,15 @@ progress survives a session running out mid-task. Status:
   data). `HierarchyDescendantRequirement` is shipped but not yet wired to a controller action —
   no screen operates on a real per-user/per-org resource yet. Solution builds, `dotnet test`
   passes (18 tests, none of which cover the now-gated MVC controllers — no test behaviour change).
-- ⬜ Checkpoint 4 — `DevUserSeeder` extended with Manager/User test accounts for policy testing.
+- ✅ Checkpoint 4 — `DevUserSeeder` extended: still gated behind `DevSeedOptions` (same as
+  before), now seeds three accounts against the seeded org tree — DGI Admin (existing account,
+  now also gets `OrgNodeId`/`OrgLevel` set, previously only `HierarchyPath`), a Manager at the
+  seeded Kenya `Country` node (`kenya-manager@dotglasses.dev`), and a `User` at the seeded
+  RetailPoint (`retailpoint-user@dotglasses.dev`) — fixed dev-only credentials, not configurable
+  (see the file for both passwords). Lets `CustomOrdersView` and the other new policies actually
+  be exercised end-to-end: DGI Admin and Kenya Manager should reach `/custom-orders`, the
+  RetailPoint User should not. Solution builds, `dotnet test` passes (18 tests). Not yet run
+  against a live database — that's the final Verification step, after Checkpoint 5.
 - ⬜ Checkpoint 5 — remove the now-stale "Classical Optician" placeholder data from
   `CataloguesController`/`OrganisationsController`, replace this whole section with the permanent
   write-up, retire the two `[OPEN]` items below it makes obsolete.
