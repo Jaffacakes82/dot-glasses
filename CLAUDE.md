@@ -44,11 +44,19 @@ progress survives a session running out mid-task. Status:
   `ReferenceDataItem`, `PresetCatalogue`, `PresetCatalogueAssignment`, `LensOption`, `Customer`,
   `Test`, `Lead`, `Sale`) and `DotGlasses.Domain/Enums` (`OrganisationLevel`, `Gender`,
   `TestOutcome`, `LensRangeType`, `FrameCoverage`, `ReferenceDataCategory`) — solution builds.
-- ⬜ Checkpoint 2 — Infrastructure persistence: EF configs, `DbSet`s, reference-data + org-tree +
-  preset-catalogue seed migrations (sourced from the Kobo `choices` export, per today's decisions
-  — notably: no "Classical" lens-set option, hard-case colours are Orange/Green/Other not Kobo's
-  Blue/Pink/Purple/Black, coating list is Bradley's 5 not Kobo's 7, photophobia/vision-type/
-  multifocal-type dropped as legacy-only).
+- ✅ Checkpoint 2 — Infrastructure persistence: EF configs in
+  `Persistence/Configurations/*Configuration.cs`, `DbSet`s added to `DotGlassesDbContext`,
+  migration `20260804175140_AddDomainEntities` (reference-data + org-tree + preset-catalogue seed
+  data via `HasData`, sourced from the Kobo `choices` export per today's decisions — notably: no
+  "Classical" lens-set option, hard-case colours are Orange/Green/Other not Kobo's Blue/Pink/
+  Purple/Black, coating list is Bradley's 5 not Kobo's 7, photophobia/vision-type/multifocal-type
+  dropped as legacy-only). Two assumptions made along the way, not explicitly discussed on the
+  call — flag for confirmation once the admin Reference Data / Catalogues screens are wired for
+  real: (1) FrameColour got an "Other" fallback row for consistency with every other reference
+  list, even though the call named exactly 6 fixed colours; (2) every non-bifocal seeded
+  `LensOption` defaults to the "Clear" coating (the call only specified bifocals' forced
+  Photochromic coating). Solution builds, `dotnet test` passes (18 tests). Migration not yet
+  applied to a running database — see Verification in the plan file for how to do that.
 - ⬜ Checkpoint 3 — RBAC: `OrgLevelRequirement`/`HierarchyDescendantRequirement` handlers + named
   policies, `[Authorize]` on the Admin Portal controllers.
 - ⬜ Checkpoint 4 — `DevUserSeeder` extended with Manager/User test accounts for policy testing.
