@@ -133,52 +133,60 @@ a second Lead-from-the-same-Test attempt is rejected (400, "already been convert
 
 ## Field App UI wiring (ConsultationForm.razor)
 
-**[IN PROGRESS 2026-08-04]** Wiring `ConsultationForm.razor` (Field App) to the real Test/Lead/
-Sale API — Admin Portal's equivalent modal is explicitly out of scope for this pass (doesn't
-exist yet, separate larger task). Also explicitly deferred: the lead-match confirm popup, the
-"use test result" Test→Sale carry-over, and progressive disclosure for >10-item catalogues (moot
-today — both seeded catalogues have ≤12 `LensOption`s).
+`ConsultationForm.razor` (Field App) is wired to the real Test/Lead/Sale API (2026-08-04) —
+Admin Portal's equivalent modal is explicitly out of scope (doesn't exist yet, separate larger
+task). Also explicitly deferred: the lead-match confirm popup, the "use test result" Test→Sale
+carry-over, and progressive disclosure for >10-item catalogues (moot today — both seeded
+catalogues have ≤12 `LensOption`s). Full offline caching of reference data is also deferred (see
+below).
 
-Status:
-- ✅ Checkpoint 1 — read-only Reference Data + Preset Catalogue API, a prerequisite this surfaced
-  that wasn't UI work: `ReferenceDataItemDto`/`PresetCatalogueDto`/`LensOptionDto` (Contracts, +
-  `Contracts.Common.ReferenceDataCategory` mirroring `Domain.Enums.ReferenceDataCategory`),
-  `IReferenceDataQueryService`/`IPresetCatalogueQueryService` (Application),
-  `ReferenceDataQueryService`/`PresetCatalogueQueryService` (Infrastructure),
-  `ReferenceDataController`/`PresetCataloguesController` (Web, `GET`-only, any authenticated
-  role — distinct from the MVC `CataloguesController` Admin Portal placeholder). `
-  PresetCatalogueQueryService` implements the cascading-assignment query (`PresetCatalogueAssignment`
-  join resolved in memory, not translatable as a single SQL predicate — see its code comment) —
-  "which catalogues can this caller's retail point use," the reverse-direction query documented
-  under Domain modelling above. Solution builds, `dotnet test` passes (18 tests).
-- ✅ Checkpoint 2 — App reference-data client + shared `LensRangeSelector.razor`:
-  `IReferenceDataClient`/`ReferenceDataClient` (`DotGlasses.App/ReferenceData`, singleton,
-  fetch-once-per-session, no IndexedDB caching yet — see Checkpoint 1's note), `LensRangeSelector`
-  (`DotGlasses.App/Pages`, shared by the Lead and Sale sections) + its `LensRangeSelection`
-  mutable UI-state model. **Known rough edge, flagged for later**: `LensRangeType.SixLensSet`/
-  `NineLensSet` aren't otherwise tied to a specific `PresetCatalogueId` in the domain model — the
-  picker matches by catalogue **name** ("6-Lens Set"/"9-Lens Set") since only those two
-  catalogues exist today; if DGI/Country admins ever create additional named catalogues this
-  needs an explicit "kind" field on `PresetCatalogue` instead of name-sniffing. Solution builds,
-  `dotnet test` passes (18 tests).
-- ✅ Checkpoints 3–5 (combined) — `ConsultationForm.razor`'s Test/Lead/Sale sections all rewired
-  in one pass, not committed as three separate per-type slices as originally planned: the
-  skeleton's shared `@if (IsTest) {...} else { @if (IsSale) {...} else {...} }` template is too
-  interleaved to touch one type at a time without leaving the file showing a visibly
-  inconsistent mix of real reference data and hardcoded stub dropdowns for the not-yet-reworked
-  types. One more shared component extracted along the way beyond `LensRangeSelector`:
-  `ReferenceDataDropdown.razor` (`DotGlasses.App/Pages`) — a reference-data-driven `<select>` +
-  conditional "Other" free-text field, used 5 times across the three sub-forms (Occupation ×3,
-  Referral reason, Reason not purchased, Coating preference, Frame colour, Hard case colour).
-  All three `CreateXRequest`s now build for real and enqueue via `OutboxStore.EnqueueAsync` +
-  `SyncService.SyncPendingAsync()`, exactly `WidgetExamples.razor`'s pattern. "Continue as Lead"
-  now actually saves the Test first, then navigates to `consultation/lead?sourceTestId=...&
-  prefillAge=...&prefillGender=...` — age/gender pre-populate on the Lead form, matching the CEO
-  call's "pre-populate from the test screen." `SourceLeadId` is never set on a Sale in this pass
-  — no Leads list/"convert to sale" entry point exists yet for a technician to pick one from; a
-  Sale recorded here is always a fresh walk-in. Solution builds, `dotnet test` passes (18 tests).
-- ⬜ Checkpoint 6 — wrap-up: manual verification against the real running stack, replace this
-  block with a permanent write-up.
+**New read-only API** (a prerequisite this surfaced, not UI work): `ReferenceDataItemDto`/
+`PresetCatalogueDto`/`LensOptionDto` (Contracts, + `Contracts.Common.ReferenceDataCategory`
+mirroring `Domain.Enums.ReferenceDataCategory`), `IReferenceDataQueryService`/
+`IPresetCatalogueQueryService` (Application), `ReferenceDataController`/
+`PresetCataloguesController` (Web, `GET`-only, any authenticated role — distinct from the MVC
+`CataloguesController` Admin Portal placeholder).
+
+**App-side**: `IReferenceDataClient` (`DotGlasses.App/ReferenceData`, singleton, fetch-once-per-
+session — no IndexedDB caching yet, degrades with a retry message if unreachable, same pattern
+`WidgetExamples.razor` uses for its own round trip), and two shared components:
+`LensRangeSelector.razor` (the SixLensSet/NineLensSet/Custom picker, used by both Lead and Sale)
+and `ReferenceDataDropdown.razor` (a reference-data `<select>` + conditional "Other" free-text
+field, used 5×). All three `CreateXRequest`s build for real and enqueue via
+`OutboxStore.EnqueueAsync` + `SyncService.SyncPendingAsync()`, exactly `WidgetExamples.razor`'s
+pattern. "Continue as Lead" saves the Test first, then navigates to `consultation/lead?
+sourceTestId=...&prefillAge=...&prefillGender=...` — age/gender pre-populate on the Lead form.
+`SourceLeadId` is never set on a Sale in this pass — no Leads list/"convert to sale" entry point
+exists yet for a technician to pick one from; a Sale recorded here is always a fresh walk-in.
+
+**Known rough edge, flagged for later**: `LensRangeType.SixLensSet`/`NineLensSet` aren't
+otherwise tied to a specific `PresetCatalogueId` in the domain model — `LensRangeSelector`
+matches by catalogue **name** ("6-Lens Set"/"9-Lens Set") since only those two catalogues exist
+today; if DGI/Country admins ever create additional named catalogues this needs an explicit
+"kind" field on `PresetCatalogue` instead of name-sniffing.
+
+**Verified live end-to-end** (real browser against a real running stack, not just build+test):
+signed in as the seeded RetailPoint dev user, recorded a Test with `Outcome: NeedsGlasses`,
+clicked "Continue as Lead" (confirmed the Test's `ConvertedToLeadId` linked + age/gender
+pre-filled), saved a Lead with a preset 6-Lens Set range, then separately saved a standalone Sale
+choosing a **bifocal** left-eye lens paired with a **non-bifocal** right-eye lens — confirmed
+`CoatingRefId` landed as "Photochromic" (derived from the left eye, per the documented
+known-simplification), `HierarchyPath`/`TechnicianUserId` on every record matched the signed-in
+user's own JWT claims (never anything a client could have sent — there's no such field on any
+Create form), and the Customer record was correctly reused (not duplicated) across the Lead and
+Sale sharing the same name+phone.
+
+**One real bug found and fixed via that live run**: `PresetCatalogueQueryService`'s join against
+`OrganisationNodes` was silently caught by the global hierarchy-scoping query filter — a
+RetailPoint-level caller's own query only ever sees their own subtree, so the Country-level
+ancestor a catalogue was actually assigned to got filtered out, and every preset appeared "not
+available" for retail-point users specifically (DGI-level testing never would have caught this,
+since DGI's own subtree contains everything). Fixed by resolving org paths via
+`IUnscopedReportQueryService` (extended with `GetOrganisationNodePathsUnscopedAsync`) instead of
+querying `OrganisationNodes` directly — the sanctioned way to look outside a caller's hierarchy
+scope, per the Architecture rules above; this is exactly the kind of ad hoc scoping bug that rule
+exists to prevent, and it still slipped through because the *query itself* wasn't obviously
+"looking outside scope" until traced through.
 
 ## RBAC permission matrix
 
@@ -213,13 +221,13 @@ acts on a specific target user/org — not yet wired to one, see above).
 - Bootstrap is still present in both projects (grid utilities, form controls, the native modal
   JS in `UserDirectory`) — the design system layers custom `dg-*` classes/tokens on top rather
   than replacing it.
-- Admin Portal (`Web`) screens are skeletons over static placeholder data (in each
+- Admin Portal (`Web`) screens are still skeletons over static placeholder data (in each
   `Controllers/*Controller.cs`, not a database) — Dashboard, Organisations, Event History, User
-  Directory, Preset Catalogues, Custom Orders, Reference Data. `ConsultationForm.razor` in `App`
-  (and its `Web` modal equivalent, not yet built) is the same story — a visual skeleton with no
-  save wiring. Test/Lead/Sale and everything else are now designed real entities (see Domain
-  modelling above) — don't wire these screens to them without checking each screen's field-level
-  shape against the design README first (that wiring is the deliberately deferred next phase).
+  Directory, Preset Catalogues, Custom Orders, Reference Data. Don't wire these up without
+  checking each screen's field-level shape against the design README first (that wiring is the
+  deliberately deferred next phase — see Domain modelling above). `ConsultationForm.razor` in
+  `App` is **no longer a stub** — it saves real Test/Lead/Sale records via the real API (see
+  Field App UI wiring above); its `Web` modal equivalent still doesn't exist.
 - All seven Admin Portal controllers now have `[Authorize]` (see RBAC permission matrix above) —
   `HomeController`'s `Error` action is `[AllowAnonymous]` so error pages render for logged-out
   users too.
@@ -269,20 +277,38 @@ Aspire dashboard).
 
 - Real per-user role/claim assignment beyond the three seeded dev accounts (`DevUserSeeder`) is
   still open — no self-service provisioning flow exists yet.
-- Test/Lead/Sale have a full Application/Contracts/API slice now (see Test/Lead/Sale API above),
-  but no UI consumes it yet — `ConsultationForm.razor`/its `Web` modal equivalent are still
-  static placeholder data. OrganisationNode/PresetCatalogue/ReferenceDataItem/Customer have no
-  public API surface at all yet (Customer is internal-only by design; the others are genuinely
-  unbuilt) — build screen by screen, checking field-level shape against the design README first.
+- The Field App's `ConsultationForm.razor` is wired to the real API (see Field App UI wiring
+  above); the Admin Portal's equivalent modal still doesn't exist. OrganisationNode/
+  PresetCatalogue/ReferenceDataItem have no *write* API yet (reference data is DGI-editable per
+  the RBAC matrix, but there's nowhere to actually edit it — the Admin Portal's Reference Data/
+  Catalogues screens are still placeholder); Customer is internal-only by design. Build the
+  Admin Portal screens next, screen by screen, checking field-level shape against the design
+  README first.
+- No Leads-list/"convert to sale" entry point exists yet — a Sale recorded via
+  `ConsultationForm.razor` can never set `SourceLeadId`, so a Lead's `ConvertedFlag`/`SaleId`
+  currently only ever get set via the Test→Lead→(same-session)→Sale path, never by converting an
+  existing Lead found later. Needs an Event History/Leads screen action once one exists.
+- Full offline (IndexedDB) caching of reference data/preset catalogues — `IReferenceDataClient`
+  currently needs connectivity to load the first time each session; a technician who's never
+  been online since app install can't record anything yet.
+- Domain-shape question, not resolved, don't guess: the CEO transcript separately mentions "0 to
+  4 PD (0 to 2 for children)" for *preset*-range pupil distance, which reads as a UI shorthand/
+  frame-fit bucket rather than literal millimetres, distinct from the real 54–74mm
+  inter-pupillary-distance field used for Custom range. `LensRangeSelector` currently only
+  exposes the real mm field, for both range types — ask before inventing a second taxonomy.
+  See `Lead`/`Sale.PupilDistanceMm`.
+- `LensRangeType.SixLensSet`/`NineLensSet` matching a specific `PresetCatalogueId` by catalogue
+  **name** (see Field App UI wiring above) — fine while only two catalogues exist, needs an
+  explicit "kind" field on `PresetCatalogue` if DGI/Country ever create more.
 - Offline sync conflict resolution (currently last-write-wins; don't hard-code away a future
   version/ETag column).
 - Azure Monitor/Application Insights exporter connection string.
 - `azd pipeline config` not run yet — see Deployment section below.
 - UI skeleton screens are static placeholder data, not wired to a database — see UI / design
-  system section above. In particular the Consultation Form skeleton is missing the lead-match
-  confirm popup, the "use test result" carry-over from Test to Sale, and progressive disclosure
-  for catalogues with >10 items (short list vs. searchable lookup) — all present in the design
-  mockups but not built.
+  system section above. The Consultation Form is still missing the lead-match confirm popup, the
+  "use test result" carry-over from Test to Sale, and progressive disclosure for catalogues with
+  >10 items — all present in the design mockups but not built (deliberately deferred, not an
+  oversight — see Field App UI wiring above).
 - Field App's `wwwroot/appsettings.json` `ApiBaseUrl` still points at `Web`'s local dev HTTPS
   port — needs updating to the real deployed API origin once that exists.
 - Two reference-data seeding assumptions not explicitly discussed on the call — see Domain

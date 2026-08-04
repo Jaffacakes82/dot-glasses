@@ -12,4 +12,13 @@ namespace DotGlasses.Application.Reporting;
 public interface IUnscopedReportQueryService
 {
     Task<IReadOnlyList<WidgetExample>> GetAllWidgetExamplesUnscopedAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Every org node's Id + HierarchyPath, ignoring the hierarchy-scoping filter.
+    /// Needed by anything that must look "upward" from the caller (e.g.
+    /// PresetCatalogueQueryService resolving which ancestor orgs a catalogue is assigned to) —
+    /// the standard filter only ever shows a caller their own subtree, so a plain scoped query
+    /// against OrganisationNodes silently returns nothing for ancestor lookups.</summary>
+    Task<IReadOnlyList<OrganisationNodePath>> GetOrganisationNodePathsUnscopedAsync(CancellationToken cancellationToken = default);
 }
+
+public record OrganisationNodePath(Guid Id, string HierarchyPath);
