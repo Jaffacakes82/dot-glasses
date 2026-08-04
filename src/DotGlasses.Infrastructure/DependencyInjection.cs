@@ -1,6 +1,7 @@
 using DotGlasses.Application.Common;
 using DotGlasses.Application.Customers;
 using DotGlasses.Application.Leads;
+using DotGlasses.Application.PresetCatalogues;
 using DotGlasses.Application.ReferenceData;
 using DotGlasses.Application.Reporting;
 using DotGlasses.Application.Sales;
@@ -34,6 +35,8 @@ public static class DependencyInjection
 
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<DotGlassesDbContext>());
         services.AddScoped<IReferenceDataLookupService, ReferenceDataLookupService>();
+        services.AddScoped<IReferenceDataQueryService, ReferenceDataQueryService>();
+        services.AddScoped<IPresetCatalogueQueryService, PresetCatalogueQueryService>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();
 
         services.AddScoped<IVisionTestRepository, TestRepository>();
