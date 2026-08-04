@@ -35,58 +35,58 @@ call the API directly from a Blazor page/component.
 
 ## Domain modelling
 
-**[IN PROGRESS 2026-08-04]** Real domain entities are now settled (CEO follow-up conversation +
-`design/design_handoff_dot_glasses_platform/README.md` + same-day decisions on Custom Orders
-scope, preset catalogue assignment, Manager RBAC scope, and Kobo-sourced reference data — see
-plan `breezy-conjuring-galaxy.md` for full rationale) and are being built in checkpoints so
-progress survives a session running out mid-task. Status:
-- ✅ Checkpoint 1 — `DotGlasses.Domain/Entities` (`OrganisationNode`, `UserOrgAssignment`,
-  `ReferenceDataItem`, `PresetCatalogue`, `PresetCatalogueAssignment`, `LensOption`, `Customer`,
-  `Test`, `Lead`, `Sale`) and `DotGlasses.Domain/Enums` (`OrganisationLevel`, `Gender`,
-  `TestOutcome`, `LensRangeType`, `FrameCoverage`, `ReferenceDataCategory`) — solution builds.
-- ✅ Checkpoint 2 — Infrastructure persistence: EF configs in
-  `Persistence/Configurations/*Configuration.cs`, `DbSet`s added to `DotGlassesDbContext`,
-  migration `20260804175140_AddDomainEntities` (reference-data + org-tree + preset-catalogue seed
-  data via `HasData`, sourced from the Kobo `choices` export per today's decisions — notably: no
-  "Classical" lens-set option, hard-case colours are Orange/Green/Other not Kobo's Blue/Pink/
-  Purple/Black, coating list is Bradley's 5 not Kobo's 7, photophobia/vision-type/multifocal-type
-  dropped as legacy-only). Two assumptions made along the way, not explicitly discussed on the
-  call — flag for confirmation once the admin Reference Data / Catalogues screens are wired for
-  real: (1) FrameColour got an "Other" fallback row for consistency with every other reference
-  list, even though the call named exactly 6 fixed colours; (2) every non-bifocal seeded
-  `LensOption` defaults to the "Clear" coating (the call only specified bifocals' forced
-  Photochromic coating). Solution builds, `dotnet test` passes (18 tests). Migration not yet
-  applied to a running database — see Verification in the plan file for how to do that.
-- ✅ Checkpoint 3 — RBAC: `OrgLevelRequirement`/`HierarchyDescendantRequirement` handlers + named
-  policies in `AuthorizationPolicies`, wired in `Program.cs`. `ICurrentUserContext` gained
-  `OrgLevel` (denormalized onto `ApplicationUser.OrgLevel`, stamped as an `OrgLevel` claim at
-  sign-in, same no-DB-round-trip pattern as `HierarchyPath`) so the new handlers depend only on
-  `ICurrentUserContext` (Application), never `DotGlassesDbContext` directly — keeps Web's
-  Authorization folder inside the Clean Architecture boundary. `[Authorize]` now on all seven
-  Admin Portal controllers: `CustomOrdersController`/`ReferenceDataController`/
-  `CataloguesController` gated by their new level policies, `HomeController` (with `[AllowAnonymous]`
-  kept on its `Error` action)/`OrganisationsController`/`EventHistoryController`/
-  `UserDirectoryController` gated by plain `[Authorize]` (real per-row scoping still pending real
-  data). `HierarchyDescendantRequirement` is shipped but not yet wired to a controller action —
-  no screen operates on a real per-user/per-org resource yet. Solution builds, `dotnet test`
-  passes (18 tests, none of which cover the now-gated MVC controllers — no test behaviour change).
-- ✅ Checkpoint 4 — `DevUserSeeder` extended: still gated behind `DevSeedOptions` (same as
-  before), now seeds three accounts against the seeded org tree — DGI Admin (existing account,
-  now also gets `OrgNodeId`/`OrgLevel` set, previously only `HierarchyPath`), a Manager at the
-  seeded Kenya `Country` node (`kenya-manager@dotglasses.dev`), and a `User` at the seeded
-  RetailPoint (`retailpoint-user@dotglasses.dev`) — fixed dev-only credentials, not configurable
-  (see the file for both passwords). Lets `CustomOrdersView` and the other new policies actually
-  be exercised end-to-end: DGI Admin and Kenya Manager should reach `/custom-orders`, the
-  RetailPoint User should not. Solution builds, `dotnet test` passes (18 tests). Not yet run
-  against a live database — that's the final Verification step, after Checkpoint 5.
-- ⬜ Checkpoint 5 — remove the now-stale "Classical Optician" placeholder data from
-  `CataloguesController`/`OrganisationsController`, replace this whole section with the permanent
-  write-up, retire the two `[OPEN]` items below it makes obsolete.
+Real domain entities are now designed and persisted (2026-08-04, following the CEO conversation
++ `design/design_handoff_dot_glasses_platform/README.md` + same-day follow-up decisions on Custom
+Orders scope, preset catalogue assignment, Manager RBAC scope, and Kobo-sourced reference data):
+org hierarchy (`OrganisationNode` — arbitrary-depth, only `Dgi`/`Country`/`Intermediate`/
+`RetailPoint` carry business rules), `Test`/`Lead`/`Sale` as separate atomic events, admin-
+configurable `PresetCatalogue`/`LensOption` (lens range is picked per-transaction by the
+technician now, not locked at the org level — there is no "Classical Optician" preset), a generic
+`ReferenceDataItem` table backing every admin-managed dropdown (seeded from the Kobo `choices`
+export — see `Persistence/Configurations/*SeedConfiguration.cs`), and a lightweight `Customer`
+entity for name+phone matching. Full shape: `DotGlasses.Domain/Entities` and `/Enums`.
+
+Two assumptions made while seeding, not explicitly discussed on the call — confirm once the
+Reference Data / Catalogues admin screens are wired for real: (1) `FrameColour` has an "Other"
+fallback row for consistency with every other reference list, even though the call named exactly
+6 fixed colours; (2) every non-bifocal seeded `LensOption` defaults to the "Clear" coating (the
+call only specified bifocals' forced Photochromic).
+
+RBAC now has a real permission matrix backing it (`OrgLevelRequirement`/
+`HierarchyDescendantRequirement` in `Web/Authorization`, see the RBAC section below) and all
+seven Admin Portal controllers have `[Authorize]`.
 
 `WidgetExample` remains the architectural reference pattern (audit/soft-delete/hierarchy-scoping/
-offline-sync skeleton) and isn't being deleted — real entities exist alongside it, not instead of
-it, until the new entities have their own Application/Contracts/API/UI wiring (deliberately out of
-scope for this pass — no screen consumes them yet, see the plan file).
+offline-sync skeleton) and isn't deleted — real entities exist alongside it. **Application/
+Contracts/API/UI wiring for the new entities is a deliberately deferred next phase** — no screen
+consumes them yet (Admin Portal and `ConsultationForm.razor` are still static placeholder data,
+see UI / design system below); wire it up screen by screen as each one gets real data, checking
+field-level shape against the design README first, rather than as one big pass.
+`HierarchyDescendantRequirement` is shipped but not yet wired to a controller action for the same
+reason — no screen operates on a real per-user/per-org resource yet.
+
+## RBAC permission matrix
+
+Three roles (Admin/Manager/User), assignable at any org node, scope = that node + everything
+beneath it:
+- **Admin at DGI**: super admin — the only role/level that can edit reference data
+  (`AuthorizationPolicies.ReferenceDataManage`) or touch DGI-critical settings.
+- **Admin at a child org**: full control of that org and everything beneath it.
+- **Manager**: can manage *any* user at/below their node, **including other Admins**, irrespective
+  of that user's role (2026-08-04 decision — deliberately not role-gated the other way). Can
+  create child orgs beneath their scope. Can create/assign preset catalogues at Country level and
+  above (`AuthorizationPolicies.PresetCatalogueManage`).
+- **User**: at a Retail Point, Field App access + read-only MI for that outlet only.
+- **Custom Orders** page (`AuthorizationPolicies.CustomOrdersView`): DGI/Country only, hidden
+  entirely below that (2026-08-04 decision).
+- Event History is visible at every level, but scoped to the viewer's role + org — not yet
+  enforced (still placeholder data, see UI / design system below).
+
+Backed by `OrgLevelRequirement` (role + own org level at/above a threshold — no DB round trip,
+reads `ICurrentUserContext.OrgLevel`, itself denormalized onto `ApplicationUser.OrgLevel` and
+stamped as a claim at sign-in, same pattern as `HierarchyPath`) and
+`HierarchyDescendantRequirement` (role + resource-based subtree check, for when a controller
+acts on a specific target user/org — not yet wired to one, see above).
 
 ## UI / design system
 
@@ -102,12 +102,12 @@ scope for this pass — no screen consumes them yet, see the plan file).
   `Controllers/*Controller.cs`, not a database) — Dashboard, Organisations, Event History, User
   Directory, Preset Catalogues, Custom Orders, Reference Data. `ConsultationForm.razor` in `App`
   (and its `Web` modal equivalent, not yet built) is the same story — a visual skeleton with no
-  save wiring, since Test/Lead/Sale aren't designed entities yet (see Domain modelling above).
-  Don't wire these to a real data source without checking the shape against real entities first.
-- `HomeController` (Admin Portal Dashboard, the landing route) has **no `[Authorize]`** —
-  reachable without logging in. Same for the other new Admin controllers. Deliberately left
-  alone pending the RBAC permission matrix decision below; don't silently add authorization
-  attributes without checking which policy/role each screen should require.
+  save wiring. Test/Lead/Sale and everything else are now designed real entities (see Domain
+  modelling above) — don't wire these screens to them without checking each screen's field-level
+  shape against the design README first (that wiring is the deliberately deferred next phase).
+- All seven Admin Portal controllers now have `[Authorize]` (see RBAC permission matrix above) —
+  `HomeController`'s `Error` action is `[AllowAnonymous]` so error pages render for logged-out
+  users too.
 
 ## Deployment (Azure)
 
@@ -152,12 +152,10 @@ Aspire dashboard).
 
 ## `[OPEN]` items — implement simplest placeholder, flag, don't guess
 
-- RBAC permission matrix (roles are Admin/Manager/User; only one example policy is wired). The
-  three role names themselves now seed via migration (`RoleSeedConfiguration`, `HasData`), not a
-  hosted service — real per-user role/claim assignment is still open.
-- **None of the new Admin Portal controllers have `[Authorize]`** (Dashboard/Home, Organisations,
-  Event History, User Directory, Catalogues, Custom Orders, Reference Data) — needs gating once
-  the RBAC matrix above is decided, since the right policy per screen isn't obvious yet.
+- Real per-user role/claim assignment beyond the three seeded dev accounts (`DevUserSeeder`) is
+  still open — no self-service provisioning flow exists yet.
+- Application/Contracts/API/UI wiring for the new domain entities (Test/Lead/Sale/OrganisationNode/
+  PresetCatalogue/ReferenceDataItem/Customer) — see Domain modelling above. Build screen by screen.
 - Offline sync conflict resolution (currently last-write-wins; don't hard-code away a future
   version/ETag column).
 - Azure Monitor/Application Insights exporter connection string.
@@ -169,8 +167,8 @@ Aspire dashboard).
   mockups but not built.
 - Field App's `wwwroot/appsettings.json` `ApiBaseUrl` still points at `Web`'s local dev HTTPS
   port — needs updating to the real deployed API origin once that exists.
-- Reference Data's "Referral reasons" seed list is a best guess — the real source of truth is
-  DOT Glasses' existing Kobo form (not in this repo); ask before finalizing.
+- Two reference-data seeding assumptions not explicitly discussed on the call — see Domain
+  modelling above (FrameColour's "Other" row, non-bifocal LensOptions defaulting to "Clear").
 
 This file should grow as real architectural decisions get made — propose updates here when a
 significant decision is agreed, not as a one-time artifact.

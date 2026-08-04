@@ -13,10 +13,10 @@ public class OrganisationsController : Controller
         [
             new OrgNode("kenya", "Kenya", "Country", Catalogue: null, Kind: null, Children:
             [
-                new OrgNode("classical-optician", "Classical Optician", "Retailer", "Classical Optician", Kind: null, Children:
+                new OrgNode("nairobi-retail-group", "Nairobi Retail Group", "Retailer", "6-Lens Set", Kind: null, Children:
                 [
-                    new OrgNode("kangemi", "Kangemi Vision Centre", "RetailPoint", "Classical Optician", "Standalone", []),
-                    new OrgNode("nakuru-central", "Nakuru Central", "RetailPoint", "Classical Optician", "Standalone", []),
+                    new OrgNode("kangemi", "Kangemi Vision Centre", "RetailPoint", "6-Lens Set", "Standalone", []),
+                    new OrgNode("nakuru-central", "Nakuru Central", "RetailPoint", "6-Lens Set", "Standalone", []),
                 ]),
                 new OrgNode("diocese-nakuru", "Diocese of Nakuru Network", "Retailer", "Community Essentials", "Affiliated network", Children:
                 [
@@ -25,7 +25,7 @@ public class OrganisationsController : Controller
             ]),
             new OrgNode("uganda", "Uganda", "Country", Catalogue: null, Kind: null, Children:
             [
-                new OrgNode("kampala-optics", "Kampala Optics Group", "Retailer", "Classical Optician", Kind: null, Children: []),
+                new OrgNode("kampala-optics", "Kampala Optics Group", "Retailer", "9-Lens Set", Kind: null, Children: []),
             ]),
         ]);
 
