@@ -65,6 +65,37 @@ field-level shape against the design README first, rather than as one big pass.
 `HierarchyDescendantRequirement` is shipped but not yet wired to a controller action for the same
 reason — no screen operates on a real per-user/per-org resource yet.
 
+## Test/Lead/Sale API
+
+**[IN PROGRESS 2026-08-04]** Building the Application/Contracts/API vertical slice for Test/Lead/
+Sale (the first slice of the "deferred next phase" above), following `WidgetExampleService`/
+`WidgetExampleRepository`/`WidgetExamplesController` as the structural template but with three
+deliberate departures — see plan `breezy-conjuring-galaxy.md` for full rationale:
+1. Create requests never accept `HierarchyPath`/`TechnicianUserId` from the client — the Web
+   controller stamps both from `ICurrentUserContext` instead of trusting the request body.
+2. No public Update endpoint — Test/Lead/Sale are create-once atomic events; server-side linking
+   (Test→Lead, Lead→Sale) happens inside the service layer, not via a PUT contract.
+3. New `IUnitOfWork` (`DotGlasses.Application/Common`, `DotGlassesDbContext` satisfies it
+   directly) lets a service batch multiple repository writes into one transaction — needed because
+   converting a Test into a Lead must set `Test.ConvertedToLeadId` atomically with creating the
+   Lead. `WidgetExampleRepository` is untouched; this is additive, not a retrofit.
+
+Status:
+- ✅ Checkpoint 1 — shared plumbing: `IUnitOfWork`, `IReferenceDataLookupService`
+  (`DotGlasses.Application/ReferenceData`, backs category-correctness + "Other"-text-required
+  validation without validators touching Infrastructure), `ICustomerRepository`
+  (`DotGlasses.Application/Customers`, exact-match find-or-create only — no public API; fuzzy
+  matching is Field App UI work for later). Solution builds, `dotnet test` passes (18 tests).
+- ⬜ Checkpoint 2 — Test vertical slice.
+- ⬜ Checkpoint 3 — Lead vertical slice (Test-linking, Customer find-or-create).
+- ⬜ Checkpoint 4 — Sale vertical slice (Lead-linking, derived coating for preset ranges).
+- ⬜ Checkpoint 5 — wrap-up: replace this block with a permanent write-up, retire the
+  Application/Contracts/API portion of the `[OPEN]` item below.
+
+No new xUnit tests are planned for this pass (flagged as a gap, not silently skipped) —
+verification is `dotnet build`/`dotnet test` per checkpoint plus a manual end-to-end smoke test
+against the real running stack once all three entities are wired.
+
 ## RBAC permission matrix
 
 Three roles (Admin/Manager/User), assignable at any org node, scope = that node + everything
