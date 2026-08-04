@@ -7,6 +7,7 @@ using DotGlasses.Domain.Enums;
 using DotGlasses.Infrastructure;
 using DotGlasses.Infrastructure.Identity;
 using DotGlasses.Infrastructure.Persistence;
+using DotGlasses.Infrastructure.Persistence.Interceptors;
 using DotGlasses.Web.Auth;
 using DotGlasses.Web.Authorization;
 using DotGlasses.Web.Configuration;
@@ -32,7 +33,16 @@ builder.AddServiceDefaults();
 
 // --- Persistence -----------------------------------------------------------------------
 // "dotglassesdb" must match the database resource name AppHost gives Postgres.
-builder.AddNpgsqlDbContext<DotGlassesDbContext>("dotglassesdb");
+//
+// AuditSaveChangesInterceptor is wired here via configureDbContextOptions, not inside
+// DotGlassesDbContext.OnConfiguring — EF Core throws at startup ("'OnConfiguring' cannot be used
+// to modify DbContextOptions when DbContext pooling is enabled") for a context registered via
+// AddNpgsqlDbContext, which always pools. This is the officially-supported place to add an
+// interceptor for a pooled context. A single HttpContextAccessor built once here stays correct
+// for every future request — its .HttpContext is backed by a static AsyncLocal, not instance
+// state (same reasoning DotGlassesDbContext's own query filter already relies on).
+builder.AddNpgsqlDbContext<DotGlassesDbContext>("dotglassesdb", configureDbContextOptions: optionsBuilder =>
+    optionsBuilder.AddInterceptors(new AuditSaveChangesInterceptor(new CurrentUserContext(new HttpContextAccessor()))));
 
 builder.Services.AddInfrastructure();
 
@@ -103,9 +113,16 @@ builder.Services.AddScoped<IAuthorizationHandler, HierarchyDescendantAuthorizati
 // WidgetExample's). This (Web) assembly: validators needing reference-data/cross-entity lookups
 // (e.g. Test/Lead/Sale's) — those can't live in Contracts, which DotGlasses.App also references
 // and must never pull in Application (see CLAUDE.md's Architecture rules).
+//
+// Deliberately NOT calling AddFluentValidationAutoValidation(): it runs FluentValidation
+// synchronously as part of ASP.NET's model-binding pipeline, which can't invoke the async rules
+// Test/Lead/Sale's validators need for DB-backed reference-data checks (throws
+// AsyncValidatorInvokedSynchronouslyException — found via the live smoke test, see CLAUDE.md).
+// Every controller (AuthController, WidgetExamplesController, and all of Test/Lead/Sale's) was
+// already calling ValidateAsync explicitly, so auto-validation was fully redundant even before
+// this — removing it is a pure fix, not a behavior change for the sync validators.
 builder.Services.AddValidatorsFromAssembly(typeof(DotGlasses.Contracts.WidgetExamples.WidgetExampleDto).Assembly);
 builder.Services.AddValidatorsFromAssembly(typeof(Program).Assembly);
-builder.Services.AddFluentValidationAutoValidation();
 
 // --- API versioning + Swagger ------------------------------------------------------------
 builder.Services.AddApiVersioning(options =>
