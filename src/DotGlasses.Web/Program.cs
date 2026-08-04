@@ -99,7 +99,12 @@ builder.Services.AddScoped<IAuthorizationHandler, OrgLevelAuthorizationHandler>(
 builder.Services.AddScoped<IAuthorizationHandler, HierarchyDescendantAuthorizationHandler>();
 
 // --- Validation --------------------------------------------------------------------------
+// Contracts assembly: validators with no Infrastructure/Application dependency (e.g.
+// WidgetExample's). This (Web) assembly: validators needing reference-data/cross-entity lookups
+// (e.g. Test/Lead/Sale's) — those can't live in Contracts, which DotGlasses.App also references
+// and must never pull in Application (see CLAUDE.md's Architecture rules).
 builder.Services.AddValidatorsFromAssembly(typeof(DotGlasses.Contracts.WidgetExamples.WidgetExampleDto).Assembly);
+builder.Services.AddValidatorsFromAssembly(typeof(Program).Assembly);
 builder.Services.AddFluentValidationAutoValidation();
 
 // --- API versioning + Swagger ------------------------------------------------------------

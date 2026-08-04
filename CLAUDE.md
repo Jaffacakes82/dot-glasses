@@ -12,6 +12,14 @@ decisions only, not documentation (that's `README.md`).
 - **`DotGlasses.App` may only ever reference `DotGlasses.Contracts`.** If a change seems to
   need `App` to reference anything else, that's a signal the type belongs in `Contracts`
   instead — flag it, don't add the reference.
+- **`Contracts` must not reference `Domain` or `Application`** — it's a pure wire-shape layer, not
+  because of a project reference someone forgot to add but because `App` referencing `Contracts`
+  must not transitively pull in `Domain`/`Application`. DTOs that need an enum define their own
+  copy in `Contracts` (e.g. `Contracts.Common.Gender` next to `Domain.Enums.Gender`) rather than
+  referencing the Domain one; map between them in the Application layer. Validators that need a
+  DB-backed check (e.g. "does this Guid reference an active reference-data item") can't be
+  co-located with their DTO in `Contracts` for the same reason — they live in
+  `DotGlasses.Web.Validation.*` instead, referencing `Application` interfaces directly.
 - No MediatR. Plain application services with interfaces in `Application`, implementations
   alongside.
 - Controller-based Web API (not Minimal APIs), versioned from `v1`, Swagger-visible.
@@ -86,7 +94,7 @@ Status:
   validation without validators touching Infrastructure), `ICustomerRepository`
   (`DotGlasses.Application/Customers`, exact-match find-or-create only — no public API; fuzzy
   matching is Field App UI work for later). Solution builds, `dotnet test` passes (18 tests).
-- ⬜ Checkpoint 2 — Test vertical slice.
+- ✅ Checkpoint 2 — Test vertical slice: `TestDto`/`CreateTestRequest` (Contracts), `IVisionTestRepository`/`IVisionTestService`/`VisionTestService` (Application — named "VisionTest" not "Test" to avoid colliding with the `DotGlasses.Application.Tests` xUnit project's own root namespace; the Domain entity is still `Test`), `TestRepository` (Infrastructure), `TestsController` (Web, `GET`/`GET {id}`/`POST` only). Found along the way: **Contracts must not reference Domain** — `DotGlasses.App` references only Contracts and must never transitively pull in Domain/Application, so wire-shape enums (`Contracts.Common.Gender`, `Contracts.Tests.TestOutcome`) are separate types from `Domain.Enums`, mapped in the Application layer (`GenderMapping` — shared across Test/Lead/Sale since Gender repeats; outcome/range-type enums are entity-specific and mapped inline in their own service). Validators needing DB-backed reference-data checks live in `DotGlasses.Web.Validation.*` (new — `AddValidatorsFromAssembly` now also scans the Web assembly), not co-located with the Contracts DTO like WidgetExample's was, for the same Contracts-must-not-reference-Application reason. Solution builds, `dotnet test` passes (18 tests).
 - ⬜ Checkpoint 3 — Lead vertical slice (Test-linking, Customer find-or-create).
 - ⬜ Checkpoint 4 — Sale vertical slice (Lead-linking, derived coating for preset ranges).
 - ⬜ Checkpoint 5 — wrap-up: replace this block with a permanent write-up, retire the
