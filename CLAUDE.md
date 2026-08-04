@@ -57,8 +57,19 @@ progress survives a session running out mid-task. Status:
   `LensOption` defaults to the "Clear" coating (the call only specified bifocals' forced
   Photochromic coating). Solution builds, `dotnet test` passes (18 tests). Migration not yet
   applied to a running database — see Verification in the plan file for how to do that.
-- ⬜ Checkpoint 3 — RBAC: `OrgLevelRequirement`/`HierarchyDescendantRequirement` handlers + named
-  policies, `[Authorize]` on the Admin Portal controllers.
+- ✅ Checkpoint 3 — RBAC: `OrgLevelRequirement`/`HierarchyDescendantRequirement` handlers + named
+  policies in `AuthorizationPolicies`, wired in `Program.cs`. `ICurrentUserContext` gained
+  `OrgLevel` (denormalized onto `ApplicationUser.OrgLevel`, stamped as an `OrgLevel` claim at
+  sign-in, same no-DB-round-trip pattern as `HierarchyPath`) so the new handlers depend only on
+  `ICurrentUserContext` (Application), never `DotGlassesDbContext` directly — keeps Web's
+  Authorization folder inside the Clean Architecture boundary. `[Authorize]` now on all seven
+  Admin Portal controllers: `CustomOrdersController`/`ReferenceDataController`/
+  `CataloguesController` gated by their new level policies, `HomeController` (with `[AllowAnonymous]`
+  kept on its `Error` action)/`OrganisationsController`/`EventHistoryController`/
+  `UserDirectoryController` gated by plain `[Authorize]` (real per-row scoping still pending real
+  data). `HierarchyDescendantRequirement` is shipped but not yet wired to a controller action —
+  no screen operates on a real per-user/per-org resource yet. Solution builds, `dotnet test`
+  passes (18 tests, none of which cover the now-gated MVC controllers — no test behaviour change).
 - ⬜ Checkpoint 4 — `DevUserSeeder` extended with Manager/User test accounts for policy testing.
 - ⬜ Checkpoint 5 — remove the now-stale "Classical Optician" placeholder data from
   `CataloguesController`/`OrganisationsController`, replace this whole section with the permanent

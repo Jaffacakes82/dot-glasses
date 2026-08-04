@@ -1,8 +1,11 @@
+using DotGlasses.Web.Authorization;
 using DotGlasses.Web.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DotGlasses.Web.Controllers;
 
+[Authorize(Policy = AuthorizationPolicies.ReferenceDataManage)]
 public class ReferenceDataController : Controller
 {
     public IActionResult Index()

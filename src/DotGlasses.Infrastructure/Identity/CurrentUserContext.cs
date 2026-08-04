@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using DotGlasses.Application.Common;
+using DotGlasses.Domain.Enums;
 using Microsoft.AspNetCore.Http;
 
 namespace DotGlasses.Infrastructure.Identity;
@@ -19,6 +20,9 @@ public class CurrentUserContext(IHttpContextAccessor httpContextAccessor) : ICur
         Guid.TryParse(Principal?.FindFirstValue(DotGlassesClaimTypes.OrgNodeId), out var id) ? id : null;
 
     public string HierarchyPathPrefix => Principal?.FindFirstValue(DotGlassesClaimTypes.HierarchyPath) ?? string.Empty;
+
+    public OrganisationLevel? OrgLevel =>
+        Enum.TryParse<OrganisationLevel>(Principal?.FindFirstValue(DotGlassesClaimTypes.OrgLevel), out var level) ? level : null;
 
     public IReadOnlyCollection<string> Roles =>
         Principal?.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList() ?? [];

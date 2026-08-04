@@ -1,3 +1,5 @@
+using DotGlasses.Domain.Enums;
+
 namespace DotGlasses.Application.Common;
 
 /// <summary>
@@ -16,6 +18,10 @@ public interface ICurrentUserContext
 
     /// <summary>Materialized-path prefix, e.g. "/1/4/". Matches this user's org node and everything below it.</summary>
     string HierarchyPathPrefix { get; }
+
+    /// <summary>Denormalized OrganisationNode.Level of OrgNodeId — drives RBAC's OrgLevelRequirement
+    /// (e.g. "Country and above") without a DB round trip. Null if the user has no org assignment.</summary>
+    OrganisationLevel? OrgLevel { get; }
 
     IReadOnlyCollection<string> Roles { get; }
 }

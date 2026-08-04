@@ -9,4 +9,5 @@ public static class DotGlassesClaimTypes
 {
     public const string OrgNodeId = "dotglasses:org_node_id";
     public const string HierarchyPath = "dotglasses:hierarchy_path";
+    public const string OrgLevel = "dotglasses:org_level";
 }
