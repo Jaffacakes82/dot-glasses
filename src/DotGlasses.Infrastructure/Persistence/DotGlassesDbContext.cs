@@ -13,7 +13,7 @@ using Microsoft.EntityFrameworkCore;
 namespace DotGlasses.Infrastructure.Persistence;
 
 public class DotGlassesDbContext(DbContextOptions<DotGlassesDbContext> options, IHttpContextAccessor httpContextAccessor)
-    : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>(options)
+    : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>(options), IUnitOfWork
 {
     // Depends on IHttpContextAccessor (singleton) rather than the scoped ICurrentUserContext
     // directly: DotGlasses.Web registers this DbContext via Aspire's AddNpgsqlDbContext, which
