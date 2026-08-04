@@ -12,7 +12,7 @@ public class CataloguesController : Controller
     {
         var catalogues = new List<Catalogue>
         {
-            new("Classical Optician", "Full custom-prescription support for outlets with lab access.", "-6.00 to +6.00", 12),
+            new("6-Lens Set", "Standard six-option lens range for outlets with local stock.", "+2.50 to -4.50", 8),
             new("Community Essentials", "A short, stock frame + reading-strength range for outreach settings.", "+1.00 to +3.00", 8),
         };
 

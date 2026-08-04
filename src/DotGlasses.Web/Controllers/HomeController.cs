@@ -36,7 +36,7 @@ public class HomeController : Controller
             ],
             TopRetailers =
             [
-                new RankedEntry("Classical Optician", 112, 63.1),
+                new RankedEntry("Nairobi Retail Group", 112, 63.1),
                 new RankedEntry("Diocese of Nakuru Network", 74, 55.9),
             ],
             TopCountries =
