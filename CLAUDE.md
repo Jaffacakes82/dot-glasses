@@ -104,7 +104,15 @@ Status:
   `ConvertedToLeadId`, all committed in one `SaveChangesAsync` call. Double-conversion (a Test
   that's already been converted) is rejected in the validator, not the service. Solution builds,
   `dotnet test` passes (18 tests).
-- ⬜ Checkpoint 4 — Sale vertical slice (Lead-linking, derived coating for preset ranges).
+- ✅ Checkpoint 4 — Sale vertical slice: `SaleDto`/`CreateSaleRequest` (Contracts, + Sale-only
+  `Contracts.Sales.FrameCoverage` since nothing else needs it), `ISaleRepository`/`ISaleService`/
+  `SaleService` (Application), `SaleRepository` (Infrastructure), `SalesController` (Web). Same
+  Lead-linking transaction pattern as Test→Lead (Sale create + source Lead's
+  `ConvertedFlag`/`SaleId` update in one `SaveChangesAsync`). `IReferenceDataLookupService` grew a
+  `GetLensOptionCoatingIdAsync` — for a preset `LensRangeType`, `SaleService` derives
+  `CoatingRefId` from the chosen left-eye `LensOption`'s own forced coating and ignores any
+  client-submitted value entirely; only a `Custom` range actually uses the client's `CoatingRefId`.
+  Solution builds, `dotnet test` passes (18 tests).
 - ⬜ Checkpoint 5 — wrap-up: replace this block with a permanent write-up, retire the
   Application/Contracts/API portion of the `[OPEN]` item below.
 
