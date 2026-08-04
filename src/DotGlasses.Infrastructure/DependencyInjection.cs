@@ -1,5 +1,6 @@
 using DotGlasses.Application.Common;
 using DotGlasses.Application.Customers;
+using DotGlasses.Application.Leads;
 using DotGlasses.Application.ReferenceData;
 using DotGlasses.Application.Reporting;
 using DotGlasses.Application.VisionTests;
@@ -38,6 +39,9 @@ public static class DependencyInjection
 
         services.AddScoped<IVisionTestRepository, TestRepository>();
         services.AddScoped<IVisionTestService, VisionTestService>();
+
+        services.AddScoped<ILeadRepository, LeadRepository>();
+        services.AddScoped<ILeadService, LeadService>();
 
         return services;
     }

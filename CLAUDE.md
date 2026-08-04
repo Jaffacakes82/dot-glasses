@@ -95,7 +95,15 @@ Status:
   (`DotGlasses.Application/Customers`, exact-match find-or-create only — no public API; fuzzy
   matching is Field App UI work for later). Solution builds, `dotnet test` passes (18 tests).
 - ✅ Checkpoint 2 — Test vertical slice: `TestDto`/`CreateTestRequest` (Contracts), `IVisionTestRepository`/`IVisionTestService`/`VisionTestService` (Application — named "VisionTest" not "Test" to avoid colliding with the `DotGlasses.Application.Tests` xUnit project's own root namespace; the Domain entity is still `Test`), `TestRepository` (Infrastructure), `TestsController` (Web, `GET`/`GET {id}`/`POST` only). Found along the way: **Contracts must not reference Domain** — `DotGlasses.App` references only Contracts and must never transitively pull in Domain/Application, so wire-shape enums (`Contracts.Common.Gender`, `Contracts.Tests.TestOutcome`) are separate types from `Domain.Enums`, mapped in the Application layer (`GenderMapping` — shared across Test/Lead/Sale since Gender repeats; outcome/range-type enums are entity-specific and mapped inline in their own service). Validators needing DB-backed reference-data checks live in `DotGlasses.Web.Validation.*` (new — `AddValidatorsFromAssembly` now also scans the Web assembly), not co-located with the Contracts DTO like WidgetExample's was, for the same Contracts-must-not-reference-Application reason. Solution builds, `dotnet test` passes (18 tests).
-- ⬜ Checkpoint 3 — Lead vertical slice (Test-linking, Customer find-or-create).
+- ✅ Checkpoint 3 — Lead vertical slice: `LeadDto`/`CreateLeadRequest` (Contracts, + shared
+  `Contracts.Common.LensRangeType`/`Application.Common.LensRangeTypeMapping` since Sale reuses
+  both), `ILeadRepository`/`ILeadService`/`LeadService` (Application), `LeadRepository`
+  (Infrastructure), `LeadsController` (Web). `LeadService.CreateAsync` demonstrates the
+  `IUnitOfWork` pattern for real: finds-or-creates the `Customer` (exact name+phone match),
+  creates the `Lead`, and — if `SourceTestId` is set — loads and updates that `Test`'s
+  `ConvertedToLeadId`, all committed in one `SaveChangesAsync` call. Double-conversion (a Test
+  that's already been converted) is rejected in the validator, not the service. Solution builds,
+  `dotnet test` passes (18 tests).
 - ⬜ Checkpoint 4 — Sale vertical slice (Lead-linking, derived coating for preset ranges).
 - ⬜ Checkpoint 5 — wrap-up: replace this block with a permanent write-up, retire the
   Application/Contracts/API portion of the `[OPEN]` item below.
