@@ -131,6 +131,32 @@ a second Lead-from-the-same-Test attempt is rejected (400, "already been convert
   startup stays correct for every future request; same reasoning the query filter already uses).
   See `Program.cs`'s persistence section for the full comment.
 
+## Field App UI wiring (ConsultationForm.razor)
+
+**[IN PROGRESS 2026-08-04]** Wiring `ConsultationForm.razor` (Field App) to the real Test/Lead/
+Sale API — Admin Portal's equivalent modal is explicitly out of scope for this pass (doesn't
+exist yet, separate larger task). Also explicitly deferred: the lead-match confirm popup, the
+"use test result" Test→Sale carry-over, and progressive disclosure for >10-item catalogues (moot
+today — both seeded catalogues have ≤12 `LensOption`s).
+
+Status:
+- ✅ Checkpoint 1 — read-only Reference Data + Preset Catalogue API, a prerequisite this surfaced
+  that wasn't UI work: `ReferenceDataItemDto`/`PresetCatalogueDto`/`LensOptionDto` (Contracts, +
+  `Contracts.Common.ReferenceDataCategory` mirroring `Domain.Enums.ReferenceDataCategory`),
+  `IReferenceDataQueryService`/`IPresetCatalogueQueryService` (Application),
+  `ReferenceDataQueryService`/`PresetCatalogueQueryService` (Infrastructure),
+  `ReferenceDataController`/`PresetCataloguesController` (Web, `GET`-only, any authenticated
+  role — distinct from the MVC `CataloguesController` Admin Portal placeholder). `
+  PresetCatalogueQueryService` implements the cascading-assignment query (`PresetCatalogueAssignment`
+  join resolved in memory, not translatable as a single SQL predicate — see its code comment) —
+  "which catalogues can this caller's retail point use," the reverse-direction query documented
+  under Domain modelling above. Solution builds, `dotnet test` passes (18 tests).
+- ⬜ Checkpoint 2 — App reference-data client + shared `LensRangeSelector.razor`.
+- ⬜ Checkpoint 3 — Test sub-form.
+- ⬜ Checkpoint 4 — Lead sub-form.
+- ⬜ Checkpoint 5 — Sale sub-form.
+- ⬜ Checkpoint 6 — wrap-up: replace this block with a permanent write-up.
+
 ## RBAC permission matrix
 
 Three roles (Admin/Manager/User), assignable at any org node, scope = that node + everything
