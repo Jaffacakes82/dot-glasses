@@ -28,6 +28,11 @@ public class ApplicationUserClaimsPrincipalFactory(
             identity.AddClaim(new Claim(DotGlassesClaimTypes.OrgNodeId, orgNodeId.ToString()));
         }
 
+        if (user.OrgLevel is { } orgLevel)
+        {
+            identity.AddClaim(new Claim(DotGlassesClaimTypes.OrgLevel, orgLevel.ToString()));
+        }
+
         return identity;
     }
 }

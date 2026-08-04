@@ -2,6 +2,8 @@ using System.Security.Claims;
 using System.Text;
 using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
+using DotGlasses.Application.Common;
+using DotGlasses.Domain.Enums;
 using DotGlasses.Infrastructure;
 using DotGlasses.Infrastructure.Identity;
 using DotGlasses.Infrastructure.Persistence;
@@ -81,8 +83,20 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
 // --- RBAC (separate from the data-scoping query filter — see CLAUDE.md) ----------------
 builder.Services.AddAuthorizationBuilder()
     .AddPolicy(AuthorizationPolicies.WidgetExampleCreate, policy =>
-        policy.Requirements.Add(new MinimumRoleRequirement("Admin", "Manager")));
+        policy.Requirements.Add(new MinimumRoleRequirement("Admin", "Manager")))
+    .AddPolicy(AuthorizationPolicies.CustomOrdersView, policy =>
+        policy.Requirements.Add(new OrgLevelRequirement(OrganisationLevel.Country, RoleNames.All.ToArray())))
+    .AddPolicy(AuthorizationPolicies.ReferenceDataManage, policy =>
+        policy.Requirements.Add(new OrgLevelRequirement(OrganisationLevel.Dgi, RoleNames.Admin)))
+    .AddPolicy(AuthorizationPolicies.PresetCatalogueManage, policy =>
+        policy.Requirements.Add(new OrgLevelRequirement(OrganisationLevel.Country, RoleNames.Admin, RoleNames.Manager)))
+    .AddPolicy(AuthorizationPolicies.ManageUsersInScope, policy =>
+        policy.Requirements.Add(new HierarchyDescendantRequirement(RoleNames.Admin, RoleNames.Manager)))
+    .AddPolicy(AuthorizationPolicies.ManageOrgInScope, policy =>
+        policy.Requirements.Add(new HierarchyDescendantRequirement(RoleNames.Admin, RoleNames.Manager)));
 builder.Services.AddSingleton<IAuthorizationHandler, MinimumRoleAuthorizationHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, OrgLevelAuthorizationHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, HierarchyDescendantAuthorizationHandler>();
 
 // --- Validation --------------------------------------------------------------------------
 builder.Services.AddValidatorsFromAssembly(typeof(DotGlasses.Contracts.WidgetExamples.WidgetExampleDto).Assembly);

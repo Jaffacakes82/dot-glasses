@@ -1,9 +1,11 @@
 using System.Diagnostics;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using DotGlasses.Web.Models;
 
 namespace DotGlasses.Web.Controllers;
 
+[Authorize]
 public class HomeController : Controller
 {
     public IActionResult Index()
@@ -53,6 +55,7 @@ public class HomeController : Controller
         return View(model);
     }
 
+    [AllowAnonymous]
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
     public IActionResult Error()
     {

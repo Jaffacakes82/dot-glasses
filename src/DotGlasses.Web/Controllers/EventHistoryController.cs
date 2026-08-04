@@ -1,8 +1,10 @@
 using DotGlasses.Web.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DotGlasses.Web.Controllers;
 
+[Authorize]
 public class EventHistoryController : Controller
 {
     public IActionResult Index(string tab = "sales")
