@@ -161,10 +161,24 @@ Status:
   catalogues exist today; if DGI/Country admins ever create additional named catalogues this
   needs an explicit "kind" field on `PresetCatalogue` instead of name-sniffing. Solution builds,
   `dotnet test` passes (18 tests).
-- ⬜ Checkpoint 3 — Test sub-form.
-- ⬜ Checkpoint 4 — Lead sub-form.
-- ⬜ Checkpoint 5 — Sale sub-form.
-- ⬜ Checkpoint 6 — wrap-up: replace this block with a permanent write-up.
+- ✅ Checkpoints 3–5 (combined) — `ConsultationForm.razor`'s Test/Lead/Sale sections all rewired
+  in one pass, not committed as three separate per-type slices as originally planned: the
+  skeleton's shared `@if (IsTest) {...} else { @if (IsSale) {...} else {...} }` template is too
+  interleaved to touch one type at a time without leaving the file showing a visibly
+  inconsistent mix of real reference data and hardcoded stub dropdowns for the not-yet-reworked
+  types. One more shared component extracted along the way beyond `LensRangeSelector`:
+  `ReferenceDataDropdown.razor` (`DotGlasses.App/Pages`) — a reference-data-driven `<select>` +
+  conditional "Other" free-text field, used 5 times across the three sub-forms (Occupation ×3,
+  Referral reason, Reason not purchased, Coating preference, Frame colour, Hard case colour).
+  All three `CreateXRequest`s now build for real and enqueue via `OutboxStore.EnqueueAsync` +
+  `SyncService.SyncPendingAsync()`, exactly `WidgetExamples.razor`'s pattern. "Continue as Lead"
+  now actually saves the Test first, then navigates to `consultation/lead?sourceTestId=...&
+  prefillAge=...&prefillGender=...` — age/gender pre-populate on the Lead form, matching the CEO
+  call's "pre-populate from the test screen." `SourceLeadId` is never set on a Sale in this pass
+  — no Leads list/"convert to sale" entry point exists yet for a technician to pick one from; a
+  Sale recorded here is always a fresh walk-in. Solution builds, `dotnet test` passes (18 tests).
+- ⬜ Checkpoint 6 — wrap-up: manual verification against the real running stack, replace this
+  block with a permanent write-up.
 
 ## RBAC permission matrix
 

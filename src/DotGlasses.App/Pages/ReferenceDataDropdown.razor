@@ -1,0 +1,45 @@
+@using DotGlasses.Contracts.ReferenceData
+
+<div class="dg-field">
+    <label>@Label</label>
+    <select value="@SelectedId" @onchange="OnChangedAsync">
+        <option value="">@(Placeholder ?? "—")</option>
+        @foreach (var item in Items.OrderBy(i => i.SortOrder))
+        {
+            <option value="@item.Id">@item.Label</option>
+        }
+    </select>
+</div>
+@if (SelectedIsOther)
+{
+    <div class="dg-field">
+        <label>@(OtherLabel ?? $"{Label} — please specify")</label>
+        <input value="@OtherText" @oninput="e => OtherTextChanged.InvokeAsync(e.Value?.ToString())" />
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string? Placeholder { get; set; }
+    [Parameter] public string? OtherLabel { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<ReferenceDataItemDto> Items { get; set; } = [];
+
+    [Parameter] public Guid? SelectedId { get; set; }
+    [Parameter] public EventCallback<Guid?> SelectedIdChanged { get; set; }
+
+    [Parameter] public string? OtherText { get; set; }
+    [Parameter] public EventCallback<string?> OtherTextChanged { get; set; }
+
+    private bool SelectedIsOther => SelectedId is { } id && Items.FirstOrDefault(i => i.Id == id)?.IsOtherOption == true;
+
+    private async Task OnChangedAsync(ChangeEventArgs e)
+    {
+        var id = Guid.TryParse(e.Value?.ToString(), out var parsed) ? parsed : (Guid?)null;
+        await SelectedIdChanged.InvokeAsync(id);
+
+        if (!SelectedIsOther && !string.IsNullOrEmpty(OtherText))
+        {
+            await OtherTextChanged.InvokeAsync(null);
+        }
+    }
+}
