@@ -665,6 +665,38 @@ tests/sales, no DGI-root orphan rows) — and, post-fix, correct "Kangemi Vision
 names in Top Retailers/Top Countries instead of "Unknown". Re-checked Event History under the same
 user afterward and confirmed its Country column now also resolves correctly.
 
+## Event History pagination
+
+Resolved the `[OPEN]` gap flagged when Event History first shipped ("no pagination — unlike
+Reference Data/Organisations' naturally small, bounded lists, Test/Lead/Sale volume genuinely
+grows over time"). `IEventHistoryQueryService`'s four list methods now take `(page, pageSize)`
+and return a `PagedResult<T>` (`Items`, `TotalCount`, `Page`, `PageSize`, computed `TotalPages`);
+`EventHistoryController` fixes `PageSize = 25` and passes through a `page` query-string param
+(1-based, clamped to ≥1). Paging is pushed to the database via `Skip`/`Take` after `CountAsync`,
+not loaded-then-sliced in memory — the point of doing this at all was to stop loading the whole
+table, so an in-memory `Skip`/`Take` would have defeated it.
+
+**Leads' search filter had to move to a DB-level subquery** — it previously ran in memory,
+*after* mapping every Lead to a `LeadEventRow` (so it could match on the resolved `Customer.
+FullName`). Filtering after paging would have made "page 2" mean something different depending on
+how many of page 1's rows the search happened to exclude, so the filter now runs first, as a
+`Customer`-scoped subquery (`dbContext.Customers.Where(c => c.FullName.Contains(searchByName))
+.Select(c => c.Id)`, then `Leads.Where(l => matchingCustomerIds.Contains(l.CustomerId))`) that EF
+Core translates into a single correlated SQL query — count and page both happen against the
+already-filtered set.
+
+The view shows a simple Previous/Next pager with "Page X of Y (Z total)" — no page-number jump
+list, matching this session's established "simplest real thing" bar for admin-only screens with
+no evidence yet of needing more. Switching tabs (the pill links) doesn't carry the `page` query
+param, so it correctly resets to page 1 rather than landing on a phantom "page 3" of a different
+tab's data.
+
+**Verified live**: created 25 extra Sale rows via direct API calls (28 total, crossing the
+25-per-page boundary) — confirmed the Sales tab's page 1 shows exactly 25 rows with a working
+`Next` link and no `Previous` link, page 2 shows the remaining 3 with `Previous` and no `Next`.
+Confirmed the Leads tab's search (`?search=Jane`) correctly narrows to just the matching rows
+before any paging math applies.
+
 ## Preset-range pupil distance shorthand
 
 Resolved a domain-shape question that had sat in `[OPEN]` since the CEO transcript first surfaced
@@ -820,10 +852,6 @@ Aspire dashboard).
   `UserOrgAssignment` (now real, see Admin Portal wiring above) only ever sets the *first*
   selected org as primary/active — a user assigned to several locations can't currently change
   which one drives their JWT/cookie claims after the fact.
-- Event History has no pagination — unlike Reference Data/Organisations (naturally small, bounded
-  lists), `Test`/`Lead`/`Sale` volume genuinely grows over time in production. Flagged as a real
-  gap this time, not silently assumed away; will need addressing before this screen sees
-  production-scale data.
 - Organisations' "Assign users" action isn't built (that's User Directory's job — still
   placeholder, and `AuthorizationPolicies.ManageUsersInScope`/`HierarchyDescendantRequirement` are
   equally unwired, same underlying mechanism `ManageOrgInScope` now uses, ready to reuse when
