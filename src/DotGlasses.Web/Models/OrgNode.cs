@@ -1,18 +1,20 @@
 namespace DotGlasses.Web.Models;
 
-/// <summary>
-/// Placeholder shape for the Organisations tree — the real org hierarchy entity isn't designed
-/// yet (see CLAUDE.md), but the tree is known to be arbitrary-depth (DGI root, RetailPoint
-/// leaves, any number of Retailer/Reseller layers between), not a fixed 3-tier structure. Don't
-/// flatten that assumption away when the real entity lands.
-/// </summary>
-public record OrgNode(string Id, string Name, string Type, string? Catalogue, string? Kind, IReadOnlyList<OrgNode> Children)
+/// <summary>Real org hierarchy tree node — Type is OrganisationLevel's display string ("DGI",
+/// "Country", "Intermediate", "RetailPoint"); Kind is the entity's free-text display label (e.g.
+/// "Retailer", "Distributor"), shown separately since no business rule keys off it.</summary>
+public record OrgNode(Guid Id, string Name, string Type, string? Kind, bool IsTrainingOrg, bool CanHandleCustomOrders, IReadOnlyList<OrgNode> Children)
 {
     public static readonly IReadOnlyDictionary<string, string> TypeColor = new Dictionary<string, string>
     {
         ["DGI"] = "var(--dot-black)",
         ["Country"] = "var(--dot-blue)",
-        ["Retailer"] = "var(--dot-orange)",
+        ["Intermediate"] = "var(--dot-orange)",
         ["RetailPoint"] = "var(--dot-green)",
     };
 }
+
+/// <summary>Tree (left panel) + the currently selected node (right detail panel) — CanManage
+/// drives whether "Add child node" and the two flag toggles are shown for Selected, per
+/// AuthorizationPolicies.ManageOrgInScope resolved against Selected's own HierarchyPath.</summary>
+public record OrganisationsIndexViewModel(OrgNode Tree, OrgNode Selected, bool CanManage, IReadOnlyList<(string Value, string Label)> ValidChildLevels);

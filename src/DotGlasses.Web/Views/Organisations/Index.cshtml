@@ -1,7 +1,7 @@
-@model DotGlasses.Web.Models.OrgNode
+@model DotGlasses.Web.Models.OrganisationsIndexViewModel
 @{
     ViewData["Title"] = "Organisations";
-    ViewData["SelectedId"] = Model.Id;
+    ViewData["SelectedId"] = Model.Selected.Id;
 }
 
 @await Html.PartialAsync("_PageHeader", new DotGlasses.Web.Models.PageHeaderViewModel
@@ -14,35 +14,118 @@
     The hierarchy is arbitrary depth — DGI is always the root and Retail Points are always the
     leaves, but any number of Retailer/Reseller layers can sit between them. For affiliated
     networks (e.g. a diocese), model one Retailer for the umbrella organisation and give each
-    Retail Point a combined "Name / Location" field.
+    Retail Point a combined "Name / Location" field. You only see and manage your own node and
+    everything below it.
 </p>
+
+@if (!ViewData.ModelState.IsValid)
+{
+    <div class="alert alert-danger" style="border-radius:var(--radius-md); margin-bottom:var(--space-4);" asp-validation-summary="All"></div>
+}
 
 <div style="display:grid; grid-template-columns: 1.4fr 1fr; gap: var(--space-5);">
     <div class="dg-card">
-        @await Html.PartialAsync("_OrgTreeNode", Model)
+        @await Html.PartialAsync("_OrgTreeNode", Model.Tree)
     </div>
     <div class="dg-card">
-        <span class="dg-badge" style="background:@DotGlasses.Web.Models.OrgNode.TypeColor[Model.Type]; color:var(--dot-white);">@Model.Type</span>
-        <h2 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin: var(--space-3) 0;">@Model.Name</h2>
-        @if (Model.Catalogue is not null)
+        <span class="dg-badge" style="background:@DotGlasses.Web.Models.OrgNode.TypeColor[Model.Selected.Type]; color:var(--dot-white);">@Model.Selected.Type</span>
+        @if (Model.Selected.IsTrainingOrg)
         {
-            <p class="dg-stat-label">Assigned catalogue</p>
-            <p style="margin-top:-8px;">@Model.Catalogue <span style="color:var(--text-muted);">(cascades to child outlets)</span></p>
+            <span class="dg-badge" style="background:var(--dot-yellow);">Training org — excluded from MI dashboards</span>
         }
-        @if (Model.Type == "RetailPoint")
+        <h2 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin: var(--space-3) 0;">@Model.Selected.Name</h2>
+        @if (!string.IsNullOrEmpty(Model.Selected.Kind))
+        {
+            <p class="dg-stat-label">@Model.Selected.Kind</p>
+        }
+        @if (Model.Selected.Type == "RetailPoint")
         {
             <p style="font-size:13px; color:var(--text-muted-2);">No inventory/SKU data shown here — stock is tracked externally in Zoho.</p>
         }
-        <div style="display:flex; flex-direction:column; gap:var(--space-2); margin-top:var(--space-4);">
-            @if (Model.Type != "RetailPoint")
-            {
-                <button class="dg-btn dg-btn-primary" type="button">Add child node</button>
-            }
-            <button class="dg-btn dg-btn-ghost" type="button">Assign users</button>
-            @if (Model.Type != "DGI")
-            {
-                <button class="dg-btn dg-btn-ghost" type="button">Assign preset catalogue</button>
-            }
-        </div>
+
+        @if (!Model.CanManage)
+        {
+            <p style="font-size:12px; color:#999; margin-top:var(--space-3);">You don't have permission to manage this node.</p>
+        }
+        else
+        {
+            <div style="display:flex; flex-direction:column; gap:var(--space-2); margin-top:var(--space-4);">
+                <form asp-action="SetTrainingOrgFlag" method="post">
+                    <input type="hidden" name="id" value="@Model.Selected.Id" />
+                    <input type="hidden" name="value" value="@((!Model.Selected.IsTrainingOrg).ToString())" />
+                    <button class="dg-btn dg-btn-ghost" style="width:100%; justify-content:center;" type="submit">
+                        @(Model.Selected.IsTrainingOrg ? "Remove training-org flag" : "Flag as training organisation")
+                    </button>
+                </form>
+
+                @if (Model.Selected.Type == "Country")
+                {
+                    <form asp-action="SetCanHandleCustomOrders" method="post">
+                        <input type="hidden" name="id" value="@Model.Selected.Id" />
+                        <input type="hidden" name="value" value="@((!Model.Selected.CanHandleCustomOrders).ToString())" />
+                        <button class="dg-btn dg-btn-ghost" style="width:100%; justify-content:center;" type="submit">
+                            @(Model.Selected.CanHandleCustomOrders ? "Disable custom orders" : "Enable custom orders")
+                        </button>
+                    </form>
+                }
+
+                @if (Model.Selected.Type != "RetailPoint")
+                {
+                    <button class="dg-btn dg-btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#addChildModal">Add child node</button>
+                }
+            </div>
+        }
     </div>
 </div>
+
+@if (Model.CanManage && Model.Selected.Type != "RetailPoint")
+{
+    <div class="modal fade" id="addChildModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content" style="border-radius:var(--radius-md); border:none;">
+                <form asp-action="CreateChild" method="post">
+                    <input type="hidden" name="ParentId" value="@Model.Selected.Id" />
+                    <div class="modal-header">
+                        <h2 class="dg-page-title" style="font-size:20px;">Add child node under @Model.Selected.Name</h2>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="dg-auth-field">
+                            <label>Name</label>
+                            <input class="form-control" name="Name" />
+                        </div>
+                        <div class="dg-auth-field">
+                            <label>Kind (optional display label, e.g. "Distributor")</label>
+                            <input class="form-control" name="Kind" />
+                        </div>
+                        @if (Model.ValidChildLevels.Count > 1)
+                        {
+                            <div class="dg-auth-field">
+                                <label>Level</label>
+                                <select class="form-select" name="Level">
+                                    @foreach (var level in Model.ValidChildLevels)
+                                    {
+                                        <option value="@level.Value">@level.Label</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+                        else if (Model.ValidChildLevels.Count == 1)
+                        {
+                            <input type="hidden" name="Level" value="@Model.ValidChildLevels[0].Value" />
+                            <p style="font-size:12px; color:var(--text-muted);">This will be created as a @Model.ValidChildLevels[0].Label node.</p>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button class="dg-btn dg-btn-ghost" type="button" data-bs-dismiss="modal">Cancel</button>
+                        <button class="dg-btn dg-btn-primary" type="submit">Create</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
+}

@@ -267,6 +267,75 @@ into the Field App as the retail-point user and confirmed the newly-added Frame 
 live in `ConsultationForm.razor`'s Sale form — proves the two screens share the same underlying
 data, not just similar UIs.
 
+## Admin Portal wiring (Organisations screen)
+
+Second Admin Portal screen wired (2026-08-05, same day as Reference Data) — real org-tree
+rendering + write actions, replacing `OrganisationsController`'s hardcoded 8-node placeholder
+tree. Scoped the same way Reference Data was: the design mockup's full action set (Add child
+node, training-org/custom-orders toggles, Assign users, Create/assign preset catalogue) minus
+"Assign users" (User Directory's job, still placeholder, `ManageUsersInScope` equally unwired)
+and the two preset-catalogue actions (`PresetCatalogue` has no write API yet — Preset Catalogues'
+own future screen).
+
+**First real use of resource-based RBAC**: `HierarchyDescendantRequirement`/
+`AuthorizationPolicies.ManageOrgInScope` existed since the RBAC pass but were never wired to a
+controller (their own doc comments said so explicitly). `OrganisationsController` now calls
+`IAuthorizationService.AuthorizeAsync(User, targetNode.HierarchyPath, ManageOrgInScope)` — for
+"Add child" the resource is the *parent* being added to; for the two flag toggles it's the node
+itself (same node in both cases, since you always operate on whichever node is currently
+selected). Buttons/forms are hidden server-side for a user who'd fail the check (computed once
+per request into `OrganisationsIndexViewModel.CanManage`), and every POST action re-checks it
+server-side regardless — never trust the hidden-button UX alone.
+
+**Reading needs no special handling** — `OrganisationNode` implements `IHierarchyScoped`, so a
+plain scoped query already returns exactly "the caller's own node + everything below it"; a DGI
+Admin sees the whole tree, a Manager sees only their own subtree (their node becomes the
+*displayed* root even though it has a real `ParentId` pointing above them — that ancestor is
+simply filtered out of their result set, which the controller's root-detection already handles:
+whichever node has no `ParentId`, or a `ParentId` not present in the caller's own result set, is
+the root for display purposes).
+
+**Minting a new `HierarchyPath` *does* need `IUnscopedReportQueryService`**: existing paths
+(`/1/`, `/1/2/`, `/1/2/3/`) are small ever-increasing integers assigned in creation order across
+the whole tree, not per-parent — the existing `GetOrganisationNodePathsUnscopedAsync` (added for
+the `PresetCatalogueQueryService` fix earlier this session) was reused as-is, no new method
+needed. **Known simplification, accepted for now**: `OrganisationAdminService.CreateChildAsync`
+computes the next segment as (global max parsed across every path) + 1, read-then-increment with
+no locking — a small race window exists under concurrent creates. Acceptable for an infrequent,
+admin-only action; would need a real sequence/lock if org creation ever became high-throughput.
+
+**New `IOrganisationAdminService`** (Application) / `OrganisationAdminService` (Infrastructure,
+queries `DbContext.OrganisationNodes` directly, no repository interface for this entity) —
+`ListAsync`, `IsValidChildLevel` (Dgi's only child level is Country; Country/Intermediate's is
+Intermediate or RetailPoint, admin's choice; RetailPoint has none — enforced both in the service
+and in `CreateChildOrganisationRequestValidator`'s `CustomAsync` rule, and the "Add child
+node"/Level-select UI is hidden/constrained accordingly), `CreateChildAsync`,
+`SetTrainingOrgFlagAsync`, `SetCanHandleCustomOrdersAsync` (rejects if the target isn't
+Country-level).
+
+**One real Razor bug found and fixed via the live pass**: the two flag-toggle forms originally
+bound a raw `bool` C# expression directly to an `<input value="...">` attribute
+(`value="@(!Model.Selected.IsTrainingOrg)"`). Razor treats *any* attribute bound to a `bool`-typed
+expression as an HTML boolean attribute (like `disabled`/`checked`) regardless of the attribute's
+actual name — it renders `value="value"` (attribute name repeated) when true and omits the
+attribute entirely when false, never the string "True"/"False" a naive reader would expect. The
+toggle POSTs were silently binding `value` to `false` every time as a result (model binding fell
+back to the parameter's default). Fixed by explicitly calling `.ToString()` on the expression
+(`value="@((!Model.Selected.IsTrainingOrg).ToString())"`) so Razor sees a `string`, not a `bool`.
+Caught by actually clicking the toggle live and checking Postgres, not by build/test — worth
+remembering for any future boolean value bound into a non-boolean-semantic HTML attribute.
+
+**Verified live**: as the seeded DGI Admin, added an Intermediate child under Kenya ("Mombasa
+Retail Group", `HierarchyPath` correctly minted as `/1/2/5/`), toggled its training-org flag
+(after the bug fix above, confirmed in Postgres and the UI). Then signed in as the seeded Kenya
+Manager and confirmed their tree shows Kenya as the root with DGI itself not visible at all
+(only Kenya + its own subtree, which does include the DGI-Admin-created Mombasa Retail Group,
+correctly — Manager can see everything below their own node), and that they can still create
+their own child (a RetailPoint "Nakuru Central" under Kenya, path `/1/2/6/` — correctly
+continuing the *global* segment counter from Mombasa's 5, proving the unscoped max-segment lookup
+works regardless of which caller's request triggered it) — proving both the read-scoping and the
+resource-based write RBAC actually restrict, not just that the DGI-Admin happy path works.
+
 ## RBAC permission matrix
 
 Three roles (Admin/Manager/User), assignable at any org node, scope = that node + everything
@@ -298,16 +367,17 @@ acts on a specific target user/org — not yet wired to one, see above).
   server-rendered MVC app and a WASM app to source one file from, so the two copies must be
   kept in sync **by hand**. If the token values ever change, update both.
 - Bootstrap is still present in both projects (grid utilities, form controls, the native modal
-  JS in `UserDirectory`) — the design system layers custom `dg-*` classes/tokens on top rather
-  than replacing it.
+  JS — first used decoratively in `UserDirectory`, now also driving Organisations' real "Add
+  child node" dialog) — the design system layers custom `dg-*` classes/tokens on top rather than
+  replacing it.
 - Admin Portal (`Web`) screens are mostly still skeletons over static placeholder data (in each
-  `Controllers/*Controller.cs`, not a database) — Dashboard, Organisations, Event History, User
-  Directory, Preset Catalogues, Custom Orders. **Reference Data is wired to the real database**
-  (2026-08-05 — see Admin Portal wiring above); the rest aren't. Don't wire the remaining ones up
-  without checking each screen's field-level shape against the design README first — go screen by
-  screen, same as Reference Data. `ConsultationForm.razor` in `App` is **no longer a stub** — it
-  saves real Test/Lead/Sale records via the real API (see Field App UI wiring above); its `Web`
-  modal equivalent still doesn't exist.
+  `Controllers/*Controller.cs`, not a database) — Dashboard, Event History, User Directory,
+  Preset Catalogues, Custom Orders. **Reference Data and Organisations are wired to the real
+  database** (both 2026-08-05 — see Admin Portal wiring sections above); the rest aren't. Don't
+  wire the remaining ones up without checking each screen's field-level shape against the design
+  README first — go screen by screen, same discipline both of those followed.
+  `ConsultationForm.razor` in `App` is **no longer a stub** — it saves real Test/Lead/Sale records
+  via the real API (see Field App UI wiring above); its `Web` modal equivalent still doesn't exist.
 - All seven Admin Portal controllers now have `[Authorize]` (see RBAC permission matrix above) —
   `HomeController`'s `Error` action is `[AllowAnonymous]` so error pages render for logged-out
   users too.
@@ -358,11 +428,20 @@ Aspire dashboard).
 - Real per-user role/claim assignment beyond the three seeded dev accounts (`DevUserSeeder`) is
   still open — no self-service provisioning flow exists yet.
 - The Field App's `ConsultationForm.razor` is wired to the real API (see Field App UI wiring
-  above); the Admin Portal's equivalent modal still doesn't exist. `ReferenceDataItem` now has a
-  write path (see Admin Portal wiring above) — `OrganisationNode`/`PresetCatalogue` still don't;
-  Dashboard/Organisations/Event History/User Directory/Preset Catalogues/Custom Orders are still
-  placeholder. Customer is internal-only by design. Keep building the Admin Portal screens one at
-  a time, checking field-level shape against the design README first.
+  above); the Admin Portal's equivalent modal still doesn't exist. `ReferenceDataItem` and
+  `OrganisationNode` now have write paths (see the two Admin Portal wiring sections above) —
+  `PresetCatalogue` still doesn't; Dashboard/Event History/User Directory/Preset Catalogues/
+  Custom Orders are still placeholder. Customer is internal-only by design. Keep building the
+  Admin Portal screens one at a time, checking field-level shape against the design README first.
+- Organisations' "Assign users" action isn't built (that's User Directory's job — still
+  placeholder, and `AuthorizationPolicies.ManageUsersInScope`/`HierarchyDescendantRequirement` are
+  equally unwired, same underlying mechanism `ManageOrgInScope` now uses, ready to reuse when
+  User Directory gets its turn). Organisations also has no delete/deactivate action — the design
+  mockup doesn't show one, so none was added (not an oversight).
+- `OrganisationAdminService.CreateChildAsync`'s new-`HierarchyPath`-segment minting is
+  read-current-max-then-increment with no locking — a small race window exists under concurrent
+  creates. Acceptable for now (infrequent, admin-only action); revisit if org creation ever
+  becomes high-throughput.
 - `PresetCatalogue`/`LensOption` are not rewired to build from the new `LensStrength` reference
   category — `LensOption` still defines its own typed `SphericalPower`/`IsBifocal`/`AddPower`
   fields per row. Doing so is a real design question (does a catalogue pick N strengths + a
