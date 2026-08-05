@@ -18,6 +18,14 @@ public class PresetCatalogue : IAuditable, ISoftDeletable
 
     public string Name { get; set; } = string.Empty;
 
+    /// <summary>Free-text, admin-facing only — no business rule keys off this. Added 2026-08-05
+    /// alongside real catalogue create/edit.</summary>
+    public string? Description { get; set; }
+
+    /// <summary>Free-text summary of the dioptre/strength span (e.g. "+2.50 to -4.50") — display
+    /// only, not derived from the actual LensOption roster or validated against it.</summary>
+    public string? RangeDescription { get; set; }
+
     public Guid OwningOrgNodeId { get; set; }
 
     public DateTimeOffset CreatedAtUtc { get; set; }

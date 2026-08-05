@@ -39,6 +39,7 @@ public class DotGlassesDbContext(DbContextOptions<DotGlassesDbContext> options, 
     public DbSet<PresetCatalogue> PresetCatalogues => Set<PresetCatalogue>();
     public DbSet<PresetCatalogueAssignment> PresetCatalogueAssignments => Set<PresetCatalogueAssignment>();
     public DbSet<LensOption> LensOptions => Set<LensOption>();
+    public DbSet<LensStrengthCoatingOption> LensStrengthCoatingOptions => Set<LensStrengthCoatingOption>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Test> Tests => Set<Test>();
     public DbSet<Lead> Leads => Set<Lead>();

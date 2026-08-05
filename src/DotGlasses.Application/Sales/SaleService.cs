@@ -1,10 +1,8 @@
 using DotGlasses.Application.Common;
 using DotGlasses.Application.Customers;
 using DotGlasses.Application.Leads;
-using DotGlasses.Application.ReferenceData;
 using DotGlasses.Contracts.Sales;
 using DotGlasses.Domain.Entities;
-using DomainLensRangeType = DotGlasses.Domain.Enums.LensRangeType;
 using DomainFrameCoverage = DotGlasses.Domain.Enums.FrameCoverage;
 using ContractFrameCoverage = DotGlasses.Contracts.Sales.FrameCoverage;
 
@@ -14,7 +12,6 @@ public class SaleService(
     ISaleRepository repository,
     ILeadRepository leadRepository,
     ICustomerRepository customerRepository,
-    IReferenceDataLookupService referenceData,
     IUnitOfWork unitOfWork) : ISaleService
 {
     public async Task<SaleDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -39,7 +36,6 @@ public class SaleService(
 
         var customerId = await FindOrCreateCustomerAsync(hierarchyPath, request.FullName, request.PhoneNumber, cancellationToken);
         var lensRangeType = request.LensRangeType.ToDomain();
-        var coatingRefId = await ResolveCoatingRefIdAsync(lensRangeType, request, cancellationToken);
 
         var entity = new Sale
         {
@@ -71,7 +67,7 @@ public class SaleService(
             FrameColourRefId = request.FrameColourRefId,
             FrameColourOtherText = request.FrameColourOtherText,
             FrameCoverage = ToDomainFrameCoverage(request.FrameCoverage),
-            CoatingRefId = coatingRefId,
+            CoatingRefId = request.CoatingRefId!.Value,
             HardCaseSold = request.HardCaseSold,
             HardCaseColourRefId = request.HardCaseColourRefId,
             HardCaseOtherColourText = request.HardCaseOtherColourText,
@@ -95,23 +91,6 @@ public class SaleService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return ToDto(entity);
-    }
-
-    /// <summary>
-    /// Custom range: use the client-submitted CoatingRefId (validator requires + category-checks
-    /// it). Preset range: derive from the left-eye LensOption's own forced coating, ignoring any
-    /// client value entirely — matches the CEO call's "coating is pre-selected per lens" intent.
-    /// Known simplification if left/right eyes resolve to different coatings — see CLAUDE.md.
-    /// </summary>
-    private async Task<Guid> ResolveCoatingRefIdAsync(DomainLensRangeType lensRangeType, CreateSaleRequest request, CancellationToken cancellationToken)
-    {
-        if (lensRangeType == DomainLensRangeType.Custom)
-        {
-            return request.CoatingRefId!.Value;
-        }
-
-        var coatingId = await referenceData.GetLensOptionCoatingIdAsync(request.LensOptionLeftId!.Value, cancellationToken);
-        return coatingId!.Value;
     }
 
     /// <summary>Exact name+phone match within the retail point — see LeadService's identical helper.</summary>

@@ -140,10 +140,6 @@
                         <ReferenceDataDropdown Label="Coating" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
                                                 SelectedId="_coatingRefId" SelectedIdChanged="v => _coatingRefId = v" />
                     }
-                    else
-                    {
-                        <p style="font-size:12px; color:#888;">Coating is set automatically from the chosen lens.</p>
-                    }
 
                     @RenderFrameSwatches()
                     <div class="dg-field">
@@ -172,8 +168,11 @@
 
                     <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues" Coatings="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)" AllowNoPreference="true" />
 
-                    <ReferenceDataDropdown Label="Coating preference (optional)" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
-                                            SelectedId="_coatingPreferenceRefId" SelectedIdChanged="v => _coatingPreferenceRefId = v" />
+                    @if (_lensRange.LensRangeType is not (LensRangeType.SixLensSet or LensRangeType.NineLensSet))
+                    {
+                        <ReferenceDataDropdown Label="Coating preference (optional)" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
+                                                SelectedId="_coatingPreferenceRefId" SelectedIdChanged="v => _coatingPreferenceRefId = v" />
+                    }
                 }
             }
 
@@ -368,7 +367,9 @@
                 CustomAddPowerRight = _lensRange.CustomAddPowerRight,
                 PupilDistanceMm = _lensRange.PupilDistanceMm,
                 ChildrensFrame = _lensRange.ChildrensFrame,
-                CoatingPreferenceRefId = _coatingPreferenceRefId,
+                CoatingPreferenceRefId = _lensRange.LensRangeType is LensRangeType.SixLensSet or LensRangeType.NineLensSet
+                    ? _lensRange.CoatingRefId
+                    : _coatingPreferenceRefId,
             };
 
             await EnqueueAndSyncAsync(request.Id, "Lead", "api/v1/leads", request);
@@ -414,7 +415,7 @@
                 FrameColourRefId = _frameColourRefId ?? Guid.Empty,
                 FrameColourOtherText = _frameColourOtherText,
                 FrameCoverage = _frameCoverage,
-                CoatingRefId = _lensRange.LensRangeType == LensRangeType.Custom ? _coatingRefId : null,
+                CoatingRefId = _lensRange.LensRangeType == LensRangeType.Custom ? _coatingRefId : _lensRange.CoatingRefId,
                 HardCaseSold = _hardCaseSold,
                 HardCaseColourRefId = _hardCaseSold ? _hardCaseColourRefId : null,
                 HardCaseOtherColourText = _hardCaseSold ? _hardCaseOtherColourText : null,

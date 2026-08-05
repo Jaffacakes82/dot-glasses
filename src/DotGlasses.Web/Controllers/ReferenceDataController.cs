@@ -23,7 +23,7 @@ public class ReferenceDataController(IReferenceDataAdminService referenceDataAdm
         (ReferenceDataCategory.FrameColour, "Frame colors", "DGI-editable · Sale/custom color swatches, matches e-commerce site", true),
         (ReferenceDataCategory.HardCaseColour, "Hard case colors", "DGI-editable · shown when a Sale includes a hard case", false),
         (ReferenceDataCategory.Occupation, "Occupations", "DGI-editable · optional occupation field on Test, Lead and Sale", false),
-        (ReferenceDataCategory.LensStrength, "Lens strengths", "DGI-editable · curated power labels — not yet used to build Preset Catalogues", false),
+        (ReferenceDataCategory.LensStrength, "Lens strengths", "DGI-editable · curated power labels used to build Preset Catalogues — see Preset Catalogues for per-strength coating availability", false),
     ];
 
     public async Task<IActionResult> Index(CancellationToken cancellationToken) =>

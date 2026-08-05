@@ -46,6 +46,7 @@ public static class DependencyInjection
         services.AddScoped<IReferenceDataAdminService, ReferenceDataAdminService>();
         services.AddScoped<IOrganisationAdminService, OrganisationAdminService>();
         services.AddScoped<IPresetCatalogueQueryService, PresetCatalogueQueryService>();
+        services.AddScoped<IPresetCatalogueAdminService, PresetCatalogueAdminService>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();
 
         services.AddScoped<IVisionTestRepository, TestRepository>();

@@ -28,6 +28,25 @@ public class ReferenceDataSeedConfiguration : IEntityTypeConfiguration<Reference
     public static readonly Guid CoatingPhotochromicId = new("b0000000-0000-0000-0000-000000000023");
     public static readonly Guid CoatingClearId = new("b0000000-0000-0000-0000-000000000024");
 
+    // Exposed for PresetCatalogueSeedConfiguration/LensOptionSeedConfiguration, which build each
+    // catalogue's LensOption roster from these.
+    public static readonly Guid LensStrength300Id = new("b0000000-0000-0000-0000-000000000043");
+    public static readonly Guid LensStrength250Id = new("b0000000-0000-0000-0000-000000000044");
+    public static readonly Guid LensStrength200Id = new("b0000000-0000-0000-0000-000000000045");
+    public static readonly Guid LensStrength125Id = new("b0000000-0000-0000-0000-000000000046");
+    public static readonly Guid LensStrength000Id = new("b0000000-0000-0000-0000-000000000047");
+    public static readonly Guid LensStrengthMinus100Id = new("b0000000-0000-0000-0000-000000000048");
+    public static readonly Guid LensStrengthMinus150Id = new("b0000000-0000-0000-0000-000000000049");
+    public static readonly Guid LensStrengthMinus200Id = new("b0000000-0000-0000-0000-000000000050");
+    public static readonly Guid LensStrengthMinus250Id = new("b0000000-0000-0000-0000-000000000051");
+    public static readonly Guid LensStrengthMinus300Id = new("b0000000-0000-0000-0000-000000000052");
+    public static readonly Guid LensStrengthMinus400Id = new("b0000000-0000-0000-0000-000000000053");
+    public static readonly Guid LensStrengthMinus450Id = new("b0000000-0000-0000-0000-000000000054");
+    public static readonly Guid LensStrengthBifocal300Id = new("b0000000-0000-0000-0000-000000000055");
+    public static readonly Guid LensStrengthBifocal250Id = new("b0000000-0000-0000-0000-000000000056");
+    public static readonly Guid LensStrengthBifocal200Id = new("b0000000-0000-0000-0000-000000000057");
+    public static readonly Guid LensStrengthBifocal125Id = new("b0000000-0000-0000-0000-000000000058");
+
     public void Configure(EntityTypeBuilder<ReferenceDataItem> builder)
     {
         var now = new DateTimeOffset(2026, 8, 4, 0, 0, 0, TimeSpan.Zero);
@@ -108,6 +127,30 @@ public class ReferenceDataSeedConfiguration : IEntityTypeConfiguration<Reference
         Add(new("b0000000-0000-0000-0000-000000000040"), ReferenceDataCategory.HardCaseColour, "orange", "Orange");
         Add(new("b0000000-0000-0000-0000-000000000041"), ReferenceDataCategory.HardCaseColour, "green", "Green");
         Add(new("b0000000-0000-0000-0000-000000000042"), ReferenceDataCategory.HardCaseColour, "other", "Other", isOther: true);
+
+        // LensStrength ← the 16 distinct values across the two seeded preset catalogues (2026-08-05
+        // rework — see CLAUDE.md's Admin Portal wiring (Preset Catalogues screen) section), taken
+        // verbatim from the user-supplied screenshot of the real 6-Lens/9-Lens rosters. No coating
+        // is baked into the label — which coatings each strength is available in is a separate
+        // LensStrengthCoatingOption relationship, seeded (or left unconfigured) in
+        // PresetCatalogueSeedConfiguration.
+        sort = 0;
+        Add(LensStrength300Id, ReferenceDataCategory.LensStrength, "plus_3_00", "+3.00");
+        Add(LensStrength250Id, ReferenceDataCategory.LensStrength, "plus_2_50", "+2.50");
+        Add(LensStrength200Id, ReferenceDataCategory.LensStrength, "plus_2_00", "+2.00");
+        Add(LensStrength125Id, ReferenceDataCategory.LensStrength, "plus_1_25", "+1.25");
+        Add(LensStrength000Id, ReferenceDataCategory.LensStrength, "plus_0_00", "+0.00");
+        Add(LensStrengthMinus100Id, ReferenceDataCategory.LensStrength, "minus_1_00", "-1.00");
+        Add(LensStrengthMinus150Id, ReferenceDataCategory.LensStrength, "minus_1_50", "-1.50");
+        Add(LensStrengthMinus200Id, ReferenceDataCategory.LensStrength, "minus_2_00", "-2.00");
+        Add(LensStrengthMinus250Id, ReferenceDataCategory.LensStrength, "minus_2_50", "-2.50");
+        Add(LensStrengthMinus300Id, ReferenceDataCategory.LensStrength, "minus_3_00", "-3.00");
+        Add(LensStrengthMinus400Id, ReferenceDataCategory.LensStrength, "minus_4_00", "-4.00");
+        Add(LensStrengthMinus450Id, ReferenceDataCategory.LensStrength, "minus_4_50", "-4.50");
+        Add(LensStrengthBifocal300Id, ReferenceDataCategory.LensStrength, "bifocal_0_00_3_00", "+0.00 / +3.00 (Bifocal)");
+        Add(LensStrengthBifocal250Id, ReferenceDataCategory.LensStrength, "bifocal_0_00_2_50", "+0.00 / +2.50 (Bifocal)");
+        Add(LensStrengthBifocal200Id, ReferenceDataCategory.LensStrength, "bifocal_0_00_2_00", "+0.00 / +2.00 (Bifocal)");
+        Add(LensStrengthBifocal125Id, ReferenceDataCategory.LensStrength, "bifocal_0_00_1_25", "+0.00 / +1.25 (Bifocal)");
 
         builder.HasData(items);
     }

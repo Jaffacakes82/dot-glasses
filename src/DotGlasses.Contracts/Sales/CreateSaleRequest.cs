@@ -7,10 +7,11 @@ namespace DotGlasses.Contracts.Sales;
 /// TechnicianUserId (server-derived, see TestsController). No CustomerId — server finds-or-
 /// creates a Customer from FullName+PhoneNumber, same as Lead.
 ///
-/// CoatingRefId is only actually used for LensRangeType.Custom. For a preset range
-/// (SixLensSet/NineLensSet) the server derives the Sale's coating from the chosen left-eye
-/// LensOption's own forced coating and ignores this field entirely — see SaleService. Still
-/// present on the request so a Custom-range submission has somewhere to put it.
+/// CoatingRefId is required for every LensRangeType now (2026-08-05 — previously ignored for
+/// preset ranges, server-derived from a single forced coating per lens; see LensOption's doc
+/// comment for why that was replaced). For Custom, any active Coating item is valid; for a
+/// preset range, it must be one of the coatings configured as available for the chosen left-eye
+/// LensOption's lens strength — see SaleService/CreateSaleRequestValidator.
 /// </summary>
 public class CreateSaleRequest
 {
@@ -54,7 +55,7 @@ public class CreateSaleRequest
     public string? FrameColourOtherText { get; set; }
     public FrameCoverage FrameCoverage { get; set; }
 
-    /// <summary>Required + used only for Custom ranges — see class summary.</summary>
+    /// <summary>Required for every LensRangeType now — see class summary.</summary>
     public Guid? CoatingRefId { get; set; }
 
     public bool HardCaseSold { get; set; }
