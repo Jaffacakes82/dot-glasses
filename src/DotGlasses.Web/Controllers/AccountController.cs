@@ -7,10 +7,10 @@ using Microsoft.AspNetCore.Mvc;
 namespace DotGlasses.Web.Controllers;
 
 /// <summary>
-/// Basic login page for the Admin Portal's cookie-authenticated MVC session. [OPEN]: no
-/// registration/self-service flow yet — admin users are provisioned via the dev user seeding
-/// placeholder (see HostedServices/DevUserSeeder.cs) pending the CEO conversation on the
-/// real permission matrix.
+/// Basic login page for the Admin Portal's cookie-authenticated MVC session, plus the anonymous
+/// SetPassword page a User Directory invite/reset link points at (see CLAUDE.md's Admin Portal
+/// wiring (User Directory screen) section) — real Identity password-reset tokens, no email
+/// sending yet (IEmailSender is stubbed).
 /// </summary>
 public class AccountController(SignInManager<ApplicationUser> signInManager) : Controller
 {
@@ -35,6 +35,13 @@ public class AccountController(SignInManager<ApplicationUser> signInManager) : C
             return View(model);
         }
 
+        var user = await signInManager.UserManager.FindByNameAsync(model.UserName);
+        if (user is not null)
+        {
+            user.LastLoginUtc = DateTimeOffset.UtcNow;
+            await signInManager.UserManager.UpdateAsync(user);
+        }
+
         if (!string.IsNullOrEmpty(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl))
         {
             return Redirect(model.ReturnUrl);
@@ -50,5 +57,40 @@ public class AccountController(SignInManager<ApplicationUser> signInManager) : C
     {
         await signInManager.SignOutAsync();
         return RedirectToAction("Index", "Home");
+    }
+
+    [HttpGet]
+    [AllowAnonymous]
+    public IActionResult SetPassword(string userId, string token) => View(new SetPasswordViewModel { UserId = userId, Token = token });
+
+    [HttpPost]
+    [AllowAnonymous]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SetPassword(SetPasswordViewModel model)
+    {
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        var user = await signInManager.UserManager.FindByIdAsync(model.UserId);
+        if (user is null)
+        {
+            model.Error = "Invalid or expired link.";
+            return View(model);
+        }
+
+        var result = await signInManager.UserManager.ResetPasswordAsync(user, model.Token, model.Password);
+        if (!result.Succeeded)
+        {
+            model.Error = string.Join(" ", result.Errors.Select(e => e.Description));
+            return View(model);
+        }
+
+        user.EmailConfirmed = true;
+        await signInManager.UserManager.UpdateAsync(user);
+
+        TempData["Info"] = "Password set — you can now log in.";
+        return RedirectToAction(nameof(Login));
     }
 }

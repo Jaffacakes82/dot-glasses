@@ -1,14 +1,17 @@
 using DotGlasses.Application.Common;
 using DotGlasses.Application.Customers;
 using DotGlasses.Application.Leads;
+using DotGlasses.Application.Notifications;
 using DotGlasses.Application.Organisations;
 using DotGlasses.Application.PresetCatalogues;
 using DotGlasses.Application.ReferenceData;
 using DotGlasses.Application.Reporting;
 using DotGlasses.Application.Sales;
+using DotGlasses.Application.Users;
 using DotGlasses.Application.VisionTests;
 using DotGlasses.Application.WidgetExamples;
 using DotGlasses.Infrastructure.Identity;
+using DotGlasses.Infrastructure.Notifications;
 using DotGlasses.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
@@ -34,6 +37,8 @@ public static class DependencyInjection
         services.AddScoped<IWidgetExampleService, WidgetExampleService>();
         services.AddScoped<IUnscopedReportQueryService, UnscopedReportQueryService>();
         services.AddScoped<IEventHistoryQueryService, EventHistoryQueryService>();
+        services.AddScoped<IEmailSender, LoggingEmailSender>();
+        services.AddScoped<IUserAdminService, UserAdminService>();
 
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<DotGlassesDbContext>());
         services.AddScoped<IReferenceDataLookupService, ReferenceDataLookupService>();
