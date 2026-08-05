@@ -400,6 +400,70 @@ renders. Then signed in as the seeded Kenya Manager and confirmed the Tests tab 
 4 Kenya-subtree rows — the DGI-stamped orphan rows visible to the Admin are correctly invisible
 to them, proving the same automatic hierarchy scoping Organisations relies on applies here too.
 
+## Admin Portal wiring (User Directory screen)
+
+Fourth Admin Portal screen wired (2026-08-05, same day as the other three) — the actual
+account-provisioning gap, since nothing beyond the three `DevUserSeeder` dev accounts could sign
+in before this. First real consumer of `AuthorizationPolicies.ManageUsersInScope`/
+`HierarchyDescendantRequirement`, which had sat unwired since the RBAC pass specifically for this.
+
+**Invite-link flow, not admin-set passwords** — decided with the user before implementing. ASP.NET
+Identity's `AddDefaultTokenProviders()` was already registered (`Program.cs`), so
+`UserManager.GeneratePasswordResetTokenAsync`/`ResetPasswordAsync` work with no extra setup; the
+only real gap was delivery (no `IEmailSender`, no SMTP/mail config anywhere in this codebase).
+`IUserAdminService.InviteAsync` creates the `ApplicationUser` with **no password at all**
+(`PasswordHash` stays null — this is what "Invited" status means, derived, not a stored column),
+generates a real reset token, and the Web layer builds a `/Account/SetPassword?userId=&token=`
+link. Since there's no real email sending yet, that link is shown **once** on the Admin Portal
+page after Invite/Reset (`TempData["SetPasswordLink"]`) for the admin to relay manually. The user
+visits the link, sets their own password on a real anonymous `AccountController.SetPassword`
+page (`UserManager.ResetPasswordAsync` — the same "forgot password" API works fine against a
+user who never had a password to begin with), which also flips `EmailConfirmed = true` — that
+transition (PasswordHash null → set) is what moves a user from Invited to Active. `IEmailSender`
+(`Application/Notifications`) is a one-method stub (`LoggingEmailSender`, Infrastructure) that
+just logs — real Azure Communication Services delivery is explicit `[OPEN]` work the user will do
+themselves; nothing about the token mechanics needs to change when that lands, only what happens
+after `InviteAsync` returns the link in the Web controller.
+
+**Multi-org assignment is real now** — `UserOrgAssignment` ("which org nodes a user can switch
+between") existed since the domain-modelling pass but had no writer or reader anywhere. The
+Invite form's org checkbox list (sourced from `IOrganisationAdminService.ListAsync()`, already
+scoped to the caller) can select several; every selection becomes a `UserOrgAssignment` row, and
+the *first* one is also stamped as the "primary" org onto `ApplicationUser.OrgNodeId`/
+`HierarchyPath`/`OrgLevel` (and therefore the JWT/cookie claims) — there's still no "switch
+active location" UI anywhere to make a more elaborate primary-selection UX meaningful yet.
+
+**`ApplicationUser` is not covered by the automatic hierarchy-scoping query filter** — that
+filter only walks Domain entities implementing `IHierarchyScoped`; `ApplicationUser :
+IdentityUser<Guid>` is an Identity/Infrastructure type, never in scope for it.
+`UserAdminService.ListAsync` filters manually (`.Where(u => u.HierarchyPath.StartsWith(prefix))`)
+using the same `ICurrentUserContext.HierarchyPathPrefix` the automatic filter itself is built on
+— worth remembering for any future screen that lists `ApplicationUser` rows directly.
+
+**Two small schema additions beyond what was originally scoped**: `ApplicationUser.LastLoginUtc`
+(stamped on *both* sign-in paths — `AccountController.Login` for the Admin Portal and the API's
+`AuthController.Login` for the Field App, since a `User`-role account almost never touches the
+Admin Portal, so only stamping the cookie path would leave this permanently null for most real
+users) and `ApplicationUser.FullName` (nullable — the three seeded dev accounts predate it and
+fall back to displaying their username/email).
+
+**Suspend/Unsuspend uses Identity's own lockout mechanism**
+(`SetLockoutEndDateAsync(user, DateTimeOffset.MaxValue)` / `(user, null)`), not a parallel
+`IsActive` flag — "Suspended" status is derived from `LockoutEnd` being in the future, same
+derived-not-stored approach as "Invited"/"Active".
+
+**Verified live, the full loop**: as the seeded DGI Admin, invited a new Manager assigned to two
+org nodes (Kenya + a RetailPoint under it) — confirmed in Postgres that the primary org stamped
+correctly (first-selected, matching DOM/submission order) and both `UserOrgAssignment` rows were
+created. Opened the shown link, set a password, and signed in as the new user — confirmed
+`LastLoginUtc` stamped and status flipped Invited → Active in the directory. As the DGI Admin,
+Suspended that user and confirmed sign-in was then rejected (generic "Invalid username or
+password," not a leak that the account exists but is locked); Unsuspended and confirmed sign-in
+worked again. Throughout, signed in as the new Manager and confirmed she could see herself plus
+other Kenya-subtree users but not the DGI-level admin — the same manual-prefix-filter symmetry
+Organisations' automatic filter already proved, just exercised through the non-`IHierarchyScoped`
+path this screen needed.
+
 ## RBAC permission matrix
 
 Three roles (Admin/Manager/User), assignable at any org node, scope = that node + everything
@@ -431,15 +495,15 @@ acts on a specific target user/org — not yet wired to one, see above).
   server-rendered MVC app and a WASM app to source one file from, so the two copies must be
   kept in sync **by hand**. If the token values ever change, update both.
 - Bootstrap is still present in both projects (grid utilities, form controls, the native modal
-  JS — first used decoratively in `UserDirectory`, now also driving Organisations' real "Add
-  child node" dialog) — the design system layers custom `dg-*` classes/tokens on top rather than
-  replacing it.
+  JS — originally decorative in `UserDirectory`, now driving both Organisations' "Add child
+  node" dialog and User Directory's own real "Invite platform user" form) — the design system
+  layers custom `dg-*` classes/tokens on top rather than replacing it.
 - Admin Portal (`Web`) screens are mostly still skeletons over static placeholder data (in each
-  `Controllers/*Controller.cs`, not a database) — Dashboard, User Directory, Preset Catalogues,
-  Custom Orders. **Reference Data, Organisations, and Event History are wired to the real
+  `Controllers/*Controller.cs`, not a database) — Dashboard, Preset Catalogues, Custom Orders.
+  **Reference Data, Organisations, Event History, and User Directory are wired to the real
   database** (all 2026-08-05 — see Admin Portal wiring sections above); the rest aren't. Don't
   wire the remaining ones up without checking each screen's field-level shape against the design
-  README first — go screen by screen, same discipline all three of those followed.
+  README first — go screen by screen, same discipline all four of those followed.
   `ConsultationForm.razor` in `App` is **no longer a stub** — it saves real Test/Lead/Sale records
   via the real API (see Field App UI wiring above); its `Web` modal equivalent still doesn't exist.
 - All seven Admin Portal controllers now have `[Authorize]` (see RBAC permission matrix above) —
@@ -489,14 +553,24 @@ Aspire dashboard).
 
 ## `[OPEN]` items — implement simplest placeholder, flag, don't guess
 
-- Real per-user role/claim assignment beyond the three seeded dev accounts (`DevUserSeeder`) is
-  still open — no self-service provisioning flow exists yet.
+- Real per-user provisioning beyond the three seeded `DevUserSeeder` accounts now exists (User
+  Directory's invite flow, see Admin Portal wiring above) — but real email delivery doesn't. The
+  set-password link is shown once in the Admin Portal UI for manual relay; `IEmailSender` is a
+  logging-only stub (`LoggingEmailSender`, Infrastructure). **Needed before any of this is usable
+  outside a dev session**: a real Azure Communication Services `IEmailSender` implementation —
+  the user is setting this up themselves; the token/link mechanics don't need to change at all
+  when it lands, only what `UserDirectoryController` does with the link after `InviteAsync`
+  returns it.
 - The Field App's `ConsultationForm.razor` is wired to the real API (see Field App UI wiring
-  above); the Admin Portal's equivalent modal still doesn't exist. `ReferenceDataItem` and
-  `OrganisationNode` now have write paths (see the Admin Portal wiring sections above) —
-  `PresetCatalogue` still doesn't; Dashboard/User Directory/Preset Catalogues/Custom Orders are
-  still placeholder. Customer is internal-only by design. Keep building the Admin Portal screens
-  one at a time, checking field-level shape against the design README first.
+  above); the Admin Portal's equivalent modal still doesn't exist. `ReferenceDataItem`,
+  `OrganisationNode`, and `ApplicationUser` now have write paths (see the Admin Portal wiring
+  sections above) — `PresetCatalogue` still doesn't; Dashboard/Preset Catalogues/Custom Orders
+  are still placeholder. Customer is internal-only by design. Keep building the Admin Portal
+  screens one at a time, checking field-level shape against the design README first.
+- User Directory has no "switch active location" UI anywhere yet, so multi-org assignment via
+  `UserOrgAssignment` (now real, see Admin Portal wiring above) only ever sets the *first*
+  selected org as primary/active — a user assigned to several locations can't currently change
+  which one drives their JWT/cookie claims after the fact.
 - Event History has no pagination — unlike Reference Data/Organisations (naturally small, bounded
   lists), `Test`/`Lead`/`Sale` volume genuinely grows over time in production. Flagged as a real
   gap this time, not silently assumed away; will need addressing before this screen sees

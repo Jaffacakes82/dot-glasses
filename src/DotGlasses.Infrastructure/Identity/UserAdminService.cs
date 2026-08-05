@@ -1,0 +1,140 @@
+using DotGlasses.Application.Common;
+using DotGlasses.Application.Users;
+using DotGlasses.Domain.Entities;
+using DotGlasses.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+
+namespace DotGlasses.Infrastructure.Identity;
+
+public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlassesDbContext dbContext, ICurrentUserContext currentUser) : IUserAdminService
+{
+    public async Task<IReadOnlyList<UserAdminRow>> ListAsync(CancellationToken cancellationToken = default)
+    {
+        var prefix = currentUser.HierarchyPathPrefix;
+        var users = await userManager.Users
+            .Where(u => u.HierarchyPath.StartsWith(prefix))
+            .OrderBy(u => u.UserName)
+            .ToListAsync(cancellationToken);
+
+        var userIds = users.Select(u => u.Id).ToList();
+
+        var salesCounts = await dbContext.Sales
+            .Where(s => userIds.Contains(s.TechnicianUserId))
+            .GroupBy(s => s.TechnicianUserId)
+            .Select(g => new { UserId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.UserId, x => x.Count, cancellationToken);
+
+        var assignments = await dbContext.UserOrgAssignments
+            .Where(a => userIds.Contains(a.UserId))
+            .ToListAsync(cancellationToken);
+
+        // Scoped automatically (OrganisationNode implements IHierarchyScoped) — an org an
+        // assigned-to user has that falls outside the caller's own scope (rare: a DGI-assigned
+        // user with a foreign secondary org, viewed by a narrower-scoped caller) resolves to
+        // "Unknown" via the fallback below rather than throwing.
+        var orgNames = await dbContext.OrganisationNodes.ToDictionaryAsync(o => o.Id, o => o.Name, cancellationToken);
+
+        var rows = new List<UserAdminRow>();
+        foreach (var user in users)
+        {
+            var roles = await userManager.GetRolesAsync(user);
+            var assignedOrgNames = assignments
+                .Where(a => a.UserId == user.Id)
+                .Select(a => orgNames.GetValueOrDefault(a.OrgNodeId, "Unknown"))
+                .ToList();
+
+            rows.Add(new UserAdminRow(
+                user.Id,
+                user.Email ?? user.UserName ?? "—",
+                string.IsNullOrWhiteSpace(user.FullName) ? user.UserName ?? "—" : user.FullName,
+                roles.FirstOrDefault() ?? "—",
+                assignedOrgNames,
+                ResolveStatus(user),
+                user.LastLoginUtc,
+                salesCounts.GetValueOrDefault(user.Id, 0),
+                user.HierarchyPath));
+        }
+
+        return rows;
+    }
+
+    public async Task<bool> EmailExistsAsync(string email, CancellationToken cancellationToken = default) =>
+        await userManager.FindByEmailAsync(email) is not null;
+
+    public async Task<InviteUserResult> InviteAsync(string email, string fullName, string role, IReadOnlyList<Guid> orgNodeIds, CancellationToken cancellationToken = default)
+    {
+        var primaryOrg = await dbContext.OrganisationNodes.FirstAsync(o => o.Id == orgNodeIds[0], cancellationToken);
+
+        var user = new ApplicationUser
+        {
+            UserName = email,
+            Email = email,
+            EmailConfirmed = false,
+            FullName = fullName,
+            OrgNodeId = primaryOrg.Id,
+            HierarchyPath = primaryOrg.HierarchyPath,
+            OrgLevel = primaryOrg.Level,
+        };
+
+        // No password — the account stays in the "Invited" state (PasswordHash is null) until
+        // the user completes the set-password link.
+        var createResult = await userManager.CreateAsync(user);
+        if (!createResult.Succeeded)
+        {
+            throw new InvalidOperationException(string.Join("; ", createResult.Errors.Select(e => e.Description)));
+        }
+
+        await userManager.AddToRoleAsync(user, role);
+
+        foreach (var orgNodeId in orgNodeIds)
+        {
+            dbContext.UserOrgAssignments.Add(new UserOrgAssignment
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.Id,
+                OrgNodeId = orgNodeId,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            });
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var token = await userManager.GeneratePasswordResetTokenAsync(user);
+        return new InviteUserResult(user.Id, email, token);
+    }
+
+    public async Task<string> RegeneratePasswordResetTokenAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var user = await userManager.FindByIdAsync(userId.ToString()) ?? throw new InvalidOperationException("User not found.");
+        return await userManager.GeneratePasswordResetTokenAsync(user);
+    }
+
+    public async Task SuspendAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var user = await userManager.FindByIdAsync(userId.ToString()) ?? throw new InvalidOperationException("User not found.");
+        await userManager.SetLockoutEnabledAsync(user, true);
+        await userManager.SetLockoutEndDateAsync(user, DateTimeOffset.MaxValue);
+    }
+
+    public async Task UnsuspendAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var user = await userManager.FindByIdAsync(userId.ToString()) ?? throw new InvalidOperationException("User not found.");
+        await userManager.SetLockoutEndDateAsync(user, null);
+    }
+
+    private static string ResolveStatus(ApplicationUser user)
+    {
+        if (string.IsNullOrEmpty(user.PasswordHash))
+        {
+            return "Invited";
+        }
+
+        if (user.LockoutEnd is { } lockoutEnd && lockoutEnd > DateTimeOffset.UtcNow)
+        {
+            return "Suspended";
+        }
+
+        return "Active";
+    }
+}

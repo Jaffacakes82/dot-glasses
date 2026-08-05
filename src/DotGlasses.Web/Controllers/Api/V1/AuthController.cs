@@ -47,6 +47,9 @@ public class AuthController(
             return Unauthorized();
         }
 
+        user.LastLoginUtc = DateTimeOffset.UtcNow;
+        await userManager.UpdateAsync(user);
+
         var principal = await claimsPrincipalFactory.CreateAsync(user);
         var (token, expiresAtUtc) = jwtTokenService.CreateToken(principal.Claims);
 

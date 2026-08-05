@@ -1,7 +1,9 @@
 @model IReadOnlyList<DotGlasses.Web.Models.DirectoryUser>
+@using DotGlasses.Application.Organisations
 @{
     ViewData["Title"] = "User Directory";
     var statusColor = (Dictionary<string, string>)ViewData["StatusColor"]!;
+    var availableOrgs = (IReadOnlyList<OrganisationAdminNode>)ViewData["AvailableOrgs"]!;
 }
 
 <div class="dg-page-header">
@@ -11,6 +13,19 @@
     </div>
     <button class="dg-btn dg-btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#inviteUserModal">Invite platform user</button>
 </div>
+
+@if (TempData["SetPasswordLink"] is string link)
+{
+    <div class="alert alert-success" style="border-radius:var(--radius-md); margin-bottom:var(--space-4); word-break:break-all;">
+        No email sending is wired up yet — copy this set-password link and send it to <strong>@TempData["SetPasswordLinkFor"]</strong> yourself:<br />
+        <code>@link</code>
+    </div>
+}
+
+@if (!ViewData.ModelState.IsValid)
+{
+    <div class="alert alert-danger" style="border-radius:var(--radius-md); margin-bottom:var(--space-4);" asp-validation-summary="All"></div>
+}
 
 <div class="dg-card">
     <table class="dg-table">
@@ -31,8 +46,27 @@
                 <td class="dg-muted">@user.Sales</td>
                 <td><span class="dg-badge" style="background:@statusColor[user.Status];">@user.Status</span></td>
                 <td style="white-space:nowrap;">
-                    <button class="dg-btn dg-btn-ghost" style="padding:6px 14px; font-size:12px;" type="button">Reset password</button>
-                    <button class="dg-btn dg-btn-ghost" style="padding:6px 14px; font-size:12px;" type="button">Suspend</button>
+                    @if (user.CanManage)
+                    {
+                        <form asp-action="ResetPassword" method="post" style="display:inline;">
+                            <input type="hidden" name="id" value="@user.Id" />
+                            <button class="dg-btn dg-btn-ghost" style="padding:6px 14px; font-size:12px;" type="submit">Reset password</button>
+                        </form>
+                        @if (user.Status == "Suspended")
+                        {
+                            <form asp-action="Unsuspend" method="post" style="display:inline;">
+                                <input type="hidden" name="id" value="@user.Id" />
+                                <button class="dg-btn dg-btn-ghost" style="padding:6px 14px; font-size:12px;" type="submit">Unsuspend</button>
+                            </form>
+                        }
+                        else
+                        {
+                            <form asp-action="Suspend" method="post" style="display:inline;">
+                                <input type="hidden" name="id" value="@user.Id" />
+                                <button class="dg-btn dg-btn-ghost" style="padding:6px 14px; font-size:12px;" type="submit">Suspend</button>
+                            </form>
+                        }
+                    }
                 </td>
             </tr>
         }
@@ -48,39 +82,49 @@
 <div class="modal fade" id="inviteUserModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content" style="border-radius:var(--radius-md); border:none;">
-            <div class="modal-header">
-                <h2 class="dg-page-title" style="font-size:20px;">Invite platform user</h2>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="dg-auth-field">
-                    <label>Email</label>
-                    <input class="form-control" type="email" />
+            <form asp-action="Invite" method="post">
+                <div class="modal-header">
+                    <h2 class="dg-page-title" style="font-size:20px;">Invite platform user</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="dg-auth-field">
-                    <label>Hierarchy scope</label>
-                    <select class="form-select" multiple size="5">
-                        <option>DOT Glasses International</option>
-                        <option>— Kenya</option>
-                        <option>—— Nairobi Retail Group</option>
-                        <option>———— Kangemi Vision Centre</option>
-                        <option>———— Nakuru Central</option>
-                    </select>
+                <div class="modal-body">
+                    <div class="dg-auth-field">
+                        <label>Full name</label>
+                        <input class="form-control" name="FullName" />
+                    </div>
+                    <div class="dg-auth-field">
+                        <label>Email</label>
+                        <input class="form-control" type="email" name="Email" />
+                    </div>
+                    <div class="dg-auth-field">
+                        <label>Hierarchy scope <span style="font-weight:400; color:var(--text-muted);">(first checked becomes the primary/active location)</span></label>
+                        <div style="max-height:160px; overflow-y:auto; border:1px solid var(--border-default); border-radius:8px; padding:8px;">
+                            @foreach (var org in availableOrgs)
+                            {
+                                <label style="display:block; font-weight:400; padding:2px 0;">
+                                    <input type="checkbox" name="OrgNodeIds" value="@org.Id" /> @org.Name
+                                </label>
+                            }
+                        </div>
+                    </div>
+                    <div class="dg-auth-field">
+                        <label>Role</label>
+                        <select class="form-select" name="Role">
+                            <option value="Admin">Admin</option>
+                            <option value="Manager">Manager</option>
+                            <option value="User" selected>User</option>
+                        </select>
+                    </div>
+                    <p style="font-size:12px; color:var(--text-muted);">
+                        No email sending is wired up yet — after inviting, you'll get a
+                        set-password link to copy and send the new user yourself.
+                    </p>
                 </div>
-                <div class="dg-auth-field">
-                    <label>Role</label>
-                    <select class="form-select">
-                        <option>Admin</option>
-                        <option>Manager</option>
-                        <option selected>User</option>
-                    </select>
+                <div class="modal-footer">
+                    <button class="dg-btn dg-btn-ghost" type="button" data-bs-dismiss="modal">Cancel</button>
+                    <button class="dg-btn dg-btn-primary" type="submit">Send invite</button>
                 </div>
-                <p style="font-size:12px; color:var(--text-muted);">Managers can only add Users within their own scope.</p>
-            </div>
-            <div class="modal-footer">
-                <button class="dg-btn dg-btn-ghost" type="button" data-bs-dismiss="modal">Cancel</button>
-                <button class="dg-btn dg-btn-primary" type="button">Send invite</button>
-            </div>
+            </form>
         </div>
     </div>
 </div>
