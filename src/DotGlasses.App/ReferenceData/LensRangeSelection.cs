@@ -15,6 +15,11 @@ public class LensRangeSelection
     public Guid? LensOptionLeftId { get; set; }
     public Guid? LensOptionRightId { get; set; }
 
+    /// <summary>Preset-range coating pick, driven by the left-eye LensOption's AvailableCoatingIds
+    /// — see LensRangeSelector. Unused for Custom range (ConsultationForm hosts its own coating
+    /// dropdown there, since "any coating" applies rather than a lens-linked available set).</summary>
+    public Guid? CoatingRefId { get; set; }
+
     public decimal? CustomSphereLeft { get; set; }
     public decimal? CustomCylinderLeft { get; set; }
     public decimal? CustomAxisLeft { get; set; }

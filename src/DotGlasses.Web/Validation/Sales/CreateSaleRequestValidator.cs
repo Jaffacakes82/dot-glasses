@@ -90,6 +90,23 @@ public class CreateSaleRequestValidator : AbstractValidator<CreateSaleRequest>
                 context.AddFailure(nameof(request.LensOptionRightId), "LensOptionRightId must belong to PresetCatalogueId.");
             }
 
+            if (request.CoatingRefId is not { } presetCoatingRefId)
+            {
+                context.AddFailure(nameof(request.CoatingRefId), "CoatingRefId is required for a preset LensRangeType.");
+            }
+            else
+            {
+                var presetCoatingLookup = await referenceData.LookupAsync(presetCoatingRefId, ReferenceDataCategory.Coating, cancellationToken);
+                if (presetCoatingLookup is not { IsActive: true })
+                {
+                    context.AddFailure(nameof(request.CoatingRefId), "CoatingRefId must reference an existing, active Coating reference-data item.");
+                }
+                else if (!await referenceData.IsCoatingAvailableForLensOptionAsync(leftId, presetCoatingRefId, cancellationToken))
+                {
+                    context.AddFailure(nameof(request.CoatingRefId), "CoatingRefId is not configured as available for the chosen lens option (see Reference Data > Lens Strength).");
+                }
+            }
+
             return;
         }
 
@@ -105,9 +122,22 @@ public class CreateSaleRequestValidator : AbstractValidator<CreateSaleRequest>
                 context.AddFailure(nameof(request.LensRangeType), "CustomSphereLeft and CustomSphereRight are required for a Custom LensRangeType.");
             }
 
+            ValidateCustomPower(request.CustomSphereLeft, nameof(request.CustomSphereLeft), -10m, 10m, 0.25m, context);
+            ValidateCustomPower(request.CustomSphereRight, nameof(request.CustomSphereRight), -10m, 10m, 0.25m, context);
+            ValidateCustomPower(request.CustomCylinderLeft, nameof(request.CustomCylinderLeft), -6m, 0.25m, 0.25m, context);
+            ValidateCustomPower(request.CustomCylinderRight, nameof(request.CustomCylinderRight), -6m, 0.25m, 0.25m, context);
+            ValidateCustomPower(request.CustomAddPowerLeft, nameof(request.CustomAddPowerLeft), 0m, 3m, 0.25m, context);
+            ValidateCustomPower(request.CustomAddPowerRight, nameof(request.CustomAddPowerRight), 0m, 3m, 0.25m, context);
+            ValidateCustomAxis(request.CustomAxisLeft, nameof(request.CustomAxisLeft), context);
+            ValidateCustomAxis(request.CustomAxisRight, nameof(request.CustomAxisRight), context);
+
             if (request.PupilDistanceMm is not { } pd || pd < 54 || pd > 74)
             {
                 context.AddFailure(nameof(request.PupilDistanceMm), "PupilDistanceMm is required and must be within the standard 54-74mm range for a Custom LensRangeType (manual override outside this range is a Day 2 feature).");
+            }
+            else if (pd != Math.Truncate(pd))
+            {
+                context.AddFailure(nameof(request.PupilDistanceMm), "PupilDistanceMm must be a whole millimetre value.");
             }
 
             if (request.CoatingRefId is not { } coatingRefId)
@@ -122,6 +152,34 @@ public class CreateSaleRequestValidator : AbstractValidator<CreateSaleRequest>
                     context.AddFailure(nameof(request.CoatingRefId), "CoatingRefId must reference an existing, active Coating reference-data item.");
                 }
             }
+        }
+    }
+
+    /// <summary>Sphere/Cylinder/Add-power are physical lens-grinding constraints, not admin-curated
+    /// reference data — validated in code against the user's exact spec, not a lookup table.</summary>
+    private static void ValidateCustomPower(decimal? value, string propertyName, decimal min, decimal max, decimal step, ValidationContext<CreateSaleRequest> context)
+    {
+        if (value is not { } v)
+        {
+            return;
+        }
+
+        if (v < min || v > max || (v - min) % step != 0)
+        {
+            context.AddFailure(propertyName, $"{propertyName} must be between {min} and {max} in {step} increments.");
+        }
+    }
+
+    private static void ValidateCustomAxis(decimal? value, string propertyName, ValidationContext<CreateSaleRequest> context)
+    {
+        if (value is not { } v)
+        {
+            return;
+        }
+
+        if (v < 0 || v > 180 || v != Math.Truncate(v))
+        {
+            context.AddFailure(propertyName, $"{propertyName} must be a whole number of degrees between 0 and 180.");
         }
     }
 

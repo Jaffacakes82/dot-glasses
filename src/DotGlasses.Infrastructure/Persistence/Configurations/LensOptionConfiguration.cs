@@ -11,9 +11,7 @@ public class LensOptionConfiguration : IEntityTypeConfiguration<LensOption>
         builder.ToTable("LensOptions");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).ValueGeneratedNever();
-        builder.Property(x => x.SphericalPower).HasPrecision(4, 2);
-        builder.Property(x => x.AddPower).HasPrecision(4, 2);
         builder.HasIndex(x => x.PresetCatalogueId);
-        builder.HasIndex(x => x.CoatingId);
+        builder.HasIndex(x => x.LensStrengthRefId);
     }
 }

@@ -27,11 +27,11 @@
     {
         <div class="dg-field">
             <label>Lens power — left eye</label>
-            <select value="@Model.LensOptionLeftId" @onchange="e => Model.LensOptionLeftId = ParseGuid(e.Value)">
+            <select value="@Model.LensOptionLeftId" @onchange="OnLeftLensChanged">
                 <option value="">Select...</option>
                 @foreach (var option in catalogue.LensOptions.OrderBy(o => o.SortOrder))
                 {
-                    <option value="@option.Id">@FormatLensOption(option)</option>
+                    <option value="@option.Id">@option.Label</option>
                 }
             </select>
         </div>
@@ -41,29 +41,112 @@
                 <option value="">Select...</option>
                 @foreach (var option in catalogue.LensOptions.OrderBy(o => o.SortOrder))
                 {
-                    <option value="@option.Id">@FormatLensOption(option)</option>
+                    <option value="@option.Id">@option.Label</option>
                 }
             </select>
         </div>
+
+        @if (Model.LensOptionLeftId is not null)
+        {
+            var leftOption = catalogue.LensOptions.FirstOrDefault(o => o.Id == Model.LensOptionLeftId);
+            var availableCoatingIds = leftOption?.AvailableCoatingIds ?? [];
+            @if (availableCoatingIds.Count == 0)
+            {
+                <p style="color:#c00; font-size:12px;">No coatings are configured for this lens yet — it can't be sold on a preset range until DGI configures one in Reference Data.</p>
+            }
+            else
+            {
+                <div class="dg-field">
+                    <label>Coating</label>
+                    <select value="@Model.CoatingRefId" @onchange="e => Model.CoatingRefId = ParseGuid(e.Value)">
+                        <option value="">Select...</option>
+                        @foreach (var coatingId in availableCoatingIds)
+                        {
+                            <option value="@coatingId">@(Coatings.FirstOrDefault(c => c.Id == coatingId)?.Label ?? coatingId.ToString())</option>
+                        }
+                    </select>
+                </div>
+            }
+        }
     }
 }
 else if (Model.LensRangeType == LensRangeType.Custom)
 {
     <div style="display:flex; gap:8px;">
-        <div class="dg-field" style="flex:1;"><label>Sphere — left</label><input type="number" step="0.25" @bind="Model.CustomSphereLeft" /></div>
-        <div class="dg-field" style="flex:1;"><label>Cylinder — left</label><input type="number" step="0.25" @bind="Model.CustomCylinderLeft" /></div>
-        <div class="dg-field" style="flex:1;"><label>Axis — left</label><input type="number" @bind="Model.CustomAxisLeft" /></div>
-        <div class="dg-field" style="flex:1;"><label>Add power — left</label><input type="number" step="0.25" @bind="Model.CustomAddPowerLeft" /></div>
+        <div class="dg-field" style="flex:1;">
+            <label>Sphere — left</label>
+            <select value="@Model.CustomSphereLeft" @onchange="e => Model.CustomSphereLeft = ParseDecimal(e.Value)">
+                <option value="">Select...</option>
+                @foreach (var v in SphereSteps)
+                {
+                    <option value="@v">@FormatPower(v)</option>
+                }
+            </select>
+        </div>
+        <div class="dg-field" style="flex:1;">
+            <label>Cylinder — left</label>
+            <select value="@Model.CustomCylinderLeft" @onchange="e => Model.CustomCylinderLeft = ParseDecimal(e.Value)">
+                <option value="">Select...</option>
+                @foreach (var v in CylinderSteps)
+                {
+                    <option value="@v">@FormatPower(v)</option>
+                }
+            </select>
+        </div>
+        <div class="dg-field" style="flex:1;"><label>Axis — left</label><input type="number" min="0" max="180" step="1" @bind="Model.CustomAxisLeft" /></div>
+        <div class="dg-field" style="flex:1;">
+            <label>Add power — left</label>
+            <select value="@Model.CustomAddPowerLeft" @onchange="e => Model.CustomAddPowerLeft = ParseDecimal(e.Value)">
+                <option value="">Select...</option>
+                @foreach (var v in AddPowerSteps)
+                {
+                    <option value="@v">@FormatPower(v)</option>
+                }
+            </select>
+        </div>
     </div>
     <div style="display:flex; gap:8px;">
-        <div class="dg-field" style="flex:1;"><label>Sphere — right</label><input type="number" step="0.25" @bind="Model.CustomSphereRight" /></div>
-        <div class="dg-field" style="flex:1;"><label>Cylinder — right</label><input type="number" step="0.25" @bind="Model.CustomCylinderRight" /></div>
-        <div class="dg-field" style="flex:1;"><label>Axis — right</label><input type="number" @bind="Model.CustomAxisRight" /></div>
-        <div class="dg-field" style="flex:1;"><label>Add power — right</label><input type="number" step="0.25" @bind="Model.CustomAddPowerRight" /></div>
+        <div class="dg-field" style="flex:1;">
+            <label>Sphere — right</label>
+            <select value="@Model.CustomSphereRight" @onchange="e => Model.CustomSphereRight = ParseDecimal(e.Value)">
+                <option value="">Select...</option>
+                @foreach (var v in SphereSteps)
+                {
+                    <option value="@v">@FormatPower(v)</option>
+                }
+            </select>
+        </div>
+        <div class="dg-field" style="flex:1;">
+            <label>Cylinder — right</label>
+            <select value="@Model.CustomCylinderRight" @onchange="e => Model.CustomCylinderRight = ParseDecimal(e.Value)">
+                <option value="">Select...</option>
+                @foreach (var v in CylinderSteps)
+                {
+                    <option value="@v">@FormatPower(v)</option>
+                }
+            </select>
+        </div>
+        <div class="dg-field" style="flex:1;"><label>Axis — right</label><input type="number" min="0" max="180" step="1" @bind="Model.CustomAxisRight" /></div>
+        <div class="dg-field" style="flex:1;">
+            <label>Add power — right</label>
+            <select value="@Model.CustomAddPowerRight" @onchange="e => Model.CustomAddPowerRight = ParseDecimal(e.Value)">
+                <option value="">Select...</option>
+                @foreach (var v in AddPowerSteps)
+                {
+                    <option value="@v">@FormatPower(v)</option>
+                }
+            </select>
+        </div>
     </div>
     <div class="dg-field">
         <label>Pupil distance (mm, 54–74)</label>
-        <input type="number" min="54" max="74" @bind="Model.PupilDistanceMm" />
+        <select value="@Model.PupilDistanceMm" @onchange="e => Model.PupilDistanceMm = ParseDecimal(e.Value)">
+            <option value="">Select...</option>
+            @foreach (var mm in Enumerable.Range(54, 21))
+            {
+                <option value="@mm">@mm</option>
+            }
+        </select>
     </div>
 }
 
@@ -104,6 +187,7 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         Model.PresetCatalogueId = null;
         Model.LensOptionLeftId = null;
         Model.LensOptionRightId = null;
+        Model.CoatingRefId = null;
         Model.CustomSphereLeft = null;
         Model.CustomCylinderLeft = null;
         Model.CustomAxisLeft = null;
@@ -132,16 +216,28 @@ else if (Model.LensRangeType == LensRangeType.Custom)
     private static Guid? ParseGuid(object? value) =>
         Guid.TryParse(value?.ToString(), out var id) ? id : null;
 
-    private string FormatLensOption(LensOptionDto option)
-    {
-        var sphere = option.SphericalPower >= 0 ? $"+{option.SphericalPower:0.00}" : option.SphericalPower.ToString("0.00");
-        if (!option.IsBifocal)
-        {
-            return sphere;
-        }
+    private static decimal? ParseDecimal(object? value) =>
+        decimal.TryParse(value?.ToString(), out var d) ? d : null;
 
-        var add = option.AddPower is { } addPower ? (addPower >= 0 ? $"+{addPower:0.00}" : addPower.ToString("0.00")) : "?";
-        var coatingLabel = Coatings.FirstOrDefault(c => c.Id == option.CoatingId)?.Label;
-        return coatingLabel is null ? $"{sphere} / {add} (Bifocal)" : $"{sphere} / {add} (Bifocal, {coatingLabel})";
+    private void OnLeftLensChanged(ChangeEventArgs e)
+    {
+        Model.LensOptionLeftId = ParseGuid(e.Value);
+        // Available coatings are keyed off the left-eye lens ("left eye wins" — see SaleService's
+        // documented single-CoatingRefId simplification) — any prior pick may no longer be valid.
+        Model.CoatingRefId = null;
     }
+
+    private static IEnumerable<decimal> SphereSteps => Steps(-10m, 10m, 0.25m);
+    private static IEnumerable<decimal> CylinderSteps => Steps(-6m, 0.25m, 0.25m);
+    private static IEnumerable<decimal> AddPowerSteps => Steps(0m, 3m, 0.25m);
+
+    private static IEnumerable<decimal> Steps(decimal min, decimal max, decimal step)
+    {
+        for (var v = min; v <= max; v += step)
+        {
+            yield return v;
+        }
+    }
+
+    private static string FormatPower(decimal v) => v >= 0 ? $"+{v:0.00}" : v.ToString("0.00");
 }

@@ -13,12 +13,10 @@ public class PresetCatalogueQueryService(DotGlassesDbContext dbContext, IUnscope
         // standard IHierarchyScoped filter (a catalogue is assigned above the caller, not below
         // it) — a plain query against OrganisationNodes here would be silently filtered down to
         // the caller's own subtree by the global filter, excluding the ancestor org the
-        // assignment actually points at (found live: a RetailPoint-level caller got zero
-        // catalogues back even with a real assignment on their Country ancestor). Org paths
-        // therefore come from IUnscopedReportQueryService — the one sanctioned way to look
-        // outside the caller's hierarchy scope (see CLAUDE.md) — and the assignment→org-path
-        // match is resolved in memory, since it's not translatable as a single SQL predicate
-        // against a per-row column compared to a constant either way.
+        // assignment actually points at. Org paths therefore come from
+        // IUnscopedReportQueryService — the one sanctioned way to look outside the caller's
+        // hierarchy scope (see CLAUDE.md) — and the assignment→org-path match is resolved in
+        // memory.
         var assignments = await dbContext.PresetCatalogueAssignments.ToListAsync(cancellationToken);
         var orgPaths = (await unscopedReportQueryService.GetOrganisationNodePathsUnscopedAsync(cancellationToken))
             .ToDictionary(x => x.Id, x => x.HierarchyPath);
@@ -34,31 +32,31 @@ public class PresetCatalogueQueryService(DotGlassesDbContext dbContext, IUnscope
             return [];
         }
 
-        var catalogues = await dbContext.PresetCatalogues
-            .Where(c => catalogueIds.Contains(c.Id))
-            .ToListAsync(cancellationToken);
+        var catalogues = await dbContext.PresetCatalogues.Where(c => catalogueIds.Contains(c.Id)).ToListAsync(cancellationToken);
+        var lensOptions = await dbContext.LensOptions.Where(l => catalogueIds.Contains(l.PresetCatalogueId)).OrderBy(l => l.SortOrder).ToListAsync(cancellationToken);
 
-        var lensOptions = await dbContext.LensOptions
-            .Where(l => catalogueIds.Contains(l.PresetCatalogueId))
-            .OrderBy(l => l.SortOrder)
-            .ToListAsync(cancellationToken);
+        var lensStrengthIds = lensOptions.Select(l => l.LensStrengthRefId).Distinct().ToList();
+        var lensStrengthLabels = await dbContext.ReferenceDataItems
+            .Where(r => lensStrengthIds.Contains(r.Id))
+            .ToDictionaryAsync(r => r.Id, r => r.Label, cancellationToken);
+
+        var availableCoatingsByStrength = (await dbContext.LensStrengthCoatingOptions
+            .Where(o => lensStrengthIds.Contains(o.LensStrengthRefId))
+            .ToListAsync(cancellationToken))
+            .GroupBy(o => o.LensStrengthRefId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<Guid>)g.Select(o => o.CoatingRefId).ToList());
 
         return catalogues.Select(c => new PresetCatalogueDto
         {
             Id = c.Id,
             Name = c.Name,
-            LensOptions = lensOptions
-                .Where(l => l.PresetCatalogueId == c.Id)
-                .Select(l => new LensOptionDto
-                {
-                    Id = l.Id,
-                    SphericalPower = l.SphericalPower,
-                    IsBifocal = l.IsBifocal,
-                    AddPower = l.AddPower,
-                    CoatingId = l.CoatingId,
-                    SortOrder = l.SortOrder,
-                })
-                .ToList(),
+            LensOptions = lensOptions.Where(l => l.PresetCatalogueId == c.Id).Select(l => new LensOptionDto
+            {
+                Id = l.Id,
+                Label = lensStrengthLabels.GetValueOrDefault(l.LensStrengthRefId, "Unknown"),
+                SortOrder = l.SortOrder,
+                AvailableCoatingIds = availableCoatingsByStrength.GetValueOrDefault(l.LensStrengthRefId, []),
+            }).ToList(),
         }).ToList();
     }
 }

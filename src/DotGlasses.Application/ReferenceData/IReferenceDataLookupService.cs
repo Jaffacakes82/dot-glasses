@@ -15,11 +15,11 @@ public interface IReferenceDataLookupService
 
     Task<bool> LensOptionBelongsToCatalogueAsync(Guid lensOptionId, Guid presetCatalogueId, CancellationToken cancellationToken = default);
 
-    /// <summary>The forced default coating for a preset LensOption (e.g. every bifocal is
-    /// Photochromic) — SaleService derives Sale.CoatingRefId from this for preset ranges, never
-    /// trusting a client-submitted coating for a lens the admin already pinned one to. Null if
-    /// no LensOption with this Id exists.</summary>
-    Task<Guid?> GetLensOptionCoatingIdAsync(Guid lensOptionId, CancellationToken cancellationToken = default);
+    /// <summary>True if coatingRefId is configured as available for the LensStrength the given
+    /// LensOption references (LensStrengthCoatingOption) — replaces the old single forced
+    /// CoatingId (2026-08-05 rework, see LensOption's own doc comment). False (not an exception)
+    /// if the LensOption doesn't exist, or the strength has no coatings configured yet.</summary>
+    Task<bool> IsCoatingAvailableForLensOptionAsync(Guid lensOptionId, Guid coatingRefId, CancellationToken cancellationToken = default);
 }
 
 public record ReferenceDataLookupResult(bool IsActive, bool IsOtherOption);

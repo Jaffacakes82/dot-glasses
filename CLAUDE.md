@@ -71,11 +71,13 @@ technician now, not locked at the org level — there is no "Classical Optician"
 export — see `Persistence/Configurations/*SeedConfiguration.cs`), and a lightweight `Customer`
 entity for name+phone matching. Full shape: `DotGlasses.Domain/Entities` and `/Enums`.
 
-Two assumptions made while seeding, not explicitly discussed on the call — confirm once the
-Reference Data / Catalogues admin screens are wired for real: (1) `FrameColour` has an "Other"
+One assumption made while seeding, not explicitly discussed on the call — confirm once the
+Reference Data admin screen is checked against real DGI usage: `FrameColour` has an "Other"
 fallback row for consistency with every other reference list, even though the call named exactly
-6 fixed colours; (2) every non-bifocal seeded `LensOption` defaults to the "Clear" coating (the
-call only specified bifocals' forced Photochromic).
+6 fixed colours. (The other original assumption here — every non-bifocal seeded `LensOption`
+defaulting to the "Clear" coating — is superseded: coating-per-lens-strength is now a real,
+admin-configurable many-to-many, seeded deliberately empty for non-bifocals. See the Preset
+Catalogues admin wiring section below.)
 
 RBAC now has a real permission matrix backing it (`OrgLevelRequirement`/
 `HierarchyDescendantRequirement` in `Web/Authorization`, see the RBAC section below) and all
@@ -106,14 +108,14 @@ structural template but with three deliberate departures:
    creating the Sale. `WidgetExampleRepository` is untouched — this is additive, not a retrofit.
 
 Shared plumbing: `IReferenceDataLookupService` (`DotGlasses.Application/ReferenceData` — category
-correctness + "Other"-text-required checks, plus `LensOptionBelongsToCatalogueAsync`/
-`GetLensOptionCoatingIdAsync` for preset-range consistency) and `ICustomerRepository`
-(`DotGlasses.Application/Customers` — exact name+phone find-or-create only, no public API; fuzzy/
-suggested-match UX is Field App UI work for later). For a preset `LensRangeType`, `SaleService`
-derives `Sale.CoatingRefId` from the chosen left-eye `LensOption`'s own forced coating and ignores
-any client-submitted value — only a `Custom` range actually uses the client's `CoatingRefId`
-(known simplification if left/right eyes resolve to different coatings — `Sale` has one
-`CoatingRefId` column, not per-eye).
+correctness + "Other"-text-required checks, plus `LensOptionBelongsToCatalogueAsync` for
+preset-range consistency) and `ICustomerRepository` (`DotGlasses.Application/Customers` — exact
+name+phone find-or-create only, no public API; fuzzy/suggested-match UX is Field App UI work for
+later). **Coating resolution changed 2026-08-05** — see the Preset Catalogues admin wiring section
+below: `SaleService` no longer derives `Sale.CoatingRefId` for preset ranges; the client always
+submits it and the validator checks it's legal (still one `CoatingRefId` column, not per-eye —
+same known simplification, now expressed as "left eye's configured coating set" rather than "left
+eye's single forced coating").
 
 The `Test` Application-layer types are named `IVisionTestRepository`/`IVisionTestService`/
 `VisionTestService` (not `ITestRepository` etc.) — `ITestRepository` would collide with the
@@ -464,6 +466,91 @@ other Kenya-subtree users but not the DGI-level admin — the same manual-prefix
 Organisations' automatic filter already proved, just exercised through the non-`IHierarchyScoped`
 path this screen needed.
 
+## Admin Portal wiring (Preset Catalogues screen) — and a coating-model rework
+
+Fifth Admin Portal screen wired (2026-08-05) — but bigger than a screen wiring: scoping it against
+the design mockup (`design/admin/screens-b.jsx`'s `Catalogues`, just three text fields) surfaced
+that the user wanted real lens-by-lens catalogue building, which meant reworking how lens
+strength/coating work at the domain level, confirmed via a screenshot of the exact 6-lens/9-lens
+option lists before implementing.
+
+**`LensOption` reshaped**: dropped `SphericalPower`/`IsBifocal`/`AddPower`/`CoatingId` (typed
+columns per row), gained `LensStrengthRefId` (FK to `ReferenceDataItem`, `Category =
+LensStrength`) — a catalogue's lens roster is now "which curated `LensStrength` items are
+included, in what order," with the actual power/bifocal-ness living in the reference item's own
+`Label` (e.g. `"+0.00 / +2.50 (Bifocal)"`) rather than duplicated as typed columns. 16 distinct
+`LensStrength` items seeded (12 standard + 4 bifocal, overlapping between the two catalogues where
+the screenshot's lists overlap) — exact values came from the user's screenshot, not guessed.
+
+**New `LensStrengthCoatingOption`** (`LensStrengthRefId`, `CoatingRefId`, `CreatedAtUtc`) — a
+many-to-many "this lens strength is available in this coating," editable from this screen (not
+Reference Data — keeps Reference Data's cards uniform across categories; this relationship is
+really about how catalogues work). **Only the 4 bifocal strengths are seeded with a coating**
+(→ Photochromic, the one fact actually known from the CEO call) — all 12 non-bifocal strengths
+ship with zero configured coatings, a deliberate, visible interim gap (flagged in `[OPEN]`), not
+an oversight — DGI populates the real matrix themselves via this same screen.
+
+**Coating resolution flipped from derived to validated**: `SaleService` previously derived
+`Sale.CoatingRefId` for preset ranges from the chosen lens's single forced `CoatingId`, ignoring
+any client value. That derivation is gone — for both preset and custom ranges the client now
+submits the coating it wants, and `IReferenceDataLookupService.IsCoatingAvailableForLensOptionAsync`
+(new, DB-backed) checks it's legal: for Custom, still "any active Coating item"; for a preset
+range, "one of the coatings configured as available for the chosen left-eye `LensOption`'s
+`LensStrengthRefId`." A lens strength with zero configured coatings can't pass validation yet —
+`LensRangeSelector.razor` shows this plainly ("No coatings are configured for this lens yet...")
+rather than a dead-end empty dropdown. `CreateLeadRequestValidator`'s equivalent check
+(`CoatingPreferenceRefId`) stays optional overall (a Lead can carry no product preference) but is
+still validated against the available set whenever a preset lens **is** chosen.
+
+**Custom-range fields gained real constraints** (previously only null-presence checks, confirmed
+by reading both validators before this pass — a genuine gap being filled, not duplicated
+validation): Sphere -10 to 10, Cylinder -6 to 0.25, Near-vision add 0 to 3 (all 0.25 increments,
+both server-side in `CreateSaleRequestValidator`/`CreateLeadRequestValidator` and client-side as
+generated-range `<select>`s in `LensRangeSelector.razor`), Axis 0–180 whole degrees (plain number
+input — a 181-option dropdown isn't better UX), Pupil distance 54–74mm (range check already
+existed; added the 1mm-increment check + a generated `<select>` client-side). Verified live by
+forcing an out-of-range/off-increment Sphere value via devtools past the constrained dropdown —
+correctly rejected 400 server-side, nothing landed in Postgres.
+
+**New `IPresetCatalogueAdminService`** (Application) / `PresetCatalogueAdminService`
+(Infrastructure, queries `DbContext` directly, no repository interface for these entities) —
+catalogue CRUD, `AddLensOptionAsync`/`RemoveLensOptionAsync` (hard remove — no historical
+Test/Lead/Sale can reference a `LensOption` that was never actually chosen on a real transaction,
+so nothing needs preserving, unlike Reference Data's soft-retire), `AssignCatalogueToOrgAsync`
+(idempotent no-op if already assigned), `ListAvailableCoatingsAsync`/`AddAvailableCoatingAsync`/
+`RemoveAvailableCoatingAsync` for the new join table. Reuses
+`AuthorizationPolicies.PresetCatalogueManage` (Admin/Manager, Country level+ — already existed, no
+new policy needed) and stamps `OwningOrgNodeId` from the caller's own `ICurrentUserContext.OrgNodeId`
+server-side (never client-submitted), matching every other Create-request pattern in this codebase.
+
+**Same Razor boolean-attribute bug as Organisations, second occurrence** — `<input type="hidden"
+name="Available" value="@(!available.Contains(coating.Id))" />` in the coating-availability
+toggle grid. Razor renders a bare-`bool`-typed attribute expression as an HTML boolean attribute
+(`value="value"` when true, omitted when false) regardless of the attribute's actual semantic
+name — model binding therefore received the literal string `"value"` or nothing, never
+`"True"`/`"False"`, so every toggle click silently no-opped. Fixed the same way as before:
+`value="@(!available.Contains(coating.Id) ? "true" : "false")"` so Razor sees a `string`. Caught
+by actually clicking a toggle live and checking the outbox/network, not by build/test — this is
+now the second time this exact class of bug has bitten a plain-`<input value="@boolExpr">` in this
+codebase (see Organisations above); worth treating "a `bool` C# expression is the entire value of
+a non-checked/disabled/readonly HTML attribute" as a standing red flag when reviewing new Razor.
+
+**Verified live end-to-end**: as the seeded DGI Admin, confirmed both seeded catalogues render
+their correct 20-lens rosters with resolved labels (not raw GUIDs) and the coating-availability
+grid shows exactly the 4 seeded bifocal→Photochromic rows checked, everything else unchecked;
+toggled Clear on for `+2.50` and confirmed the DB updated. Assigned the 6-Lens Set catalogue to an
+Intermediate org ("Kangemi Vision Centre"). Then signed into the Field App as the RetailPoint user
+one level below that org (proving assignment cascades down the hierarchy, not just exact-match) —
+confirmed the `+2.50` lens option now shows a working Coating picker with exactly the one
+configured option, while an unconfigured strength (`+1.25`) shows the "not configured yet"
+message instead of an empty dropdown; recorded a real preset-range Sale choosing `+2.50`/Clear and
+confirmed it persisted with the correct `CoatingRefId`; recorded a real Custom-range Sale using
+the new constrained dropdowns and confirmed it persisted with the correct Sphere/AddPower/Axis/PD
+values. A stray manually-created "+2.50" `LensStrength` item (leftover test data from earlier
+Reference Data screen verification this session, not a seeding bug) was found and retired during
+this pass — worth remembering that this Postgres data volume persists real state across every
+`AppHost` restart in this session, including ad hoc test rows.
+
 ## RBAC permission matrix
 
 Three roles (Admin/Manager/User), assignable at any org node, scope = that node + everything
@@ -499,13 +586,14 @@ acts on a specific target user/org — not yet wired to one, see above).
   node" dialog and User Directory's own real "Invite platform user" form) — the design system
   layers custom `dg-*` classes/tokens on top rather than replacing it.
 - Admin Portal (`Web`) screens are mostly still skeletons over static placeholder data (in each
-  `Controllers/*Controller.cs`, not a database) — Dashboard, Preset Catalogues, Custom Orders.
-  **Reference Data, Organisations, Event History, and User Directory are wired to the real
-  database** (all 2026-08-05 — see Admin Portal wiring sections above); the rest aren't. Don't
-  wire the remaining ones up without checking each screen's field-level shape against the design
-  README first — go screen by screen, same discipline all four of those followed.
-  `ConsultationForm.razor` in `App` is **no longer a stub** — it saves real Test/Lead/Sale records
-  via the real API (see Field App UI wiring above); its `Web` modal equivalent still doesn't exist.
+  `Controllers/*Controller.cs`, not a database) — only **Dashboard and Custom Orders** remain.
+  **Reference Data, Organisations, Event History, User Directory, and Preset Catalogues are wired
+  to the real database** (all 2026-08-05 — see Admin Portal wiring sections above); the rest
+  aren't. Don't wire the remaining ones up without checking each screen's field-level shape
+  against the design README first — go screen by screen, same discipline all five of those
+  followed. `ConsultationForm.razor` in `App` is **no longer a stub** — it saves real
+  Test/Lead/Sale records via the real API (see Field App UI wiring above); its `Web` modal
+  equivalent still doesn't exist.
 - All seven Admin Portal controllers now have `[Authorize]` (see RBAC permission matrix above) —
   `HomeController`'s `Error` action is `[AllowAnonymous]` so error pages render for logged-out
   users too.
@@ -563,10 +651,17 @@ Aspire dashboard).
   returns it.
 - The Field App's `ConsultationForm.razor` is wired to the real API (see Field App UI wiring
   above); the Admin Portal's equivalent modal still doesn't exist. `ReferenceDataItem`,
-  `OrganisationNode`, and `ApplicationUser` now have write paths (see the Admin Portal wiring
-  sections above) — `PresetCatalogue` still doesn't; Dashboard/Preset Catalogues/Custom Orders
-  are still placeholder. Customer is internal-only by design. Keep building the Admin Portal
-  screens one at a time, checking field-level shape against the design README first.
+  `OrganisationNode`, `ApplicationUser`, and now `PresetCatalogue`/`LensOption`/
+  `LensStrengthCoatingOption` all have write paths (see the Admin Portal wiring sections above) —
+  only Dashboard and Custom Orders are still placeholder. Customer is internal-only by design.
+  Keep building the Admin Portal screens one at a time, checking field-level shape against the
+  design README first.
+- **~12 of the 16 seeded `LensStrength` reference items have zero configured coatings** (see the
+  Preset Catalogues admin wiring section above) — only the 4 bifocal strengths ship pre-configured
+  (→ Photochromic). Those ~12 non-bifocal lens strengths are genuinely unsellable on a preset
+  range until DGI configures at least one coating for each via the Preset Catalogues screen; this
+  is a real, visible interim gap, not a bug — the Field App correctly refuses to offer a coating
+  picker for them rather than silently allowing an unconfigured sale.
 - User Directory has no "switch active location" UI anywhere yet, so multi-org assignment via
   `UserOrgAssignment` (now real, see Admin Portal wiring above) only ever sets the *first*
   selected org as primary/active — a user assigned to several locations can't currently change
@@ -584,11 +679,6 @@ Aspire dashboard).
   read-current-max-then-increment with no locking — a small race window exists under concurrent
   creates. Acceptable for now (infrequent, admin-only action); revisit if org creation ever
   becomes high-throughput.
-- `PresetCatalogue`/`LensOption` are not rewired to build from the new `LensStrength` reference
-  category — `LensOption` still defines its own typed `SphericalPower`/`IsBifocal`/`AddPower`
-  fields per row. Doing so is a real design question (does a catalogue pick N strengths + a
-  per-strength coating override? does `LensOption` gain a FK to this list instead?), not
-  something to guess at — ask before implementing.
 - Frame colour images are a plain admin-pasted URL (`ReferenceDataItem.ImageUrl`) — no real file
   upload or blob storage exists yet. `AppHost` has no storage resource provisioned.
 - No Leads-list/"convert to sale" entry point exists yet — a Sale recorded via
@@ -621,8 +711,8 @@ Aspire dashboard).
   oversight — see Field App UI wiring above).
 - Field App's `wwwroot/appsettings.json` `ApiBaseUrl` still points at `Web`'s local dev HTTPS
   port — needs updating to the real deployed API origin once that exists.
-- Two reference-data seeding assumptions not explicitly discussed on the call — see Domain
-  modelling above (FrameColour's "Other" row, non-bifocal LensOptions defaulting to "Clear").
+- One reference-data seeding assumption not explicitly discussed on the call — see Domain
+  modelling above (FrameColour's "Other" row).
 
 This file should grow as real architectural decisions get made — propose updates here when a
 significant decision is agreed, not as a one-time artifact.
