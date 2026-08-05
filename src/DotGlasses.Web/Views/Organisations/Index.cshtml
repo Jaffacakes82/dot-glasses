@@ -43,6 +43,19 @@
             <p style="font-size:13px; color:var(--text-muted-2);">No inventory/SKU data shown here — stock is tracked externally in Zoho.</p>
         }
 
+        @if (Model.SelectedAssignedUserNames.Count > 0)
+        {
+            <div style="margin-top:var(--space-3);">
+                <p class="dg-stat-label">Assigned users</p>
+                <ul style="margin:0; padding-left:18px; font-size:13px; color:var(--text-muted-2);">
+                    @foreach (var name in Model.SelectedAssignedUserNames)
+                    {
+                        <li>@name</li>
+                    }
+                </ul>
+            </div>
+        }
+
         @if (!Model.CanManage)
         {
             <p style="font-size:12px; color:#999; margin-top:var(--space-3);">You don't have permission to manage this node.</p>
@@ -72,6 +85,11 @@
                 @if (Model.Selected.Type != "RetailPoint")
                 {
                     <button class="dg-btn dg-btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#addChildModal">Add child node</button>
+                }
+
+                @if (Model.AssignableUsers.Count > 0)
+                {
+                    <button class="dg-btn dg-btn-ghost" type="button" data-bs-toggle="modal" data-bs-target="#assignUserModal">Assign users</button>
                 }
             </div>
         }
@@ -119,6 +137,38 @@
                     <div class="modal-footer">
                         <button class="dg-btn dg-btn-ghost" type="button" data-bs-dismiss="modal">Cancel</button>
                         <button class="dg-btn dg-btn-primary" type="submit">Create</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+@if (Model.CanManage && Model.AssignableUsers.Count > 0)
+{
+    <div class="modal fade" id="assignUserModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content" style="border-radius:var(--radius-md); border:none;">
+                <form asp-action="AssignUser" method="post">
+                    <input type="hidden" name="OrgNodeId" value="@Model.Selected.Id" />
+                    <div class="modal-header">
+                        <h2 class="dg-page-title" style="font-size:20px;">Assign a user to @Model.Selected.Name</h2>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="dg-auth-field">
+                            <label>User</label>
+                            <select class="form-select" name="UserId">
+                                @foreach (var user in Model.AssignableUsers)
+                                {
+                                    <option value="@user.Id">@user.DisplayName</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="dg-btn dg-btn-ghost" type="button" data-bs-dismiss="modal">Cancel</button>
+                        <button class="dg-btn dg-btn-primary" type="submit">Assign</button>
                     </div>
                 </form>
             </div>
