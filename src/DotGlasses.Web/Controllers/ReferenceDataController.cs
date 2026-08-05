@@ -1,25 +1,80 @@
+using DotGlasses.Application.ReferenceData;
+using DotGlasses.Domain.Enums;
 using DotGlasses.Web.Authorization;
 using DotGlasses.Web.Models;
+using FluentValidation;
+using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DotGlasses.Web.Controllers;
 
 [Authorize(Policy = AuthorizationPolicies.ReferenceDataManage)]
-public class ReferenceDataController : Controller
+public class ReferenceDataController(IReferenceDataAdminService referenceDataAdminService, IValidator<CreateReferenceDataItemRequest> createValidator) : Controller
 {
-    public IActionResult Index()
-    {
-        var lists = new List<ReferenceDataList>
-        {
-            new("Reasons not purchased", "DGI-editable · shown in the field app Lead form", ["Price", "Wanted to think about it", "Didn't like frame options", "Out of stock"]),
-            new("Referral reasons", "DGI-editable · shown in the field app Test form", ["Suspected cataract", "Suspected glaucoma", "Other eye disease"]),
-            new("Coating preferences", "DGI-editable · shown in the consultation form", ["Anti-glare", "Scratch-resistant", "UV protection"]),
-            new("Tint options", "DGI-editable · shown in the consultation form", ["None", "Light", "Photochromic"]),
-            new("Frame colors", "DGI-editable · shown in the consultation form", ["Black", "Tortoise", "Navy", "Clear", "Rose Gold"]),
-            new("Occupations", "DGI-editable · shown in the Sale form", ["Farmer", "Teacher", "Driver", "Trader", "Student"]),
-        };
+    /// <summary>Display name/scope-note copy per category, and whether its Create form should
+    /// show the image-URL field (only Frame colour, per the CEO's ask for a swatch photo).
+    /// Ordering here is display order on the screen.</summary>
+    private static readonly (ReferenceDataCategory Category, string Name, string ScopeNote, bool ShowImageField)[] CategoryMeta =
+    [
+        (ReferenceDataCategory.ReasonNotPurchased, "Reasons not purchased", "DGI-editable · shown in the field app Lead form", false),
+        (ReferenceDataCategory.ReferralReason, "Referral reasons", "DGI-editable · shown when a Test is marked Referred", false),
+        (ReferenceDataCategory.Coating, "Coatings & tints", "DGI-editable · Lead coating preference and Sale tint/coating checkboxes", false),
+        (ReferenceDataCategory.FrameColour, "Frame colors", "DGI-editable · Sale/custom color swatches, matches e-commerce site", true),
+        (ReferenceDataCategory.HardCaseColour, "Hard case colors", "DGI-editable · shown when a Sale includes a hard case", false),
+        (ReferenceDataCategory.Occupation, "Occupations", "DGI-editable · optional occupation field on Test, Lead and Sale", false),
+        (ReferenceDataCategory.LensStrength, "Lens strengths", "DGI-editable · curated power labels — not yet used to build Preset Catalogues", false),
+    ];
 
-        return View(lists);
+    public async Task<IActionResult> Index(CancellationToken cancellationToken) =>
+        View(await BuildViewModelAsync(cancellationToken));
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Create(CreateReferenceDataItemRequest request, CancellationToken cancellationToken)
+    {
+        var validationResult = await createValidator.ValidateAsync(request, cancellationToken);
+        if (!validationResult.IsValid)
+        {
+            validationResult.AddToModelState(ModelState);
+            return View(nameof(Index), await BuildViewModelAsync(cancellationToken));
+        }
+
+        await referenceDataAdminService.CreateAsync(request.Category, request.Label, request.ImageUrl, request.IsOtherOption, cancellationToken);
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Deactivate(Guid id, CancellationToken cancellationToken)
+    {
+        await referenceDataAdminService.DeactivateAsync(id, cancellationToken);
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Reactivate(Guid id, CancellationToken cancellationToken)
+    {
+        await referenceDataAdminService.ReactivateAsync(id, cancellationToken);
+        return RedirectToAction(nameof(Index));
+    }
+
+    private async Task<IReadOnlyList<ReferenceDataList>> BuildViewModelAsync(CancellationToken cancellationToken)
+    {
+        var items = await referenceDataAdminService.ListAllAsync(cancellationToken);
+
+        return CategoryMeta.Select(meta =>
+        {
+            var categoryItems = items.Where(x => x.Category == meta.Category).ToList();
+            return new ReferenceDataList(
+                meta.Category,
+                meta.Name,
+                meta.ScopeNote,
+                meta.ShowImageField,
+                categoryItems.Any(x => x.IsActive && x.IsOtherOption),
+                categoryItems.Where(x => x.IsActive).Select(x => new ReferenceDataOption(x.Id, x.Label, x.ImageUrl)).ToList(),
+                categoryItems.Where(x => !x.IsActive).Select(x => new ReferenceDataOption(x.Id, x.Label, x.ImageUrl)).ToList());
+        }).ToList();
     }
 }

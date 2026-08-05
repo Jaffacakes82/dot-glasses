@@ -10,4 +10,5 @@ public class ReferenceDataItemDto
     public string Label { get; set; } = string.Empty;
     public int SortOrder { get; set; }
     public bool IsOtherOption { get; set; }
+    public string? ImageUrl { get; set; }
 }

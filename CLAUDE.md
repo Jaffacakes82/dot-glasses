@@ -205,6 +205,68 @@ scope, per the Architecture rules above; this is exactly the kind of ad hoc scop
 exists to prevent, and it still slipped through because the *query itself* wasn't obviously
 "looking outside scope" until traced through.
 
+## Admin Portal wiring (Reference Data screen)
+
+First of the seven Admin Portal screens wired to real data (2026-08-05) — Dashboard,
+Organisations, Event History, User Directory, Preset Catalogues, Custom Orders still
+placeholder. Chosen first because it's foundational (every other admin screen and the Field App
+itself depends on reference data existing) and `AuthorizationPolicies.ReferenceDataManage`
+(Admin-at-DGI only) was already enforced on the controller, just unused.
+
+**New write path**: `IReferenceDataAdminService` (Application) /
+`ReferenceDataAdminService` (Infrastructure, queries `DotGlassesDbContext.ReferenceDataItems`
+directly — no repository interface for this entity, matching `PresetCatalogueQueryService`) —
+`ListAllAsync` (every item incl. retired), `CreateAsync` (slugifies `Code` from the label,
+`SortOrder` = max+1 in category), `DeactivateAsync`/`ReactivateAsync`. Deliberately separate from
+`IReferenceDataQueryService`, which the Field App also depends on (active items only) — same
+segregation precedent as the MVC `CataloguesController` vs. API `PresetCataloguesController`
+split. Uses `Domain.Enums.ReferenceDataCategory` directly throughout (Application →
+Infrastructure → the MVC controller/view, no mirrored enum) since `DotGlasses.Web` has no
+restriction on referencing `Domain` — that restriction is specific to `DotGlasses.App`.
+
+**Removing an option retires it** (`IsActive = false`), never a hard delete — historical
+`Test`/`Lead`/`Sale` rows may still reference it by Id. The screen shows a collapsed "Retired"
+sub-list per category with a "Restore" action, since without one a mis-click permanently hides an
+option with zero in-app recovery.
+
+**Three additions beyond wiring the existing 6 categories** (scoped via user decision before
+implementation, 2026-08-05):
+1. **`ReferenceDataCategory.LensStrength`** (7th category, no migration needed — plain label list
+   like every other category, e.g. "+2.50", "+0.00 / +2.50 Bifocal"). This pass only adds the
+   category so values can be curated; `PresetCatalogue`/`LensOption` are **not** rewired to build
+   from it yet — that raises its own design question (does a catalogue pick N strengths + a
+   per-strength coating override? does `LensOption` keep its typed SphericalPower/IsBifocal/
+   AddPower fields or gain a FK to this list?) and is flagged in `[OPEN]`, not guessed at.
+2. **`ReferenceDataItem.ImageUrl`** (new nullable column) — the CEO wants a photo next to each
+   Frame colour option. Generic on the entity but only surfaced in the Create form (and shown as
+   a thumbnail) for Frame colour; admin pastes a URL, since no blob storage exists yet to build
+   real upload — flagged in `[OPEN]`. `Contracts.ReferenceData.ReferenceDataItemDto` also carries
+   `ImageUrl` now for read-API consistency, though the Field App doesn't consume it yet.
+3. **`IsOtherOption` is now settable from the Create form** (a checkbox), not just baked into
+   seed data — guarded server-side (`IReferenceDataAdminService.HasActiveOtherOptionAsync`, used
+   by `CreateReferenceDataItemRequestValidator`'s `CustomAsync` rule in
+   `Web.Validation.ReferenceData`) so at most one *active* Other-flagged item can exist per
+   category; consuming dropdowns (`ReferenceDataDropdown.razor`) key off this flag to reveal a
+   free-text field, so two would be ambiguous. Verified live: a second attempt in the same
+   category was rejected with the checkbox's server-enforced guard, even after forcing the
+   client-side `disabled` attribute off via devtools.
+
+**MVC pattern established here** (first real write-capable MVC controller besides
+`AccountController`): `[HttpPost][ValidateAntiForgeryToken]` actions, Post-Redirect-Get, FluentValidation
+via an explicit `IValidator<T>.ValidateAsync` call + `ValidationResult.AddToModelState(ModelState)`
+(not `AddFluentValidationAutoValidation`, removed earlier this session — see Test/Lead/Sale API
+above) for the one DB-backed rule; a single page-level `asp-validation-summary="All"` banner on
+failure rather than per-card error placement, since one shared `CreateReferenceDataItemRequest`
+posts from seven identical per-category forms on one page — acceptable simplification for a first
+admin screen, not something to over-engineer.
+
+**Verified live**: signed in as the seeded DGI Admin, added a Lens strength value, added a Frame
+colour with an image URL (thumbnail rendered), added and then rejected a second "Other" in the
+same category, retired then restored an option — each round-tripped through Postgres. Then signed
+into the Field App as the retail-point user and confirmed the newly-added Frame colour appeared
+live in `ConsultationForm.razor`'s Sale form — proves the two screens share the same underlying
+data, not just similar UIs.
+
 ## RBAC permission matrix
 
 Three roles (Admin/Manager/User), assignable at any org node, scope = that node + everything
@@ -238,13 +300,14 @@ acts on a specific target user/org — not yet wired to one, see above).
 - Bootstrap is still present in both projects (grid utilities, form controls, the native modal
   JS in `UserDirectory`) — the design system layers custom `dg-*` classes/tokens on top rather
   than replacing it.
-- Admin Portal (`Web`) screens are still skeletons over static placeholder data (in each
+- Admin Portal (`Web`) screens are mostly still skeletons over static placeholder data (in each
   `Controllers/*Controller.cs`, not a database) — Dashboard, Organisations, Event History, User
-  Directory, Preset Catalogues, Custom Orders, Reference Data. Don't wire these up without
-  checking each screen's field-level shape against the design README first (that wiring is the
-  deliberately deferred next phase — see Domain modelling above). `ConsultationForm.razor` in
-  `App` is **no longer a stub** — it saves real Test/Lead/Sale records via the real API (see
-  Field App UI wiring above); its `Web` modal equivalent still doesn't exist.
+  Directory, Preset Catalogues, Custom Orders. **Reference Data is wired to the real database**
+  (2026-08-05 — see Admin Portal wiring above); the rest aren't. Don't wire the remaining ones up
+  without checking each screen's field-level shape against the design README first — go screen by
+  screen, same as Reference Data. `ConsultationForm.razor` in `App` is **no longer a stub** — it
+  saves real Test/Lead/Sale records via the real API (see Field App UI wiring above); its `Web`
+  modal equivalent still doesn't exist.
 - All seven Admin Portal controllers now have `[Authorize]` (see RBAC permission matrix above) —
   `HomeController`'s `Error` action is `[AllowAnonymous]` so error pages render for logged-out
   users too.
@@ -295,12 +358,18 @@ Aspire dashboard).
 - Real per-user role/claim assignment beyond the three seeded dev accounts (`DevUserSeeder`) is
   still open — no self-service provisioning flow exists yet.
 - The Field App's `ConsultationForm.razor` is wired to the real API (see Field App UI wiring
-  above); the Admin Portal's equivalent modal still doesn't exist. OrganisationNode/
-  PresetCatalogue/ReferenceDataItem have no *write* API yet (reference data is DGI-editable per
-  the RBAC matrix, but there's nowhere to actually edit it — the Admin Portal's Reference Data/
-  Catalogues screens are still placeholder); Customer is internal-only by design. Build the
-  Admin Portal screens next, screen by screen, checking field-level shape against the design
-  README first.
+  above); the Admin Portal's equivalent modal still doesn't exist. `ReferenceDataItem` now has a
+  write path (see Admin Portal wiring above) — `OrganisationNode`/`PresetCatalogue` still don't;
+  Dashboard/Organisations/Event History/User Directory/Preset Catalogues/Custom Orders are still
+  placeholder. Customer is internal-only by design. Keep building the Admin Portal screens one at
+  a time, checking field-level shape against the design README first.
+- `PresetCatalogue`/`LensOption` are not rewired to build from the new `LensStrength` reference
+  category — `LensOption` still defines its own typed `SphericalPower`/`IsBifocal`/`AddPower`
+  fields per row. Doing so is a real design question (does a catalogue pick N strengths + a
+  per-strength coating override? does `LensOption` gain a FK to this list instead?), not
+  something to guess at — ask before implementing.
+- Frame colour images are a plain admin-pasted URL (`ReferenceDataItem.ImageUrl`) — no real file
+  upload or blob storage exists yet. `AppHost` has no storage resource provisioned.
 - No Leads-list/"convert to sale" entry point exists yet — a Sale recorded via
   `ConsultationForm.razor` can never set `SourceLeadId`, so a Lead's `ConvertedFlag`/`SaleId`
   currently only ever get set via the Test→Lead→(same-session)→Sale path, never by converting an

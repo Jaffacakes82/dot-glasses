@@ -23,6 +23,7 @@ public class ReferenceDataQueryService(DotGlassesDbContext dbContext) : IReferen
             Label = x.Label,
             SortOrder = x.SortOrder,
             IsOtherOption = x.IsOtherOption,
+            ImageUrl = x.ImageUrl,
         }).ToList();
     }
 
@@ -34,6 +35,7 @@ public class ReferenceDataQueryService(DotGlassesDbContext dbContext) : IReferen
         DomainCategory.Coating => ContractCategory.Coating,
         DomainCategory.FrameColour => ContractCategory.FrameColour,
         DomainCategory.HardCaseColour => ContractCategory.HardCaseColour,
+        DomainCategory.LensStrength => ContractCategory.LensStrength,
         _ => throw new ArgumentOutOfRangeException(nameof(category), category, null),
     };
 }
