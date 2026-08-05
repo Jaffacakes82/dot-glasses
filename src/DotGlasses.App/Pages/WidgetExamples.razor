@@ -97,8 +97,12 @@
             _error = "Couldn't reach the server — showing locally queued items only. This is expected while offline.";
         }
 
+        // GetPendingAsync excludes permanently-Failed items (they're no longer retried, see
+        // ISyncQueueStore), so this demo page merges GetFailedAsync back in to keep showing
+        // every outbox status it ever could — Failed included — for the offline-outbox walkthrough.
         var pending = await OutboxStore.GetPendingAsync();
-        foreach (var item in pending.Where(i => i.EntityType == "WidgetExample"))
+        var failed = await OutboxStore.GetFailedAsync();
+        foreach (var item in pending.Concat(failed).Where(i => i.EntityType == "WidgetExample"))
         {
             var request = JsonSerializer.Deserialize<CreateWidgetExampleRequest>(item.PayloadJson, JsonOptions);
             if (request is null || _rows.Any(r => r.Id == request.Id))
