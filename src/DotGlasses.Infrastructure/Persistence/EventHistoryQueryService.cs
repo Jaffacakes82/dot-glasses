@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DotGlasses.Infrastructure.Persistence;
 
-public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceDataAdminService referenceDataAdminService) : IEventHistoryQueryService
+public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceDataAdminService referenceDataAdminService, IUnscopedReportQueryService unscopedReportQueryService) : IEventHistoryQueryService
 {
     public async Task<IReadOnlyList<SaleOrTestEventRow>> ListSalesAsync(CancellationToken cancellationToken = default)
     {
@@ -108,9 +108,15 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
         return $"{phone[..4]}••••{phone[^3..]}";
     }
 
+    /// <summary>Goes through IUnscopedReportQueryService, not a plain scoped OrganisationNodes
+    /// query — a caller scoped below Country level can never see their own Country ancestor via
+    /// the standard hierarchy filter (it only ever shows a caller their own subtree), so a plain
+    /// query silently resolved every outlet's country to "Unknown country" for anyone below
+    /// Country level (2026-08-05 fix, caught while building the Dashboard's identical org
+    /// resolution — see CLAUDE.md).</summary>
     private async Task<OrgLookup> BuildOrgLookupAsync(CancellationToken cancellationToken)
     {
-        var nodes = await dbContext.OrganisationNodes.ToListAsync(cancellationToken);
+        var nodes = await unscopedReportQueryService.GetOrganisationNodesUnscopedAsync(cancellationToken);
         return new OrgLookup(nodes);
     }
 
@@ -123,10 +129,10 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
         return new ReferenceDataLookup(items);
     }
 
-    private sealed class OrgLookup(IReadOnlyList<OrganisationNode> nodes)
+    private sealed class OrgLookup(IReadOnlyList<OrganisationNodeSummary> nodes)
     {
-        private readonly Dictionary<string, OrganisationNode> _byPath = nodes.ToDictionary(n => n.HierarchyPath);
-        private readonly IReadOnlyList<OrganisationNode> _countries = nodes.Where(n => n.Level == OrganisationLevel.Country).ToList();
+        private readonly Dictionary<string, OrganisationNodeSummary> _byPath = nodes.ToDictionary(n => n.HierarchyPath);
+        private readonly IReadOnlyList<OrganisationNodeSummary> _countries = nodes.Where(n => n.Level == OrganisationLevel.Country).ToList();
 
         public (string Outlet, string Country) Resolve(string hierarchyPath)
         {

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using DotGlasses.Application.Dashboard;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using DotGlasses.Web.Models;
@@ -6,50 +7,28 @@ using DotGlasses.Web.Models;
 namespace DotGlasses.Web.Controllers;
 
 [Authorize]
-public class HomeController : Controller
+public class HomeController(IDashboardQueryService dashboardQueryService) : Controller
 {
-    public IActionResult Index()
+    public async Task<IActionResult> Index(CancellationToken cancellationToken)
     {
+        var snapshot = await dashboardQueryService.GetAsync(cancellationToken);
+
         var model = new DashboardViewModel
         {
-            PendingLeads = 42,
-            TotalTests = 318,
-            StandardSales = 176,
-            CustomLenses = 23,
-            TestToSaleConversion = 55.3,
-            NeededToSaleConversion = 71.8,
-            ReferralsLogged = 19,
-            ConversionTrend = [38, 44, 41, 52, 49, 55],
-            GenderMalePercent = 46,
-            GenderFemalePercent = 54,
-            RetailPointDistribution =
-            [
-                new RetailPointShare("Independent retailers", 62),
-                new RetailPointShare("Faith-affiliated networks", 24),
-                new RetailPointShare("Community outreach", 14),
-            ],
-            TopOutlets =
-            [
-                new RankedEntry("Kangemi Vision Centre", 41, 68.2),
-                new RankedEntry("St. Angela Marillac / Kangemi", 33, 61.0),
-                new RankedEntry("Nakuru Central", 29, 58.4),
-            ],
-            TopRetailers =
-            [
-                new RankedEntry("Nairobi Retail Group", 112, 63.1),
-                new RankedEntry("Diocese of Nakuru Network", 74, 55.9),
-            ],
-            TopCountries =
-            [
-                new RankedEntry("Kenya", 176, 59.2),
-                new RankedEntry("Uganda", 98, 51.7),
-                new RankedEntry("Tanzania", 44, 47.3),
-            ],
-            TopAgents =
-            [
-                new RankedEntry("A. Wanjiru", 27, 72.4),
-                new RankedEntry("J. Otieno", 24, 65.0),
-            ],
+            PendingLeads = snapshot.PendingLeads,
+            TotalTests = snapshot.TotalTests,
+            StandardSales = snapshot.StandardSales,
+            CustomOrders = snapshot.CustomOrders,
+            TestToSaleConversion = snapshot.TestToSaleConversionPercent,
+            NeededToSaleConversion = snapshot.NeededToSaleConversionPercent,
+            ReferralsLogged = snapshot.ReferralsLogged,
+            ConversionTrend = snapshot.ConversionTrendPercent,
+            GenderMalePercent = snapshot.GenderMalePercent,
+            GenderFemalePercent = snapshot.GenderFemalePercent,
+            TopOutlets = snapshot.TopOutlets.Select(e => new RankedEntry(e.Name, e.Sales, e.ConversionPercent)).ToList(),
+            TopRetailers = snapshot.TopRetailers.Select(e => new RankedEntry(e.Name, e.Sales, e.ConversionPercent)).ToList(),
+            TopCountries = snapshot.TopCountries.Select(e => new RankedEntry(e.Name, e.Sales, e.ConversionPercent)).ToList(),
+            TopTechnicians = snapshot.TopTechnicians.Select(e => new RankedEntry(e.Name, e.Sales, e.ConversionPercent)).ToList(),
         };
 
         return View(model);

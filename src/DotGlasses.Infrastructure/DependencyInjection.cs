@@ -1,6 +1,7 @@
 using DotGlasses.Application.Common;
 using DotGlasses.Application.Customers;
 using DotGlasses.Application.CustomOrders;
+using DotGlasses.Application.Dashboard;
 using DotGlasses.Application.Leads;
 using DotGlasses.Application.Notifications;
 using DotGlasses.Application.Organisations;
@@ -39,6 +40,7 @@ public static class DependencyInjection
         services.AddScoped<IUnscopedReportQueryService, UnscopedReportQueryService>();
         services.AddScoped<IEventHistoryQueryService, EventHistoryQueryService>();
         services.AddScoped<ICustomOrderService, CustomOrderService>();
+        services.AddScoped<IDashboardQueryService, DashboardQueryService>();
         services.AddScoped<IEmailSender, LoggingEmailSender>();
         services.AddScoped<IUserAdminService, UserAdminService>();
 

@@ -23,4 +23,11 @@ public class UnscopedReportQueryService(DotGlassesDbContext dbContext) : IUnscop
             .Where(x => !x.IsDeleted)
             .Select(x => new OrganisationNodePath(x.Id, x.HierarchyPath))
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<OrganisationNodeSummary>> GetOrganisationNodesUnscopedAsync(CancellationToken cancellationToken = default) =>
+        await dbContext.OrganisationNodes
+            .IgnoreQueryFilters()
+            .Where(x => !x.IsDeleted)
+            .Select(x => new OrganisationNodeSummary(x.Id, x.Name, x.Level, x.HierarchyPath, x.IsTrainingOrg))
+            .ToListAsync(cancellationToken);
 }
