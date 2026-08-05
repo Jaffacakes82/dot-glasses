@@ -123,6 +123,26 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
         await userManager.SetLockoutEndDateAsync(user, null);
     }
 
+    public async Task AssignUserToOrgAsync(Guid userId, Guid orgNodeId, CancellationToken cancellationToken = default)
+    {
+        var alreadyAssigned = await dbContext.UserOrgAssignments
+            .AnyAsync(a => a.UserId == userId && a.OrgNodeId == orgNodeId, cancellationToken);
+        if (alreadyAssigned)
+        {
+            return;
+        }
+
+        dbContext.UserOrgAssignments.Add(new UserOrgAssignment
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            OrgNodeId = orgNodeId,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+        });
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     private static string ResolveStatus(ApplicationUser user)
     {
         if (string.IsNullOrEmpty(user.PasswordHash))

@@ -31,6 +31,13 @@ public interface IUserAdminService
     Task SuspendAsync(Guid userId, CancellationToken cancellationToken = default);
 
     Task UnsuspendAsync(Guid userId, CancellationToken cancellationToken = default);
+
+    /// <summary>Adds orgNodeId as an additional UserOrgAssignment for an existing user — the
+    /// Organisations screen's "Assign users" action (2026-08-05). No-op if already assigned.
+    /// Never touches the user's primary org (OrgNodeId/HierarchyPath/OrgLevel) — there's still no
+    /// "switch active location" UI to make changing which org drives a multi-org user's JWT/
+    /// cookie claims meaningful (see CLAUDE.md's [OPEN] items).</summary>
+    Task AssignUserToOrgAsync(Guid userId, Guid orgNodeId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Status is "Invited" (no password set yet), "Suspended" (locked out), or "Active" —

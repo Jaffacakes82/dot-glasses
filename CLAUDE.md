@@ -665,6 +665,46 @@ tests/sales, no DGI-root orphan rows) — and, post-fix, correct "Kangemi Vision
 names in Top Retailers/Top Countries instead of "Unknown". Re-checked Event History under the same
 user afterward and confirmed its Country column now also resolves correctly.
 
+## Assign users to Organisations
+
+Resolved the `[OPEN]` gap flagged when Organisations first shipped ("'Assign users' action isn't
+built"). Reuses `UserOrgAssignment` (already real since User Directory's invite flow) and
+`AuthorizationPolicies.ManageOrgInScope` (already wired to every other Organisations action) —
+this is additive to both, not new plumbing.
+
+**Deliberately reuses `ManageOrgInScope`, not `ManageUsersInScope`**: the action being gated is
+"can this caller manage *this org node*," not "can this caller manage *this user*" — the target
+user could be anyone in the caller's own hierarchy scope, but what's actually being changed is
+the org's membership list. Keeps every Organisations action (`CreateChild`, the two flag toggles,
+now `AssignUser`) authorized against the same policy/resource pair, rather than introducing a
+second check with different semantics on the same screen.
+`ManageUsersInScope`/`HierarchyDescendantRequirement` stay unwired, still reserved for when User
+Directory gets a matching "assign to org" action from the user's side.
+
+**`IUserAdminService.AssignUserToOrgAsync(userId, orgNodeId)`** (Infrastructure) — idempotent
+no-op if the pair already exists (same precedent as `PresetCatalogueAdminService.
+AssignCatalogueToOrgAsync`), never touches the user's primary org
+(`OrgNodeId`/`HierarchyPath`/`OrgLevel`) — still no "switch active location" UI to make changing
+which org drives a multi-org user's JWT/cookie claims meaningful (unchanged `[OPEN]` item).
+
+**`OrganisationsIndexViewModel` gains `AssignableUsers`** (every user in the caller's own scope,
+via `IUserAdminService.ListAsync()`, already prefix-filtered) **and `SelectedAssignedUserNames`**
+(cross-referenced by matching `UserAdminRow.OrgNames` against the selected node's `Name` — a
+name-based match, not an Id-based one, since `IUserAdminService` only exposes each user's assigned
+org *names* today, not `OrgNodeId`s; acceptable since org names are unique in this dataset, but
+worth revisiting if that stops being true). The "Assign users" button/modal only render when
+`AssignableUsers.Count > 0`, same defensive pattern as `CanManage` hiding the other action buttons.
+
+**Verified live**: as the seeded DGI Admin, assigned Grace Njoroge (an existing Manager) to
+"Mombasa Retail Group" — confirmed a new `UserOrgAssignment` row in Postgres and the node's detail
+panel listing her under "Assigned users." Re-submitted the identical assignment and confirmed no
+duplicate row (the no-op guard). Then signed in as the seeded Kenya Manager: assigning her to
+"Nakuru Central" (within Kenya's own subtree) succeeded normally, while attempting to assign her
+to the DGI root node — outside the Kenya Manager's scope, and not even present in their own scoped
+`ListAsync()` result — correctly hit `CanManageAsync`'s Forbid() (surfaced as a redirect to
+`/Account/AccessDenied` under cookie auth, not a raw 403 — same behaviour every other
+`ManageOrgInScope`-gated action already has).
+
 ## Event History pagination
 
 Resolved the `[OPEN]` gap flagged when Event History first shipped ("no pagination — unlike
@@ -852,11 +892,15 @@ Aspire dashboard).
   `UserOrgAssignment` (now real, see Admin Portal wiring above) only ever sets the *first*
   selected org as primary/active — a user assigned to several locations can't currently change
   which one drives their JWT/cookie claims after the fact.
-- Organisations' "Assign users" action isn't built (that's User Directory's job — still
-  placeholder, and `AuthorizationPolicies.ManageUsersInScope`/`HierarchyDescendantRequirement` are
-  equally unwired, same underlying mechanism `ManageOrgInScope` now uses, ready to reuse when
-  User Directory gets its turn). Organisations also has no delete/deactivate action — the design
-  mockup doesn't show one, so none was added (not an oversight).
+- Organisations has no delete/deactivate action — the design mockup doesn't show one, so none was
+  added (not an oversight). `AuthorizationPolicies.ManageUsersInScope`/
+  `HierarchyDescendantRequirement` are still unwired (see the Assign users to Organisations
+  section above) — reserved for a future User-Directory-side "assign to org" action.
+- Organisations' `SelectedAssignedUserNames` resolves "who's assigned to this node" by matching
+  `UserAdminRow.OrgNames` (strings) against the selected node's `Name`, since `IUserAdminService`
+  doesn't expose `OrgNodeId`s per assignment today — correct only because org names happen to be
+  unique. Revisit with a real Id-based lookup if that stops holding (e.g. two orgs sharing a
+  display name).
 - `OrganisationAdminService.CreateChildAsync`'s new-`HierarchyPath`-segment minting is
   read-current-max-then-increment with no locking — a small race window exists under concurrent
   creates. Acceptable for now (infrequent, admin-only action); revisit if org creation ever

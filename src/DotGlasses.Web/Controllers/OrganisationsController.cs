@@ -1,4 +1,5 @@
 using DotGlasses.Application.Organisations;
+using DotGlasses.Application.Users;
 using DotGlasses.Domain.Enums;
 using DotGlasses.Web.Authorization;
 using DotGlasses.Web.Models;
@@ -12,6 +13,7 @@ namespace DotGlasses.Web.Controllers;
 [Authorize]
 public class OrganisationsController(
     IOrganisationAdminService organisationAdminService,
+    IUserAdminService userAdminService,
     IAuthorizationService authorizationService,
     IValidator<CreateChildOrganisationRequest> createChildValidator) : Controller
 {
@@ -64,6 +66,21 @@ public class OrganisationsController(
         return RedirectToAction(nameof(Index), new { selectedId = id });
     }
 
+    /// <summary>Reuses ManageOrgInScope (against the org being assigned into), not the separate
+    /// user-scoped ManageUsersInScope — see OrganisationsIndexViewModel's doc comment for why.</summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AssignUser(Guid orgNodeId, Guid userId, CancellationToken cancellationToken)
+    {
+        if (!await CanManageAsync(orgNodeId, cancellationToken))
+        {
+            return Forbid();
+        }
+
+        await userAdminService.AssignUserToOrgAsync(userId, orgNodeId, cancellationToken);
+        return RedirectToAction(nameof(Index), new { selectedId = orgNodeId });
+    }
+
     /// <summary>Resource-based check against the target node's own HierarchyPath — see
     /// HierarchyDescendantRequirement. Re-checked here even though the view already hides the
     /// triggering button/form for a user who'd fail it; never trust the hidden-button UX alone.</summary>
@@ -102,7 +119,14 @@ public class OrganisationsController(
             .Select(level => (Value: level.ToString(), Label: level.ToString()))
             .ToList();
 
-        return new OrganisationsIndexViewModel(tree, selected, canManage, validChildLevels);
+        var users = await userAdminService.ListAsync(cancellationToken);
+        var assignableUsers = users.Select(u => (u.Id, DisplayName: $"{u.DisplayName} ({u.Email})")).ToList();
+        var selectedAssignedUserNames = users
+            .Where(u => u.OrgNames.Contains(selected.Name))
+            .Select(u => u.DisplayName)
+            .ToList();
+
+        return new OrganisationsIndexViewModel(tree, selected, canManage, validChildLevels, assignableUsers, selectedAssignedUserNames);
     }
 
     private static OrgNode BuildTree(Guid nodeId, IReadOnlyDictionary<Guid, OrganisationAdminNode> byId, ILookup<Guid?, OrganisationAdminNode> byParent)
