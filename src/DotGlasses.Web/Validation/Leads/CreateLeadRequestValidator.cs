@@ -96,7 +96,7 @@ public class CreateLeadRequestValidator : AbstractValidator<CreateLeadRequest>
         switch (request.LensRangeType)
         {
             case null:
-                if (presetFieldsSet || customFieldsSet)
+                if (presetFieldsSet || customFieldsSet || request.PupilDistanceMm is not null || request.PresetPupilDistanceBucket is not null)
                 {
                     context.AddFailure(nameof(request.LensRangeType), "Preset/custom lens fields must be empty when LensRangeType is not set.");
                 }
@@ -131,6 +131,17 @@ public class CreateLeadRequestValidator : AbstractValidator<CreateLeadRequest>
                     context.AddFailure(nameof(request.CoatingPreferenceRefId), "CoatingPreferenceRefId is not configured as available for the chosen lens option (see Reference Data > Lens Strength).");
                 }
 
+                if (request.PupilDistanceMm is not null)
+                {
+                    context.AddFailure(nameof(request.PupilDistanceMm), "PupilDistanceMm must be empty for a preset LensRangeType — use PresetPupilDistanceBucket instead.");
+                }
+
+                var maxPdBucket = request.ChildrensFrame ? 2 : 4;
+                if (request.PresetPupilDistanceBucket is { } pdBucket && (pdBucket < 0 || pdBucket > maxPdBucket))
+                {
+                    context.AddFailure(nameof(request.PresetPupilDistanceBucket), $"PresetPupilDistanceBucket must be between 0 and {maxPdBucket} for a preset LensRangeType{(request.ChildrensFrame ? " (0-2 for a children's frame)" : "")}.");
+                }
+
                 break;
 
             case ContractLensRangeType.Custom:
@@ -152,6 +163,11 @@ public class CreateLeadRequestValidator : AbstractValidator<CreateLeadRequest>
                 ValidateCustomPower(request.CustomAddPowerRight, nameof(request.CustomAddPowerRight), 0m, 3m, 0.25m, context);
                 ValidateCustomAxis(request.CustomAxisLeft, nameof(request.CustomAxisLeft), context);
                 ValidateCustomAxis(request.CustomAxisRight, nameof(request.CustomAxisRight), context);
+
+                if (request.PresetPupilDistanceBucket is not null)
+                {
+                    context.AddFailure(nameof(request.PresetPupilDistanceBucket), "PresetPupilDistanceBucket must be empty for a Custom LensRangeType — use PupilDistanceMm instead.");
+                }
 
                 if (request.PupilDistanceMm is not { } pdCustom || pdCustom < 54 || pdCustom > 74)
                 {

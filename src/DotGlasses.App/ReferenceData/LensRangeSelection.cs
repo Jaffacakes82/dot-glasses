@@ -29,6 +29,12 @@ public class LensRangeSelection
     public decimal? CustomAxisRight { get; set; }
     public decimal? CustomAddPowerRight { get; set; }
 
+    /// <summary>The real inter-pupillary distance in mm — Custom range only.</summary>
     public decimal? PupilDistanceMm { get; set; }
+
+    /// <summary>Coarse 0-4 PD shorthand for a preset range (0-2 when ChildrensFrame) — preset
+    /// ranges only, see Sale.PresetPupilDistanceBucket.</summary>
+    public int? PresetPupilDistanceBucket { get; set; }
+
     public bool ChildrensFrame { get; set; }
 }

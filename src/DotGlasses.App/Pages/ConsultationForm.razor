@@ -366,6 +366,7 @@
                 CustomAxisRight = _lensRange.CustomAxisRight,
                 CustomAddPowerRight = _lensRange.CustomAddPowerRight,
                 PupilDistanceMm = _lensRange.PupilDistanceMm,
+                PresetPupilDistanceBucket = _lensRange.PresetPupilDistanceBucket,
                 ChildrensFrame = _lensRange.ChildrensFrame,
                 CoatingPreferenceRefId = _lensRange.LensRangeType is LensRangeType.SixLensSet or LensRangeType.NineLensSet
                     ? _lensRange.CoatingRefId
@@ -411,6 +412,7 @@
                 CustomAddPowerRight = _lensRange.CustomAddPowerRight,
                 OrderFromDotGlasses = _lensRange.LensRangeType == LensRangeType.Custom && _orderFromDotGlasses,
                 PupilDistanceMm = _lensRange.PupilDistanceMm,
+                PresetPupilDistanceBucket = _lensRange.PresetPupilDistanceBucket,
                 ChildrensFrame = _lensRange.ChildrensFrame,
                 FrameColourRefId = _frameColourRefId ?? Guid.Empty,
                 FrameColourOtherText = _frameColourOtherText,

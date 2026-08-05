@@ -29,6 +29,7 @@ public class LeadDto
     public decimal? CustomAxisRight { get; set; }
     public decimal? CustomAddPowerRight { get; set; }
     public decimal? PupilDistanceMm { get; set; }
+    public int? PresetPupilDistanceBucket { get; set; }
     public bool ChildrensFrame { get; set; }
     public Guid? CoatingPreferenceRefId { get; set; }
     public bool ConvertedFlag { get; set; }

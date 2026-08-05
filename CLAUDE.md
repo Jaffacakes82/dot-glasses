@@ -665,6 +665,42 @@ tests/sales, no DGI-root orphan rows) — and, post-fix, correct "Kangemi Vision
 names in Top Retailers/Top Countries instead of "Unknown". Re-checked Event History under the same
 user afterward and confirmed its Country column now also resolves correctly.
 
+## Preset-range pupil distance shorthand
+
+Resolved a domain-shape question that had sat in `[OPEN]` since the CEO transcript first surfaced
+it: the "0 to 4 PD (0 to 2 for children)" line is a coarse shorthand/frame-fit bucket used **only
+for a preset range** (`SixLensSet`/`NineLensSet`) — confirmed by the user (2026-08-05), distinct
+from the real 54–74mm inter-pupillary-distance field, which stays exactly what it always was and
+now applies to Custom range only.
+
+**New `Sale.PresetPupilDistanceBucket`/`Lead.PresetPupilDistanceBucket`** (nullable `int`, 0–4,
+capped at 0–2 when `ChildrensFrame`) — a separate column, not an overload of the existing
+`PupilDistanceMm`. Both fields are now mutually exclusive and range-checked by `LensRangeType` in
+`CreateSaleRequestValidator`/`CreateLeadRequestValidator`: a preset range requires
+`PresetPupilDistanceBucket` (0–4/0–2) and rejects `PupilDistanceMm`; Custom requires
+`PupilDistanceMm` (54–74mm, unchanged) and rejects `PresetPupilDistanceBucket`. For a Lead's
+`LensRangeType == null` case (no product preference at all), both must be empty, same as every
+other lens-range field. Unlike Sale (always required for its chosen range type),
+`PresetPupilDistanceBucket` on a Lead is optional even for a preset range — matches the existing
+`CoatingPreferenceRefId` precedent ("a Lead can carry no product preference at all"), just
+range-checked if the technician does provide one.
+
+`LensRangeSelector.razor` shows the 0–4 (or 0–2) bucket `<select>` for a preset range instead of
+the mm picker; `Model.ChildrensFrame`'s own checkbox (rendered separately, lower in the same
+component) clamps a stale out-of-range bucket value back to null if toggling it drops the max
+from 4 to 2 — otherwise a previously-picked "3" or "4" would linger, unselectable, in the picker.
+
+**Verified via direct API calls, not the WASM UI** — the Field App browser session had
+accumulated an extreme volume of stale `ClientLogBatch` outbox junk across this session's many
+live-verification passes (thousands of rows, all pre-existing test artifacts, unrelated to this
+feature), to the point that `Home.razor`'s own failed-item widget triggered a real
+`OutOfMemoryException` deserializing them via JS interop on every login redirect — a genuine
+browser-storage-hygiene issue worth fixing standalone, not a bug in this feature. `LensRangeSelector.razor`'s
+own picker was confirmed rendering correctly (0–4 options) before the crash; the full
+accept/reject matrix (valid preset bucket, out-of-range bucket, children's-frame 0–2 cap, and the
+`PupilDistanceMm`-must-be-empty-for-preset rule) was verified directly against the running API
+instead, matching exactly what a real client would submit.
+
 ## RBAC permission matrix
 
 Three roles (Admin/Manager/User), assignable at any org node, scope = that node + everything
@@ -806,12 +842,14 @@ Aspire dashboard).
 - Full offline (IndexedDB) caching of reference data/preset catalogues — `IReferenceDataClient`
   currently needs connectivity to load the first time each session; a technician who's never
   been online since app install can't record anything yet.
-- Domain-shape question, not resolved, don't guess: the CEO transcript separately mentions "0 to
-  4 PD (0 to 2 for children)" for *preset*-range pupil distance, which reads as a UI shorthand/
-  frame-fit bucket rather than literal millimetres, distinct from the real 54–74mm
-  inter-pupillary-distance field used for Custom range. `LensRangeSelector` currently only
-  exposes the real mm field, for both range types — ask before inventing a second taxonomy.
-  See `Lead`/`Sale.PupilDistanceMm`.
+- **Browser storage hygiene**: the Field App dev-testing browser session accumulated thousands of
+  stale `ClientLogBatch` outbox rows across this session's many live-verification passes, to the
+  point that `Home.razor`'s failed-item widget threw a real `OutOfMemoryException` deserializing
+  them via JS interop on every login redirect (see the PD-shorthand section above, where this was
+  hit). This is dev-only IndexedDB bloat, not a production concern per se, but it's the same
+  underlying gap as the outbox-retry/discard `[OPEN]` item below — a technician's device could
+  plausibly accumulate enough failed items over real field use to hit the same wall. Worth
+  addressing alongside that item, not on its own.
 - `LensRangeType.SixLensSet`/`NineLensSet` matching a specific `PresetCatalogueId` by catalogue
   **name** (see Field App UI wiring above) — fine while only two catalogues exist, needs an
   explicit "kind" field on `PresetCatalogue` if DGI/Country ever create more.
