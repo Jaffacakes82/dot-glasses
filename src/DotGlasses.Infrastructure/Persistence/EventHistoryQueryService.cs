@@ -8,70 +8,85 @@ namespace DotGlasses.Infrastructure.Persistence;
 
 public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceDataAdminService referenceDataAdminService, IUnscopedReportQueryService unscopedReportQueryService) : IEventHistoryQueryService
 {
-    public async Task<IReadOnlyList<SaleOrTestEventRow>> ListSalesAsync(CancellationToken cancellationToken = default)
+    public async Task<PagedResult<SaleOrTestEventRow>> ListSalesAsync(int page, int pageSize, CancellationToken cancellationToken = default)
     {
-        var sales = await dbContext.Sales.OrderByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
+        var totalCount = await dbContext.Sales.CountAsync(cancellationToken);
+        var sales = await dbContext.Sales.OrderByDescending(x => x.CreatedAtUtc).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
         var customers = await GetCustomersByIdAsync(sales.Select(s => (Guid?)s.CustomerId), cancellationToken);
         var orgLookup = await BuildOrgLookupAsync(cancellationToken);
 
-        return sales.Select(s =>
+        var items = sales.Select(s =>
         {
             var (outlet, country) = orgLookup.Resolve(s.HierarchyPath);
             return new SaleOrTestEventRow("Sale", s.LensRangeType == LensRangeType.Custom, CustomerName(customers, s.CustomerId), outlet, country, s.CreatedAtUtc);
         }).ToList();
+
+        return new PagedResult<SaleOrTestEventRow>(items, totalCount, page, pageSize);
     }
 
-    public async Task<IReadOnlyList<SaleOrTestEventRow>> ListTestsAsync(CancellationToken cancellationToken = default)
+    public async Task<PagedResult<SaleOrTestEventRow>> ListTestsAsync(int page, int pageSize, CancellationToken cancellationToken = default)
     {
-        var tests = await dbContext.Tests.OrderByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
+        var totalCount = await dbContext.Tests.CountAsync(cancellationToken);
+        var tests = await dbContext.Tests.OrderByDescending(x => x.CreatedAtUtc).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
         var customers = await GetCustomersByIdAsync(tests.Select(t => t.CustomerId), cancellationToken);
         var orgLookup = await BuildOrgLookupAsync(cancellationToken);
 
-        return tests.Select(t =>
+        var items = tests.Select(t =>
         {
             var (outlet, country) = orgLookup.Resolve(t.HierarchyPath);
             return new SaleOrTestEventRow("Test", false, CustomerName(customers, t.CustomerId), outlet, country, t.CreatedAtUtc);
         }).ToList();
+
+        return new PagedResult<SaleOrTestEventRow>(items, totalCount, page, pageSize);
     }
 
-    public async Task<IReadOnlyList<LeadEventRow>> ListLeadsAsync(string? searchByName, CancellationToken cancellationToken = default)
+    public async Task<PagedResult<LeadEventRow>> ListLeadsAsync(string? searchByName, int page, int pageSize, CancellationToken cancellationToken = default)
     {
-        var leads = await dbContext.Leads.OrderByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
+        var query = dbContext.Leads.AsQueryable();
+        if (!string.IsNullOrWhiteSpace(searchByName))
+        {
+            // A DB-level subquery on Customer rather than an in-memory filter after loading — the
+            // filter must apply before paging, or "page 2" would silently mean something
+            // different depending on how many rows on page 1 the search happened to exclude.
+            var matchingCustomerIds = dbContext.Customers
+                .Where(c => c.FullName.Contains(searchByName))
+                .Select(c => c.Id);
+            query = query.Where(l => matchingCustomerIds.Contains(l.CustomerId));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var leads = await query.OrderByDescending(x => x.CreatedAtUtc).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
         var customers = await GetCustomersByIdAsync(leads.Select(l => (Guid?)l.CustomerId), cancellationToken);
         var orgLookup = await BuildOrgLookupAsync(cancellationToken);
         var refData = await BuildReferenceDataLookupAsync(cancellationToken);
 
-        var rows = leads.Select(l =>
+        var items = leads.Select(l =>
         {
             var customer = customers.GetValueOrDefault(l.CustomerId);
             var (outlet, _) = orgLookup.Resolve(l.HierarchyPath);
             var reason = refData.Resolve(l.ReasonNotPurchasedRefId, l.ReasonNotPurchasedOtherText);
             return new LeadEventRow(customer?.FullName ?? "—", MaskPhone(customer?.PhoneNumber), outlet, reason, l.CreatedAtUtc);
-        });
+        }).ToList();
 
-        if (!string.IsNullOrWhiteSpace(searchByName))
-        {
-            rows = rows.Where(r => r.Name.Contains(searchByName, StringComparison.OrdinalIgnoreCase));
-        }
-
-        return rows.ToList();
+        return new PagedResult<LeadEventRow>(items, totalCount, page, pageSize);
     }
 
-    public async Task<IReadOnlyList<ReferralEventRow>> ListReferralsAsync(CancellationToken cancellationToken = default)
+    public async Task<PagedResult<ReferralEventRow>> ListReferralsAsync(int page, int pageSize, CancellationToken cancellationToken = default)
     {
-        var referrals = await dbContext.Tests
-            .Where(t => t.Outcome == TestOutcome.Referred)
-            .OrderByDescending(x => x.CreatedAtUtc)
-            .ToListAsync(cancellationToken);
+        var query = dbContext.Tests.Where(t => t.Outcome == TestOutcome.Referred);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var referrals = await query.OrderByDescending(x => x.CreatedAtUtc).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
         var orgLookup = await BuildOrgLookupAsync(cancellationToken);
         var refData = await BuildReferenceDataLookupAsync(cancellationToken);
 
-        return referrals.Select(t =>
+        var items = referrals.Select(t =>
         {
             var (outlet, country) = orgLookup.Resolve(t.HierarchyPath);
             var reason = refData.Resolve(t.ReferralReasonRefId, t.ReferralOtherText);
             return new ReferralEventRow(outlet, country, reason, t.CreatedAtUtc);
         }).ToList();
+
+        return new PagedResult<ReferralEventRow>(items, totalCount, page, pageSize);
     }
 
     private async Task<Dictionary<Guid, Customer>> GetCustomersByIdAsync(IEnumerable<Guid?> ids, CancellationToken cancellationToken)

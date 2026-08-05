@@ -8,7 +8,12 @@ public class EventHistoryViewModel
 {
     public required string ActiveTab { get; init; }
     public string? SearchQuery { get; init; }
-    public required IReadOnlyList<SaleOrTestEvent> Events { get; init; }
-    public required IReadOnlyList<LeadEvent> Leads { get; init; }
-    public required IReadOnlyList<ReferralEvent> Referrals { get; init; }
+    public IReadOnlyList<SaleOrTestEvent> Events { get; set; } = [];
+    public IReadOnlyList<LeadEvent> Leads { get; set; } = [];
+    public IReadOnlyList<ReferralEvent> Referrals { get; set; } = [];
+
+    public int Page { get; init; } = 1;
+    public int PageSize { get; init; }
+    public int TotalCount { get; set; }
+    public int TotalPages { get; set; }
 }
