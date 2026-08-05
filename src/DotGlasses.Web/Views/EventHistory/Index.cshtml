@@ -47,7 +47,11 @@
     }
     else if (Model.ActiveTab == "leads")
     {
-        <input class="form-control" style="max-width:280px; margin-bottom:var(--space-4);" placeholder="Search by name" />
+        <form method="get" asp-action="Index" style="display:flex; gap:8px; margin-bottom:var(--space-4);">
+            <input type="hidden" name="tab" value="leads" />
+            <input class="form-control" style="max-width:280px;" name="search" value="@Model.SearchQuery" placeholder="Search by name" />
+            <button class="dg-btn dg-btn-ghost" type="submit">Search</button>
+        </form>
         @if (Model.Leads.Count == 0)
         {
             <div class="dg-empty-state"><div class="dg-ring"></div><p>No leads logged yet.</p></div>

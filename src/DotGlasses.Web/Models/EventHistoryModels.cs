@@ -7,6 +7,7 @@ public record ReferralEvent(string Outlet, string Country, string Reason, string
 public class EventHistoryViewModel
 {
     public required string ActiveTab { get; init; }
+    public string? SearchQuery { get; init; }
     public required IReadOnlyList<SaleOrTestEvent> Events { get; init; }
     public required IReadOnlyList<LeadEvent> Leads { get; init; }
     public required IReadOnlyList<ReferralEvent> Referrals { get; init; }

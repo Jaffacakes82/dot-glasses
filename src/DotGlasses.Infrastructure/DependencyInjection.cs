@@ -33,6 +33,7 @@ public static class DependencyInjection
         services.AddScoped<IWidgetExampleRepository, WidgetExampleRepository>();
         services.AddScoped<IWidgetExampleService, WidgetExampleService>();
         services.AddScoped<IUnscopedReportQueryService, UnscopedReportQueryService>();
+        services.AddScoped<IEventHistoryQueryService, EventHistoryQueryService>();
 
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<DotGlassesDbContext>());
         services.AddScoped<IReferenceDataLookupService, ReferenceDataLookupService>();

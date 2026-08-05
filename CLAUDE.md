@@ -336,6 +336,70 @@ continuing the *global* segment counter from Mombasa's 5, proving the unscoped m
 works regardless of which caller's request triggered it) — proving both the read-scoping and the
 resource-based write RBAC actually restrict, not just that the DGI-Admin happy path works.
 
+## Admin Portal wiring (Event History screen)
+
+Third Admin Portal screen wired (2026-08-05, same day as Reference Data and Organisations) —
+pure read/reporting, no write actions, over `Test`/`Lead`/`Sale` (built earlier this session).
+Picked over the four remaining placeholder screens (Dashboard, User Directory, Preset Catalogues,
+Custom Orders) specifically because it needed no new domain modelling — Dashboard's "retail-point
+type distribution" and Custom Orders' fulfilment-status tracking both need concepts that don't
+exist anywhere in the domain yet, and User Directory means touching real account/password
+creation. Unusually, `Views/EventHistory/Index.cshtml`/`Web/Models/EventHistoryModels.cs` already
+matched the real 4-tab design (`design/admin/event-history.jsx`) almost exactly, including a
+`PhoneMasked` field already anticipating masking — only `EventHistoryController` still returned
+hardcoded rows, so this pass is almost entirely Application/Infrastructure.
+
+**Reading needs no special handling** — same insight as Organisations: `Test`/`Lead`/`Sale`/
+`Customer`/`OrganisationNode` all implement `IHierarchyScoped`, so a plain scoped query already
+returns exactly what a viewer is allowed to see. This is also literally what "Event History...
+scoped to the viewer's role + org" (RBAC permission matrix, below) turns out to mean — a `User`
+is always assigned at RetailPoint level, so their own `HierarchyPathPrefix` already *is* just
+that outlet, no extra role-based filtering needed on top of the automatic hierarchy filter.
+
+**New `IEventHistoryQueryService`** (Application) / `EventHistoryQueryService` (Infrastructure,
+queries `DbContext` directly for `Test`/`Lead`/`Sale`/`Customer` rather than through
+`IVisionTestRepository`/`ILeadRepository`/`ISaleRepository`, which exist for the write side's
+`Add`/`Update`/`GetById` needs, not bulk reads) — `ListSalesAsync`, `ListTestsAsync`,
+`ListLeadsAsync(searchByName)`, `ListReferralsAsync` (`Test` rows where `Outcome == Referred` — a
+filtered view of the same data `ListTestsAsync` shows unfiltered, not a separate entity; verified
+live that a single Referred test genuinely appears in both).
+
+**Outlet/Country resolution**: fetches every `OrganisationNode` visible to the caller once per
+request (same small-scoped-dataset approach `OrganisationsController` uses for tree building),
+exact-matches `HierarchyPath` for the outlet, prefix-matches the nearest `Country`-level ancestor.
+Falls back to "Unknown outlet"/"Unknown country" rather than throwing on an unresolvable path —
+confirmed live and genuinely useful: a handful of Sale/Test rows created directly against the API
+earlier this session (by the DGI Admin account itself, not through the Field App, so stamped with
+DGI's own `HierarchyPath` rather than a real RetailPoint's) render as "Unknown country" instead of
+crashing the whole page.
+
+**Reference-data label resolution** (referral reason, reason-not-purchased) uses
+`IReferenceDataAdminService.ListAllAsync()` (added for the Reference Data screen — every item,
+including retired), not the Field-App-facing `IReferenceDataQueryService.ListActiveAsync()` — a
+historical event can reference a since-retired item, which `ListActiveAsync` would silently fail
+to resolve. `IsOtherOption` items resolve to their row's own `...OtherText` instead of the generic
+"Other" label.
+
+**Phone masking**: `EventHistoryQueryService.MaskPhone` keeps the first 4 / last 3 characters,
+redacts the middle with a fixed run of `•` — the design mockup's sample data hardcodes an
+already-masked string per row rather than a real masking function to copy, and that exact format
+assumes a specific number length/shape (Kenyan), so this is a deliberately more general scheme
+rather than a literal port. Leads' "Logged" column gets a small relative-time helper (minutes/
+hours/days ago, falling back to an absolute date past a week); Sales/Tests/Referrals show an
+absolute local timestamp. Both live in `EventHistoryController` (formatting is a Web/display
+concern), not `EventHistoryQueryService` (which returns raw `DateTimeOffset`).
+
+**Verified live**: as the seeded DGI Admin, confirmed all four tabs render real data with
+correctly resolved outlet/country names and reference-data labels (including the "Unknown
+country" fallback on genuinely orphaned rows from earlier this session, and a `0001-01-01`
+`CreatedAtUtc` on one Test predating the `AuditSaveChangesInterceptor` fix documented above —
+both pre-existing historical artifacts surfaced correctly, not new bugs); recorded a fresh
+Referred test via the Field App and confirmed it appeared in both Tests and Referrals; confirmed
+Leads search filters by name while preserving the active tab in the URL, and that phone masking
+renders. Then signed in as the seeded Kenya Manager and confirmed the Tests tab shows only their
+4 Kenya-subtree rows — the DGI-stamped orphan rows visible to the Admin are correctly invisible
+to them, proving the same automatic hierarchy scoping Organisations relies on applies here too.
+
 ## RBAC permission matrix
 
 Three roles (Admin/Manager/User), assignable at any org node, scope = that node + everything
@@ -371,11 +435,11 @@ acts on a specific target user/org — not yet wired to one, see above).
   child node" dialog) — the design system layers custom `dg-*` classes/tokens on top rather than
   replacing it.
 - Admin Portal (`Web`) screens are mostly still skeletons over static placeholder data (in each
-  `Controllers/*Controller.cs`, not a database) — Dashboard, Event History, User Directory,
-  Preset Catalogues, Custom Orders. **Reference Data and Organisations are wired to the real
-  database** (both 2026-08-05 — see Admin Portal wiring sections above); the rest aren't. Don't
+  `Controllers/*Controller.cs`, not a database) — Dashboard, User Directory, Preset Catalogues,
+  Custom Orders. **Reference Data, Organisations, and Event History are wired to the real
+  database** (all 2026-08-05 — see Admin Portal wiring sections above); the rest aren't. Don't
   wire the remaining ones up without checking each screen's field-level shape against the design
-  README first — go screen by screen, same discipline both of those followed.
+  README first — go screen by screen, same discipline all three of those followed.
   `ConsultationForm.razor` in `App` is **no longer a stub** — it saves real Test/Lead/Sale records
   via the real API (see Field App UI wiring above); its `Web` modal equivalent still doesn't exist.
 - All seven Admin Portal controllers now have `[Authorize]` (see RBAC permission matrix above) —
@@ -429,10 +493,14 @@ Aspire dashboard).
   still open — no self-service provisioning flow exists yet.
 - The Field App's `ConsultationForm.razor` is wired to the real API (see Field App UI wiring
   above); the Admin Portal's equivalent modal still doesn't exist. `ReferenceDataItem` and
-  `OrganisationNode` now have write paths (see the two Admin Portal wiring sections above) —
-  `PresetCatalogue` still doesn't; Dashboard/Event History/User Directory/Preset Catalogues/
-  Custom Orders are still placeholder. Customer is internal-only by design. Keep building the
-  Admin Portal screens one at a time, checking field-level shape against the design README first.
+  `OrganisationNode` now have write paths (see the Admin Portal wiring sections above) —
+  `PresetCatalogue` still doesn't; Dashboard/User Directory/Preset Catalogues/Custom Orders are
+  still placeholder. Customer is internal-only by design. Keep building the Admin Portal screens
+  one at a time, checking field-level shape against the design README first.
+- Event History has no pagination — unlike Reference Data/Organisations (naturally small, bounded
+  lists), `Test`/`Lead`/`Sale` volume genuinely grows over time in production. Flagged as a real
+  gap this time, not silently assumed away; will need addressing before this screen sees
+  production-scale data.
 - Organisations' "Assign users" action isn't built (that's User Directory's job — still
   placeholder, and `AuthorizationPolicies.ManageUsersInScope`/`HierarchyDescendantRequirement` are
   equally unwired, same underlying mechanism `ManageOrgInScope` now uses, ready to reuse when
