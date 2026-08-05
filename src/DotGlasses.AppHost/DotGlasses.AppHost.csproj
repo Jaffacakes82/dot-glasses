@@ -5,6 +5,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- AddBicepTemplate resolves its path relative to the AppHost's output directory at
+         runtime, not the source tree — must be copied alongside the built assembly. -->
+    <None Include="acs.bicep" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- AddAzurePostgresFlexibleServer(...).RunAsContainer(...) replaces the plain
          Aspire.Hosting.PostgreSQL AddPostgres() call: same local-dev container experience, but
          now also generates Azure Database for PostgreSQL Flexible Server Bicep at publish time. -->
@@ -12,6 +18,7 @@
     <!-- Explicit Azure Container Apps environment — required since Aspire 9.4 dropped the
          "hybrid" mode where azd silently created/owned this environment. -->
     <PackageReference Include="Aspire.Hosting.Azure.AppContainers" Version="13.4.6" />
+    <PackageReference Include="Aspire.Hosting.Azure.Storage" Version="13.4.6" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -15,6 +15,12 @@ param postgres_outputs_connectionstring string
 
 param postgres_outputs_hostname string
 
+param storage_outputs_blobendpoint string
+
+param acs_outputs_communicationserviceconnectionstring string
+
+param acs_outputs_manageddomainname string
+
 param web_identity_outputs_clientid string
 
 param env_outputs_azure_container_registry_endpoint string
@@ -86,6 +92,26 @@ resource web 'Microsoft.App/containerApps@2025-10-02-preview' = {
             {
               name: 'DOTGLASSESDB_DATABASENAME'
               value: 'dotglassesdb'
+            }
+            {
+              name: 'ConnectionStrings__reference-data-images'
+              value: 'Endpoint=${storage_outputs_blobendpoint};ContainerName=reference-data-images'
+            }
+            {
+              name: 'REFERENCE_DATA_IMAGES_URI'
+              value: storage_outputs_blobendpoint
+            }
+            {
+              name: 'REFERENCE_DATA_IMAGES_BLOBCONTAINERNAME'
+              value: 'reference-data-images'
+            }
+            {
+              name: 'ACS_CONNECTION_STRING'
+              value: acs_outputs_communicationserviceconnectionstring
+            }
+            {
+              name: 'ACS_SENDER_DOMAIN'
+              value: acs_outputs_manageddomainname
             }
             {
               name: 'AZURE_CLIENT_ID'

@@ -836,12 +836,72 @@ acts on a specific target user/org — not yet wired to one, see above).
   whether that constraint has lifted.
 - `/infra` (root) is generated via `azd infra gen` from the AppHost model — treat it as
   regenerable output, not hand-maintained source; re-run `azd infra gen --force` after AppHost
-  resource changes rather than hand-editing the Bicep.
-- **No infra is ever deployed from a developer machine** — only via GitHub Actions. `[OPEN]`:
-  `azd pipeline config` hasn't been run yet (needs to run once per azd project — twice, since
-  root and `DotGlasses.App` are separate projects — and needs the user's own Azure login, so
-  Claude shouldn't run it). Deliberately deferred; don't scaffold `azure-dev.yml`-style workflow
-  files ahead of that until asked again.
+  resource changes rather than hand-editing the Bicep. `azd` itself isn't on PATH in a fresh
+  shell despite being winget-installed (`C:\Users\Joe\AppData\Local\Programs\Azure Dev CLI\
+  azd.exe`) — prepend that directory to PATH rather than assuming `azd` is missing.
+- **Blob Storage and Azure Communication Services are now real Aspire-managed resources**
+  (2026-08-05), resolving the `[OPEN]` "no blob storage exists yet"/"ACS needs to be
+  configurable via Aspire, or we need to flesh out the Bicep for it" gaps directly per the CEO's
+  instruction. Storage uses the native `Aspire.Hosting.Azure.Storage` package
+  (`builder.AddAzureStorage("storage").RunAsEmulator()` + `.AddBlobContainer("reference-data-
+  images")`, `RunAsEmulator` gives local dev a real Azurite container) — the blob container itself
+  is provisioned and RBAC-wired to Web's managed identity (`allowSharedKeyAccess: false`, a
+  `StorageBlobDataContributor` role assignment, no connection-string secret), but nothing in the
+  app actually uploads to it yet — `ReferenceDataItem.ImageUrl` is still a plain admin-pasted URL;
+  wiring a real upload feature is separate application-layer work, out of scope for this pass.
+  ACS has **no** Aspire hosting integration (confirmed via `dotnet package search`, official and
+  CommunityToolkit) — added via `builder.AddBicepTemplate("acs", "acs.bicep")` instead
+  (`src/DotGlasses.AppHost/acs.bicep`, hand-authored: a Communication Service + an Email
+  Communication Service with a free Azure-managed domain, no custom-domain DNS verification
+  attempted since that's an interactive portal step) so it still participates in the regenerable
+  `azd infra gen` pipeline rather than becoming loose hand-maintained Bicep. **Gated behind
+  `builder.ExecutionContext.IsPublishMode`** — unlike `AddAzurePostgresFlexibleServer`/
+  `AddAzureStorage`, a raw `AddBicepTemplate` resource has no `RunAsContainer`/`RunAsEmulator`
+  local-dev escape hatch, so without this guard plain `dotnet run` would try to actually provision
+  it against a real Azure subscription on every local start and hang waiting for `az login`
+  credentials that don't exist in dev — caught live (Web never started; the `DotGlasses.AppHost.exe`
+  process was running but had no child Web process, and curl against `localhost:7117` just hung)
+  before shipping, not by build/test. `IEmailSender` stays `LoggingEmailSender` — swapping in a
+  real ACS-backed sender is still explicit `[OPEN]` work the user is doing themselves; only the
+  infra needed to exist for that swap to be possible.
+- **No infra is ever deployed from a developer machine** — only via GitHub Actions
+  (`.github/workflows/deploy.yml`, 2026-08-05). Auto-deploys both azd projects (root `Web`/
+  AppHost and the separate `DotGlasses.App` project) to a `staging` GitHub Environment on every
+  successful `App` workflow run on `main` (a `workflow_run` trigger, not a second push trigger —
+  avoids re-running build/test twice per push while still only ever deploying commits that passed
+  CI), then to a `production` GitHub Environment gated by a required-reviewers protection rule.
+  Uses OIDC federated credentials (`azd auth login --federated-credential-provider github`, no
+  stored client secret) — the exact pattern azd's own generated pipeline uses, so a later
+  `azd pipeline config` run stays compatible with this file's shape rather than fighting it.
+  Neither the `staging` nor `production` Azure environment exists yet (confirmed with the user
+  2026-08-05) — this workflow is wired up ahead of that the same way `infra.yml` was originally
+  wired up ahead of `/infra` existing, so deployment becomes automatic the moment the manual setup
+  below is done, without another CI change.
+  **`[OPEN]` — exact manual steps the user needs to run themselves** (needs their own Azure
+  login; Claude must not run any of this):
+  1. `azd auth login` once, locally.
+  2. `azd pipeline config` from the repo root (root azd project — `Web`/AppHost/Postgres/Storage/
+     ACS), **and again from `src/DotGlasses.App`** (the separate Field App azd project) — each
+     run needs to target *both* a `staging` and a `production` azd environment/GitHub Environment
+     pair; azd will prompt to create each environment (subscription, location) and will create
+     matching GitHub Environments + `AZURE_CLIENT_ID`/`AZURE_TENANT_ID`/`AZURE_SUBSCRIPTION_ID`
+     federated-credential variables if they don't already exist — the exact variable names this
+     workflow reads.
+  3. In GitHub repo Settings → Environments → `production`, add a required-reviewers protection
+     rule. This is the actual manual-approval gate — `environment: production` in the workflow
+     YAML only *targets* that gate, it can't create the reviewer requirement itself.
+  4. Set an `AZURE_LOCATION` variable on both environments (e.g. `uksouth`) — read by the
+     workflow, not set by `azd pipeline config` automatically.
+  5. `main.bicep`'s `postgres_password` parameter is a **pre-existing quirk, not something this
+     pass introduced**: Aspire's manifest→Bicep generation always emits a top-level parameter for
+     every `AddParameter(..., secret: true)` call in `AppHost.cs` (there's only the one,
+     `postgres-password`, used solely by local dev's `.RunAsContainer(...)`), regardless of
+     whether any actual Azure module consumes it — and none does, since the real Postgres
+     Flexible Server module uses `activeDirectoryAuth: 'Enabled'` / `passwordAuth: 'Disabled'`
+     (Entra ID only, confirmed by reading `postgres.module.bicep` directly). `azd provision` will
+     still refuse to run without *some* value for it. Set any placeholder string as a secret azd
+     environment value (`azd env set postgres_password <anything> --secret`) for both
+     environments — it's genuinely never read by the deployed resource.
 
 ## Repo/public-repo constraints
 
@@ -905,8 +965,10 @@ Aspire dashboard).
   read-current-max-then-increment with no locking — a small race window exists under concurrent
   creates. Acceptable for now (infrequent, admin-only action); revisit if org creation ever
   becomes high-throughput.
-- Frame colour images are a plain admin-pasted URL (`ReferenceDataItem.ImageUrl`) — no real file
-  upload or blob storage exists yet. `AppHost` has no storage resource provisioned.
+- Frame colour images are a plain admin-pasted URL (`ReferenceDataItem.ImageUrl`) — no real
+  upload feature exists yet. The blob storage *infrastructure* to build one against now does
+  (`AppHost`'s `reference-data-images` container, see the Deployment section above) — building
+  the actual upload UI/API is separate application-layer work, still open.
 - No Leads-list/"convert to sale" entry point exists yet — a Sale recorded via
   `ConsultationForm.razor` can never set `SourceLeadId`, so a Lead's `ConvertedFlag`/`SaleId`
   currently only ever get set via the Test→Lead→(same-session)→Sale path, never by converting an
@@ -931,7 +993,9 @@ Aspire dashboard).
   discard action yet — the technician sees it flagged on the home screen but can't currently fix
   the bad field and resubmit, or dismiss it, from the Field App itself.
 - Azure Monitor/Application Insights exporter connection string.
-- `azd pipeline config` not run yet — see Deployment section below.
+- `azd pipeline config` not run yet (needs to run twice — once per azd project — plus a
+  `production` GitHub Environment reviewer rule and a placeholder `postgres_password` env value
+  on both environments) — see the numbered manual-steps list in the Deployment section above.
 - UI skeleton screens are static placeholder data, not wired to a database — see UI / design
   system section above. The Consultation Form is still missing the lead-match confirm popup, the
   "use test result" carry-over from Test to Sale, and progressive disclosure for catalogues with

@@ -1,0 +1,140 @@
+# Deploys both azd projects (root `azure.yaml` — AppHost/Web/Postgres/Storage/ACS — and
+# `src/DotGlasses.App/azure.yaml` — the Field App static web app, a separate azd project per
+# CLAUDE.md's Deployment section) to a "staging" environment automatically, then to "production"
+# gated by a manual approval — the "production" GitHub Environment must have a required-reviewers
+# protection rule configured in repo Settings > Environments; that's a one-time manual step this
+# workflow cannot configure for you (see CLAUDE.md's [OPEN] items).
+#
+# Triggered off the "App" workflow's successful completion on main, not a second push trigger —
+# avoids re-running the same build/test twice per push while still only ever deploying code that
+# passed CI. Uses OIDC federated credentials (no stored client secret) via `azd auth login
+# --federated-credential-provider github`, following azd's own generated-pipeline convention so a
+# later `azd pipeline config` run stays compatible with this file's shape.
+#
+# Every AZURE_CLIENT_ID/AZURE_TENANT_ID/AZURE_SUBSCRIPTION_ID/AZURE_LOCATION value below is a
+# GitHub Environment variable/secret that doesn't exist yet — see CLAUDE.md's Deployment section
+# for the exact `azd pipeline config` invocation (run by the user, not Claude) that provisions
+# them for both azd projects across both environments.
+
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["App"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-web-staging:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      AZURE_ENV_NAME: dot-glasses-staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: Azure/setup-azd@v2
+
+      - name: Log in with Azure (federated credentials)
+        run: |
+          azd auth login \
+            --client-id "$AZURE_CLIENT_ID" \
+            --federated-credential-provider "github" \
+            --tenant-id "$AZURE_TENANT_ID"
+
+      - name: Provision + deploy (Web/AppHost)
+        run: azd up --no-prompt
+
+  deploy-app-staging:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      AZURE_ENV_NAME: dot-glasses-field-app-staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: Azure/setup-azd@v2
+
+      - name: Log in with Azure (federated credentials)
+        run: |
+          azd auth login \
+            --client-id "$AZURE_CLIENT_ID" \
+            --federated-credential-provider "github" \
+            --tenant-id "$AZURE_TENANT_ID"
+
+      - name: Provision + deploy (Field App)
+        working-directory: src/DotGlasses.App
+        run: azd up --no-prompt
+
+  deploy-web-production:
+    needs: deploy-web-staging
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      AZURE_ENV_NAME: dot-glasses-production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: Azure/setup-azd@v2
+
+      - name: Log in with Azure (federated credentials)
+        run: |
+          azd auth login \
+            --client-id "$AZURE_CLIENT_ID" \
+            --federated-credential-provider "github" \
+            --tenant-id "$AZURE_TENANT_ID"
+
+      - name: Provision + deploy (Web/AppHost)
+        run: azd up --no-prompt
+
+  deploy-app-production:
+    needs: deploy-app-staging
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      AZURE_ENV_NAME: dot-glasses-field-app-production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: Azure/setup-azd@v2
+
+      - name: Log in with Azure (federated credentials)
+        run: |
+          azd auth login \
+            --client-id "$AZURE_CLIENT_ID" \
+            --federated-credential-provider "github" \
+            --tenant-id "$AZURE_TENANT_ID"
+
+      - name: Provision + deploy (Field App)
+        working-directory: src/DotGlasses.App
+        run: azd up --no-prompt

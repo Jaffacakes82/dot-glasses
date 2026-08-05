@@ -25,6 +25,13 @@ resource rg 'Microsoft.Resources/resourceGroups@2022-09-01' = {
   tags: tags
 }
 
+module acs 'acs/acs.bicep' = {
+  name: 'acs'
+  scope: rg
+  params: {
+    location: location
+  }
+}
 module env 'env/env.module.bicep' = {
   name: 'env'
   scope: rg
@@ -48,6 +55,13 @@ module postgres 'postgres/postgres.module.bicep' = {
     location: location
   }
 }
+module storage 'storage/storage.module.bicep' = {
+  name: 'storage'
+  scope: rg
+  params: {
+    location: location
+  }
+}
 module web_identity 'web-identity/web-identity.module.bicep' = {
   name: 'web-identity'
   scope: rg
@@ -65,6 +79,17 @@ module web_roles_postgres 'web-roles-postgres/web-roles-postgres.module.bicep' =
     principalName: web_identity.outputs.principalName
   }
 }
+module web_roles_storage 'web-roles-storage/web-roles-storage.module.bicep' = {
+  name: 'web-roles-storage'
+  scope: rg
+  params: {
+    location: location
+    principalId: web_identity.outputs.principalId
+    storage_outputs_name: storage.outputs.name
+  }
+}
+output ACS_COMMUNICATIONSERVICECONNECTIONSTRING string = acs.outputs.communicationServiceConnectionString
+output ACS_MANAGEDDOMAINNAME string = acs.outputs.managedDomainName
 output AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN string = env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = env.outputs.AZURE_CONTAINER_REGISTRY_ENDPOINT
 output ENV_AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN string = env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN
@@ -73,5 +98,6 @@ output ENV_AZURE_CONTAINER_REGISTRY_ENDPOINT string = env.outputs.AZURE_CONTAINE
 output ENV_AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID string = env.outputs.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID
 output POSTGRES_CONNECTIONSTRING string = postgres.outputs.connectionString
 output POSTGRES_HOSTNAME string = postgres.outputs.hostName
+output STORAGE_BLOBENDPOINT string = storage.outputs.blobEndpoint
 output WEB_IDENTITY_CLIENTID string = web_identity.outputs.clientId
 output WEB_IDENTITY_ID string = web_identity.outputs.id
