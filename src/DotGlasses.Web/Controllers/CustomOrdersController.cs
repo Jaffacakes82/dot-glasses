@@ -1,3 +1,4 @@
+using DotGlasses.Application.CustomOrders;
 using DotGlasses.Web.Authorization;
 using DotGlasses.Web.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -6,17 +7,22 @@ using Microsoft.AspNetCore.Mvc;
 namespace DotGlasses.Web.Controllers;
 
 [Authorize(Policy = AuthorizationPolicies.CustomOrdersView)]
-public class CustomOrdersController : Controller
+public class CustomOrdersController(ICustomOrderService customOrderService) : Controller
 {
-    public IActionResult Index()
+    public async Task<IActionResult> Index(CancellationToken cancellationToken)
     {
-        var orders = new List<CustomOrder>
-        {
-            new("Otieno K.", "Nakuru Central", "OD -4.50 / OS -4.25, cyl -0.75", "In Lab"),
-            new("Mwangi T.", "Kangemi Vision Centre", "OD -2.00 / OS -2.25", "Submitted"),
-            new("Achieng P.", "Kampala Optics Group", "OD +1.50 / OS +1.75", "Ready for Pickup"),
-        };
+        var orders = await customOrderService.ListAsync(cancellationToken);
+        return View(orders.Select(o => new CustomOrder(o.SaleId, o.CustomerName, o.Outlet, o.Prescription, o.Status)).ToList());
+    }
 
-        return View(orders);
+    /// <summary>Reuses the page-level CustomOrdersView policy for the write action too (2026-08-05
+    /// decision) — any role, Country level and above, same gate that already controls seeing the
+    /// queue at all.</summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> AdvanceStatus(Guid saleId, CancellationToken cancellationToken)
+    {
+        await customOrderService.AdvanceStatusAsync(saleId, cancellationToken);
+        return RedirectToAction(nameof(Index));
     }
 }

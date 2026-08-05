@@ -551,6 +551,53 @@ Reference Data screen verification this session, not a seeding bug) was found an
 this pass — worth remembering that this Postgres data volume persists real state across every
 `AppHost` restart in this session, including ad hoc test rows.
 
+## Admin Portal wiring (Custom Orders screen)
+
+Sixth Admin Portal screen wired (2026-08-05) — only Dashboard remains placeholder. Picked next
+because, unlike Dashboard's unspecified "retail-point type distribution," the domain shape was
+resolvable from what already existed: `Sale.OrderFromDotGlasses` (Custom range, outlet has no
+stock) was already the exact signal for "this needs fulfilment," just with nowhere to track
+progress — confirmed two decisions with the user before implementing (status storage: a column on
+`Sale`, not a separate entity; advance-status RBAC: same `CustomOrdersView` policy as viewing, not
+a stricter one) rather than guessing either.
+
+**New `Sale.FulfilmentStatus`** (`Domain.Enums.FulfilmentStatus?` — `Submitted`/`InLab`/
+`ReadyForPickup`/`Fulfilled`) — null unless `OrderFromDotGlasses` was true at creation, in which
+case `SaleService.CreateAsync` stamps it `Submitted`. Deliberately on the same row rather than a
+separate entity: `Sale`'s own doc comment already said "a custom order counts as a completed Sale
+immediately," and the design mockup only ever shows a flat single-status queue (no per-change
+history) — a separate entity would have been solving a problem nobody asked for.
+
+**New `ICustomOrderService`** (Application) / `CustomOrderService` (Infrastructure, queries
+`DbContext` directly, no repository interface — matches `EventHistoryQueryService`) —
+`ListAsync` (`Sale` rows where `FulfilmentStatus IS NOT NULL`, resolved to outlet name via the
+same `HierarchyPath`-keyed lookup `EventHistoryQueryService` uses, customer name, and a formatted
+`"OD {right} / OS {left}"` prescription string built from the Custom sphere/cylinder/add-power
+fields) and `AdvanceStatusAsync` (linear, forward-only — throws if the Sale isn't a custom order
+or is already `Fulfilled`, never lets a caller set an arbitrary status). Hierarchy scoping is
+automatic (`Sale`/`Customer`/`OrganisationNode` all implement `IHierarchyScoped`), so — same
+insight as Event History/Organisations — a Country-level caller's `ListAsync` only ever returns
+their own subtree's custom orders with no extra filtering needed; `AdvanceStatus` reuses
+`AuthorizationPolicies.CustomOrdersView` (any role, Country level+) rather than a separate write
+policy, per the user's decision.
+
+**Design mockup's copy was stale, corrected rather than copied**: `design/admin/screens-b.jsx`'s
+`CustomOrders` component claims "Field users cannot submit custom orders directly; only a
+retailer or outlet manager/admin can, via this portal" — no longer true since the Field App UI
+wiring pass (see above) already lets any RetailPoint technician submit a Custom Sale with
+`OrderFromDotGlasses` directly from `ConsultationForm.razor`. `Views/CustomOrders/Index.cshtml`'s
+copy now describes that real path instead of the outdated design assumption.
+
+**Verified live end-to-end**: as the seeded RetailPoint user, recorded a real Custom-range Sale
+with "Order this lens from DOT Glasses" checked — confirmed `FulfilmentStatus` landed `Submitted`
+in Postgres. As the seeded DGI Admin, confirmed it appeared in the Custom Orders queue with the
+correct customer, outlet (resolved from `HierarchyPath`, not a raw GUID), and prescription string,
+then advanced it through the full `Submitted → In Lab → Ready for Pickup → Fulfilled` flow — the
+advance button correctly disappears once `Fulfilled`. Confirmed RBAC three ways in one pass: the
+DGI Admin and the seeded Kenya Manager (Country level) both saw the page and this order (it's in
+Kenya's subtree); the seeded RetailPoint user was redirected to `AccessDenied` outright, matching
+`AuthorizationPolicies.CustomOrdersView`'s "DGI/Country only, hidden entirely below that" gate.
+
 ## RBAC permission matrix
 
 Three roles (Admin/Manager/User), assignable at any org node, scope = that node + everything
@@ -586,12 +633,13 @@ acts on a specific target user/org — not yet wired to one, see above).
   node" dialog and User Directory's own real "Invite platform user" form) — the design system
   layers custom `dg-*` classes/tokens on top rather than replacing it.
 - Admin Portal (`Web`) screens are mostly still skeletons over static placeholder data (in each
-  `Controllers/*Controller.cs`, not a database) — only **Dashboard and Custom Orders** remain.
-  **Reference Data, Organisations, Event History, User Directory, and Preset Catalogues are wired
-  to the real database** (all 2026-08-05 — see Admin Portal wiring sections above); the rest
-  aren't. Don't wire the remaining ones up without checking each screen's field-level shape
-  against the design README first — go screen by screen, same discipline all five of those
-  followed. `ConsultationForm.razor` in `App` is **no longer a stub** — it saves real
+  `Controllers/*Controller.cs`, not a database) — only **Dashboard** remains. **Reference Data,
+  Organisations, Event History, User Directory, Preset Catalogues, and Custom Orders are wired
+  to the real database** (all 2026-08-05 — see Admin Portal wiring sections above); Dashboard
+  isn't. Don't wire it up without checking its field-level shape against the design README first
+  and confirming the still-unspecified "retail-point type distribution" concept with the user —
+  same discipline all six of those followed. `ConsultationForm.razor` in `App` is **no longer a
+  stub** — it saves real
   Test/Lead/Sale records via the real API (see Field App UI wiring above); its `Web` modal
   equivalent still doesn't exist.
 - All seven Admin Portal controllers now have `[Authorize]` (see RBAC permission matrix above) —
@@ -651,11 +699,11 @@ Aspire dashboard).
   returns it.
 - The Field App's `ConsultationForm.razor` is wired to the real API (see Field App UI wiring
   above); the Admin Portal's equivalent modal still doesn't exist. `ReferenceDataItem`,
-  `OrganisationNode`, `ApplicationUser`, and now `PresetCatalogue`/`LensOption`/
-  `LensStrengthCoatingOption` all have write paths (see the Admin Portal wiring sections above) —
-  only Dashboard and Custom Orders are still placeholder. Customer is internal-only by design.
-  Keep building the Admin Portal screens one at a time, checking field-level shape against the
-  design README first.
+  `OrganisationNode`, `ApplicationUser`, `PresetCatalogue`/`LensOption`/`LensStrengthCoatingOption`,
+  and now `Sale.FulfilmentStatus` all have write paths (see the Admin Portal wiring sections
+  above) — only Dashboard is still placeholder. Customer is internal-only by design. Its shape
+  ("retail-point type distribution") isn't specified anywhere yet — confirm with the user before
+  scoping it, same as every other screen here.
 - **~12 of the 16 seeded `LensStrength` reference items have zero configured coatings** (see the
   Preset Catalogues admin wiring section above) — only the 4 bifocal strengths ship pre-configured
   (→ Photochromic). Those ~12 non-bifocal lens strengths are genuinely unsellable on a preset
