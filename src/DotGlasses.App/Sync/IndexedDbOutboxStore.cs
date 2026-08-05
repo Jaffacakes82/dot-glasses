@@ -29,6 +29,12 @@ public class IndexedDbOutboxStore(IJSRuntime jsRuntime) : ISyncQueueStore
         return JsonSerializer.Deserialize<List<OutboxItem>>(json, JsonOptions) ?? [];
     }
 
+    public async Task<IReadOnlyList<OutboxItem>> GetFailedAsync(CancellationToken cancellationToken = default)
+    {
+        var json = await jsRuntime.InvokeAsync<string>("dotGlassesIdb.getFailed", cancellationToken);
+        return JsonSerializer.Deserialize<List<OutboxItem>>(json, JsonOptions) ?? [];
+    }
+
     public async Task MarkSyncedAsync(Guid id, CancellationToken cancellationToken = default) =>
         await jsRuntime.InvokeVoidAsync("dotGlassesIdb.updateStatus", cancellationToken, id.ToString(), nameof(OutboxItemStatus.Synced), null);
 

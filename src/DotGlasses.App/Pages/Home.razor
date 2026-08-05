@@ -26,6 +26,20 @@
             }
         </div>
 
+        @if (_failedItems.Count > 0)
+        {
+            <div class="dg-status-banner" style="background:#fdecea; color:#c00; margin-top:var(--space-2);">
+                <span class="dg-status-dot" style="background:#c00;"></span>
+                <span>@_failedItems.Count record(s) couldn't sync — needs review, not retrying automatically</span>
+            </div>
+            <ul style="font-size:12px; color:#888; margin:4px 0 0 0; padding-left:16px;">
+                @foreach (var failedItem in _failedItems)
+                {
+                    <li>@failedItem.EntityType (@failedItem.CreatedAtUtc.ToLocalTime().ToString("g")): @failedItem.LastError</li>
+                }
+            </ul>
+        }
+
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: var(--space-4);">
             <div>
                 <div style="font-weight:700;">Signed in</div>
@@ -71,6 +85,7 @@
     private bool _isOnline;
     private int _pendingCount;
     private bool _isSyncing;
+    private IReadOnlyList<OutboxItem> _failedItems = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -87,6 +102,7 @@
     {
         _isOnline = await JS.InvokeAsync<bool>("dotGlassesIdb.isOnline");
         _pendingCount = (await OutboxStore.GetPendingAsync()).Count;
+        _failedItems = await OutboxStore.GetFailedAsync();
     }
 
     private async Task SyncNowAsync()

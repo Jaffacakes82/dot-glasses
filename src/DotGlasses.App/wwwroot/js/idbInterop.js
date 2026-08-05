@@ -46,7 +46,23 @@ window.dotGlassesIdb = (function () {
                 const tx = db.transaction(storeName, 'readonly');
                 const request = tx.objectStore(storeName).getAll();
                 request.onsuccess = () => {
-                    const items = request.result.filter((i) => i.status !== 'Synced');
+                    // 'Failed' is terminal (permanent 4xx — see SyncService.SyncItemAsync), not
+                    // retryable, so it's excluded here alongside 'Synced' — otherwise SyncService
+                    // re-POSTs the same permanently-invalid payload on every sync cycle forever.
+                    const items = request.result.filter((i) => i.status !== 'Synced' && i.status !== 'Failed');
+                    resolve(JSON.stringify(items));
+                };
+                request.onerror = () => reject(request.error);
+            });
+        },
+
+        getFailed: async function () {
+            const db = await openDb();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(storeName, 'readonly');
+                const request = tx.objectStore(storeName).getAll();
+                request.onsuccess = () => {
+                    const items = request.result.filter((i) => i.status === 'Failed');
                     resolve(JSON.stringify(items));
                 };
                 request.onerror = () => reject(request.error);

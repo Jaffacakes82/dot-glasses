@@ -41,6 +41,23 @@ New `App` features that write data go through the outbox pattern (IndexedDB pend
 table, client-generated GUID as idempotency key, `ISyncService` draining on reconnect) — never
 call the API directly from a Blazor page/component.
 
+**Permanent vs transient sync failures (2026-08-05 fix)**: `SyncService.SyncItemAsync` already
+marked a 400/401/403 response `OutboxItemStatus.Failed` (terminal — not retryable without user
+action) rather than logging-and-retrying like a transient failure (network error, 5xx). The bug
+was one layer down: `idbInterop.js`'s `getPending` only excluded `status !== 'Synced'`, so a
+`Failed` item was still returned by `ISyncQueueStore.GetPendingAsync()` and `SyncService` kept
+re-POSTing (and re-failing) the same permanently-invalid payload on every later sync cycle —
+reproduced live via a Lead saved with a required field left empty (13 retries observed on one
+stuck item before the fix). Fixed by also excluding `Failed` in `getPending`'s filter, and adding
+`ISyncQueueStore.GetFailedAsync()`/`dotGlassesIdb.getFailed` (JS) as the sanctioned way to query
+the terminal set separately — `SyncService` never sees `Failed` items again once marked, but
+`Home.razor` calls `GetFailedAsync()` to show a distinct "N record(s) couldn't sync — needs
+review" banner (entity type + error, no destructive retry/discard action — out of scope, see
+`[OPEN]`) so a technician isn't left thinking a permanently-broken record is just "waiting for
+signal." `WidgetExamples.razor`'s demo table merges `GetPendingAsync()` + `GetFailedAsync()` to
+keep showing every outbox status in its walkthrough, since `GetPendingAsync()` alone no longer
+does.
+
 ## Domain modelling
 
 Real domain entities are now designed and persisted (2026-08-04, following the CEO conversation
@@ -302,6 +319,9 @@ Aspire dashboard).
   explicit "kind" field on `PresetCatalogue` if DGI/Country ever create more.
 - Offline sync conflict resolution (currently last-write-wins; don't hard-code away a future
   version/ETag column).
+- A permanently-failed outbox item (see Offline sync above) has no in-app retry-after-edit or
+  discard action yet — the technician sees it flagged on the home screen but can't currently fix
+  the bad field and resubmit, or dismiss it, from the Field App itself.
 - Azure Monitor/Application Insights exporter connection string.
 - `azd pipeline config` not run yet — see Deployment section below.
 - UI skeleton screens are static placeholder data, not wired to a database — see UI / design
