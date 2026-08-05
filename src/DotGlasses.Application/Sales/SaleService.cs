@@ -62,6 +62,7 @@ public class SaleService(
             CustomAxisRight = request.CustomAxisRight,
             CustomAddPowerRight = request.CustomAddPowerRight,
             OrderFromDotGlasses = request.OrderFromDotGlasses,
+            FulfilmentStatus = request.OrderFromDotGlasses ? Domain.Enums.FulfilmentStatus.Submitted : null,
             PupilDistanceMm = request.PupilDistanceMm,
             ChildrensFrame = request.ChildrensFrame,
             FrameColourRefId = request.FrameColourRefId,

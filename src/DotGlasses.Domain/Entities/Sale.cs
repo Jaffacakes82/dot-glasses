@@ -6,8 +6,9 @@ namespace DotGlasses.Domain.Entities;
 /// <summary>
 /// Full transaction — a completed sale, whether fulfilled from local stock (preset range) or
 /// routed to fulfilment (Custom + OrderFromDotGlasses). A custom order counts as a completed Sale
-/// immediately (no separate fulfilment-status entity); Id is client-generated (offline-sync
-/// outbox idempotency key).
+/// immediately — FulfilmentStatus tracks it through the lab/pickup workflow on this same row
+/// (2026-08-05 decision) rather than a separate entity, matching the flat single-status queue the
+/// Custom Orders admin screen shows; Id is client-generated (offline-sync outbox idempotency key).
 /// </summary>
 public class Sale : IAuditable, ISoftDeletable, IHierarchyScoped
 {
@@ -53,6 +54,10 @@ public class Sale : IAuditable, ISoftDeletable, IHierarchyScoped
     /// (needs manufacturing + delivery) rather than logging it as stock already on hand.</summary>
     public bool OrderFromDotGlasses { get; set; }
 
+    /// <summary>Null unless OrderFromDotGlasses is true — set to Submitted at creation, then
+    /// advanced forward-only by the Custom Orders admin screen. See FulfilmentStatus.</summary>
+    public FulfilmentStatus? FulfilmentStatus { get; set; }
+
     public decimal? PupilDistanceMm { get; set; }
     public bool ChildrensFrame { get; set; }
 
@@ -61,8 +66,9 @@ public class Sale : IAuditable, ISoftDeletable, IHierarchyScoped
     public string? FrameColourOtherText { get; set; }
     public FrameCoverage FrameCoverage { get; set; }
 
-    /// <summary>FK to ReferenceDataItem (Category = Coating). Forced to Photochromic when a
-    /// bifocal LensOption is selected — validated in the Application layer, not a DB constraint.</summary>
+    /// <summary>FK to ReferenceDataItem (Category = Coating) — client-submitted, validated in the
+    /// Application layer against the legal set for the chosen lens (any active Coating for
+    /// Custom; the configured LensStrengthCoatingOption set for a preset range).</summary>
     public Guid CoatingRefId { get; set; }
 
     public bool HardCaseSold { get; set; }

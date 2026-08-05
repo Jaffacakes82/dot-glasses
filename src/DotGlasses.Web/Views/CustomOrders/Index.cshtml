@@ -10,9 +10,9 @@
 })
 
 <p style="max-width:680px; color:var(--text-muted-2); margin-bottom:var(--space-5);">
-    This queue is populated from the Field App's Sale flow when the custom/special-lens toggle
-    is used — field users cannot submit custom orders directly. Multi-tier approval
-    (outlet → retailer → country) is a Day 2 feature; v1 is a flat status queue.
+    This queue is populated from the Field App's Sale flow whenever a technician records a Custom
+    prescription and marks it to order from DOT Glasses (the outlet doesn't have stock). Multi-tier
+    approval (outlet → retailer → country) is a Day 2 feature; v1 is a flat status queue.
 </p>
 
 <div class="dg-card">
@@ -31,11 +31,14 @@
                     <td>@order.Customer</td>
                     <td class="dg-muted">@order.Outlet</td>
                     <td class="dg-muted">@order.Prescription</td>
-                    <td><span class="dg-badge" style="background:@DotGlasses.Web.Models.CustomOrder.StatusColor[order.Status];">@order.Status</span></td>
+                    <td><span class="dg-badge" style="background:@DotGlasses.Web.Models.CustomOrder.StatusColor[order.Status];">@DotGlasses.Web.Models.CustomOrder.StatusLabel[order.Status]</span></td>
                     <td>
-                        @if (order.NextStatus is not null)
+                        @if (order.NextStatus is { } next)
                         {
-                            <button class="dg-btn dg-btn-ghost" style="padding:6px 14px; font-size:12px;" type="button">Advance to @order.NextStatus</button>
+                            <form asp-action="AdvanceStatus" method="post" style="display:inline;">
+                                <input type="hidden" name="saleId" value="@order.SaleId" />
+                                <button class="dg-btn dg-btn-ghost" style="padding:6px 14px; font-size:12px;" type="submit">Advance to @DotGlasses.Web.Models.CustomOrder.StatusLabel[next]</button>
+                            </form>
                         }
                     </td>
                 </tr>
