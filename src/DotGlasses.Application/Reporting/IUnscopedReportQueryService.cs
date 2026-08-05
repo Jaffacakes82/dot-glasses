@@ -1,4 +1,5 @@
 using DotGlasses.Domain.Entities;
+using DotGlasses.Domain.Enums;
 
 namespace DotGlasses.Application.Reporting;
 
@@ -19,6 +20,16 @@ public interface IUnscopedReportQueryService
     /// the standard filter only ever shows a caller their own subtree, so a plain scoped query
     /// against OrganisationNodes silently returns nothing for ancestor lookups.</summary>
     Task<IReadOnlyList<OrganisationNodePath>> GetOrganisationNodePathsUnscopedAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Every org node's Id/Name/Level/HierarchyPath/IsTrainingOrg, ignoring the
+    /// hierarchy-scoping filter — a superset of GetOrganisationNodePathsUnscopedAsync for callers
+    /// that need to resolve a display name or ancestor level, not just match a path prefix (e.g.
+    /// a Dashboard/Event-History-style report resolving "which outlet/retailer/country" for a
+    /// caller who may be scoped well below those ancestors and so could never see them via a
+    /// plain scoped query).</summary>
+    Task<IReadOnlyList<OrganisationNodeSummary>> GetOrganisationNodesUnscopedAsync(CancellationToken cancellationToken = default);
 }
 
 public record OrganisationNodePath(Guid Id, string HierarchyPath);
+
+public record OrganisationNodeSummary(Guid Id, string Name, OrganisationLevel Level, string HierarchyPath, bool IsTrainingOrg);

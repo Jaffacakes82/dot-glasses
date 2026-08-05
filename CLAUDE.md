@@ -598,6 +598,73 @@ DGI Admin and the seeded Kenya Manager (Country level) both saw the page and thi
 Kenya's subtree); the seeded RetailPoint user was redirected to `AccessDenied` outright, matching
 `AuthorizationPolicies.CustomOrdersView`'s "DGI/Country only, hidden entirely below that" gate.
 
+## Admin Portal wiring (Dashboard screen) — the last placeholder screen
+
+Seventh and final Admin Portal screen wired (2026-08-05) — all seven now read/write real data.
+Confirmed two scope decisions with the user before implementing, since CLAUDE.md had explicitly
+flagged Dashboard's "retail-point type distribution" as an unresolved domain question (no
+`RetailPointType` concept exists anywhere — `OrganisationNode.Kind` is free-text with only
+"Retailer"/"Standalone" ever seeded, and the design mockup's `Physical`/`Mobile Agent`/`Outreach`
+was fictional sample data never confirmed with the user): (1) drop the retail-point-type tile
+entirely for v1 rather than invent a taxonomy; (2) ship the "Top performing" tables as a fixed
+unfiltered top-5-by-sales list, not the mockup's live country/retailer/type filters + sales-vs-
+conversion sort toggle (today's seed data is too sparse for filters to show anything meaningful
+anyway). Also corrected two placeholder/mockup naming mismatches while wiring for real: "Custom
+lenses" → **Custom orders** (matches the Custom Orders screen's own terminology now that it's
+real) and "Top agents" → **Top technicians** (matches the mockup).
+
+**New `IDashboardQueryService`** (Application) / `DashboardQueryService` (Infrastructure, queries
+`DbContext` directly, no repository interface — matches `EventHistoryQueryService`/
+`CustomOrderService`) — a single `GetAsync` computing: stat tiles (pending Leads = `!ConvertedFlag`;
+custom orders = `Sale.FulfilmentStatus != null`, matching the Custom Orders screen's own
+definition exactly; standard sales = everything else); test-to-sale and needed-to-sale conversion
+% (walks `Test.ConvertedToLeadId` → `Lead.SaleId`, since there's no direct Test→Sale link);
+referrals logged (`Test.Outcome == Referred`); a 6-bucket rolling-7-day conversion-% trend;
+gender split (from `Test.Gender` — the broadest top-of-funnel population, a reasonable default
+where the mockup didn't specify a source); and top-5-by-sales-volume outlet/retailer/country/
+technician lists, each paired with its own conversion % (that key's own Sales ÷ that key's own
+Tests). "Retailer" = nearest Intermediate-level ancestor by longest matching `HierarchyPath`
+prefix — the design mockup's "retailer" tier, matching how `OrganisationSeedConfiguration` already
+nests a retail point under an Intermediate node. `OrganisationNode.IsTrainingOrg` rows are
+explicitly excluded from every aggregate (per that field's own doc comment: "excluded from MI
+dashboards/reporting via an explicit query condition, not a global filter") — the only place in
+the codebase so far that actually needed to honor this already-decided rule.
+
+**No Dashboard-specific RBAC policy** — `HomeController` keeps its plain `[Authorize]` (any
+authenticated role). This matches the RBAC permission matrix's own already-decided rule ("User: at
+a Retail Point, Field App access + read-only MI for that outlet only") — a `User`-role account is
+*supposed* to see Dashboard MI, just automatically scoped to their own subtree, same mechanism as
+every other reporting screen.
+
+**One real bug found and fixed, shared with Event History**: org name resolution (outlet/
+retailer/country) was silently broken for any caller below Country level. Both
+`DashboardQueryService` and the pre-existing `EventHistoryQueryService` built their outlet/country
+lookup from a *plain scoped* `OrganisationNodes` query — but `OrganisationNode` implements
+`IHierarchyScoped` too, so the standard hierarchy filter only ever returns a caller's own subtree,
+never their ancestors. A RetailPoint-level caller (a leaf node with no descendants) therefore saw
+*only their own single org node* from that query — their Country/Intermediate ancestors were
+invisible to them, so `Country()`/`Retailer()` resolution silently fell back to "Unknown country"/
+"Unknown retailer" for every row, even their own. This had never been caught because Event
+History's own live verification (see its section above) was only ever done by the DGI Admin and
+the Kenya Manager (Country level) — both of whom sit at or above the ancestor they were resolving,
+so the bug was invisible from their vantage point. Caught this time because Dashboard's own live
+verification was deliberately run as the RetailPoint user too. Fixed by extending
+`IUnscopedReportQueryService` — the sanctioned way to look outside a caller's hierarchy scope, per
+the Architecture rules above — with a new `GetOrganisationNodesUnscopedAsync` (a superset of the
+existing path-only `GetOrganisationNodePathsUnscopedAsync`, also carrying `Name`/`Level`/
+`IsTrainingOrg`) and switching both `DashboardQueryService` and `EventHistoryQueryService` to it.
+Worth remembering for any future reporting service: resolving an *ancestor's* name/level always
+needs the unscoped lookup, even when the entity being reported on (Sale/Test/Lead) is correctly
+auto-scoped — the org-tree lookup is a second, separate scoping concern.
+
+**Verified live**: as the seeded DGI Admin, confirmed all six stat tiles, the conversion trend
+(non-zero only in the current week's bucket, correctly reflecting this session's real but
+recent-only data), gender split, and all four top-N lists render real, non-fabricated numbers.
+Then signed in as the seeded RetailPoint user and confirmed a strictly scoped-down view (fewer
+tests/sales, no DGI-root orphan rows) — and, post-fix, correct "Kangemi Vision Centre"/"Kenya"
+names in Top Retailers/Top Countries instead of "Unknown". Re-checked Event History under the same
+user afterward and confirmed its Country column now also resolves correctly.
+
 ## RBAC permission matrix
 
 Three roles (Admin/Manager/User), assignable at any org node, scope = that node + everything
@@ -632,16 +699,12 @@ acts on a specific target user/org — not yet wired to one, see above).
   JS — originally decorative in `UserDirectory`, now driving both Organisations' "Add child
   node" dialog and User Directory's own real "Invite platform user" form) — the design system
   layers custom `dg-*` classes/tokens on top rather than replacing it.
-- Admin Portal (`Web`) screens are mostly still skeletons over static placeholder data (in each
-  `Controllers/*Controller.cs`, not a database) — only **Dashboard** remains. **Reference Data,
-  Organisations, Event History, User Directory, Preset Catalogues, and Custom Orders are wired
-  to the real database** (all 2026-08-05 — see Admin Portal wiring sections above); Dashboard
-  isn't. Don't wire it up without checking its field-level shape against the design README first
-  and confirming the still-unspecified "retail-point type distribution" concept with the user —
-  same discipline all six of those followed. `ConsultationForm.razor` in `App` is **no longer a
-  stub** — it saves real
-  Test/Lead/Sale records via the real API (see Field App UI wiring above); its `Web` modal
-  equivalent still doesn't exist.
+- **All seven Admin Portal screens are now wired to the real database** (Reference Data,
+  Organisations, Event History, User Directory, Preset Catalogues, Custom Orders, and Dashboard —
+  all 2026-08-05, see the Admin Portal wiring sections above) — none of the `Controllers/
+  *Controller.cs` files return hardcoded placeholder data anymore. `ConsultationForm.razor` in
+  `App` is **no longer a stub** either — it saves real Test/Lead/Sale records via the real API
+  (see Field App UI wiring above); its `Web` modal equivalent still doesn't exist (see `[OPEN]`).
 - All seven Admin Portal controllers now have `[Authorize]` (see RBAC permission matrix above) —
   `HomeController`'s `Error` action is `[AllowAnonymous]` so error pages render for logged-out
   users too.
@@ -698,12 +761,19 @@ Aspire dashboard).
   when it lands, only what `UserDirectoryController` does with the link after `InviteAsync`
   returns it.
 - The Field App's `ConsultationForm.razor` is wired to the real API (see Field App UI wiring
-  above); the Admin Portal's equivalent modal still doesn't exist. `ReferenceDataItem`,
-  `OrganisationNode`, `ApplicationUser`, `PresetCatalogue`/`LensOption`/`LensStrengthCoatingOption`,
-  and now `Sale.FulfilmentStatus` all have write paths (see the Admin Portal wiring sections
-  above) — only Dashboard is still placeholder. Customer is internal-only by design. Its shape
-  ("retail-point type distribution") isn't specified anywhere yet — confirm with the user before
-  scoping it, same as every other screen here.
+  above); the Admin Portal's equivalent modal still doesn't exist. All seven Admin Portal screens
+  are wired to real data now (see the Admin Portal wiring sections above) — nothing left to scope
+  screen-by-screen. Customer is internal-only by design. There is still no "retail-point type"
+  concept anywhere in the domain (Dashboard's distribution-by-type tile was deliberately dropped
+  rather than guessed at — see that section above); revisit only if the user actually asks for it,
+  with a real taxonomy decision, not by reverse-engineering the design mockup's fictional
+  `Physical`/`Mobile Agent`/`Outreach` categories.
+- **Org name/level resolution for a caller below Country level needs `IUnscopedReportQueryService`,
+  not a plain `OrganisationNodes` query** (2026-08-05 fix, see the Dashboard admin wiring section
+  above) — `OrganisationNode` is itself `IHierarchyScoped`, so a plain query only ever returns the
+  caller's own subtree, never their ancestors. Both `DashboardQueryService` and
+  `EventHistoryQueryService` now go through `GetOrganisationNodesUnscopedAsync`; watch for the
+  same mistake in any future reporting service that resolves an outlet's retailer/country name.
 - **~12 of the 16 seeded `LensStrength` reference items have zero configured coatings** (see the
   Preset Catalogues admin wiring section above) — only the 4 bifocal strengths ship pre-configured
   (→ Photochromic). Those ~12 non-bifocal lens strengths are genuinely unsellable on a preset

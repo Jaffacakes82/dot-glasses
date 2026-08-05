@@ -9,18 +9,11 @@
     Title = "MI Reporting Dashboard",
 })
 
-<div class="dg-card" style="margin-bottom: var(--space-5); display:flex; gap: var(--space-4); flex-wrap:wrap; align-items:center;">
-    <strong style="font-size:13px; text-transform:uppercase; letter-spacing:0.04em;">Filter</strong>
-    <select class="form-select" style="max-width:200px;"><option>All countries</option></select>
-    <select class="form-select" style="max-width:200px;"><option>All retailers</option></select>
-    <select class="form-select" style="max-width:220px;"><option>All retail-point types</option></select>
-</div>
-
 <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-5);">
     <div class="dg-card"><div class="dg-stat-label">Pending leads</div><div class="dg-stat-value">@Model.PendingLeads</div></div>
     <div class="dg-card"><div class="dg-stat-label">Total tests</div><div class="dg-stat-value">@Model.TotalTests</div></div>
     <div class="dg-card"><div class="dg-stat-label">Standard sales</div><div class="dg-stat-value">@Model.StandardSales</div></div>
-    <div class="dg-card"><div class="dg-stat-label">Custom lenses</div><div class="dg-stat-value">@Model.CustomLenses</div></div>
+    <div class="dg-card"><div class="dg-stat-label">Custom orders</div><div class="dg-stat-value">@Model.CustomOrders</div></div>
     <div class="dg-card"><div class="dg-stat-label">Test-to-sale conversion</div><div class="dg-stat-value">@Model.TestToSaleConversion.ToString("0.0")%</div></div>
     <div class="dg-card"><div class="dg-stat-label">Needed-to-sale conversion</div><div class="dg-stat-value">@Model.NeededToSaleConversion.ToString("0.0")%</div></div>
 </div>
@@ -28,51 +21,54 @@
 <div style="display:grid; grid-template-columns: 2fr 1fr; gap: var(--space-5);">
     <div class="dg-card">
         <h2 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; font-size:18px; margin-top:0;">Top performing</h2>
-        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-5);">
-            <div>
-                <div class="dg-stat-label" style="margin-bottom:var(--space-2);">Top outlets</div>
-                @foreach (var (entry, i) in Model.TopOutlets.Select((e, i) => (e, i)))
-                {
-                    <div style="padding:var(--space-2); border-radius:var(--radius-sm); @(i == 0 ? "background:rgba(249,103,21,0.12);" : "")">
-                        <div style="font-weight:600;">@entry.Name</div>
-                        <div class="dg-stat-label">@entry.Sales sales · @entry.ConversionPercent.ToString("0.0")%</div>
-                    </div>
-                }
-            </div>
-            <div>
-                <div class="dg-stat-label" style="margin-bottom:var(--space-2);">Top retailers</div>
-                @foreach (var (entry, i) in Model.TopRetailers.Select((e, i) => (e, i)))
-                {
-                    <div style="padding:var(--space-2); border-radius:var(--radius-sm); @(i == 0 ? "background:rgba(249,103,21,0.12);" : "")">
-                        <div style="font-weight:600;">@entry.Name</div>
-                        <div class="dg-stat-label">@entry.Sales sales · @entry.ConversionPercent.ToString("0.0")%</div>
-                    </div>
-                }
-            </div>
-            <div>
-                <div class="dg-stat-label" style="margin-bottom:var(--space-2);">Top countries</div>
-                @foreach (var (entry, i) in Model.TopCountries.Select((e, i) => (e, i)))
-                {
-                    <div style="padding:var(--space-2); border-radius:var(--radius-sm); @(i == 0 ? "background:rgba(249,103,21,0.12);" : "")">
-                        <div style="font-weight:600;">@entry.Name</div>
-                        <div class="dg-stat-label">@entry.Sales sales · @entry.ConversionPercent.ToString("0.0")%</div>
-                    </div>
-                }
-            </div>
-            <div>
-                <div class="dg-stat-label" style="margin-bottom:var(--space-2);">Top agents</div>
-                @foreach (var (entry, i) in Model.TopAgents.Select((e, i) => (e, i)))
-                {
-                    <div style="padding:var(--space-2); border-radius:var(--radius-sm); @(i == 0 ? "background:rgba(249,103,21,0.12);" : "")">
-                        <div style="font-weight:600;">@entry.Name</div>
-                        <div class="dg-stat-label">@entry.Sales sales · @entry.ConversionPercent.ToString("0.0")%</div>
-                    </div>
-                }
-            </div>
-        </div>
-        @if (Model.TopOutlets.Count == 0)
+        @if (Model.TopOutlets.Count == 0 && Model.TopRetailers.Count == 0 && Model.TopCountries.Count == 0 && Model.TopTechnicians.Count == 0)
         {
-            <div class="dg-empty-state"><div class="dg-ring"></div><p>No data for the current filters.</p></div>
+            <div class="dg-empty-state"><div class="dg-ring"></div><p>No sales recorded yet.</p></div>
+        }
+        else
+        {
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-5);">
+                <div>
+                    <div class="dg-stat-label" style="margin-bottom:var(--space-2);">Top outlets</div>
+                    @foreach (var (entry, i) in Model.TopOutlets.Select((e, i) => (e, i)))
+                    {
+                        <div style="padding:var(--space-2); border-radius:var(--radius-sm); @(i == 0 ? "background:rgba(249,103,21,0.12);" : "")">
+                            <div style="font-weight:600;">@entry.Name</div>
+                            <div class="dg-stat-label">@entry.Sales sales · @entry.ConversionPercent.ToString("0.0")%</div>
+                        </div>
+                    }
+                </div>
+                <div>
+                    <div class="dg-stat-label" style="margin-bottom:var(--space-2);">Top retailers</div>
+                    @foreach (var (entry, i) in Model.TopRetailers.Select((e, i) => (e, i)))
+                    {
+                        <div style="padding:var(--space-2); border-radius:var(--radius-sm); @(i == 0 ? "background:rgba(249,103,21,0.12);" : "")">
+                            <div style="font-weight:600;">@entry.Name</div>
+                            <div class="dg-stat-label">@entry.Sales sales · @entry.ConversionPercent.ToString("0.0")%</div>
+                        </div>
+                    }
+                </div>
+                <div>
+                    <div class="dg-stat-label" style="margin-bottom:var(--space-2);">Top countries</div>
+                    @foreach (var (entry, i) in Model.TopCountries.Select((e, i) => (e, i)))
+                    {
+                        <div style="padding:var(--space-2); border-radius:var(--radius-sm); @(i == 0 ? "background:rgba(249,103,21,0.12);" : "")">
+                            <div style="font-weight:600;">@entry.Name</div>
+                            <div class="dg-stat-label">@entry.Sales sales · @entry.ConversionPercent.ToString("0.0")%</div>
+                        </div>
+                    }
+                </div>
+                <div>
+                    <div class="dg-stat-label" style="margin-bottom:var(--space-2);">Top technicians</div>
+                    @foreach (var (entry, i) in Model.TopTechnicians.Select((e, i) => (e, i)))
+                    {
+                        <div style="padding:var(--space-2); border-radius:var(--radius-sm); @(i == 0 ? "background:rgba(249,103,21,0.12);" : "")">
+                            <div style="font-weight:600;">@entry.Name</div>
+                            <div class="dg-stat-label">@entry.Sales sales · @entry.ConversionPercent.ToString("0.0")%</div>
+                        </div>
+                    }
+                </div>
+            </div>
         }
     </div>
 
@@ -84,7 +80,7 @@
         </div>
 
         <div class="dg-card">
-            <div class="dg-stat-label" style="margin-bottom:var(--space-3);">Conversion trend</div>
+            <div class="dg-stat-label" style="margin-bottom:var(--space-3);">Conversion trend (last 6 weeks)</div>
             <div style="display:flex; align-items:flex-end; gap:6px; height:80px;">
                 @foreach (var value in Model.ConversionTrend)
                 {
@@ -103,21 +99,6 @@
                 <span>Male @Model.GenderMalePercent%</span>
                 <span>Female @Model.GenderFemalePercent%</span>
             </div>
-        </div>
-
-        <div class="dg-card">
-            <div class="dg-stat-label" style="margin-bottom:var(--space-3);">Distribution by retail-point type</div>
-            @foreach (var share in Model.RetailPointDistribution)
-            {
-                <div style="margin-bottom:var(--space-3);">
-                    <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px;">
-                        <span>@share.Label</span><span>@share.Percent%</span>
-                    </div>
-                    <div style="background:var(--border-default); border-radius:var(--radius-pill); height:8px;">
-                        <div style="width:@(share.Percent)%; background:var(--dot-green); border-radius:var(--radius-pill); height:8px;"></div>
-                    </div>
-                </div>
-            }
         </div>
     </div>
 </div>
