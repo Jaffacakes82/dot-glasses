@@ -14,4 +14,10 @@ public enum ReferenceDataCategory
     Coating = 3,
     FrameColour = 4,
     HardCaseColour = 5,
+
+    /// <summary>Curated lens-power labels (e.g. "+2.50", "+0.00 / +2.50 Bifocal") an admin
+    /// maintains directly — not yet consumed by PresetCatalogue/LensOption, which still define
+    /// their own typed SphericalPower/IsBifocal/AddPower fields per row; see CLAUDE.md's [OPEN]
+    /// items for rewiring that to build from this list instead.</summary>
+    LensStrength = 6,
 }

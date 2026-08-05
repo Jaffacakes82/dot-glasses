@@ -36,6 +36,7 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<DotGlassesDbContext>());
         services.AddScoped<IReferenceDataLookupService, ReferenceDataLookupService>();
         services.AddScoped<IReferenceDataQueryService, ReferenceDataQueryService>();
+        services.AddScoped<IReferenceDataAdminService, ReferenceDataAdminService>();
         services.AddScoped<IPresetCatalogueQueryService, PresetCatalogueQueryService>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();
 

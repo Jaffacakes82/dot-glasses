@@ -11,25 +11,86 @@
 
 <p style="max-width:680px; color:var(--text-muted-2); margin-bottom:var(--space-5);">
     These lists feed dropdowns/checkboxes in both the Field App and this portal's consultation
-    form. Only the DOT Glasses team edits them — not local distributors or retailers.
+    form. Only the DOT Glasses team edits them — not local distributors or retailers. Removing an
+    option retires it (it stays attached to any past record that used it) rather than deleting it
+    outright — retired options can be restored below.
 </p>
 
-<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--space-4);">
+@if (!ViewData.ModelState.IsValid)
+{
+    <div class="alert alert-danger" style="border-radius:var(--radius-md); margin-bottom:var(--space-4);" asp-validation-summary="All"></div>
+}
+
+<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--space-4);">
     @foreach (var list in Model)
     {
         <div class="dg-card">
             <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin:0 0 4px; font-size:16px;">@list.Name</h3>
             <p class="dg-crumb" style="margin-bottom:var(--space-3);">@list.ScopeNote</p>
-            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:var(--space-4);">
-                @foreach (var option in list.Options)
+
+            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:var(--space-3);">
+                @if (!list.ActiveOptions.Any())
                 {
-                    <span class="dg-badge" style="background:var(--dot-beige); display:inline-flex; align-items:center; gap:6px;">@option <span style="cursor:pointer;">&times;</span></span>
+                    <span style="font-size:13px; color:#999;">No options yet.</span>
+                }
+                @foreach (var option in list.ActiveOptions)
+                {
+                    <span class="dg-badge" style="background:var(--dot-beige); display:inline-flex; align-items:center; gap:6px;">
+                        @if (list.ShowImageField && !string.IsNullOrEmpty(option.ImageUrl))
+                        {
+                            <img src="@option.ImageUrl" alt="@option.Label" style="width:18px; height:18px; border-radius:50%; object-fit:cover;" />
+                        }
+                        @option.Label
+                        <form asp-action="Deactivate" method="post" style="display:inline;">
+                            <input type="hidden" name="id" value="@option.Id" />
+                            <button type="submit" aria-label="Retire @option.Label" style="border:none; background:none; cursor:pointer; padding:0; color:#888; font-size:13px; line-height:1;">&times;</button>
+                        </form>
+                    </span>
                 }
             </div>
-            <div style="display:flex; gap:var(--space-2);">
-                <input class="form-control" placeholder="Add option" />
-                <button class="dg-btn dg-btn-ghost" style="padding:8px 16px; font-size:13px;" type="button">Add</button>
-            </div>
+
+            @if (list.RetiredOptions.Any())
+            {
+                <details style="margin-bottom:var(--space-3);">
+                    <summary style="font-size:12px; color:#999; cursor:pointer;">Retired (@list.RetiredOptions.Count)</summary>
+                    <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:var(--space-2);">
+                        @foreach (var option in list.RetiredOptions)
+                        {
+                            <span class="dg-badge" style="background:#f2f2f2; color:#999; display:inline-flex; align-items:center; gap:6px;">
+                                @option.Label
+                                <form asp-action="Reactivate" method="post" style="display:inline;">
+                                    <input type="hidden" name="id" value="@option.Id" />
+                                    <button type="submit" style="border:none; background:none; cursor:pointer; padding:0; color:var(--dot-blue); font-size:12px; text-decoration:underline;">Restore</button>
+                                </form>
+                            </span>
+                        }
+                    </div>
+                </details>
+            }
+
+            <form asp-action="Create" method="post">
+                <input type="hidden" name="Category" value="@((int)list.Category)" />
+                <div style="display:flex; gap:var(--space-2); margin-bottom:6px;">
+                    <input class="form-control" name="Label" placeholder="Add option" />
+                    <button class="dg-btn dg-btn-ghost" style="padding:8px 16px; font-size:13px;" type="submit">Add</button>
+                </div>
+                @if (list.ShowImageField)
+                {
+                    <input class="form-control" name="ImageUrl" placeholder="Image URL (optional)" style="margin-bottom:6px;" />
+                }
+                <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#888;">
+                    <input type="checkbox" name="IsOtherOption" value="true" disabled="@(list.HasActiveOtherOption ? "disabled" : null)" />
+                    Mark as this category's "Other" option
+                    @if (list.HasActiveOtherOption)
+                    {
+                        <span>(already set — retire it first)</span>
+                    }
+                </label>
+            </form>
         </div>
     }
 </div>
+
+@section Scripts {
+    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
+}

@@ -31,6 +31,11 @@ public class ReferenceDataItem : IAuditable, ISoftDeletable
     /// alongside the selection.</summary>
     public bool IsOtherOption { get; set; }
 
+    /// <summary>Optional image shown alongside the option (e.g. a frame-colour swatch photo,
+    /// matching the e-commerce site) — a plain admin-pasted URL for now, no upload/blob storage
+    /// wired up yet. Generic on the entity but only meaningfully populated for FrameColour today.</summary>
+    public string? ImageUrl { get; set; }
+
     public DateTimeOffset CreatedAtUtc { get; set; }
     public string? CreatedBy { get; set; }
     public DateTimeOffset? ModifiedAtUtc { get; set; }
