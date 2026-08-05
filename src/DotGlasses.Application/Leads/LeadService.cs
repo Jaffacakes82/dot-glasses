@@ -62,6 +62,7 @@ public class LeadService(
             CustomAxisRight = request.CustomAxisRight,
             CustomAddPowerRight = request.CustomAddPowerRight,
             PupilDistanceMm = request.PupilDistanceMm,
+            PresetPupilDistanceBucket = request.PresetPupilDistanceBucket,
             ChildrensFrame = request.ChildrensFrame,
             CoatingPreferenceRefId = request.CoatingPreferenceRefId,
         };
@@ -135,6 +136,7 @@ public class LeadService(
         CustomAxisRight = entity.CustomAxisRight,
         CustomAddPowerRight = entity.CustomAddPowerRight,
         PupilDistanceMm = entity.PupilDistanceMm,
+        PresetPupilDistanceBucket = entity.PresetPupilDistanceBucket,
         ChildrensFrame = entity.ChildrensFrame,
         CoatingPreferenceRefId = entity.CoatingPreferenceRefId,
         ConvertedFlag = entity.ConvertedFlag,

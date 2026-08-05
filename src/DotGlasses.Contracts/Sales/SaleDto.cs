@@ -28,6 +28,7 @@ public class SaleDto
     public decimal? CustomAddPowerRight { get; set; }
     public bool OrderFromDotGlasses { get; set; }
     public decimal? PupilDistanceMm { get; set; }
+    public int? PresetPupilDistanceBucket { get; set; }
     public bool ChildrensFrame { get; set; }
     public Guid FrameColourRefId { get; set; }
     public string? FrameColourOtherText { get; set; }

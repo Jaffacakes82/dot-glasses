@@ -45,7 +45,13 @@ public class CreateLeadRequest
     public decimal? CustomAxisRight { get; set; }
     public decimal? CustomAddPowerRight { get; set; }
 
+    /// <summary>The real inter-pupillary distance in mm — required for Custom range only.</summary>
     public decimal? PupilDistanceMm { get; set; }
+
+    /// <summary>Coarse 0-4 PD shorthand for a preset range (0-2 when ChildrensFrame) — required
+    /// for a preset range only, see Sale.PresetPupilDistanceBucket.</summary>
+    public int? PresetPupilDistanceBucket { get; set; }
+
     public bool ChildrensFrame { get; set; }
 
     /// <summary>Optional — some leads carry no known product preference.</summary>

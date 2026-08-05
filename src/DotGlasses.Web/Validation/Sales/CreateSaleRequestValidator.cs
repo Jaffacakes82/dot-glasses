@@ -90,6 +90,17 @@ public class CreateSaleRequestValidator : AbstractValidator<CreateSaleRequest>
                 context.AddFailure(nameof(request.LensOptionRightId), "LensOptionRightId must belong to PresetCatalogueId.");
             }
 
+            if (request.PupilDistanceMm is not null)
+            {
+                context.AddFailure(nameof(request.PupilDistanceMm), "PupilDistanceMm must be empty for a preset LensRangeType — use PresetPupilDistanceBucket instead.");
+            }
+
+            var maxPdBucket = request.ChildrensFrame ? 2 : 4;
+            if (request.PresetPupilDistanceBucket is not { } pdBucket || pdBucket < 0 || pdBucket > maxPdBucket)
+            {
+                context.AddFailure(nameof(request.PresetPupilDistanceBucket), $"PresetPupilDistanceBucket is required and must be between 0 and {maxPdBucket} for a preset LensRangeType{(request.ChildrensFrame ? " (0-2 for a children's frame)" : "")}.");
+            }
+
             if (request.CoatingRefId is not { } presetCoatingRefId)
             {
                 context.AddFailure(nameof(request.CoatingRefId), "CoatingRefId is required for a preset LensRangeType.");
@@ -130,6 +141,11 @@ public class CreateSaleRequestValidator : AbstractValidator<CreateSaleRequest>
             ValidateCustomPower(request.CustomAddPowerRight, nameof(request.CustomAddPowerRight), 0m, 3m, 0.25m, context);
             ValidateCustomAxis(request.CustomAxisLeft, nameof(request.CustomAxisLeft), context);
             ValidateCustomAxis(request.CustomAxisRight, nameof(request.CustomAxisRight), context);
+
+            if (request.PresetPupilDistanceBucket is not null)
+            {
+                context.AddFailure(nameof(request.PresetPupilDistanceBucket), "PresetPupilDistanceBucket must be empty for a Custom LensRangeType — use PupilDistanceMm instead.");
+            }
 
             if (request.PupilDistanceMm is not { } pd || pd < 54 || pd > 74)
             {

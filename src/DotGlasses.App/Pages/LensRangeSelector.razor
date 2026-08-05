@@ -46,6 +46,17 @@
             </select>
         </div>
 
+        <div class="dg-field">
+            <label>Pupil distance (0–@MaxPresetPdBucket@(Model.ChildrensFrame ? ", children's frame" : ""))</label>
+            <select value="@Model.PresetPupilDistanceBucket" @onchange="e => Model.PresetPupilDistanceBucket = ParseInt(e.Value)">
+                <option value="">Select...</option>
+                @for (var i = 0; i <= MaxPresetPdBucket; i++)
+                {
+                    <option value="@i">@i</option>
+                }
+            </select>
+        </div>
+
         @if (Model.LensOptionLeftId is not null)
         {
             var leftOption = catalogue.LensOptions.FirstOrDefault(o => o.Id == Model.LensOptionLeftId);
@@ -151,7 +162,7 @@ else if (Model.LensRangeType == LensRangeType.Custom)
 }
 
 <div class="dg-field">
-    <label><input type="checkbox" @bind="Model.ChildrensFrame" style="width:auto; margin-right:8px;" />Children's frame</label>
+    <label><input type="checkbox" checked="@Model.ChildrensFrame" @onchange="OnChildrensFrameChanged" style="width:auto; margin-right:8px;" />Children's frame</label>
 </div>
 
 @code {
@@ -196,6 +207,8 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         Model.CustomCylinderRight = null;
         Model.CustomAxisRight = null;
         Model.CustomAddPowerRight = null;
+        Model.PupilDistanceMm = null;
+        Model.PresetPupilDistanceBucket = null;
 
         Model.LensRangeType = value switch
         {
@@ -218,6 +231,24 @@ else if (Model.LensRangeType == LensRangeType.Custom)
 
     private static decimal? ParseDecimal(object? value) =>
         decimal.TryParse(value?.ToString(), out var d) ? d : null;
+
+    private static int? ParseInt(object? value) =>
+        int.TryParse(value?.ToString(), out var i) ? i : null;
+
+    /// <summary>0-4 normally, 0-2 for a children's frame — see Sale/Lead.PresetPupilDistanceBucket.</summary>
+    private int MaxPresetPdBucket => Model.ChildrensFrame ? 2 : 4;
+
+    private void OnChildrensFrameChanged(ChangeEventArgs e)
+    {
+        Model.ChildrensFrame = e.Value is true;
+
+        // A previously-picked bucket value may no longer be in range once the max drops from 4
+        // to 2 — clear it rather than leaving a stale, no-longer-selectable value in the model.
+        if (Model.PresetPupilDistanceBucket > MaxPresetPdBucket)
+        {
+            Model.PresetPupilDistanceBucket = null;
+        }
+    }
 
     private void OnLeftLensChanged(ChangeEventArgs e)
     {

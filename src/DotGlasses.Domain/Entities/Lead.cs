@@ -52,7 +52,16 @@ public class Lead : IAuditable, ISoftDeletable, IHierarchyScoped
     public decimal? CustomAxisRight { get; set; }
     public decimal? CustomAddPowerRight { get; set; }
 
+    /// <summary>The real inter-pupillary distance in mm — meaningful only for Custom range (see
+    /// PresetPupilDistanceBucket for the preset-range equivalent).</summary>
     public decimal? PupilDistanceMm { get; set; }
+
+    /// <summary>Meaningful only for a preset range (SixLensSet/NineLensSet) — a coarse 0-4 PD
+    /// shorthand/frame-fit bucket (0-2 when ChildrensFrame), not a millimetre value, per the CEO
+    /// call (2026-08-05 decision — kept as its own field rather than overloading
+    /// PupilDistanceMm, which stays the real 54-74mm Custom-range value it always was).</summary>
+    public int? PresetPupilDistanceBucket { get; set; }
+
     public bool ChildrensFrame { get; set; }
 
     /// <summary>FK to ReferenceDataItem (Category = Coating). Optional per the CEO call — some
