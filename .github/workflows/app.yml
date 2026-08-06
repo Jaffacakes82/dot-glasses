@@ -15,6 +15,10 @@ on:
       - "tests/**"
       - "DotGlasses.sln"
       - ".github/workflows/app.yml"
+  # Manual escape hatch for triggering a run without a matching src/**/tests/** push — e.g. to
+  # validate the deploy.yml workflow_run chain end-to-end. Deliberately not added to deploy.yml
+  # itself, which would let a deploy fire without a build/test run ever happening.
+  workflow_dispatch:
 
 jobs:
   build-and-test:
