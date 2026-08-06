@@ -960,7 +960,14 @@ acts on a specific target user/org — not yet wired to one, see above).
      pair; azd will prompt to create each environment (subscription, location) and will create
      matching GitHub Environments + `AZURE_CLIENT_ID`/`AZURE_TENANT_ID`/`AZURE_SUBSCRIPTION_ID`
      federated-credential variables if they don't already exist — the exact variable names this
-     workflow reads.
+     workflow reads. **When prompted for the azd environment name, use exactly `dotglasses-nonprod`
+     and `dotglasses-prod`, for *both* azd projects** — that's what makes the Field App's
+     resources land in the same two resource groups as Web/AppHost rather than getting its own
+     (see the Resource naming convention bullet above and `src/DotGlasses.App/infra/main.bicep`'s
+     comment). `deploy.yml` itself already hardcodes `AZURE_ENV_NAME` per job rather than reading
+     a GitHub variable, so this mainly matters for the local environment `azd pipeline config`
+     creates/links while wiring up the federated credentials — keep it consistent with the
+     workflow's own values regardless.
   3. In GitHub repo Settings → Environments → `production`, add a required-reviewers protection
      rule. This is the actual manual-approval gate — `environment: production` in the workflow
      YAML only *targets* that gate, it can't create the reviewer requirement itself.
