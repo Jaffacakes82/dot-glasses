@@ -8,7 +8,7 @@ param tags object = { }
 param env_acr_outputs_name string
 
 resource env_mi 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
-  name: take('env_mi-${uniqueString(resourceGroup().id)}', 128)
+  name: 'id-dotglasses-cae-${substring(resourceGroup().name, 14)}'
   location: location
   tags: tags
 }
@@ -39,7 +39,7 @@ resource env_law 'Microsoft.OperationalInsights/workspaces@2025-02-01' = {
 }
 
 resource env 'Microsoft.App/managedEnvironments@2025-07-01' = {
-  name: take('env${uniqueString(resourceGroup().id)}', 24)
+  name: 'cae-dotglasses-${substring(resourceGroup().name, 14)}'
   location: location
   properties: {
     appLogsConfiguration: {

@@ -38,7 +38,10 @@ jobs:
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
-      AZURE_ENV_NAME: dot-glasses-staging
+      # Also drives the resource group name (main.bicep: rg-${environmentName}) — AppHost.cs's
+      # CAF-naming helpers assume this is exactly "dotglasses-nonprod"/"dotglasses-prod" (see
+      # its EnvToken()/Workload constants), so don't rename this without updating AppHost.cs too.
+      AZURE_ENV_NAME: dotglasses-nonprod
     steps:
       - uses: actions/checkout@v4
         with:
@@ -65,6 +68,10 @@ jobs:
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      # TODO(CAF naming): not yet reconciled with the Web project's rg-dotglasses-nonprod/-prod
+      # convention — the Field App's own /infra doesn't exist yet (see CLAUDE.md's Deployment
+      # section), so whether it shares those two resource groups or gets its own hasn't been
+      # decided. Resolve this before that project's infra gets generated for the first time.
       AZURE_ENV_NAME: dot-glasses-field-app-staging
     steps:
       - uses: actions/checkout@v4
@@ -93,7 +100,8 @@ jobs:
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
-      AZURE_ENV_NAME: dot-glasses-production
+      # See deploy-web-staging's comment — must match AppHost.cs's CAF-naming assumption.
+      AZURE_ENV_NAME: dotglasses-prod
     steps:
       - uses: actions/checkout@v4
         with:

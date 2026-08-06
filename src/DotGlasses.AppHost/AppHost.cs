@@ -1,9 +1,69 @@
+using Azure.Provisioning;
+using Azure.Provisioning.AppContainers;
+using Azure.Provisioning.Expressions;
+using Azure.Provisioning.PostgreSql;
+using Azure.Provisioning.Roles;
+using Azure.Provisioning.Storage;
+
 var builder = DistributedApplication.CreateBuilder(args);
+
+// Azure CAF naming convention (https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/
+// ready/azure-best-practices/resource-naming), decided with the user 2026-08-06: one
+// subscription, two resource groups (rg-dotglasses-nonprod / rg-dotglasses-prod, i.e. the azd
+// environment itself is named "dotglasses-nonprod"/"dotglasses-prod" — main.bicep's own
+// `rg-${environmentName}` already gives the resource-group name for free from that). Every
+// other resource name below is derived from `resourceGroup().name` at Bicep-evaluation time via
+// EnvToken(...) rather than threaded down as a new parameter from main.bicep — it works
+// unmodified in any resource-group-scoped module (every resource here is `scope: rg`) with zero
+// extra plumbing, and survives `azd infra gen --force` regeneration since the expression lives
+// in this C# file, not in generated Bicep. Globally-unique resource types (Storage, ACS) still
+// append a short uniqueString() hash after the CAF-pattern name — CAF's own examples don't
+// solve global uniqueness either, and a plain deterministic name risks colliding with someone
+// else's resource anywhere on Azure.
+const string Workload = "dotglasses";
+
+// BicepFunction has no Substring/skip wrapper in this Azure.Provisioning version (confirmed via
+// reflection — only Take(), which returns the first N characters, exists) — built by hand via
+// the same FunctionCallExpression escape hatch Azure.Provisioning itself uses internally to
+// implement its other BicepFunction.* wrappers, to emit Bicep's substring(value, startIndex).
+static BicepValue<string> Substring(BicepValue<string> value, int startIndex) =>
+    new(new FunctionCallExpression(
+        new IdentifierExpression("substring"),
+        [((IBicepValue)value).Expression!, new IntLiteralExpression(startIndex)]));
+
+static BicepValue<string> EnvToken() =>
+    Substring(BicepFunction.GetResourceGroup().Name, $"rg-{Workload}-".Length);
+
+static BicepValue<string> ShortHash(int length = 6) =>
+    BicepFunction.Take(BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id), length);
+
+// Storage accounts and Container Registries can't contain hyphens and cap out at 24/50 chars —
+// a shorter, no-separator workload token keeps "st"/"cr" + workload + env + hash comfortably
+// under Storage's tighter 24-char limit (the binding one) with room to spare.
+const string ShortWorkload = "dg";
 
 // Deploy target for compute resources (web). Explicit since Aspire 9.4 dropped "hybrid" mode,
 // where azd used to silently create/own this environment on the app's behalf — see
 // https://learn.microsoft.com/en-us/dotnet/aspire/compatibility/9.4/hybrid-compute-support-dropped.
 var containerAppEnvironment = builder.AddAzureContainerAppEnvironment("env");
+containerAppEnvironment.ConfigureInfrastructure(infra =>
+{
+    var env = infra.GetProvisionableResources().OfType<ContainerAppManagedEnvironment>().Single();
+    env.Name = BicepFunction.Interpolate($"cae-{Workload}-{EnvToken()}");
+
+    // The environment's own AcrPull identity (distinct from Web's own compute identity, "id-"
+    // below) — reachable here since Aspire emits it into this same env.module.bicep. The
+    // Container Registry itself ("env-acr") and Web's own identity ("web-identity") are each a
+    // *separate* Bicep module/provisioning construct with no IResourceBuilder exposed for either
+    // in this file, so — unlike everything else here — they're accepted as out of scope for this
+    // pass and still get Aspire's default `envacr<hash>`/`web_identity-<hash>` names; see
+    // CLAUDE.md's Deployment section.
+    var envIdentity = infra.GetProvisionableResources().OfType<UserAssignedIdentity>().SingleOrDefault();
+    if (envIdentity is not null)
+    {
+        envIdentity.Name = BicepFunction.Interpolate($"id-{Workload}-cae-{EnvToken()}");
+    }
+});
 
 // Pinned rather than left to Aspire's auto-generate-and-cache-in-user-secrets default: that
 // default is keyed off the resource's *shape* (AddPostgres vs. AddAzurePostgresFlexibleServer
@@ -25,6 +85,12 @@ var postgres = builder.AddAzurePostgresFlexibleServer("postgres")
         .WithDataVolume()
         .WithPgAdmin()
         .WithPassword(postgresPassword));
+postgres.ConfigureInfrastructure(infra =>
+{
+    var server = infra.GetProvisionableResources().OfType<PostgreSqlFlexibleServer>().Single();
+    // Postgres flexible server names are globally unique (public FQDN) — CAF pattern + hash.
+    server.Name = BicepFunction.Interpolate($"pgsql-{Workload}-{EnvToken()}-{ShortHash()}");
+});
 
 var dotglassesdb = postgres.AddDatabase("dotglassesdb");
 
@@ -36,6 +102,13 @@ var dotglassesdb = postgres.AddDatabase("dotglassesdb");
 // above.
 var storage = builder.AddAzureStorage("storage")
     .RunAsEmulator();
+storage.ConfigureInfrastructure(infra =>
+{
+    var account = infra.GetProvisionableResources().OfType<StorageAccount>().Single();
+    // No hyphens/uppercase allowed, 24-char hard cap — short workload token + a short hash for
+    // global uniqueness (storage account names are globally unique across all of Azure).
+    account.Name = BicepFunction.Interpolate($"st{ShortWorkload}{EnvToken()}{ShortHash(4)}");
+});
 var referenceDataImages = storage.AddBlobContainer("reference-data-images");
 
 var web = builder.AddProject<Projects.DotGlasses_Web>("web")
@@ -44,6 +117,10 @@ var web = builder.AddProject<Projects.DotGlasses_Web>("web")
     .WaitFor(dotglassesdb)
     .WithReference(referenceDataImages)
     .WaitFor(referenceDataImages);
+web.PublishAsAzureContainerApp((infra, app) =>
+{
+    app.Name = BicepFunction.Interpolate($"ca-{Workload}-{EnvToken()}");
+});
 
 // No Aspire hosting integration exists for Azure Communication Services (confirmed via
 // `dotnet package search`, both official and CommunityToolkit) — AddBicepTemplate is the
