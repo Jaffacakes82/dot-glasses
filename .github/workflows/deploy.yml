@@ -42,6 +42,12 @@ jobs:
       # CAF-naming helpers assume this is exactly "dotglasses-nonprod"/"dotglasses-prod" (see
       # its EnvToken()/Workload constants), so don't rename this without updating AppHost.cs too.
       AZURE_ENV_NAME: dotglasses-nonprod
+      # Required by infra/main.parameters.json's ${AZURE_POSTGRES_PASSWORD} substitution — azd
+      # provision refuses to run without some value, even though the deployed Postgres Flexible
+      # Server module never actually reads it (Entra ID auth only, passwordAuth: 'Disabled'). A
+      # single repo-level secret covers both environments since the value is a placeholder, not
+      # a real credential — see CLAUDE.md's Deployment section.
+      AZURE_POSTGRES_PASSWORD: ${{ secrets.AZURE_POSTGRES_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -110,6 +116,8 @@ jobs:
       AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
       # See deploy-web-staging's comment — must match AppHost.cs's CAF-naming assumption.
       AZURE_ENV_NAME: dotglasses-prod
+      # See deploy-web-staging's comment — same placeholder-only requirement.
+      AZURE_POSTGRES_PASSWORD: ${{ secrets.AZURE_POSTGRES_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
         with:

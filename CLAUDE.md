@@ -951,38 +951,61 @@ acts on a specific target user/org — not yet wired to one, see above).
   2026-08-05) — this workflow is wired up ahead of that the same way `infra.yml` was originally
   wired up ahead of `/infra` existing, so deployment becomes automatic the moment the manual setup
   below is done, without another CI change.
-  **`[OPEN]` — exact manual steps the user needs to run themselves** (needs their own Azure
-  login; Claude must not run any of this):
-  1. `azd auth login` once, locally.
-  2. `azd pipeline config` from the repo root (root azd project — `Web`/AppHost/Postgres/Storage/
-     ACS), **and again from `src/DotGlasses.App`** (the separate Field App azd project) — each
-     run needs to target *both* a `staging` and a `production` azd environment/GitHub Environment
-     pair; azd will prompt to create each environment (subscription, location) and will create
-     matching GitHub Environments + `AZURE_CLIENT_ID`/`AZURE_TENANT_ID`/`AZURE_SUBSCRIPTION_ID`
-     federated-credential variables if they don't already exist — the exact variable names this
-     workflow reads. **When prompted for the azd environment name, use exactly `dotglasses-nonprod`
-     and `dotglasses-prod`, for *both* azd projects** — that's what makes the Field App's
-     resources land in the same two resource groups as Web/AppHost rather than getting its own
-     (see the Resource naming convention bullet above and `src/DotGlasses.App/infra/main.bicep`'s
-     comment). `deploy.yml` itself already hardcodes `AZURE_ENV_NAME` per job rather than reading
-     a GitHub variable, so this mainly matters for the local environment `azd pipeline config`
-     creates/links while wiring up the federated credentials — keep it consistent with the
-     workflow's own values regardless.
-  3. In GitHub repo Settings → Environments → `production`, add a required-reviewers protection
-     rule. This is the actual manual-approval gate — `environment: production` in the workflow
-     YAML only *targets* that gate, it can't create the reviewer requirement itself.
-  4. Set an `AZURE_LOCATION` variable on both environments (e.g. `uksouth`) — read by the
-     workflow, not set by `azd pipeline config` automatically.
-  5. `main.bicep`'s `postgres_password` parameter is a **pre-existing quirk, not something this
-     pass introduced**: Aspire's manifest→Bicep generation always emits a top-level parameter for
-     every `AddParameter(..., secret: true)` call in `AppHost.cs` (there's only the one,
-     `postgres-password`, used solely by local dev's `.RunAsContainer(...)`), regardless of
-     whether any actual Azure module consumes it — and none does, since the real Postgres
-     Flexible Server module uses `activeDirectoryAuth: 'Enabled'` / `passwordAuth: 'Disabled'`
-     (Entra ID only, confirmed by reading `postgres.module.bicep` directly). `azd provision` will
-     still refuse to run without *some* value for it. Set any placeholder string as a secret azd
-     environment value (`azd env set postgres_password <anything> --secret`) for both
-     environments — it's genuinely never read by the deployed resource.
+  **Manual pipeline setup is now done (2026-08-06)** — all four `azd pipeline config` runs (root
+  project × `staging`/`production`, Field App project × `staging`/`production`) completed, the
+  `production` GitHub Environment has its required-reviewers rule, and `AZURE_LOCATION` is set to
+  `southafricanorth` (closest real Azure region to DGI's Kenya-based users — Postgres/Storage/
+  Container Apps all support it; the Field App's Static Web App stays on its own Bicep-default
+  `westeurope` regardless, since SWA's fixed 5-region list doesn't include South Africa and
+  `main.bicep` never threads the shared `location` param into `field-app.module.bicep` anyway).
+  Getting there took real troubleshooting, worth recording since none of it matches what the
+  original plan below assumed:
+  - **`azd pipeline config`'s interactive flow never prompted for GitHub Environment scoping at
+    all**, contrary to what step 2 originally assumed. Its default/"recommended" path creates
+    federated credentials for `pull_request` and `ref:refs/heads/main` subjects only, and writes
+    `AZURE_CLIENT_ID`/`AZURE_TENANT_ID`/`AZURE_SUBSCRIPTION_ID`/`AZURE_LOCATION`/`AZURE_ENV_NAME`
+    as plain **repository-level** GitHub variables. Neither matches what `deploy.yml` actually
+    needs: its jobs set `environment: staging`/`environment: production`, which makes GitHub issue
+    OIDC tokens with `sub: repo:{org}/{repo}:environment:{name}` — a subject the wizard's default
+    federated credentials don't cover — and because repo-level variables are one shared pool, each
+    of the four pipeline-config runs silently overwrote the previous run's values for every other
+    environment/project. Fixed by, after every run: manually adding a second federated credential
+    per identity via `az identity federated-credential create` with subject
+    `repo:Jaffacakes82/dot-glasses:environment:staging` (or `:environment:production`), and
+    manually copying that run's `AZURE_CLIENT_ID`/`AZURE_SUBSCRIPTION_ID`/`AZURE_TENANT_ID`/
+    `AZURE_LOCATION` into **environment-scoped** GitHub variables (Settings → Environments →
+    staging/production → Environment variables) rather than trusting the repo-level ones — GitHub
+    resolves an environment-scoped variable ahead of a repo-level one of the same name for any job
+    that declares that `environment:`, which is what makes this safe against later runs still
+    clobbering the repo-level pool. The repo-level variables were deleted once both environments
+    had their own complete, explicit set.
+  - **One UAMI per environment, not per project** — `msi-dot-glasses` in `rg-dotglasses-nonprod`,
+    a second in `rg-dotglasses-prod` — reused across both the root and Field App projects' pipeline
+    config runs for that environment (select "use existing identity"/"use existing resource group"
+    on the second project's run), since both projects deploy into the same resource group and
+    Contributor scope on the RG already covers deploying either project's resources.
+  - **The wizard's RBAC-scoping step only offers resource-group scope, no subscription-wide
+    option**, and there's no chicken-and-egg problem in practice because you type the resource
+    group's name yourself when it offers to "create new" — typing the exact CAF name
+    (`rg-dotglasses-nonprod`/`rg-dotglasses-prod`) there, then later letting `main.bicep`'s own
+    idempotent resource-group upsert no-op against it at real `azd up` time, resolves it cleanly.
+  - **The very first run was accidentally against a stray local azd environment literally named
+    `dev`** — a leftover from the original 2026-08-01 scaffolding, predating this session's
+    `dotglasses-nonprod`/`dotglasses-prod` naming convention. Caught via the `AZURE_ENV_NAME`
+    repo variable reading `dev` instead of the expected name; fixed by deleting that resource
+    group (`az group delete`) and the local `.azure/dev` state, then redoing the run against a
+    freshly created, correctly-named `dotglasses-nonprod` environment (`azd env new
+    dotglasses-nonprod`).
+  - **`postgres_password` needed a real GitHub secret, not just a local azd environment value** —
+    the original plan (`azd env set postgres_password <anything> --secret`) would never have
+    reached CI, since local azd environment state isn't committed and a fresh Actions runner
+    starts with none of it. Fixed by adding a repo-level secret named exactly
+    `AZURE_POSTGRES_PASSWORD` — matching the literal `${AZURE_POSTGRES_PASSWORD}` substitution
+    Aspire's generated `infra/main.parameters.json` expects — and wiring it explicitly into
+    `deploy-web-staging`/`deploy-web-production`'s `env:` blocks in `deploy.yml` (not the
+    `deploy-app-*` jobs; the Field App's own infra has no postgres parameter at all). One secret
+    covers both environments since, as originally noted, the value is a placeholder the deployed
+    Postgres Flexible Server module never actually reads (Entra ID auth only).
 
 ## Field App config per environment
 
@@ -1114,9 +1137,6 @@ Aspire dashboard).
   discard action yet — the technician sees it flagged on the home screen but can't currently fix
   the bad field and resubmit, or dismiss it, from the Field App itself.
 - Azure Monitor/Application Insights exporter connection string.
-- `azd pipeline config` not run yet (needs to run twice — once per azd project — plus a
-  `production` GitHub Environment reviewer rule and a placeholder `postgres_password` env value
-  on both environments) — see the numbered manual-steps list in the Deployment section above.
 - The Container Registry (`env-acr`) and Web's own compute identity (`web-identity`) still get
   Aspire's default `envacr<hash>`/`web_identity-<hash>` names rather than the CAF pattern every
   other resource now follows — see the Resource naming convention bullet above for why (no
