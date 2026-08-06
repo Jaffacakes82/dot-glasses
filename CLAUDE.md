@@ -984,6 +984,46 @@ acts on a specific target user/org — not yet wired to one, see above).
      environment value (`azd env set postgres_password <anything> --secret`) for both
      environments — it's genuinely never read by the deployed resource.
 
+## Field App config per environment
+
+Resolved 2026-08-06 — the user asked how to manage config for a static web app without keeping
+secrets in `appsettings.json`. **The Field App has no genuine secret today** — `ApiBaseUrl` is
+the only config value, and it's not sensitive (any user's browser network tab reveals it anyway).
+The general principle still matters for later: Blazor WASM has no secure client-side storage —
+anything under `wwwroot`, including a file fetched at runtime, is fully visible to any user via
+devtools, regardless of delivery mechanism. A real secret (a third-party API key, say) would have
+to be proxied through `Web`'s own backend, never held by the Field App directly.
+
+**Chosen approach: build-time `appsettings.{Environment}.json` selection**, not the
+deploy-time-injected-`config.json` alternative originally proposed (decided against — simpler,
+standard ASP.NET Core convention, at the cost of needing a rebuild if the API's URL ever
+changes). `wwwroot/appsettings.Staging.json`/`appsettings.Production.json` now exist alongside
+the original `appsettings.json` (which now backs local dev only); .NET's layered configuration
+loads them automatically once the app's environment is set — no `Program.cs` changes needed,
+`builder.Configuration["ApiBaseUrl"]` already picks up whichever file won.
+
+**Standalone Blazor WebAssembly has no server to send an environment header once deployed as
+static files** — confirmed via the official Blazor environments doc, .NET 10/11 uses the
+`<WasmApplicationEnvironmentName>` MSBuild property (the older `Blazor-Environment` HTTP-header
+mechanism documented for 8.0/9.0 doesn't apply here). There's no first-class azd/azure.yaml field
+to inject an MSBuild property into a `staticwebapp`-host service's build (confirmed by reading
+azd's own schema reference — `env:` on a service definition is explicitly unsupported for
+`staticwebapp`, only `appservice`/`containerapp`/`azure.ai.agent`) — instead, `deploy.yml` sets
+`WasmApplicationEnvironmentName: Staging`/`Production` as a plain job-level environment variable,
+which flows down to azd's own internal `dotnet publish` call as an inherited process environment
+variable, which MSBuild then picks up automatically as a property (standard MSBuild behavior —
+any environment variable becomes an available property unless something more specific overrides
+it). **Verified locally, not just assumed from the docs**: ran `WasmApplicationEnvironmentName=
+Staging dotnet publish` directly and grepped the published `_framework/dotnet.*.js` runtime
+bundle for confirmation — found `"applicationEnvironment": "Staging"` baked in literally, proving
+the env-var-to-MSBuild-property path actually works for this SDK/target, not just that the build
+succeeded.
+
+**Both new files carry a `REPLACE-AFTER-FIRST-DEPLOY` placeholder `ApiBaseUrl`** — Azure Container
+Apps only assigns the real FQDN's unique domain suffix at first provision, so the real staging/
+production API URLs genuinely can't be known or pre-filled before that first `azd up` for each
+environment (flagged in `[OPEN]`, not guessed at).
+
 ## Repo/public-repo constraints
 
 - This repo is public. `/design` (Claude Design handoff bundle) and local Claude Code settings
@@ -1087,7 +1127,12 @@ Aspire dashboard).
   >10 items — all present in the design mockups but not built (deliberately deferred, not an
   oversight — see Field App UI wiring above).
 - Field App's `wwwroot/appsettings.json` `ApiBaseUrl` still points at `Web`'s local dev HTTPS
-  port — needs updating to the real deployed API origin once that exists.
+  port (unaffected — that file backs local dev only now, see the Field App config-per-environment
+  section above). `appsettings.Staging.json`/`appsettings.Production.json` both carry a
+  `REPLACE-AFTER-FIRST-DEPLOY` placeholder `ApiBaseUrl` — Azure Container Apps only assigns the
+  real FQDN's unique suffix at first provision, it can't be predicted from the CAF resource name
+  ahead of time. Update both placeholders to the real Container App URLs right after the first
+  `azd up` for each environment.
 - One reference-data seeding assumption not explicitly discussed on the call — see Domain
   modelling above (FrameColour's "Other" row).
 
