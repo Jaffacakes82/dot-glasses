@@ -74,6 +74,13 @@ jobs:
       # same shared resource group as Web/AppHost rather than getting its own (see
       # src/DotGlasses.App/infra/main.bicep's comment and CLAUDE.md's Deployment section).
       AZURE_ENV_NAME: dotglasses-nonprod
+      # Selects wwwroot/appsettings.Staging.json at build time (standalone Blazor WASM has no
+      # server to send a Blazor-Environment header once deployed as static files, so this
+      # MSBuild property — inherited by azd's own internal `dotnet publish` call as a plain env
+      # var, which MSBuild exposes as a property automatically — is the only lever). Verified
+      # locally: publishing with this set embeds `"applicationEnvironment": "Staging"` directly
+      # into the runtime bundle, not just that the build succeeds.
+      WasmApplicationEnvironmentName: Staging
     steps:
       - uses: actions/checkout@v4
         with:
@@ -131,6 +138,8 @@ jobs:
       AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
       # See deploy-app-staging's comment — same shared-resource-group reasoning.
       AZURE_ENV_NAME: dotglasses-prod
+      # See deploy-app-staging's comment — selects wwwroot/appsettings.Production.json.
+      WasmApplicationEnvironmentName: Production
     steps:
       - uses: actions/checkout@v4
         with:
