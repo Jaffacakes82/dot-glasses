@@ -871,11 +871,9 @@ acts on a specific target user/org — not yet wired to one, see above).
   reachable and renamed to `id-dotglasses-cae-<env>` since it's emitted into the *same*
   `env.module.bicep`). Flagged in `[OPEN]`, not silently left — worth another look if Aspire ever
   exposes a builder handle for either.
-  **The Field App's own resource-group placement is still an open decision** — its `/infra`
-  doesn't exist yet at all (see below), and whether it shares these same two resource groups or
-  gets its own pair needs deciding *before* that project's infra is first generated, not guessed
-  at; `deploy.yml`'s `deploy-app-staging`/`deploy-app-production` jobs carry a `TODO(CAF naming)`
-  comment marking this.
+  **The Field App shares these same two resource groups** (decided with the user 2026-08-06,
+  see the next section) rather than getting its own pair — the Admin Portal and Field App are two
+  facets of one product, not two independent ones.
 - **Blob Storage and Azure Communication Services are now real Aspire-managed resources**
   (2026-08-05), resolving the `[OPEN]` "no blob storage exists yet"/"ACS needs to be
   configurable via Aspire, or we need to flesh out the Bicep for it" gaps directly per the CEO's
@@ -901,6 +899,45 @@ acts on a specific target user/org — not yet wired to one, see above).
   before shipping, not by build/test. `IEmailSender` stays `LoggingEmailSender` — swapping in a
   real ACS-backed sender is still explicit `[OPEN]` work the user is doing themselves; only the
   infra needed to exist for that swap to be possible.
+- **The Field App's `/infra` now exists too** (2026-08-06) — resolving the gap flagged when the
+  root project's infra was first built. `azd infra gen` doesn't apply here (it's specifically the
+  Aspire-manifest→Bicep synthesis path, confirmed by running it from `src/DotGlasses.App` and
+  getting "this project does not contain any infrastructure to generate") — this is a plain,
+  non-Aspire azd project, so `src/DotGlasses.App/infra/main.bicep`/`main.parameters.json` are
+  hand-authored, mirroring the shape of the root project's own (generated) `main.bicep` closely
+  enough to stay recognizable. **Shares `rg-dotglasses-nonprod`/`rg-dotglasses-prod` with the
+  root project** rather than getting its own pair (decided with the user 2026-08-06: the Admin
+  Portal and Field App are two facets of one product, not two independent ones) — the *only*
+  thing that makes this work is both azd projects' environments being named identically
+  (`dotglasses-nonprod`/`dotglasses-prod`, confirmed in both `main.bicep`'s comments and
+  `deploy.yml`'s `AZURE_ENV_NAME` values); resource-group creation is a plain idempotent upsert,
+  so it's safe for both projects' independent deployments to declare it, in either order or in
+  parallel, matching exactly how the root project's own generated `main.bicep` already does it.
+  The Static Web App resource itself
+  (`src/DotGlasses.App/infra/field-app/field-app.module.bicep`) uses the public AVM registry
+  module (`br/public:avm/res/web/static-site:0.3.0`) rather than a hand-rolled
+  `Microsoft.Web/staticSites` resource, matching azd's own quickstart templates
+  (`todo-nodejs-mongo-swa-func`) rather than guessing at the resource's property shape —
+  `provider: 'Custom'` (content pushed externally via `azd deploy`'s Static Web Apps CLI
+  integration, not Azure's own GitHub-repo-linked build) and the `'azd-service-name': 'field-app'`
+  tag (must match `azure.yaml`'s service name exactly — confirmed via Microsoft's own azd
+  troubleshooting reference, not assumed) are both load-bearing, not decorative. **Static Web
+  Apps has its own, much narrower region list** (`westus2`/`centralus`/`eastus2`/`westeurope`/
+  `eastasia` — confirmed via the same troubleshooting reference) than Postgres/Storage/Container
+  Apps, so the module takes its *own* `location` parameter (`@allowed(...)`-constrained, default
+  `westeurope`) rather than reusing the shared resource group's `location` — reusing it would
+  risk an outright `LocationNotAvailableForResourceType` deployment failure the moment the shared
+  region (whatever the user sets `AZURE_LOCATION` to for Postgres/Storage/Container Apps) isn't
+  one of those five. CAF naming follows the same `EnvToken()`-from-`resourceGroup().name` pattern
+  as the root project's `AppHost.cs`, hand-written directly in Bicep this time (`substring()` is a
+  native Bicep function — only the C#-side `Azure.Provisioning` SDK wrapper lacked it) rather than
+  needing the `FunctionCallExpression` escape hatch: `stapp-dotglasses-app-<env>-<hash>`.
+  **Verified**: `az bicep build` compiles clean end-to-end, including resolving the AVM registry
+  reference over the network — not just that the file parses. Did *not* run `azd provision
+  --preview` (started to, then killed it after confirming it just prints "You must be logged into
+  Azure perform this action" rather than hanging — actually provisioning, even a preview/what-if,
+  calls the real ARM API against a real subscription, which is exactly the "no infra touched from
+  a developer machine, only credentials Claude must not create" line this repo already draws).
 - **No infra is ever deployed from a developer machine** — only via GitHub Actions
   (`.github/workflows/deploy.yml`, 2026-08-05). Auto-deploys both azd projects (root `Web`/
   AppHost and the separate `DotGlasses.App` project) to a `staging` GitHub Environment on every
@@ -1037,11 +1074,6 @@ Aspire dashboard).
   Aspire's default `envacr<hash>`/`web_identity-<hash>` names rather than the CAF pattern every
   other resource now follows — see the Resource naming convention bullet above for why (no
   `IResourceBuilder` exposed for either in `AppHost.cs`).
-- The Field App (`src/DotGlasses.App`)'s own `/infra` doesn't exist yet, and whether it shares
-  `rg-dotglasses-nonprod`/`rg-dotglasses-prod` with the Web/AppHost project or gets its own two
-  resource groups is undecided — resolve before generating its infra for the first time, not by
-  guessing (see the Resource naming convention bullet above and `deploy.yml`'s `TODO(CAF naming)`
-  comments).
 - UI skeleton screens are static placeholder data, not wired to a database — see UI / design
   system section above. The Consultation Form is still missing the lead-match confirm popup, the
   "use test result" carry-over from Test to Sale, and progressive disclosure for catalogues with

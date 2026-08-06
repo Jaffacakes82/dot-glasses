@@ -68,11 +68,12 @@ jobs:
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
-      # TODO(CAF naming): not yet reconciled with the Web project's rg-dotglasses-nonprod/-prod
-      # convention — the Field App's own /infra doesn't exist yet (see CLAUDE.md's Deployment
-      # section), so whether it shares those two resource groups or gets its own hasn't been
-      # decided. Resolve this before that project's infra gets generated for the first time.
-      AZURE_ENV_NAME: dot-glasses-field-app-staging
+      # Deliberately the SAME env name as deploy-web-staging (not a distinct
+      # "dot-glasses-field-app-staging") — this project's own main.bicep computes
+      # rg-${environmentName} too, so an identical AZURE_ENV_NAME is what makes it land in the
+      # same shared resource group as Web/AppHost rather than getting its own (see
+      # src/DotGlasses.App/infra/main.bicep's comment and CLAUDE.md's Deployment section).
+      AZURE_ENV_NAME: dotglasses-nonprod
     steps:
       - uses: actions/checkout@v4
         with:
@@ -128,7 +129,8 @@ jobs:
       AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
-      AZURE_ENV_NAME: dot-glasses-field-app-production
+      # See deploy-app-staging's comment — same shared-resource-group reasoning.
+      AZURE_ENV_NAME: dotglasses-prod
     steps:
       - uses: actions/checkout@v4
         with:
