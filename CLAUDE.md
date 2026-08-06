@@ -839,6 +839,43 @@ acts on a specific target user/org — not yet wired to one, see above).
   resource changes rather than hand-editing the Bicep. `azd` itself isn't on PATH in a fresh
   shell despite being winget-installed (`C:\Users\Joe\AppData\Local\Programs\Azure Dev CLI\
   azd.exe`) — prepend that directory to PATH rather than assuming `azd` is missing.
+- **Resources follow the Azure CAF naming convention** (2026-08-06, [Cloud Adoption Framework
+  resource naming](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-
+  best-practices/resource-naming) — user-specified, one subscription with two resource groups:
+  `rg-dotglasses-nonprod` / `rg-dotglasses-prod`). The azd environment itself is named
+  `dotglasses-nonprod`/`dotglasses-prod` (main.bicep's own `rg-${environmentName}` gives the
+  resource-group name for free from that — see `deploy.yml`'s `AZURE_ENV_NAME`). Every other
+  resource name is a CAF-pattern string built in `AppHost.cs` via `ConfigureInfrastructure`
+  (`.PublishAsAzureContainerApp` for the "web" container app specifically) — e.g.
+  `pgsql-dotglasses-nonprod-<hash>`, `ca-dotglasses-nonprod`, `cae-dotglasses-nonprod`. The env
+  token (`nonprod`/`prod`) is pulled out of `resourceGroup().name` at Bicep-evaluation time
+  (`EnvToken()`, stripping the fixed `rg-dotglasses-` prefix) rather than threaded down as a new
+  parameter from main.bicep — works unmodified in any resource-group-scoped module with zero
+  extra plumbing, and survives `azd infra gen --force` regeneration since the expression lives in
+  this C# file, not generated Bicep. Globally-unique resource types (Storage, the two
+  Communication Services resources) append a short `uniqueString()` hash after the CAF name —
+  CAF's own examples don't solve global uniqueness either, and a plain deterministic name risks
+  colliding with someone else's resource anywhere on Azure; Storage additionally uses a shorter
+  `dg` workload token (not `dotglasses`) to stay under the 24-char/no-hyphen storage-account limit.
+  **`BicepFunction` has no `Substring`/skip wrapper in the installed Azure.Provisioning version**
+  (confirmed via reflection against the actually-resolved 1.5.0, not just the lower version
+  floor some packages declare — only `Take()`, first-N-characters, exists) — `EnvToken()` builds
+  the `substring(...)` call by hand via `FunctionCallExpression`, the same escape hatch
+  Azure.Provisioning uses internally to implement its own `BicepFunction.*` wrappers; verified by
+  regenerating `/infra` and confirming the emitted Bicep actually contains
+  `substring(resourceGroup().name, 14)`, not by trusting the C# compiled.
+  **Two resources deliberately keep Aspire's default name, not CAF** — the Container Registry
+  (`env-acr` module) and Web's own compute identity (`web-identity` module) are each a *separate*
+  Bicep module/provisioning construct with no `IResourceBuilder` exposed for either in
+  `AppHost.cs`, unlike the container-apps-environment's own internal AcrPull identity (`env_mi`,
+  reachable and renamed to `id-dotglasses-cae-<env>` since it's emitted into the *same*
+  `env.module.bicep`). Flagged in `[OPEN]`, not silently left — worth another look if Aspire ever
+  exposes a builder handle for either.
+  **The Field App's own resource-group placement is still an open decision** — its `/infra`
+  doesn't exist yet at all (see below), and whether it shares these same two resource groups or
+  gets its own pair needs deciding *before* that project's infra is first generated, not guessed
+  at; `deploy.yml`'s `deploy-app-staging`/`deploy-app-production` jobs carry a `TODO(CAF naming)`
+  comment marking this.
 - **Blob Storage and Azure Communication Services are now real Aspire-managed resources**
   (2026-08-05), resolving the `[OPEN]` "no blob storage exists yet"/"ACS needs to be
   configurable via Aspire, or we need to flesh out the Bicep for it" gaps directly per the CEO's
@@ -996,6 +1033,15 @@ Aspire dashboard).
 - `azd pipeline config` not run yet (needs to run twice — once per azd project — plus a
   `production` GitHub Environment reviewer rule and a placeholder `postgres_password` env value
   on both environments) — see the numbered manual-steps list in the Deployment section above.
+- The Container Registry (`env-acr`) and Web's own compute identity (`web-identity`) still get
+  Aspire's default `envacr<hash>`/`web_identity-<hash>` names rather than the CAF pattern every
+  other resource now follows — see the Resource naming convention bullet above for why (no
+  `IResourceBuilder` exposed for either in `AppHost.cs`).
+- The Field App (`src/DotGlasses.App`)'s own `/infra` doesn't exist yet, and whether it shares
+  `rg-dotglasses-nonprod`/`rg-dotglasses-prod` with the Web/AppHost project or gets its own two
+  resource groups is undecided — resolve before generating its infra for the first time, not by
+  guessing (see the Resource naming convention bullet above and `deploy.yml`'s `TODO(CAF naming)`
+  comments).
 - UI skeleton screens are static placeholder data, not wired to a database — see UI / design
   system section above. The Consultation Form is still missing the lead-match confirm popup, the
   "use test result" carry-over from Test to Sale, and progressive disclosure for catalogues with

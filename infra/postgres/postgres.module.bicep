@@ -2,7 +2,7 @@
 param location string = resourceGroup().location
 
 resource postgres 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
-  name: take('postgres-${uniqueString(resourceGroup().id)}', 63)
+  name: 'pgsql-dotglasses-${substring(resourceGroup().name, 14)}-${take(uniqueString(resourceGroup().id), 6)}'
   location: location
   properties: {
     authConfig: {

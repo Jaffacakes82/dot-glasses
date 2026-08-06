@@ -28,7 +28,7 @@ param env_outputs_azure_container_registry_endpoint string
 param env_outputs_azure_container_registry_managed_identity_id string
 
 resource web 'Microsoft.App/containerApps@2025-10-02-preview' = {
-  name: 'web'
+  name: 'ca-dotglasses-${substring(resourceGroup().name, 14)}'
   location: location
   properties: {
     configuration: {

@@ -2,7 +2,7 @@
 param location string = resourceGroup().location
 
 resource storage 'Microsoft.Storage/storageAccounts@2024-01-01' = {
-  name: take('storage${uniqueString(resourceGroup().id)}', 24)
+  name: 'stdg${substring(resourceGroup().name, 14)}${take(uniqueString(resourceGroup().id), 4)}'
   kind: 'StorageV2'
   location: location
   sku: {

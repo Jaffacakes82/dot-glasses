@@ -17,8 +17,16 @@ param location string = resourceGroup().location
 @description('Data residency for the Email Communication Service.')
 param dataLocation string = 'United States'
 
+// Azure CAF naming convention (see AppHost.cs's Workload/EnvToken/ShortHash for the same
+// pattern applied to every other resource) — envToken pulls "nonprod"/"prod" straight out of
+// the resource group's own name (rg-dotglasses-nonprod/rg-dotglasses-prod) rather than needing
+// a new parameter threaded down from main.bicep; both Communication Services resource types are
+// globally unique (public hostnames), hence the uniqueString() suffix.
+var envToken = substring(resourceGroup().name, length('rg-dotglasses-'))
+var shortHash = take(uniqueString(resourceGroup().id), 6)
+
 resource emailService 'Microsoft.Communication/emailServices@2023-04-01' = {
-  name: 'acs-email-${uniqueString(resourceGroup().id)}'
+  name: 'acs-email-dotglasses-${envToken}-${shortHash}'
   location: 'global'
   properties: {
     dataLocation: dataLocation
@@ -35,7 +43,7 @@ resource managedDomain 'Microsoft.Communication/emailServices/domains@2023-04-01
 }
 
 resource communicationService 'Microsoft.Communication/communicationServices@2023-04-01' = {
-  name: 'acs-${uniqueString(resourceGroup().id)}'
+  name: 'acs-dotglasses-${envToken}-${shortHash}'
   location: 'global'
   properties: {
     dataLocation: dataLocation
