@@ -1,0 +1,127 @@
+@page "/failed-records"
+@using DotGlasses.Contracts.Sync
+@inject ISyncQueueStore OutboxStore
+@inject ISyncService SyncService
+@inject NavigationManager Navigation
+
+<PageTitle>Records needing review</PageTitle>
+
+<div class="dg-screen">
+    <div class="dg-top-strip">
+        <a class="back" href="/">&#8592;</a>
+        <h1>Needs review</h1>
+    </div>
+
+    @if (_items.Count == 0)
+    {
+        <p style="font-size:13px; color:#666;">Nothing to review — every record on this device has been sent.</p>
+    }
+    else
+    {
+        <p style="font-size:13px; color:#666; margin-bottom:var(--space-4);">
+            These records were refused by the server, so they aren't being retried automatically.
+            Fix what's wrong and send them again, or discard them if they're no longer needed.
+        </p>
+
+        @foreach (var item in _items)
+        {
+            <div class="dg-card" style="margin-bottom:var(--space-3);">
+                <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
+                    <strong>@item.EntityType</strong>
+                    <span style="font-size:12px; color:#999;">@item.CreatedAtUtc.ToLocalTime().ToString("d MMM, HH:mm")</span>
+                </div>
+                <p style="color:#c00; font-size:13px; margin:6px 0 0;">@(item.LastError ?? "The server rejected this record.")</p>
+
+                <div style="display:flex; gap:8px; margin-top:var(--space-3); flex-wrap:wrap;">
+                    @if (EditRouteFor(item) is { } editRoute)
+                    {
+                        <a class="dg-btn dg-btn-primary" style="flex:1; text-align:center; padding:10px 16px; font-size:13px;" href="@editRoute">Fix &amp; re-send</a>
+                    }
+                    <button class="dg-btn dg-btn-ghost" style="flex:1; padding:10px 16px; font-size:13px;" disabled="@_busy" @onclick="() => RetryAsync(item)">Re-send as is</button>
+                    <button class="dg-btn dg-btn-ghost" style="flex:1; padding:10px 16px; font-size:13px;" disabled="@_busy" @onclick="() => ConfirmDiscard(item)">Discard</button>
+                </div>
+
+                @if (_pendingDiscardId == item.Id)
+                {
+                    <div style="margin-top:var(--space-3); background:#fdecea; border-radius:var(--radius-md); padding:12px;">
+                        <p style="font-size:13px; margin:0 0 8px;">Discard this @item.EntityType.ToLowerInvariant()? It won't be recorded anywhere.</p>
+                        <div style="display:flex; gap:8px;">
+                            <button class="dg-btn dg-btn-ghost" style="flex:1; padding:8px 14px; font-size:13px;" @onclick="() => _pendingDiscardId = null">Keep it</button>
+                            <button class="dg-btn dg-btn-primary" style="flex:1; padding:8px 14px; font-size:13px;" disabled="@_busy" @onclick="() => DiscardAsync(item)">Discard</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    }
+
+    @if (_message is not null)
+    {
+        <p style="font-size:13px; color:#555;">@_message</p>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<OutboxItem> _items = [];
+    private Guid? _pendingDiscardId;
+    private bool _busy;
+    private string? _message;
+
+    protected override async Task OnInitializedAsync() => await RefreshAsync();
+
+    private async Task RefreshAsync() => _items = await OutboxStore.GetFailedAsync();
+
+    /// <summary>Consultation records can be reopened in the form that created them; anything else
+    /// (batched client logs, for instance) can only be re-sent as is or discarded.</summary>
+    private static string? EditRouteFor(OutboxItem item) => item.EntityType switch
+    {
+        "Test" => $"consultation/test?fixOutboxId={item.Id}",
+        "Lead" => $"consultation/lead?fixOutboxId={item.Id}",
+        "Sale" => $"consultation/sale?fixOutboxId={item.Id}",
+        _ => null,
+    };
+
+    /// <summary>Useful when the data was fine and the session wasn't — a 401 rejection re-sends
+    /// cleanly once the technician has signed in again.</summary>
+    private async Task RetryAsync(OutboxItem item)
+    {
+        _busy = true;
+        _message = null;
+        try
+        {
+            await OutboxStore.RequeueAsync(item.Id, item.PayloadJson);
+            var result = await SyncService.TrySyncItemAsync(item);
+
+            _message = result.Outcome switch
+            {
+                SyncAttemptOutcome.Succeeded => $"{item.EntityType} sent.",
+                SyncAttemptOutcome.Deferred => "Still offline — it's queued and will send when you have signal.",
+                _ => result.Message,
+            };
+
+            await RefreshAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void ConfirmDiscard(OutboxItem item) => _pendingDiscardId = item.Id;
+
+    private async Task DiscardAsync(OutboxItem item)
+    {
+        _busy = true;
+        try
+        {
+            await OutboxStore.RemoveAsync(item.Id);
+            _pendingDiscardId = null;
+            _message = $"{item.EntityType} discarded.";
+            await RefreshAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

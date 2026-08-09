@@ -56,10 +56,19 @@
                 </nav>
                 <div class="dg-user-chip">
                     <div class="dg-avatar">@initials</div>
-                    <div>
+                    <div style="flex:1; min-width:0;">
                         <div style="font-weight:600; font-size:13px;">@CurrentUser.UserName</div>
                         <div style="font-size:11px; opacity:0.7; text-transform:uppercase;">@roleLabel</div>
                     </div>
+                    @* AccountController.Logout has existed since the portal was built but nothing
+                       ever posted to it, so there was no way to end a session short of clearing
+                       cookies. *@
+                    <form asp-controller="Account" asp-action="Logout" method="post" style="margin:0;">
+                        <button type="submit" title="Sign out" aria-label="Sign out"
+                                style="border:none; background:none; cursor:pointer; padding:4px; color:inherit; opacity:0.7; font-size:16px; line-height:1;">
+                            &#9099;
+                        </button>
+                    </form>
                 </div>
             </aside>
             <main class="dg-content" role="main">

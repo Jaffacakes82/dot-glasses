@@ -1,4 +1,5 @@
 @using DotGlasses.App.ReferenceData
+@using DotGlasses.App.Validation
 @using DotGlasses.Contracts.Common
 @using DotGlasses.Contracts.PresetCatalogues
 @using DotGlasses.Contracts.ReferenceData
@@ -14,6 +15,7 @@
         <option value="nine">9-Lens Set@(NineLensCatalogue is null ? " (not available)" : "")</option>
         <option value="custom">Custom prescription</option>
     </select>
+    <FieldError Errors="Errors" For="LensRangeType" />
 </div>
 
 @if (Model.LensRangeType is LensRangeType.SixLensSet or LensRangeType.NineLensSet)
@@ -34,6 +36,7 @@
                     <option value="@option.Id">@option.Label</option>
                 }
             </select>
+            <FieldError Errors="Errors" For="LensOptionLeftId" />
         </div>
         <div class="dg-field">
             <label>Lens power — right eye</label>
@@ -44,6 +47,7 @@
                     <option value="@option.Id">@option.Label</option>
                 }
             </select>
+            <FieldError Errors="Errors" For="LensOptionRightId" />
         </div>
 
         <div class="dg-field">
@@ -55,6 +59,7 @@
                     <option value="@i">@i</option>
                 }
             </select>
+            <FieldError Errors="Errors" For="PresetPupilDistanceBucket" />
         </div>
 
         @if (Model.LensOptionLeftId is not null)
@@ -76,6 +81,7 @@
                             <option value="@coatingId">@(Coatings.FirstOrDefault(c => c.Id == coatingId)?.Label ?? coatingId.ToString())</option>
                         }
                     </select>
+                    <FieldError Errors="Errors" For="@CoatingField" />
                 </div>
             }
         }
@@ -93,6 +99,7 @@ else if (Model.LensRangeType == LensRangeType.Custom)
                     <option value="@v">@FormatPower(v)</option>
                 }
             </select>
+            <FieldError Errors="Errors" For="CustomSphereLeft" />
         </div>
         <div class="dg-field" style="flex:1;">
             <label>Cylinder — left</label>
@@ -104,7 +111,7 @@ else if (Model.LensRangeType == LensRangeType.Custom)
                 }
             </select>
         </div>
-        <div class="dg-field" style="flex:1;"><label>Axis — left</label><input type="number" min="0" max="180" step="1" @bind="Model.CustomAxisLeft" /></div>
+        <div class="dg-field" style="flex:1;"><label>Axis — left</label><input type="number" min="0" max="180" step="1" @bind="Model.CustomAxisLeft" /><FieldError Errors="Errors" For="CustomAxisLeft" /></div>
         <div class="dg-field" style="flex:1;">
             <label>Add power — left</label>
             <select value="@Model.CustomAddPowerLeft" @onchange="e => Model.CustomAddPowerLeft = ParseDecimal(e.Value)">
@@ -126,6 +133,7 @@ else if (Model.LensRangeType == LensRangeType.Custom)
                     <option value="@v">@FormatPower(v)</option>
                 }
             </select>
+            <FieldError Errors="Errors" For="CustomSphereRight" />
         </div>
         <div class="dg-field" style="flex:1;">
             <label>Cylinder — right</label>
@@ -137,7 +145,7 @@ else if (Model.LensRangeType == LensRangeType.Custom)
                 }
             </select>
         </div>
-        <div class="dg-field" style="flex:1;"><label>Axis — right</label><input type="number" min="0" max="180" step="1" @bind="Model.CustomAxisRight" /></div>
+        <div class="dg-field" style="flex:1;"><label>Axis — right</label><input type="number" min="0" max="180" step="1" @bind="Model.CustomAxisRight" /><FieldError Errors="Errors" For="CustomAxisRight" /></div>
         <div class="dg-field" style="flex:1;">
             <label>Add power — right</label>
             <select value="@Model.CustomAddPowerRight" @onchange="e => Model.CustomAddPowerRight = ParseDecimal(e.Value)">
@@ -158,6 +166,7 @@ else if (Model.LensRangeType == LensRangeType.Custom)
                 <option value="@mm">@mm</option>
             }
         </select>
+        <FieldError Errors="Errors" For="PupilDistanceMm" />
     </div>
 }
 
@@ -172,6 +181,29 @@ else if (Model.LensRangeType == LensRangeType.Custom)
 
     /// <summary>A Lead can carry no product preference at all; a Sale must always have one.</summary>
     [Parameter] public bool AllowNoPreference { get; set; }
+
+    [Parameter] public FormErrors? Errors { get; set; }
+
+    /// <summary>Lead and Sale name the coating field differently on the wire
+    /// (CoatingPreferenceRefId vs CoatingRefId), so the parent supplies the key server errors
+    /// will come back under.</summary>
+    [Parameter] public string CoatingField { get; set; } = "CoatingRefId";
+
+    /// <summary>
+    /// When there's no "no preference" option, the select's first entry (6-Lens Set) is what the
+    /// browser displays — but the model starts null, so display and model disagreed until the
+    /// technician happened to change the dropdown. A Sale left on the apparent default therefore
+    /// submitted a null range. Seeding the model to match what is actually on screen removes the
+    /// mismatch at its source rather than papering over it in validation.
+    /// </summary>
+    protected override void OnInitialized()
+    {
+        if (!AllowNoPreference && Model.LensRangeType is null)
+        {
+            Model.LensRangeType = LensRangeType.SixLensSet;
+            Model.PresetCatalogueId = SixLensCatalogue?.Id;
+        }
+    }
 
     // Matched by name against the two seeded catalogues ("6-Lens Set"/"9-Lens Set") — the domain
     // model doesn't otherwise tie LensRangeType.SixLensSet/NineLensSet to a specific

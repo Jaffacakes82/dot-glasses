@@ -1095,6 +1095,69 @@ submits, queues, is rejected 400 by the API, and dies permanently in the outbox 
 - **Add sign-out to both apps.** The Admin Portal has an unreachable `Logout` action (no view
   posts to it); the Field App never calls `AuthTokenStore.Clear()`.
 
+**Phase 1 status: implemented and verified live (2026-08-09), on branch
+`feat/field-app-data-integrity`, not yet merged.** What shipped:
+- `FormErrors` (`App/Validation`) + a `FieldError` component. Keys are the **request DTO property
+  names**, deliberately, so a server `ValidationProblemDetails` response renders against the right
+  control with no translation table. Not `EditContext`/DataAnnotations — the rules are conditional
+  on other answers (referral fields only when Referred, hard-case colour only when sold, a whole
+  branch of lens fields per range), which attributes express badly.
+- `ISyncService.TrySyncItemAsync` returning `SyncAttemptResult` (`Succeeded`/`Deferred`/
+  `Rejected` + parsed field errors). The distinction is the whole point: a rejection keeps the
+  technician on the pre-filled form with fields marked; an unreachable server is the normal
+  offline path and just leaves the record queued. `SyncService` now parses the problem-details
+  body, so `OutboxItem.LastError` holds e.g. *"ReasonNotPurchasedRefId must reference an existing,
+  active ReasonNotPurchased reference-data item."* instead of `HTTP 400`.
+- `FailedRecords.razor` (`/failed-records`): per-record error text, **Fix & re-send** (reopens the
+  originating form pre-filled from the stored payload via `?fixOutboxId=`, re-queues under the
+  **same Id** so the server's idempotent upsert still applies), **Re-send as is** (for a 401 where
+  the data was fine and the session wasn't), and **Discard** behind a confirm. Home's banner is now
+  a link to it rather than an inline dump.
+- IndexedDB bumped to v2 with a `kv` store (`onupgradeneeded` creates only what's missing, so
+  queued items survive the upgrade). Backs both `AuthTokenStore` persistence and
+  `ReferenceDataClient`'s write-through cache — a technician with no signal now gets a fully
+  working form from the last cached copy plus a "Using options saved on this device on <date>"
+  banner, instead of the previous dead end.
+- Sign-out in both apps. The Admin Portal's `Logout` action existed since the portal was built but
+  nothing posted to it.
+
+**A real bug found and fixed while doing this**: `LensRangeSelector` with `AllowNoPreference=false`
+(i.e. every Sale) rendered a select whose first option — "6-Lens Set" — is what the browser
+displays, while `Model.LensRangeType` was still `null`. Display and model disagreed until the
+technician happened to change the dropdown, so a Sale left on the apparent default submitted a
+null range and none of the lens/PD/coating controls rendered at all. Fixed by seeding the model in
+`OnInitialized` to match what is actually on screen, rather than papering over it in validation.
+
+**A second, more serious issue found and only partly addressed — needs a server-side fix:**
+`TestsController`/`LeadsController`/`SalesController` stamp `TechnicianUserId` and `HierarchyPath`
+from the JWT presented **on the POST** — that is, at *sync* time, not when the technician filled
+the form in. A record created offline by technician A and drained after technician B signs in on
+the same device is therefore recorded against B, and against B's outlet. That corrupts both the
+Event History audit trail and the Dashboard's per-technician rankings. The client-side mitigation
+shipped here (Settings blocks sign-out while anything is queued, with an explanation) closes the
+likely path but not the underlying hole — a token expiring mid-queue does the same thing. **Making
+creation-time identity authoritative is a server-side change and is not done**: the request DTOs
+deliberately carry no technician/hierarchy fields precisely so a client can't spoof them, so the
+fix is not simply "accept them from the body" — it needs something like a signed creation-context
+token minted at form-open time. Flagged in `[OPEN]`.
+
+**Verified live end-to-end** (real browser, real stack, seeded RetailPoint user): submitted an
+empty Sale and got five inline field errors with no navigation, no price-confirm step and nothing
+queued; completed it and confirmed it persisted with the correct `/1/2/3/4/` path, PD bucket,
+Photochromic coating and frame colour; reloaded the page and stayed signed in (previously
+impossible); killed the API and confirmed a consultation form still opens fully populated from
+cache with the staleness banner, and that a Sale saved in that state queued as `Deferred` rather
+than being marked `Failed`; queued a deliberately-invalid Lead and confirmed the real validator
+message reached the review screen, then fixed and re-sent it and confirmed it persisted **under the
+same Id**; discarded another; confirmed sign-out is disabled while a record is unsent and enabled
+once drained; and confirmed Admin Portal sign-out returns to the login page.
+
+One false alarm worth recording so it isn't re-investigated: the accessibility-tree reader lists
+`#blazor-error-ui` ("An unhandled error has occurred") on every page. It is `display:none` and
+always present in the DOM — not an error. Confirmed by checking computed style and an
+instrumented `console.error` capture showing zero errors, and by reproducing the same reading
+against unmodified `main`.
+
 ### Phase 2 — Access model
 
 - **Collapse to two roles: `Admin` and `User`.** `Manager` is removed. It is currently functionally
@@ -1280,6 +1343,12 @@ also out of date.
 - `LensRangeType.SixLensSet`/`NineLensSet` matching a specific `PresetCatalogueId` by catalogue
   **name** (see Field App UI wiring above) — fine while only two catalogues exist, needs an
   explicit "kind" field on `PresetCatalogue` if DGI/Country ever create more.
+- **Offline records are attributed to whoever is signed in when they *sync*, not when they were
+  created** (found 2026-08-09, see the Phase 1 status note above). `TechnicianUserId`/
+  `HierarchyPath` come from the JWT on the POST. Client-side mitigation shipped (sign-out blocked
+  while the queue is non-empty), but a token expiring mid-queue still reaches the same outcome.
+  Needs a server-side notion of creation-time identity that a client still can't spoof — the DTOs
+  omit these fields deliberately, so "read them from the body" is not the fix.
 - Offline sync conflict resolution (currently last-write-wins; don't hard-code away a future
   version/ETag column).
 - A permanently-failed outbox item (see Offline sync above) has no in-app retry-after-edit or

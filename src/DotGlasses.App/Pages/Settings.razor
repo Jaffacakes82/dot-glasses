@@ -1,4 +1,10 @@
 @page "/settings"
+@using DotGlasses.App.Auth
+@using DotGlasses.Contracts.Sync
+@inject AuthTokenStore TokenStore
+@inject ISyncQueueStore OutboxStore
+@inject ISyncService SyncService
+@inject NavigationManager Navigation
 
 <PageTitle>Settings</PageTitle>
 
@@ -23,6 +29,36 @@
             @item <span style="color:var(--dot-orange); font-weight:700;">· Coming soon</span>
         </div>
     }
+
+    <div style="margin-top:auto; padding-top:var(--space-5);">
+        @if (_unsentCount > 0)
+        {
+            <p style="font-size:13px; color:#c00;">
+                @_unsentCount record(s) haven't been sent yet. Send them before signing out — the
+                server records who saved them from whoever is signed in at the moment they're sent,
+                so anything left in the queue would be filed under the next person to log in.
+            </p>
+            <button class="dg-btn dg-btn-primary" style="width:100%;" type="button" disabled="@_busy" @onclick="SyncNowAsync">Send now (@_unsentCount)</button>
+            <button class="dg-btn dg-btn-ghost" style="width:100%; margin-top:8px;" type="button" disabled>Sign out</button>
+        }
+        else if (_confirmingSignOut)
+        {
+            <p style="font-size:13px; color:#555;">Sign out on this device?</p>
+            <div style="display:flex; gap:8px;">
+                <button class="dg-btn dg-btn-ghost" style="flex:1;" type="button" @onclick="() => _confirmingSignOut = false">Cancel</button>
+                <button class="dg-btn dg-btn-primary" style="flex:1;" type="button" @onclick="SignOutAsync">Sign out</button>
+            </div>
+        }
+        else
+        {
+            <button class="dg-btn dg-btn-ghost" style="width:100%;" type="button" @onclick="() => _confirmingSignOut = true">Sign out</button>
+        }
+
+        @if (_message is not null)
+        {
+            <p style="font-size:13px; color:#555; margin-top:8px;">@_message</p>
+        }
+    </div>
 </div>
 
 @code {
@@ -31,4 +67,50 @@
     private readonly string[] _outlets = ["Kangemi Vision Centre", "Nakuru Central"];
     private readonly string _activeOutlet = "Kangemi Vision Centre";
     private readonly string[] _toolkitItems = ["Talking points & FAQs", "Near-vision chart", "Distance-vision chart"];
+
+    private bool _confirmingSignOut;
+    private bool _busy;
+    private int _unsentCount;
+    private string? _message;
+
+    protected override async Task OnInitializedAsync() => await RefreshAsync();
+
+    private async Task RefreshAsync() => _unsentCount = (await OutboxStore.GetPendingAsync()).Count;
+
+    private async Task SyncNowAsync()
+    {
+        _busy = true;
+        _message = null;
+        try
+        {
+            await SyncService.SyncPendingAsync();
+            await RefreshAsync();
+            _message = _unsentCount == 0
+                ? "All records sent."
+                : "Couldn't send everything — check your connection and try again.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>
+    /// Clears the persisted token, and is deliberately blocked while anything is still queued.
+    /// The API stamps TechnicianUserId and HierarchyPath from the JWT presented on the POST — that
+    /// is, at *sync* time, not at the time the technician filled the form in. A queued record
+    /// draining under somebody else's later sign-in would therefore be recorded against the wrong
+    /// technician and potentially the wrong outlet, which corrupts both the Event History audit
+    /// trail and the Dashboard's per-technician rankings. Forcing a sync first is the honest fix
+    /// available from the client alone; making creation-time identity authoritative is a
+    /// server-side change (see CLAUDE.md).
+    ///
+    /// The outbox is not cleared on sign-out: unsent work belongs to the outlet, and silently
+    /// discarding a technician's consultations would be worse than either alternative.
+    /// </summary>
+    private async Task SignOutAsync()
+    {
+        await TokenStore.ClearAsync();
+        Navigation.NavigateTo("login");
+    }
 }

@@ -1,0 +1,15 @@
+@using DotGlasses.App.Validation
+
+@if (Message is not null)
+{
+    <p class="dg-field-error" role="alert">@Message</p>
+}
+
+@code {
+    [Parameter] public FormErrors? Errors { get; set; }
+
+    /// <summary>The request DTO property name this control maps to — see FormErrors.</summary>
+    [Parameter, EditorRequired] public string For { get; set; } = string.Empty;
+
+    private string? Message => Errors?[For];
+}
