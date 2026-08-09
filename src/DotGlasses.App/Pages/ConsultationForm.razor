@@ -1,6 +1,7 @@
 @page "/consultation/{Type}"
 @using System.Text.Json
 @using DotGlasses.App.ReferenceData
+@using DotGlasses.App.Validation
 @using DotGlasses.Contracts.Common
 @using DotGlasses.Contracts.Leads
 @using DotGlasses.Contracts.ReferenceData
@@ -20,11 +21,11 @@
         <h1>Record @Type</h1>
     </div>
 
-    @if (ReferenceDataClient.LoadError is not null)
+    @if (!ReferenceDataClient.IsLoaded && ReferenceDataClient.LoadError is not null)
     {
         <div class="dg-card" style="margin-bottom:var(--space-3);">
             <p style="color:#c00;">@ReferenceDataClient.LoadError</p>
-            <button class="dg-btn dg-btn-ghost" type="button" @onclick="LoadReferenceDataAsync">Retry</button>
+            <button class="dg-btn dg-btn-ghost" type="button" @onclick="RetryReferenceDataAsync">Retry</button>
         </div>
     }
     else if (!ReferenceDataClient.IsLoaded)
@@ -45,14 +46,36 @@
     else
     {
         <EditForm Model="this" OnValidSubmit="HandleSubmit" style="display:flex; flex-direction:column; flex:1;">
-            @if (_error is not null)
+            @if (ReferenceDataClient.IsFromCache)
             {
-                <p style="color:#c00;">@_error</p>
+                <p style="font-size:12px; color:#8a6d00; background:#fff8e1; border-radius:var(--radius-md); padding:8px 12px; margin-bottom:var(--space-3);">
+                    Using options saved on this device@(ReferenceDataClient.CachedAtUtc is { } at ? $" on {at.ToLocalTime():d MMM, HH:mm}" : "") — reconnect to pick up any changes.
+                </p>
+            }
+
+            @if (_summaryMessage is not null || _errors.Unattributed.Count > 0)
+            {
+                <div class="dg-form-error-summary" role="alert">
+                    @if (_summaryMessage is not null)
+                    {
+                        <span>@_summaryMessage</span>
+                    }
+                    @if (_errors.Unattributed.Count > 0)
+                    {
+                        <ul>
+                            @foreach (var message in _errors.Unattributed)
+                            {
+                                <li>@message</li>
+                            }
+                        </ul>
+                    }
+                </div>
             }
 
             <div class="dg-field">
                 <label>Age</label>
-                <input type="number" min="0" @bind="_age" />
+                <input type="number" min="0" max="120" @bind="_age" />
+                <FieldError Errors="_errors" For="AgeYears" />
             </div>
             <div class="dg-field">
                 <label>Gender</label>
@@ -71,23 +94,27 @@
                         <option value="NeedsGlasses">Needs glasses</option>
                         <option value="Referred">Referred</option>
                     </select>
+                    <FieldError Errors="_errors" For="Outcome" />
                 </div>
 
                 @if (_testOutcome == TestOutcome.Referred)
                 {
                     <ReferenceDataDropdown Label="Reason for referral" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.ReferralReason)"
                                             SelectedId="_referralReasonRefId" SelectedIdChanged="v => _referralReasonRefId = v"
-                                            OtherText="_referralOtherText" OtherTextChanged="v => _referralOtherText = v" />
+                                            OtherText="_referralOtherText" OtherTextChanged="v => _referralOtherText = v"
+                                            Errors="_errors" Field="ReferralReasonRefId" OtherField="ReferralOtherText" />
                     <div class="dg-field">
                         <label>Referral location (hospital, clinic, etc.)</label>
                         <input @bind="_referralLocationFreeText" />
+                        <FieldError Errors="_errors" For="ReferralLocationFreeText" />
                     </div>
                 }
                 else if (_testOutcome == TestOutcome.NeedsGlasses)
                 {
                     <ReferenceDataDropdown Label="Occupation (optional)" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Occupation)"
                                             SelectedId="_occupationRefId" SelectedIdChanged="v => _occupationRefId = v"
-                                            OtherText="_occupationOtherText" OtherTextChanged="v => _occupationOtherText = v" />
+                                            OtherText="_occupationOtherText" OtherTextChanged="v => _occupationOtherText = v"
+                                            Errors="_errors" Field="OccupationRefId" OtherField="OccupationOtherText" />
                     <div class="dg-field">
                         <label>Did the customer share contact details?</label>
                         <div style="display:flex; gap:8px;">
@@ -108,7 +135,8 @@
                 {
                     <ReferenceDataDropdown Label="Occupation (optional)" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Occupation)"
                                             SelectedId="_occupationRefId" SelectedIdChanged="v => _occupationRefId = v"
-                                            OtherText="_occupationOtherText" OtherTextChanged="v => _occupationOtherText = v" />
+                                            OtherText="_occupationOtherText" OtherTextChanged="v => _occupationOtherText = v"
+                                            Errors="_errors" Field="OccupationRefId" OtherField="OccupationOtherText" />
                 }
             }
             else
@@ -116,21 +144,25 @@
                 <div class="dg-field">
                     <label>Full name</label>
                     <input @bind="_name" />
+                    <FieldError Errors="_errors" For="FullName" />
                 </div>
                 <div class="dg-field">
                     <label>Phone number@(IsSale ? " (optional)" : "")</label>
                     <input @bind="_phone" />
+                    <FieldError Errors="_errors" For="PhoneNumber" />
                 </div>
                 <ReferenceDataDropdown Label="Occupation (optional)" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Occupation)"
                                         SelectedId="_occupationRefId" SelectedIdChanged="v => _occupationRefId = v"
-                                        OtherText="_occupationOtherText" OtherTextChanged="v => _occupationOtherText = v" />
+                                        OtherText="_occupationOtherText" OtherTextChanged="v => _occupationOtherText = v"
+                                        Errors="_errors" Field="OccupationRefId" OtherField="OccupationOtherText" />
                 <div class="dg-field">
                     <label><input type="checkbox" @bind="_consentGiven" style="width:auto; margin-right:8px;" />Customer consents to be contacted by DOT Glasses for follow-ups/marketing</label>
                 </div>
 
                 @if (IsSale)
                 {
-                    <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues" Coatings="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)" AllowNoPreference="false" />
+                    <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues" Coatings="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
+                                       AllowNoPreference="false" Errors="_errors" CoatingField="CoatingRefId" />
 
                     @if (_lensRange.LensRangeType == LensRangeType.Custom)
                     {
@@ -138,7 +170,8 @@
                             <label><input type="checkbox" @bind="_orderFromDotGlasses" style="width:auto; margin-right:8px;" />Order this lens from DOT Glasses (outlet doesn't have stock)</label>
                         </div>
                         <ReferenceDataDropdown Label="Coating" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
-                                                SelectedId="_coatingRefId" SelectedIdChanged="v => _coatingRefId = v" />
+                                                SelectedId="_coatingRefId" SelectedIdChanged="v => _coatingRefId = v"
+                                                Errors="_errors" Field="CoatingRefId" />
                     }
 
                     @RenderFrameSwatches()
@@ -157,21 +190,25 @@
                     {
                         <ReferenceDataDropdown Label="Hard case colour" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.HardCaseColour)"
                                                 SelectedId="_hardCaseColourRefId" SelectedIdChanged="v => _hardCaseColourRefId = v"
-                                                OtherText="_hardCaseOtherColourText" OtherTextChanged="v => _hardCaseOtherColourText = v" />
+                                                OtherText="_hardCaseOtherColourText" OtherTextChanged="v => _hardCaseOtherColourText = v"
+                                                Errors="_errors" Field="HardCaseColourRefId" OtherField="HardCaseOtherColourText" />
                     }
                 }
                 else
                 {
                     <ReferenceDataDropdown Label="Reason not purchased" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.ReasonNotPurchased)"
                                             SelectedId="_reasonNotPurchasedRefId" SelectedIdChanged="v => _reasonNotPurchasedRefId = v"
-                                            OtherText="_reasonNotPurchasedOtherText" OtherTextChanged="v => _reasonNotPurchasedOtherText = v" />
+                                            OtherText="_reasonNotPurchasedOtherText" OtherTextChanged="v => _reasonNotPurchasedOtherText = v"
+                                            Errors="_errors" Field="ReasonNotPurchasedRefId" OtherField="ReasonNotPurchasedOtherText" />
 
-                    <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues" Coatings="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)" AllowNoPreference="true" />
+                    <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues" Coatings="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
+                                       AllowNoPreference="true" Errors="_errors" CoatingField="CoatingPreferenceRefId" />
 
                     @if (_lensRange.LensRangeType is not (LensRangeType.SixLensSet or LensRangeType.NineLensSet))
                     {
                         <ReferenceDataDropdown Label="Coating preference (optional)" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
-                                                SelectedId="_coatingPreferenceRefId" SelectedIdChanged="v => _coatingPreferenceRefId = v" />
+                                                SelectedId="_coatingPreferenceRefId" SelectedIdChanged="v => _coatingPreferenceRefId = v"
+                                                Errors="_errors" Field="CoatingPreferenceRefId" />
                     }
                 }
             }
@@ -190,6 +227,11 @@
     [Parameter, SupplyParameterFromQuery] public int? PrefillAge { get; set; }
     [Parameter, SupplyParameterFromQuery] public string? PrefillGender { get; set; }
 
+    /// <summary>Set when this form was opened to correct a permanently-failed outbox record —
+    /// see FailedRecords.razor. The corrected payload is re-queued under the same Id so the
+    /// server's idempotent upsert still applies.</summary>
+    [Parameter, SupplyParameterFromQuery] public Guid? FixOutboxId { get; set; }
+
     private bool IsTest => Type.Equals("test", StringComparison.OrdinalIgnoreCase);
     private bool IsSale => Type.Equals("sale", StringComparison.OrdinalIgnoreCase);
 
@@ -204,8 +246,10 @@
     private Guid? _occupationRefId;
     private string? _occupationOtherText;
     private bool _saving;
-    private string? _error;
     private bool _showPriceConfirm;
+
+    private readonly FormErrors _errors = new();
+    private string? _summaryMessage;
 
     // Test-only
     private TestOutcome _testOutcome = TestOutcome.NoGlassesNeeded;
@@ -237,9 +281,34 @@
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    // Which server error keys this form has a control for. Anything outside these lands in the
+    // summary band instead of being silently dropped — see FormErrors.Merge.
+    private static readonly string[] TestFields =
+        ["AgeYears", "Gender", "OccupationRefId", "OccupationOtherText", "Outcome", "ReferralReasonRefId", "ReferralOtherText", "ReferralLocationFreeText"];
+
+    private static readonly string[] LensFields =
+        ["LensRangeType", "PresetCatalogueId", "LensOptionLeftId", "LensOptionRightId", "CustomSphereLeft", "CustomSphereRight",
+         "CustomCylinderLeft", "CustomCylinderRight", "CustomAxisLeft", "CustomAxisRight", "CustomAddPowerLeft", "CustomAddPowerRight",
+         "PupilDistanceMm", "PresetPupilDistanceBucket"];
+
+    private static readonly string[] LeadFields =
+        [.. TestFields, .. LensFields, "FullName", "PhoneNumber", "ReasonNotPurchasedRefId", "ReasonNotPurchasedOtherText", "CoatingPreferenceRefId"];
+
+    private static readonly string[] SaleFields =
+        [.. TestFields, .. LensFields, "FullName", "PhoneNumber", "CoatingRefId", "FrameColourRefId", "FrameColourOtherText",
+         "HardCaseColourRefId", "HardCaseOtherColourText"];
+
+    private string[] KnownFields => IsTest ? TestFields : IsSale ? SaleFields : LeadFields;
+
     protected override async Task OnInitializedAsync()
     {
-        await LoadReferenceDataAsync();
+        await ReferenceDataClient.EnsureLoadedAsync();
+
+        if (FixOutboxId is { } fixId)
+        {
+            await LoadFailedRecordAsync(fixId);
+            return;
+        }
 
         if (PrefillAge is { } age)
         {
@@ -252,10 +321,126 @@
         }
     }
 
-    private async Task LoadReferenceDataAsync() => await ReferenceDataClient.EnsureLoadedAsync();
+    /// <summary>
+    /// Rehydrates the form from a permanently-failed outbox item so the technician corrects what
+    /// they originally typed instead of re-entering the whole consultation. The stored payload is
+    /// the exact request that was rejected, so replaying it into the same controls is lossless.
+    /// </summary>
+    private async Task LoadFailedRecordAsync(Guid outboxId)
+    {
+        var item = await OutboxStore.GetByIdAsync(outboxId);
+        if (item is null)
+        {
+            _summaryMessage = "That record is no longer in the queue — it may already have been sent or discarded.";
+            return;
+        }
+
+        _summaryMessage = item.LastError;
+
+        switch (item.EntityType)
+        {
+            case "Test":
+                if (JsonSerializer.Deserialize<CreateTestRequest>(item.PayloadJson, JsonOptions) is { } test)
+                {
+                    _age = test.AgeYears;
+                    _gender = test.Gender;
+                    _occupationRefId = test.OccupationRefId;
+                    _occupationOtherText = test.OccupationOtherText;
+                    _testOutcome = test.Outcome;
+                    _referralReasonRefId = test.ReferralReasonRefId;
+                    _referralOtherText = test.ReferralOtherText;
+                    _referralLocationFreeText = test.ReferralLocationFreeText;
+                }
+
+                break;
+
+            case "Lead":
+                if (JsonSerializer.Deserialize<CreateLeadRequest>(item.PayloadJson, JsonOptions) is { } lead)
+                {
+                    _age = lead.AgeYears;
+                    _gender = lead.Gender;
+                    _occupationRefId = lead.OccupationRefId;
+                    _occupationOtherText = lead.OccupationOtherText;
+                    _name = lead.FullName;
+                    _phone = lead.PhoneNumber;
+                    _consentGiven = lead.ConsentGiven;
+                    _reasonNotPurchasedRefId = lead.ReasonNotPurchasedRefId == Guid.Empty ? null : lead.ReasonNotPurchasedRefId;
+                    _reasonNotPurchasedOtherText = lead.ReasonNotPurchasedOtherText;
+                    _coatingPreferenceRefId = lead.CoatingPreferenceRefId;
+                    SourceTestId = lead.SourceTestId;
+                    ApplyLensRange(lead.LensRangeType, lead.PresetCatalogueId, lead.LensOptionLeftId, lead.LensOptionRightId,
+                        lead.CustomSphereLeft, lead.CustomCylinderLeft, lead.CustomAxisLeft, lead.CustomAddPowerLeft,
+                        lead.CustomSphereRight, lead.CustomCylinderRight, lead.CustomAxisRight, lead.CustomAddPowerRight,
+                        lead.PupilDistanceMm, lead.PresetPupilDistanceBucket, lead.ChildrensFrame, lead.CoatingPreferenceRefId);
+                }
+
+                break;
+
+            case "Sale":
+                if (JsonSerializer.Deserialize<CreateSaleRequest>(item.PayloadJson, JsonOptions) is { } sale)
+                {
+                    _age = sale.AgeYears;
+                    _gender = sale.Gender;
+                    _occupationRefId = sale.OccupationRefId;
+                    _occupationOtherText = sale.OccupationOtherText;
+                    _name = sale.FullName;
+                    _phone = sale.PhoneNumber ?? string.Empty;
+                    _consentGiven = sale.ConsentGiven;
+                    _orderFromDotGlasses = sale.OrderFromDotGlasses;
+                    _frameColourRefId = sale.FrameColourRefId == Guid.Empty ? null : sale.FrameColourRefId;
+                    _frameColourOtherText = sale.FrameColourOtherText;
+                    _frameCoverage = sale.FrameCoverage;
+                    _coatingRefId = sale.CoatingRefId;
+                    _hardCaseSold = sale.HardCaseSold;
+                    _hardCaseColourRefId = sale.HardCaseColourRefId;
+                    _hardCaseOtherColourText = sale.HardCaseOtherColourText;
+                    ApplyLensRange(sale.LensRangeType, sale.PresetCatalogueId, sale.LensOptionLeftId, sale.LensOptionRightId,
+                        sale.CustomSphereLeft, sale.CustomCylinderLeft, sale.CustomAxisLeft, sale.CustomAddPowerLeft,
+                        sale.CustomSphereRight, sale.CustomCylinderRight, sale.CustomAxisRight, sale.CustomAddPowerRight,
+                        sale.PupilDistanceMm, sale.PresetPupilDistanceBucket, sale.ChildrensFrame, sale.CoatingRefId);
+                }
+
+                break;
+        }
+    }
+
+    private void ApplyLensRange(
+        LensRangeType? rangeType, Guid? catalogueId, Guid? leftId, Guid? rightId,
+        decimal? sphereLeft, decimal? cylinderLeft, decimal? axisLeft, decimal? addLeft,
+        decimal? sphereRight, decimal? cylinderRight, decimal? axisRight, decimal? addRight,
+        decimal? pupilDistanceMm, int? presetBucket, bool childrensFrame, Guid? coatingRefId)
+    {
+        _lensRange.LensRangeType = rangeType;
+        _lensRange.PresetCatalogueId = catalogueId;
+        _lensRange.LensOptionLeftId = leftId;
+        _lensRange.LensOptionRightId = rightId;
+        _lensRange.CustomSphereLeft = sphereLeft;
+        _lensRange.CustomCylinderLeft = cylinderLeft;
+        _lensRange.CustomAxisLeft = axisLeft;
+        _lensRange.CustomAddPowerLeft = addLeft;
+        _lensRange.CustomSphereRight = sphereRight;
+        _lensRange.CustomCylinderRight = cylinderRight;
+        _lensRange.CustomAxisRight = axisRight;
+        _lensRange.CustomAddPowerRight = addRight;
+        _lensRange.PupilDistanceMm = pupilDistanceMm;
+        _lensRange.PresetPupilDistanceBucket = presetBucket;
+        _lensRange.ChildrensFrame = childrensFrame;
+
+        if (rangeType is LensRangeType.SixLensSet or LensRangeType.NineLensSet)
+        {
+            _lensRange.CoatingRefId = coatingRefId;
+        }
+    }
+
+    private async Task RetryReferenceDataAsync() => await ReferenceDataClient.RefreshAsync();
 
     private async Task HandleSubmit()
     {
+        if (!Validate())
+        {
+            return;
+        }
+
         // Test saves immediately (per the design brief); Lead and Sale require the
         // price-awareness confirmation step first.
         if (IsTest)
@@ -282,6 +467,11 @@
 
     private async Task ContinueAsLeadAsync()
     {
+        if (!Validate())
+        {
+            return;
+        }
+
         var testId = await SaveTestCoreAsync();
         if (testId is null)
         {
@@ -297,6 +487,197 @@
         Navigation.NavigateTo(url);
     }
 
+    // --- Validation ------------------------------------------------------------------------
+    //
+    // Mirrors the server's FluentValidation rules closely enough that a well-formed record never
+    // reaches the outbox. The server remains the authority — anything that slips through (a
+    // reference item retired between caching and submitting, say) comes back as a rejection and
+    // is rendered against the same field keys.
+
+    private bool Validate()
+    {
+        _errors.Clear();
+        _errors.Unattributed.Clear();
+        _summaryMessage = null;
+
+        _errors.AddIf(_age is < 0 or > 120, "AgeYears", "Age must be between 0 and 120.");
+        ValidateOtherText(ReferenceDataCategory.Occupation, _occupationRefId, _occupationOtherText, "OccupationOtherText", "an occupation");
+
+        if (IsTest)
+        {
+            ValidateTest();
+        }
+        else if (IsSale)
+        {
+            ValidateSale();
+        }
+        else
+        {
+            ValidateLead();
+        }
+
+        if (_errors.Any)
+        {
+            _summaryMessage = "Please fix the highlighted fields before saving.";
+        }
+
+        return !_errors.Any;
+    }
+
+    private void ValidateTest()
+    {
+        if (_testOutcome != TestOutcome.Referred)
+        {
+            return;
+        }
+
+        if (_referralReasonRefId is null)
+        {
+            _errors.Add("ReferralReasonRefId", "Choose a reason for the referral.");
+        }
+        else
+        {
+            ValidateOtherText(ReferenceDataCategory.ReferralReason, _referralReasonRefId, _referralOtherText, "ReferralOtherText", "a referral reason");
+        }
+
+        _errors.AddIf(string.IsNullOrWhiteSpace(_referralLocationFreeText), "ReferralLocationFreeText",
+            "Enter where the customer is being referred to.");
+    }
+
+    private void ValidateLead()
+    {
+        _errors.AddIf(string.IsNullOrWhiteSpace(_name), "FullName", "Enter the customer's full name.");
+        _errors.AddIf(string.IsNullOrWhiteSpace(_phone), "PhoneNumber", "Enter a phone number — a lead can't be followed up without one.");
+
+        if (_reasonNotPurchasedRefId is null)
+        {
+            _errors.Add("ReasonNotPurchasedRefId", "Choose why the customer didn't purchase.");
+        }
+        else
+        {
+            ValidateOtherText(ReferenceDataCategory.ReasonNotPurchased, _reasonNotPurchasedRefId, _reasonNotPurchasedOtherText,
+                "ReasonNotPurchasedOtherText", "a reason");
+        }
+
+        // A Lead may carry no product preference at all; only validate the range if one is chosen.
+        ValidateLensRange(bucketRequired: false);
+    }
+
+    private void ValidateSale()
+    {
+        _errors.AddIf(string.IsNullOrWhiteSpace(_name), "FullName", "Enter the customer's full name.");
+
+        if (_lensRange.LensRangeType is null)
+        {
+            _errors.Add("LensRangeType", "Choose a lens range.");
+        }
+        else
+        {
+            ValidateLensRange(bucketRequired: true);
+        }
+
+        if (_lensRange.LensRangeType == LensRangeType.Custom && _coatingRefId is null)
+        {
+            _errors.Add("CoatingRefId", "Choose a coating.");
+        }
+
+        if (_frameColourRefId is null)
+        {
+            _errors.Add("FrameColourRefId", "Choose a frame colour.");
+        }
+        else
+        {
+            ValidateOtherText(ReferenceDataCategory.FrameColour, _frameColourRefId, _frameColourOtherText, "FrameColourOtherText", "a frame colour");
+        }
+
+        if (_hardCaseSold)
+        {
+            if (_hardCaseColourRefId is null)
+            {
+                _errors.Add("HardCaseColourRefId", "Choose a hard case colour.");
+            }
+            else
+            {
+                ValidateOtherText(ReferenceDataCategory.HardCaseColour, _hardCaseColourRefId, _hardCaseOtherColourText,
+                    "HardCaseOtherColourText", "a hard case colour");
+            }
+        }
+    }
+
+    private void ValidateLensRange(bool bucketRequired)
+    {
+        switch (_lensRange.LensRangeType)
+        {
+            case LensRangeType.SixLensSet or LensRangeType.NineLensSet:
+                if (_lensRange.PresetCatalogueId is null)
+                {
+                    _errors.Add("LensRangeType", "This preset isn't assigned to your retail point — choose another range.");
+                    return;
+                }
+
+                _errors.AddIf(_lensRange.LensOptionLeftId is null, "LensOptionLeftId", "Choose the left lens power.");
+                _errors.AddIf(_lensRange.LensOptionRightId is null, "LensOptionRightId", "Choose the right lens power.");
+
+                var maxBucket = _lensRange.ChildrensFrame ? 2 : 4;
+                if (bucketRequired && _lensRange.PresetPupilDistanceBucket is null)
+                {
+                    _errors.Add("PresetPupilDistanceBucket", "Choose a pupil distance.");
+                }
+                else if (_lensRange.PresetPupilDistanceBucket is { } bucket && (bucket < 0 || bucket > maxBucket))
+                {
+                    _errors.Add("PresetPupilDistanceBucket", $"Pupil distance must be between 0 and {maxBucket}.");
+                }
+
+                // Only a Sale must carry a coating; a Lead's is an optional preference. The
+                // picker is only rendered once a left lens is chosen and that lens has coatings
+                // configured, so "no coatings configured" is reported against the lens itself.
+                if (IsSale && _lensRange.LensOptionLeftId is not null && _lensRange.CoatingRefId is null)
+                {
+                    var available = ReferenceDataClient.Catalogues
+                        .SelectMany(c => c.LensOptions)
+                        .FirstOrDefault(o => o.Id == _lensRange.LensOptionLeftId)?.AvailableCoatingIds ?? [];
+
+                    _errors.Add(available.Count == 0 ? "LensOptionLeftId" : "CoatingRefId",
+                        available.Count == 0
+                            ? "This lens has no coatings configured yet, so it can't be sold on a preset range."
+                            : "Choose a coating.");
+                }
+
+                break;
+
+            case LensRangeType.Custom:
+                _errors.AddIf(_lensRange.CustomSphereLeft is null, "CustomSphereLeft", "Choose the left sphere.");
+                _errors.AddIf(_lensRange.CustomSphereRight is null, "CustomSphereRight", "Choose the right sphere.");
+                ValidateAxis(_lensRange.CustomAxisLeft, "CustomAxisLeft");
+                ValidateAxis(_lensRange.CustomAxisRight, "CustomAxisRight");
+                _errors.AddIf(_lensRange.PupilDistanceMm is null, "PupilDistanceMm", "Choose a pupil distance.");
+                break;
+        }
+    }
+
+    private void ValidateAxis(decimal? value, string field)
+    {
+        if (value is { } axis && (axis < 0 || axis > 180 || axis != Math.Truncate(axis)))
+        {
+            _errors.Add(field, "Axis must be a whole number of degrees between 0 and 180.");
+        }
+    }
+
+    /// <summary>The "Other" rows in each reference list reveal a free-text box that the server
+    /// requires — this enforces the same rule before the record is queued.</summary>
+    private void ValidateOtherText(ReferenceDataCategory category, Guid? selectedId, string? otherText, string field, string noun)
+    {
+        if (selectedId is not { } id)
+        {
+            return;
+        }
+
+        var isOther = ReferenceDataClient.GetByCategory(category).FirstOrDefault(i => i.Id == id)?.IsOtherOption == true;
+        _errors.AddIf(isOther && string.IsNullOrWhiteSpace(otherText), field, $"Please specify {noun}.");
+    }
+
+    // --- Saving ----------------------------------------------------------------------------
+
     private async Task SaveTestAsync()
     {
         var testId = await SaveTestCoreAsync();
@@ -308,145 +689,155 @@
 
     private async Task<Guid?> SaveTestCoreAsync()
     {
-        _error = null;
-        _saving = true;
-        try
+        var request = new CreateTestRequest
         {
-            var request = new CreateTestRequest
-            {
-                Id = Guid.NewGuid(),
-                AgeYears = _age,
-                Gender = _gender,
-                OccupationRefId = _occupationRefId,
-                OccupationOtherText = _occupationOtherText,
-                Outcome = _testOutcome,
-                ReferralReasonRefId = _testOutcome == TestOutcome.Referred ? _referralReasonRefId : null,
-                ReferralOtherText = _testOutcome == TestOutcome.Referred ? _referralOtherText : null,
-                ReferralLocationFreeText = _testOutcome == TestOutcome.Referred ? _referralLocationFreeText : null,
-            };
+            Id = FixOutboxId ?? Guid.NewGuid(),
+            AgeYears = _age,
+            Gender = _gender,
+            OccupationRefId = _occupationRefId,
+            OccupationOtherText = _occupationOtherText,
+            Outcome = _testOutcome,
+            ReferralReasonRefId = _testOutcome == TestOutcome.Referred ? _referralReasonRefId : null,
+            ReferralOtherText = _testOutcome == TestOutcome.Referred ? _referralOtherText : null,
+            ReferralLocationFreeText = _testOutcome == TestOutcome.Referred ? _referralLocationFreeText : null,
+        };
 
-            await EnqueueAndSyncAsync(request.Id, "Test", "api/v1/tests", request);
-            return request.Id;
-        }
-        finally
-        {
-            _saving = false;
-        }
+        return await SubmitAsync(request.Id, "Test", "api/v1/tests", request) ? request.Id : null;
     }
 
     private async Task SaveLeadAsync()
     {
-        _error = null;
-        _saving = true;
-        try
+        var request = new CreateLeadRequest
         {
-            var request = new CreateLeadRequest
-            {
-                Id = Guid.NewGuid(),
-                SourceTestId = SourceTestId,
-                FullName = _name,
-                PhoneNumber = _phone,
-                AgeYears = _age,
-                Gender = _gender,
-                OccupationRefId = _occupationRefId,
-                OccupationOtherText = _occupationOtherText,
-                ConsentGiven = _consentGiven,
-                ReasonNotPurchasedRefId = _reasonNotPurchasedRefId ?? Guid.Empty,
-                ReasonNotPurchasedOtherText = _reasonNotPurchasedOtherText,
-                LensRangeType = _lensRange.LensRangeType,
-                PresetCatalogueId = _lensRange.PresetCatalogueId,
-                LensOptionLeftId = _lensRange.LensOptionLeftId,
-                LensOptionRightId = _lensRange.LensOptionRightId,
-                CustomSphereLeft = _lensRange.CustomSphereLeft,
-                CustomCylinderLeft = _lensRange.CustomCylinderLeft,
-                CustomAxisLeft = _lensRange.CustomAxisLeft,
-                CustomAddPowerLeft = _lensRange.CustomAddPowerLeft,
-                CustomSphereRight = _lensRange.CustomSphereRight,
-                CustomCylinderRight = _lensRange.CustomCylinderRight,
-                CustomAxisRight = _lensRange.CustomAxisRight,
-                CustomAddPowerRight = _lensRange.CustomAddPowerRight,
-                PupilDistanceMm = _lensRange.PupilDistanceMm,
-                PresetPupilDistanceBucket = _lensRange.PresetPupilDistanceBucket,
-                ChildrensFrame = _lensRange.ChildrensFrame,
-                CoatingPreferenceRefId = _lensRange.LensRangeType is LensRangeType.SixLensSet or LensRangeType.NineLensSet
-                    ? _lensRange.CoatingRefId
-                    : _coatingPreferenceRefId,
-            };
+            Id = FixOutboxId ?? Guid.NewGuid(),
+            SourceTestId = SourceTestId,
+            FullName = _name,
+            PhoneNumber = _phone,
+            AgeYears = _age,
+            Gender = _gender,
+            OccupationRefId = _occupationRefId,
+            OccupationOtherText = _occupationOtherText,
+            ConsentGiven = _consentGiven,
+            ReasonNotPurchasedRefId = _reasonNotPurchasedRefId ?? Guid.Empty,
+            ReasonNotPurchasedOtherText = _reasonNotPurchasedOtherText,
+            LensRangeType = _lensRange.LensRangeType,
+            PresetCatalogueId = _lensRange.PresetCatalogueId,
+            LensOptionLeftId = _lensRange.LensOptionLeftId,
+            LensOptionRightId = _lensRange.LensOptionRightId,
+            CustomSphereLeft = _lensRange.CustomSphereLeft,
+            CustomCylinderLeft = _lensRange.CustomCylinderLeft,
+            CustomAxisLeft = _lensRange.CustomAxisLeft,
+            CustomAddPowerLeft = _lensRange.CustomAddPowerLeft,
+            CustomSphereRight = _lensRange.CustomSphereRight,
+            CustomCylinderRight = _lensRange.CustomCylinderRight,
+            CustomAxisRight = _lensRange.CustomAxisRight,
+            CustomAddPowerRight = _lensRange.CustomAddPowerRight,
+            PupilDistanceMm = _lensRange.PupilDistanceMm,
+            PresetPupilDistanceBucket = _lensRange.PresetPupilDistanceBucket,
+            ChildrensFrame = _lensRange.ChildrensFrame,
+            CoatingPreferenceRefId = _lensRange.LensRangeType is LensRangeType.SixLensSet or LensRangeType.NineLensSet
+                ? _lensRange.CoatingRefId
+                : _coatingPreferenceRefId,
+        };
 
-            await EnqueueAndSyncAsync(request.Id, "Lead", "api/v1/leads", request);
-            Navigation.NavigateTo("/");
-        }
-        finally
+        if (await SubmitAsync(request.Id, "Lead", "api/v1/leads", request))
         {
-            _saving = false;
+            Navigation.NavigateTo("/");
         }
     }
 
     private async Task SaveSaleAsync()
     {
-        _error = null;
+        var request = new CreateSaleRequest
+        {
+            Id = FixOutboxId ?? Guid.NewGuid(),
+            FullName = _name,
+            PhoneNumber = string.IsNullOrWhiteSpace(_phone) ? null : _phone,
+            AgeYears = _age,
+            Gender = _gender,
+            OccupationRefId = _occupationRefId,
+            OccupationOtherText = _occupationOtherText,
+            ConsentGiven = _consentGiven,
+            LensRangeType = _lensRange.LensRangeType ?? LensRangeType.Custom,
+            PresetCatalogueId = _lensRange.PresetCatalogueId,
+            LensOptionLeftId = _lensRange.LensOptionLeftId,
+            LensOptionRightId = _lensRange.LensOptionRightId,
+            CustomSphereLeft = _lensRange.CustomSphereLeft,
+            CustomCylinderLeft = _lensRange.CustomCylinderLeft,
+            CustomAxisLeft = _lensRange.CustomAxisLeft,
+            CustomAddPowerLeft = _lensRange.CustomAddPowerLeft,
+            CustomSphereRight = _lensRange.CustomSphereRight,
+            CustomCylinderRight = _lensRange.CustomCylinderRight,
+            CustomAxisRight = _lensRange.CustomAxisRight,
+            CustomAddPowerRight = _lensRange.CustomAddPowerRight,
+            OrderFromDotGlasses = _lensRange.LensRangeType == LensRangeType.Custom && _orderFromDotGlasses,
+            PupilDistanceMm = _lensRange.PupilDistanceMm,
+            PresetPupilDistanceBucket = _lensRange.PresetPupilDistanceBucket,
+            ChildrensFrame = _lensRange.ChildrensFrame,
+            FrameColourRefId = _frameColourRefId ?? Guid.Empty,
+            FrameColourOtherText = _frameColourOtherText,
+            FrameCoverage = _frameCoverage,
+            CoatingRefId = _lensRange.LensRangeType == LensRangeType.Custom ? _coatingRefId : _lensRange.CoatingRefId,
+            HardCaseSold = _hardCaseSold,
+            HardCaseColourRefId = _hardCaseSold ? _hardCaseColourRefId : null,
+            HardCaseOtherColourText = _hardCaseSold ? _hardCaseOtherColourText : null,
+        };
+
+        if (await SubmitAsync(request.Id, "Sale", "api/v1/sales", request))
+        {
+            Navigation.NavigateTo("/");
+        }
+    }
+
+    /// <summary>
+    /// Queues the record and attempts one immediate push. Returns true when the technician can
+    /// move on — either the server accepted it, or we're offline and it is safely queued for
+    /// later. Returns false only when the server actively rejected it, in which case the errors
+    /// are rendered against the fields and the form stays open with everything still filled in.
+    /// </summary>
+    private async Task<bool> SubmitAsync<TRequest>(Guid id, string entityType, string apiRoute, TRequest request)
+    {
         _saving = true;
         try
         {
-            var request = new CreateSaleRequest
-            {
-                Id = Guid.NewGuid(),
-                FullName = _name,
-                PhoneNumber = string.IsNullOrWhiteSpace(_phone) ? null : _phone,
-                AgeYears = _age,
-                Gender = _gender,
-                OccupationRefId = _occupationRefId,
-                OccupationOtherText = _occupationOtherText,
-                ConsentGiven = _consentGiven,
-                LensRangeType = _lensRange.LensRangeType ?? LensRangeType.Custom,
-                PresetCatalogueId = _lensRange.PresetCatalogueId,
-                LensOptionLeftId = _lensRange.LensOptionLeftId,
-                LensOptionRightId = _lensRange.LensOptionRightId,
-                CustomSphereLeft = _lensRange.CustomSphereLeft,
-                CustomCylinderLeft = _lensRange.CustomCylinderLeft,
-                CustomAxisLeft = _lensRange.CustomAxisLeft,
-                CustomAddPowerLeft = _lensRange.CustomAddPowerLeft,
-                CustomSphereRight = _lensRange.CustomSphereRight,
-                CustomCylinderRight = _lensRange.CustomCylinderRight,
-                CustomAxisRight = _lensRange.CustomAxisRight,
-                CustomAddPowerRight = _lensRange.CustomAddPowerRight,
-                OrderFromDotGlasses = _lensRange.LensRangeType == LensRangeType.Custom && _orderFromDotGlasses,
-                PupilDistanceMm = _lensRange.PupilDistanceMm,
-                PresetPupilDistanceBucket = _lensRange.PresetPupilDistanceBucket,
-                ChildrensFrame = _lensRange.ChildrensFrame,
-                FrameColourRefId = _frameColourRefId ?? Guid.Empty,
-                FrameColourOtherText = _frameColourOtherText,
-                FrameCoverage = _frameCoverage,
-                CoatingRefId = _lensRange.LensRangeType == LensRangeType.Custom ? _coatingRefId : _lensRange.CoatingRefId,
-                HardCaseSold = _hardCaseSold,
-                HardCaseColourRefId = _hardCaseSold ? _hardCaseColourRefId : null,
-                HardCaseOtherColourText = _hardCaseSold ? _hardCaseOtherColourText : null,
-            };
+            var payloadJson = JsonSerializer.Serialize(request, JsonOptions);
 
-            await EnqueueAndSyncAsync(request.Id, "Sale", "api/v1/sales", request);
-            Navigation.NavigateTo("/");
+            if (FixOutboxId is not null)
+            {
+                await OutboxStore.RequeueAsync(id, payloadJson);
+            }
+            else
+            {
+                await OutboxStore.EnqueueAsync(new OutboxItem
+                {
+                    Id = id,
+                    EntityType = entityType,
+                    ApiRoute = apiRoute,
+                    PayloadJson = payloadJson,
+                });
+            }
+
+            var item = new OutboxItem { Id = id, EntityType = entityType, ApiRoute = apiRoute, PayloadJson = payloadJson };
+            var result = await SyncService.TrySyncItemAsync(item);
+
+            if (result.Outcome != SyncAttemptOutcome.Rejected)
+            {
+                return true;
+            }
+
+            _showPriceConfirm = false;
+            _summaryMessage = result.Message ?? "The server rejected this record.";
+            if (result.FieldErrors is not null)
+            {
+                _errors.Merge(result.FieldErrors, KnownFields);
+            }
+
+            return false;
         }
         finally
         {
             _saving = false;
         }
-    }
-
-    private async Task EnqueueAndSyncAsync<TRequest>(Guid id, string entityType, string apiRoute, TRequest request)
-    {
-        var outboxItem = new OutboxItem
-        {
-            Id = id,
-            EntityType = entityType,
-            ApiRoute = apiRoute,
-            PayloadJson = JsonSerializer.Serialize(request, JsonOptions),
-        };
-
-        await OutboxStore.EnqueueAsync(outboxItem);
-
-        // Best-effort immediate attempt; if offline this simply leaves the item PendingSync for
-        // ConnectivitySyncTrigger to pick up on reconnect — same pattern as WidgetExamples.razor.
-        await SyncService.SyncPendingAsync();
     }
 
     private RenderFragment RenderFrameSwatches() => @<div class="dg-field">
@@ -462,6 +853,7 @@
                         style="width:32px; height:32px; border-radius:50%; background:@hex; cursor:pointer; border: @(_frameColourRefId == colour.Id ? "3px solid var(--dot-orange)" : "1px solid var(--border-default)");"></button>
             }
         </div>
+        <FieldError Errors="_errors" For="FrameColourRefId" />
         @{
             var selectedIsOther = _frameColourRefId is { } id && frameColours.FirstOrDefault(c => c.Id == id)?.IsOtherOption == true;
         }
@@ -470,6 +862,7 @@
             <div class="dg-field" style="margin-top:var(--space-2);">
                 <label>Frame colour — please specify</label>
                 <input @bind="_frameColourOtherText" />
+                <FieldError Errors="_errors" For="FrameColourOtherText" />
             </div>
         }
     </div>;

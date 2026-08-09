@@ -35,9 +35,21 @@ public class IndexedDbOutboxStore(IJSRuntime jsRuntime) : ISyncQueueStore
         return JsonSerializer.Deserialize<List<OutboxItem>>(json, JsonOptions) ?? [];
     }
 
+    public async Task<OutboxItem?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var json = await jsRuntime.InvokeAsync<string?>("dotGlassesIdb.getById", cancellationToken, id.ToString());
+        return string.IsNullOrEmpty(json) ? null : JsonSerializer.Deserialize<OutboxItem>(json, JsonOptions);
+    }
+
     public async Task MarkSyncedAsync(Guid id, CancellationToken cancellationToken = default) =>
         await jsRuntime.InvokeVoidAsync("dotGlassesIdb.updateStatus", cancellationToken, id.ToString(), nameof(OutboxItemStatus.Synced), null);
 
     public async Task MarkFailedAsync(Guid id, string error, CancellationToken cancellationToken = default) =>
         await jsRuntime.InvokeVoidAsync("dotGlassesIdb.updateStatus", cancellationToken, id.ToString(), nameof(OutboxItemStatus.Failed), error);
+
+    public async Task RequeueAsync(Guid id, string payloadJson, CancellationToken cancellationToken = default) =>
+        await jsRuntime.InvokeVoidAsync("dotGlassesIdb.requeue", cancellationToken, id.ToString(), payloadJson);
+
+    public async Task RemoveAsync(Guid id, CancellationToken cancellationToken = default) =>
+        await jsRuntime.InvokeVoidAsync("dotGlassesIdb.remove", cancellationToken, id.ToString());
 }

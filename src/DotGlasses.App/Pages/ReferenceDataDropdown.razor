@@ -1,3 +1,4 @@
+@using DotGlasses.App.Validation
 @using DotGlasses.Contracts.ReferenceData
 
 <div class="dg-field">
@@ -9,12 +10,14 @@
             <option value="@item.Id">@item.Label</option>
         }
     </select>
+    <FieldError Errors="Errors" For="@Field" />
 </div>
 @if (SelectedIsOther)
 {
     <div class="dg-field">
         <label>@(OtherLabel ?? $"{Label} — please specify")</label>
         <input value="@OtherText" @oninput="e => OtherTextChanged.InvokeAsync(e.Value?.ToString())" />
+        <FieldError Errors="Errors" For="@OtherField" />
     </div>
 }
 
@@ -29,6 +32,12 @@
 
     [Parameter] public string? OtherText { get; set; }
     [Parameter] public EventCallback<string?> OtherTextChanged { get; set; }
+
+    /// <summary>Request DTO property names this control maps to, so client-side and server-side
+    /// errors both render here — see FormErrors.</summary>
+    [Parameter] public FormErrors? Errors { get; set; }
+    [Parameter] public string Field { get; set; } = string.Empty;
+    [Parameter] public string OtherField { get; set; } = string.Empty;
 
     private bool SelectedIsOther => SelectedId is { } id && Items.FirstOrDefault(i => i.Id == id)?.IsOtherOption == true;
 
