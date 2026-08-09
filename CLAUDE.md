@@ -1062,7 +1062,156 @@ xUnit. EF Core InMemory provider is acceptable for now (`Infrastructure.Tests`).
 `dotnet run` on the `DotGlasses.AppHost` project (starts Postgres via container, `Web`, and the
 Aspire dashboard).
 
+## Agreed roadmap (2026-08-09 functional review)
+
+A full functional review of the built product was done against the application source only (no
+`.md` files used as a requirements source) and written up in `docs/functional-capabilities.md` —
+a per-persona, per-screen, field-level capability spec plus a per-screen "Not built" list. Treat
+that document as the description of *what exists*; this section is the agreed set of *decisions
+about what changes*, taken with the user in a structured review session on 2026-08-09.
+
+**Delivery**: one feature branch + PR per phase (a push to `main` triggers the deploy pipeline —
+keep `main` deployable). Commit + update this file after each phase.
+
+### Phase 1 — Field App data integrity (highest priority: this loses real data today)
+
+The Field App has **no client-side validation** in `ConsultationForm.razor`, so an incomplete form
+submits, queues, is rejected 400 by the API, and dies permanently in the outbox showing only
+`HTTP 400`. Decisions:
+- **Validate client-side AND server-side on submit.** On rejection, keep the technician on the
+  **pre-filled form with inline field errors** — do not navigate to Home. This means the API's
+  `ValidationProblemDetails` response must be parsed and mapped back onto form fields.
+- **Failed records get a real review-and-resend surface** (revised mid-session: the user's first
+  instinct was to drop the failed queue entirely, then correctly identified that an offline-created
+  record can still be rejected on a later background sync, when the technician has moved on). Keep
+  a failed-records view; make it show the actual field errors and allow edit + resend, not just a
+  count. The existing `GetFailedAsync`/`Home.razor` banner is the starting point, not the answer.
+- **Persist the JWT and cache reference data/catalogues in IndexedDB.** Today the token is
+  in-memory only (`AuthTokenStore`) and `ReferenceDataClient` fetches once per session with no
+  caching — so any refresh forces a re-login that needs connectivity, directly contradicting the
+  login screen's own "log in once online — you can keep working fully offline after that" copy.
+  Persisting a token on a possibly-shared device is a real trade-off, which is why sign-out
+  (below) ships in the same phase, not later.
+- **Add sign-out to both apps.** The Admin Portal has an unreachable `Logout` action (no view
+  posts to it); the Field App never calls `AuthTokenStore.Clear()`.
+
+### Phase 2 — Access model
+
+- **Collapse to two roles: `Admin` and `User`.** `Manager` is removed. It is currently functionally
+  identical to `Admin` everywhere — every policy that admits one admits the other, and the only
+  divergence (`ReferenceDataManage`) gates on *level* (DGI), not role. Touches `RoleNames`,
+  `RoleSeedConfiguration` (+ migration), `PresetCatalogueManage`/`ManageUsersInScope`/
+  `ManageOrgInScope`/`WidgetExampleCreate`, the User Directory invite form's role select, and
+  `DevUserSeeder`'s Kenya Manager account.
+- **Existing `Manager` accounts migrate to `Admin`** — preserves every capability those accounts
+  have today so nobody loses access on deploy. Worth an access audit afterwards, since it widens
+  the Admin population.
+- **Role-aware sidebar + a real AccessDenied page.** Both, not either: the sidebar currently
+  advertises all seven screens to everyone, and a refusal redirects to `/Account/AccessDenied`,
+  which has no action or view — a bare 404. Nav filtering alone still 404s on a bookmarked URL.
+
+### Phase 3 — Make inert data real (or remove it)
+
+Three things an admin can currently configure that have **no effect anywhere**:
+- **`UserOrgAssignment` → build location switching.** Rows are written (invite form, Organisations
+  "Assign users") and read back only for display. Scoping and record-stamping come from the
+  *primary* org alone, fixed at invite time and unchangeable. A technician assigned to several
+  outlets picks their working location in the Field App and it drives what their records are
+  stamped with. Makes the hard-coded `Settings.razor`/`OutletSelect.razor` placeholders real.
+  Note: this changes what the JWT carries mid-session — needs a deliberate re-issue mechanism.
+- **`ConsentGiven` → surface it now, export later.** Captured on every Lead and Sale, stored, never
+  read. Show it in Event History now. **Binding requirement for whenever export is built: consent
+  must be included wherever lead data leaves the system** — nobody should be able to extract a
+  contact list that doesn't carry it.
+- **`CanHandleCustomOrders` → remove the flag and the toggle.** Its own doc comment claims it
+  controls Field App custom-order visibility; nothing reads it, and the decision is that custom
+  orders are available everywhere. Delete the concept rather than leave a lever that does nothing.
+  Also removes the Organisations screen's Country-only toggle and the seeded Kenya value.
+- **`Test.CustomerId` → remove it.** Never written by anything, so Event History's Tests tab shows
+  "—" for every row permanently. Tests stay deliberately anonymous (the Test form captures no name
+  or phone); drop the unused field and the Name column rather than leaving a dead one.
+
+### Phase 4 — Lead conversion (the highest-value missing capability)
+
+Converting a Lead into a Sale is **fully implemented and validated server-side** — atomic
+`ConvertedFlag`/`SaleId` linking, "already converted" rejection — but no screen can trigger it, so
+`SourceLeadId` is never populated by any user action and the Dashboard's conversion figures can
+never reflect a lead worked later. Build:
+- A **Field App leads worklist**: the technician's own outlet's open leads, with "convert to sale"
+  pre-filling the Sale form from the Lead.
+- An **Admin Portal action** on Event History's Leads tab for the same conversion.
+- **Automatic conversion detection**: when a technician records a Sale, match the customer on name
+  + phone against existing open Leads and *prompt* — "is this the same customer? convert their
+  lead?" — rather than silently linking or silently duplicating. This supersedes the deferred
+  "lead-match confirm popup" noted in the Field App UI wiring section.
+
+### Phase 5 — Email delivery
+
+Implement a real **Azure Communication Services `IEmailSender`**, replacing `LoggingEmailSender`.
+The ACS infrastructure already exists (`AppHost`'s `acs.bicep`). The user supplies the connection
+string and a verified sender address; Claude writes the sender. Token/link mechanics do not change
+— only what `UserDirectoryController` does after `InviteAsync` returns. Until this lands, no user
+provisioning is usable outside a dev session (the set-password link is copied by hand).
+
+### Phase 6 — Admin editing gaps (all four agreed)
+
+- **Reference Data: edit + reorder.** A label, image URL or sort order cannot be changed after
+  creation — the only route is retire-and-re-add, which orphans the historical association.
+- **Preset Catalogues: duplicate-lens guard + un-assign.** The same lens strength can be added to
+  a catalogue repeatedly (and renders repeatedly in the Field App picker); a catalogue assigned to
+  an org can never be un-assigned.
+- **Preset Catalogues: replace name-sniffing with an explicit `kind` field.** `LensRangeSelector`
+  matches its 6-Lens/9-Lens buttons to catalogues by *name substring*, so any third catalogue is
+  invisible to technicians. Supersedes the "known rough edge" flagged in Field App UI wiring.
+- **Organisations: rename + deactivate, and un-assign a user.** A node cannot be renamed,
+  re-levelled or deactivated after creation, and a user assigned to it can never be removed.
+
+### Phase 7 — Reporting usability (export explicitly deprioritised)
+
+- **Dashboard filters + drill-down.** Every figure is all-time and unfiltered and nothing is
+  clickable. Add date ranges and click-through into Event History.
+- **Search, filters and paging across screens.** User Directory, Custom Orders and Preset
+  Catalogues each render a full unfiltered list. Also fix Event History's Leads search, which is a
+  case-sensitive substring `LIKE` on PostgreSQL.
+- **Export is deliberately later**, not never — and when it lands it carries the consent rule above.
+
+### Phase 8 — Production readiness (all four agreed)
+
+- **Secrets + password policy**: move the JWT signing key out of `appsettings` to Key Vault / App
+  Configuration, and tighten Identity's deliberately-relaxed dev password rules (currently ≥8
+  chars, digit required, no uppercase or non-alphanumeric).
+- **Remove hard-coded dev passwords**: `DevUserSeeder`'s `KenyaManagerPassword`/
+  `RetailPointUserPassword` are literal constants in a **public** repo. Gated behind config
+  production never sets, but they should not be in source.
+- **Migration strategy**: replace auto-migrate-on-boot with an explicit, reviewed pipeline step.
+- **Field App URL placeholders**: `appsettings.Staging.json`/`appsettings.Production.json` both
+  still carry `REPLACE-AFTER-FIRST-DEPLOY`. Resolvable only after the first successful `azd up`
+  per environment — wire the mechanism and flag precisely what the user fills in and when.
+
+### Explicitly decided *against* (do not build)
+
+- **No correction path for Tests/Leads/Sales in v1.** They stay create-once atomic events with no
+  edit, void or reverse anywhere — including for admins. A mistyped phone number or wrong frame
+  colour is permanent. This is a deliberate constraint, not an oversight; revisit only if the
+  business asks.
+- **No standalone export ahead of Phase 7** (see the consent note above for the binding
+  requirement when it does get built).
+
 ## `[OPEN]` items — implement simplest placeholder, flag, don't guess
+
+**Many of the items below are now scheduled** by the agreed roadmap above (2026-08-09) rather than
+still open-ended — email delivery (Phase 5), offline reference-data caching and the outbox
+retry/discard gap and browser-storage hygiene (Phase 1), "switch active location" (Phase 3), the
+Leads-list/convert-to-sale entry point (Phase 4), catalogue name-sniffing and Organisations'
+missing delete/deactivate (Phase 6). Where a bullet below and the roadmap disagree, **the roadmap
+is the decision**; these bullets are kept for the context they carry about how each gap arose.
+
+One correction to a stale claim repeated in several bullets below:
+`AuthorizationPolicies.ManageUsersInScope`/`HierarchyDescendantRequirement` **are** wired — every
+`UserDirectoryController` action (Invite, ResetPassword, Suspend, Unsuspend) authorizes against
+the target user's own `HierarchyPath` through it, and the row-level action buttons are hidden the
+same way. The "not yet wired to a controller" doc comments on the requirement class itself are
+also out of date.
 
 - Real per-user provisioning beyond the three seeded `DevUserSeeder` accounts now exists (User
   Directory's invite flow, see Admin Portal wiring above) — but real email delivery doesn't. The
