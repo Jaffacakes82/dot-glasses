@@ -1073,12 +1073,11 @@ about what changes*, taken with the user in a structured review session on 2026-
 **Delivery**: one feature branch + PR per phase (a push to `main` triggers the deploy pipeline —
 keep `main` deployable). Commit + update this file after each phase.
 
-**Where this stands (2026-08-09):** Phase 1 is done, verified live, and committed on
-`feat/field-app-data-integrity` (2 commits: the review/roadmap, then the implementation).
-**Not pushed and no PR raised yet** — that's the first thing to do next session, then start
-Phase 2. Nothing is merged to `main`. Phases 2–8 are untouched. One new `[OPEN]` item came out of
-Phase 1 (offline record attribution at sync time vs creation time) and is a genuine correctness
-bug that should be scheduled deliberately, not left to drift.
+**Where this stands (2026-08-10):** Phase 1 is done, verified live, pushed, and PR'd —
+[PR #1](https://github.com/Jaffacakes82/dot-glasses/pull/1), `feat/field-app-data-integrity` into
+`main`. Not merged yet. Phase 2 (Access model) is next. Phases 3–8 are untouched. One new
+`[OPEN]` item came out of Phase 1 (offline record attribution at sync time vs creation time) and
+is a genuine correctness bug that should be scheduled deliberately, not left to drift.
 
 ### Phase 1 — Field App data integrity (highest priority: this loses real data today)
 
