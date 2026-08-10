@@ -227,6 +227,35 @@ html, body {
     outline-offset: 1px;
 }
 
+/* Validation. Colour alone can't carry the message (contrast and colour-blindness), so an
+   errored field gets a thicker border as well as the red, and the message itself always
+   renders as text beneath the control rather than only as a tooltip or a border state. */
+.dg-field-error {
+    color: #c00;
+    font-size: 12px;
+    font-weight: 600;
+    margin: 4px 0 0;
+}
+
+.dg-field:has(> .dg-field-error) input,
+.dg-field:has(> .dg-field-error) select {
+    border: 2px solid #c00;
+}
+
+.dg-form-error-summary {
+    background: #fdecea;
+    color: #c00;
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    font-size: 13px;
+    margin-bottom: var(--space-3);
+}
+
+.dg-form-error-summary ul {
+    margin: 6px 0 0;
+    padding-left: 18px;
+}
+
 /* -- Cards / tappable list rows ----------------------------------------------------------- */
 
 .dg-card {

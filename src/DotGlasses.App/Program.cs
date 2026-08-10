@@ -37,6 +37,11 @@ builder.Services.AddSingleton<ILoggerProvider>(sp => sp.GetRequiredService<Batch
 
 var host = builder.Build();
 
+// Rehydrate a persisted token before the first render, so a returning technician lands straight
+// on Home rather than being bounced through the login page — see AuthTokenStore.
+var tokenStore = host.Services.GetRequiredService<AuthTokenStore>();
+await tokenStore.InitializeAsync();
+
 var connectivityTrigger = host.Services.GetRequiredService<ConnectivitySyncTrigger>();
 await connectivityTrigger.StartAsync();
 
