@@ -9,14 +9,14 @@ namespace DotGlasses.Web.Authorization;
 /// AuthorizationPolicies.ManageUsersInScope/ManageOrgInScope — call via
 /// `AuthorizeAsync(User, targetHierarchyPath, policyName)`.
 ///
-/// Deliberately does NOT also check the target user's role: a Manager can manage any role at/
-/// below their node, including other Admins in a child org (2026-08-04 decision) — that's
-/// different from MinimumRoleRequirement's "who can call this at all" check, which still applies
-/// via AllowedRoles here.
+/// Deliberately does NOT also check the target user's role: an Admin can manage any role at/
+/// below their node, including other Admins in a child org (2026-08-04 decision, originally
+/// framed around Manager before the 2026-08-10 Manager→Admin collapse — see CLAUDE.md's Access
+/// model section) — that's different from MinimumRoleRequirement's "who can call this at all"
+/// check, which still applies via AllowedRoles here.
 ///
-/// Not yet wired to a controller action — UserDirectoryController/OrganisationsController don't
-/// operate on real per-user/per-org resources yet (still static placeholder data). Ships now so
-/// it's ready when they do.
+/// Wired to UserDirectoryController (Invite/ResetPassword/Suspend/Unsuspend) and
+/// OrganisationsController (CreateChild, the two flag toggles, AssignUser).
 /// </summary>
 public class HierarchyDescendantRequirement(params string[] allowedRoles) : IAuthorizationRequirement
 {

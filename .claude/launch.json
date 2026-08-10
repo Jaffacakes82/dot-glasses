@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dotglasses-apphost",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "src/DotGlasses.AppHost"],
+      "port": 7117,
+      "url": "https://localhost:7117"
+    }
+  ]
+}

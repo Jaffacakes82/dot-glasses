@@ -1,0 +1,12 @@
+@{
+    ViewData["Title"] = "Access denied";
+}
+
+@await Html.PartialAsync("_PageHeader", new DotGlasses.Web.Models.PageHeaderViewModel { Crumb = "DOT Glasses", Title = "Access denied" })
+
+<div class="alert alert-danger" style="border-radius:var(--radius-md); max-width:640px;">
+    You don't have permission to view this page. If you think this is a mistake, contact your
+    DGI administrator.
+</div>
+
+<a class="dg-btn dg-btn-primary" asp-controller="Home" asp-action="Index">Back to Dashboard</a>
