@@ -93,17 +93,17 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
 // --- RBAC (separate from the data-scoping query filter — see CLAUDE.md) ----------------
 builder.Services.AddAuthorizationBuilder()
     .AddPolicy(AuthorizationPolicies.WidgetExampleCreate, policy =>
-        policy.Requirements.Add(new MinimumRoleRequirement("Admin", "Manager")))
+        policy.Requirements.Add(new MinimumRoleRequirement(RoleNames.Admin)))
     .AddPolicy(AuthorizationPolicies.CustomOrdersView, policy =>
         policy.Requirements.Add(new OrgLevelRequirement(OrganisationLevel.Country, RoleNames.All.ToArray())))
     .AddPolicy(AuthorizationPolicies.ReferenceDataManage, policy =>
         policy.Requirements.Add(new OrgLevelRequirement(OrganisationLevel.Dgi, RoleNames.Admin)))
     .AddPolicy(AuthorizationPolicies.PresetCatalogueManage, policy =>
-        policy.Requirements.Add(new OrgLevelRequirement(OrganisationLevel.Country, RoleNames.Admin, RoleNames.Manager)))
+        policy.Requirements.Add(new OrgLevelRequirement(OrganisationLevel.Country, RoleNames.Admin)))
     .AddPolicy(AuthorizationPolicies.ManageUsersInScope, policy =>
-        policy.Requirements.Add(new HierarchyDescendantRequirement(RoleNames.Admin, RoleNames.Manager)))
+        policy.Requirements.Add(new HierarchyDescendantRequirement(RoleNames.Admin)))
     .AddPolicy(AuthorizationPolicies.ManageOrgInScope, policy =>
-        policy.Requirements.Add(new HierarchyDescendantRequirement(RoleNames.Admin, RoleNames.Manager)));
+        policy.Requirements.Add(new HierarchyDescendantRequirement(RoleNames.Admin)));
 builder.Services.AddSingleton<IAuthorizationHandler, MinimumRoleAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, OrgLevelAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, HierarchyDescendantAuthorizationHandler>();

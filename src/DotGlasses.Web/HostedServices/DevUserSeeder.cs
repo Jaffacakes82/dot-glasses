@@ -10,15 +10,18 @@ namespace DotGlasses.Web.HostedServices;
 /// <summary>
 /// [OPEN] placeholder: creates dev users at three org levels so the pipeline — including the
 /// 2026-08-04 RBAC policies (OrgLevelRequirement, HierarchyDescendantRequirement) — is
-/// exercisable end-to-end without a real provisioning flow. The three agreed role names are
+/// exercisable end-to-end without a real provisioning flow. The two agreed role names are
 /// seeded via migration now (see Persistence/Configurations/RoleSeedConfiguration.cs), not here —
 /// roles are non-secret reference data that needs to exist in every environment, whereas these
 /// dev accounts are gated behind DevSeedOptions being configured (never set in production) and
-/// their passwords are only ever a local-dev convenience. The Manager/User accounts' credentials
+/// their passwords are only ever a local-dev convenience. The below-DGI accounts' credentials
 /// are fixed (not configurable via DevSeedOptions) since they exist purely to exercise RBAC
 /// locally, not for per-environment customization. Real seeding (who gets provisioned, at which
 /// org node, by whom) is pending the CEO conversation — do not treat DevSeedOptions as production
-/// account provisioning.
+/// account provisioning. The "Kenya Manager" account name/constants predate the 2026-08-10
+/// Manager→Admin role collapse (see CLAUDE.md's Access model section) and are left as-is — it's
+/// now just an Admin account at Country level, kept under its original username so the existing
+/// local Postgres data volume's seeded account is reused rather than duplicated.
 /// </summary>
 public class DevUserSeeder(IServiceScopeFactory scopeFactory, IOptions<DevSeedOptions> devSeedOptions) : IHostedService
 {
@@ -47,7 +50,7 @@ public class DevUserSeeder(IServiceScopeFactory scopeFactory, IOptions<DevSeedOp
         await CreateOrUpdateAsync(
             userManager, KenyaManagerUserName, KenyaManagerPassword,
             OrganisationSeedConfiguration.KenyaId, OrganisationSeedConfiguration.KenyaPath, OrganisationLevel.Country,
-            RoleNames.Manager);
+            RoleNames.Admin);
 
         await CreateOrUpdateAsync(
             userManager, RetailPointUserUserName, RetailPointUserPassword,

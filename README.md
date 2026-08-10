@@ -73,7 +73,7 @@ This starts Postgres in a container, runs `DotGlasses.Web` (Admin Portal + API),
 Aspire dashboard (logs/traces/metrics for every service in one place). The EF Core migration
 applies automatically — nothing manual to run first.
 
-A dev admin user and the `Admin`/`Manager`/`User` roles are seeded automatically on startup —
+A dev admin user and the `Admin`/`User` roles are seeded automatically on startup —
 credentials are in `src/DotGlasses.Web/appsettings.Development.json` (`DevSeed` section). This
 is a placeholder pending real account provisioning — see the `[OPEN]` items in
 [CLAUDE.md](CLAUDE.md).
