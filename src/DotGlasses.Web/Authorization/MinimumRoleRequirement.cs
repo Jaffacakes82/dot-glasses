@@ -5,9 +5,10 @@ namespace DotGlasses.Web.Authorization;
 /// <summary>
 /// RBAC example gating WidgetExample creation (brief 3.2b) — entirely separate from the
 /// hierarchy-scoping global query filter in DotGlasses.Infrastructure, which governs which
-/// rows a user can see at all, not what they can do with them. [OPEN]: the real permission
-/// matrix (e.g. "a Manager may only create at or below their own node") is pending the CEO
-/// conversation; this only checks role membership as the placeholder pattern to extend.
+/// rows a user can see at all, not what they can do with them. Only checks role membership,
+/// deliberately not node-scoped — WidgetExample stays the architectural reference pattern, not
+/// a real feature that needs resource-based checks (see HierarchyDescendantRequirement for
+/// that pattern, used by the real entities).
 /// </summary>
 public class MinimumRoleRequirement(params string[] allowedRoles) : IAuthorizationRequirement
 {

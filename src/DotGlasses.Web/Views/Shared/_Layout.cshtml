@@ -1,5 +1,8 @@
 @using DotGlasses.Application.Common
+@using DotGlasses.Web.Authorization
+@using Microsoft.AspNetCore.Authorization
 @inject ICurrentUserContext CurrentUser
+@inject IAuthorizationService AuthorizationService
 @{
     var currentController = ViewContext.RouteData.Values["controller"]?.ToString();
 
@@ -12,6 +15,18 @@
             .Select(part => char.ToUpperInvariant(part[0])));
 
     var roleLabel = CurrentUser.Roles.FirstOrDefault() ?? "—";
+
+    // Dashboard/Organisations/Event History/User Directory carry a plain [Authorize] on their
+    // controllers — visible to any authenticated role. These three have a real policy gate, so
+    // the sidebar mirrors it rather than advertising a link that 403s — nav filtering alone still
+    // wouldn't be enough on its own (a bookmarked URL bypasses it), which is what the real
+    // AccessDenied page above is for.
+    var canViewPresetCatalogues = CurrentUser.IsAuthenticated &&
+        (await AuthorizationService.AuthorizeAsync(User, AuthorizationPolicies.PresetCatalogueManage)).Succeeded;
+    var canViewCustomOrders = CurrentUser.IsAuthenticated &&
+        (await AuthorizationService.AuthorizeAsync(User, AuthorizationPolicies.CustomOrdersView)).Succeeded;
+    var canViewReferenceData = CurrentUser.IsAuthenticated &&
+        (await AuthorizationService.AuthorizeAsync(User, AuthorizationPolicies.ReferenceDataManage)).Succeeded;
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -44,15 +59,24 @@
                     <a class="dg-nav-item @(IsActive("UserDirectory") ? "active" : "")" asp-controller="UserDirectory" asp-action="Index">
                         <span class="dg-dot"></span> User Directory
                     </a>
-                    <a class="dg-nav-item @(IsActive("Catalogues") ? "active" : "")" asp-controller="Catalogues" asp-action="Index">
-                        <span class="dg-dot"></span> Preset Catalogues
-                    </a>
-                    <a class="dg-nav-item @(IsActive("CustomOrders") ? "active" : "")" asp-controller="CustomOrders" asp-action="Index">
-                        <span class="dg-dot"></span> Custom Orders
-                    </a>
-                    <a class="dg-nav-item @(IsActive("ReferenceData") ? "active" : "")" asp-controller="ReferenceData" asp-action="Index">
-                        <span class="dg-dot"></span> Reference Data
-                    </a>
+                    @if (canViewPresetCatalogues)
+                    {
+                        <a class="dg-nav-item @(IsActive("Catalogues") ? "active" : "")" asp-controller="Catalogues" asp-action="Index">
+                            <span class="dg-dot"></span> Preset Catalogues
+                        </a>
+                    }
+                    @if (canViewCustomOrders)
+                    {
+                        <a class="dg-nav-item @(IsActive("CustomOrders") ? "active" : "")" asp-controller="CustomOrders" asp-action="Index">
+                            <span class="dg-dot"></span> Custom Orders
+                        </a>
+                    }
+                    @if (canViewReferenceData)
+                    {
+                        <a class="dg-nav-item @(IsActive("ReferenceData") ? "active" : "")" asp-controller="ReferenceData" asp-action="Index">
+                            <span class="dg-dot"></span> Reference Data
+                        </a>
+                    }
                 </nav>
                 <div class="dg-user-chip">
                     <div class="dg-avatar">@initials</div>

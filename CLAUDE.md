@@ -775,26 +775,70 @@ instead, matching exactly what a real client would submit.
 
 ## RBAC permission matrix
 
-Three roles (Admin/Manager/User), assignable at any org node, scope = that node + everything
-beneath it:
+**Two roles (2026-08-10, collapsed from three — see the Access model section below): Admin/
+User**, assignable at any org node, scope = that node + everything beneath it:
 - **Admin at DGI**: super admin — the only role/level that can edit reference data
   (`AuthorizationPolicies.ReferenceDataManage`) or touch DGI-critical settings.
-- **Admin at a child org**: full control of that org and everything beneath it.
-- **Manager**: can manage *any* user at/below their node, **including other Admins**, irrespective
-  of that user's role (2026-08-04 decision — deliberately not role-gated the other way). Can
-  create child orgs beneath their scope. Can create/assign preset catalogues at Country level and
-  above (`AuthorizationPolicies.PresetCatalogueManage`).
+- **Admin at a child org**: full control of that org and everything beneath it. Can manage *any*
+  user at/below their node, **including other Admins**, irrespective of that user's role
+  (2026-08-04 decision — deliberately not role-gated the other way). Can create child orgs beneath
+  their scope. Can create/assign preset catalogues at Country level and above
+  (`AuthorizationPolicies.PresetCatalogueManage`).
 - **User**: at a Retail Point, Field App access + read-only MI for that outlet only.
 - **Custom Orders** page (`AuthorizationPolicies.CustomOrdersView`): DGI/Country only, hidden
-  entirely below that (2026-08-04 decision).
-- Event History is visible at every level, but scoped to the viewer's role + org — not yet
-  enforced (still placeholder data, see UI / design system below).
+  entirely below that (2026-08-04 decision) — the only policy either role can pass, since it's
+  level-gated, not role-gated.
+- Event History is visible at every level (any authenticated role), scoped automatically to the
+  viewer's own hierarchy the same way every other `IHierarchyScoped` read is (see the Event
+  History wiring section above).
 
 Backed by `OrgLevelRequirement` (role + own org level at/above a threshold — no DB round trip,
 reads `ICurrentUserContext.OrgLevel`, itself denormalized onto `ApplicationUser.OrgLevel` and
-stamped as a claim at sign-in, same pattern as `HierarchyPath`) and
-`HierarchyDescendantRequirement` (role + resource-based subtree check, for when a controller
-acts on a specific target user/org — not yet wired to one, see above).
+stamped as a claim at sign-in, same pattern as `HierarchyPath`) and `HierarchyDescendantRequirement`
+(role + resource-based subtree check, for when a controller acts on a specific target user/org —
+wired to `UserDirectoryController` and `OrganisationsController`, see the Access model section).
+
+## Access model (2026-08-10 — Phase 2 of the agreed roadmap)
+
+**Collapsed `Manager` into `Admin`; two roles remain.** `Manager` had been functionally identical
+to `Admin` in every policy that admitted one (`PresetCatalogueManage`, `ManageUsersInScope`,
+`ManageOrgInScope`, `WidgetExampleCreate`) — the only role-differentiated policy,
+`ReferenceDataManage`, already gated on org *level* (DGI), not role, so Manager never actually
+carved out a distinct capability anywhere. `RoleNames.Manager` is gone; `RoleNames.All` is now
+`[Admin, User]`.
+
+**New EF migration `RemoveManagerRole`** deletes the seeded Manager row from `AspNetRoles`, but
+first runs a raw `UPDATE AspNetUserRoles SET RoleId = <Admin's Id> WHERE RoleId = <Manager's Id>`
+— existing Manager-role users migrate to Admin, preserving every capability they had (per the
+2026-08-09 roadmap decision: nobody loses access on deploy). Not reversible on `Down()` past
+re-inserting the role row itself — there's no record of which reassigned users were originally
+Manager vs Admin, so that half of the migration is one-way. The seeded dev "Kenya Manager" account
+(`DevUserSeeder`) now seeds as `RoleNames.Admin` — its username/constant names were deliberately
+left as `KenyaManagerUserName`/`kenya-manager@dotglasses.dev` rather than renamed, so the existing
+local Postgres data volume's seeded account is reused (matched by username) rather than duplicated
+alongside a stale orphaned "kenya-manager" row.
+
+**Role-aware sidebar + a real `AccessDenied` page**, both — nav filtering alone still 404s on a
+bookmarked URL to a screen the viewer can't reach. `_Layout.cshtml` now injects
+`IAuthorizationService` and hides the Preset Catalogues/Custom Orders/Reference Data nav links
+per-request via the same three policies their controllers already enforce
+(`PresetCatalogueManage`/`CustomOrdersView`/`ReferenceDataManage`) — Dashboard/Organisations/Event
+History/User Directory stay unconditionally visible, matching their controllers' plain
+`[Authorize]` (any authenticated role today; no new restriction added here, this phase only makes
+existing access decisions visible/consistent, not narrower). `AccountController.AccessDenied` +
+`Views/Account/AccessDenied.cshtml` replace the previous bare 404 — ASP.NET Core Identity's cookie
+middleware already redirected a failed policy check to `/Account/AccessDenied` by default, nothing
+was ever handling that path until now.
+
+**Verified live**: signed in as the seeded `kenya-manager@dotglasses.dev` account post-migration —
+User Directory now lists it (and Grace Njoroge, previously invited as a real Manager via the
+Assign Users pass) as role "Admin", the sidebar chip reads "Admin", and the sidebar correctly
+shows Preset Catalogues/Custom Orders but hides Reference Data (Admin at Country level, not DGI) —
+navigating directly to `/ReferenceData` renders the real Access Denied page, not a 404. Signed in
+separately as the seeded RetailPoint `retailpoint-user@dotglasses.dev`: sidebar shows only
+Dashboard/Organisations/Event History/User Directory, and a direct hit on `/CustomOrders`
+(level-gated, not role-gated — this account fails on level alone) also renders Access Denied
+correctly. The invite form's role `<select>` now offers only Admin/User.
 
 ## UI / design system
 

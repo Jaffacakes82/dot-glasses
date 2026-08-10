@@ -60,6 +60,9 @@ public class AccountController(SignInManager<ApplicationUser> signInManager) : C
     }
 
     [HttpGet]
+    public IActionResult AccessDenied() => View();
+
+    [HttpGet]
     [AllowAnonymous]
     public IActionResult SetPassword(string userId, string token) => View(new SetPasswordViewModel { UserId = userId, Token = token });
 
