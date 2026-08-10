@@ -39,8 +39,8 @@ public class OrganisationAdminService(DotGlassesDbContext dbContext, IUnscopedRe
         // New path segments are small ever-increasing integers assigned in creation order across
         // the *whole* tree (not per-parent) — see the seeded /1/, /1/2/, /1/2/3/ paths. Picking
         // the next one safely means seeing the current global max, which requires looking outside
-        // the caller's own hierarchy scope (a Manager creating a node must not collide with a
-        // segment an org they can't see already used) — hence IUnscopedReportQueryService, not a
+        // the caller's own hierarchy scope (an Admin below DGI creating a node must not collide
+        // with a segment an org they can't see already used) — hence IUnscopedReportQueryService, not a
         // scoped query here. Known simplification: read-max-then-increment has a small race
         // window under concurrent creates — acceptable for an infrequent, admin-only action.
         var allPaths = await unscopedReportQueryService.GetOrganisationNodePathsUnscopedAsync(cancellationToken);

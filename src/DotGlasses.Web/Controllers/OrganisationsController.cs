@@ -104,7 +104,7 @@ public class OrganisationsController(
         var byParent = nodes.ToLookup(n => n.ParentId);
 
         // Root for display purposes is whichever node has no visible parent — the true DGI root
-        // for a DGI Admin, or e.g. Kenya for a Kenya Manager (Kenya's real ParentId points at
+        // for a DGI Admin, or e.g. Kenya for a Kenya-level Admin (Kenya's real ParentId points at
         // DGI, but DGI is filtered out of their scoped result, so it's effectively their root).
         var rootId = nodes.First(n => n.ParentId is null || !byId.ContainsKey(n.ParentId.Value)).Id;
         var tree = BuildTree(rootId, byId, byParent);

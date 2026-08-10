@@ -4,7 +4,7 @@ namespace DotGlasses.Application.PresetCatalogues;
 /// screen. Deliberately separate from IPresetCatalogueQueryService (the Field-App-facing "which
 /// catalogues can this caller use" read, active-assignment-scoped): this returns every catalogue
 /// the caller is allowed to manage and can mutate. Reuses
-/// AuthorizationPolicies.PresetCatalogueManage (Admin/Manager, Country level+) — no new RBAC
+/// AuthorizationPolicies.PresetCatalogueManage (Admin, Country level+) — no new RBAC
 /// policy needed.</summary>
 public interface IPresetCatalogueAdminService
 {

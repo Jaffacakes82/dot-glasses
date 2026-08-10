@@ -53,7 +53,7 @@ public class WidgetExamplesApiTests(CustomWebApplicationFactory factory) : IClas
     public async Task Create_WithUserRoleOnly_ReturnsForbidden()
     {
         // Exercises the RBAC policy example (brief 3.2b): "WidgetExample.Create" requires
-        // Admin or Manager — a plain User is authenticated but not authorized for this action.
+        // Admin — a plain User is authenticated but not authorized for this action.
         var client = CreateAuthenticatedClient(factory, "plain-user", RoleNames.User);
         var request = new CreateWidgetExampleRequest { Id = Guid.NewGuid(), Name = "Test", HierarchyPath = "/1/" };
 
