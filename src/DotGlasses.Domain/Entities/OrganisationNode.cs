@@ -30,11 +30,6 @@ public class OrganisationNode : IAuditable, ISoftDeletable, IHierarchyScoped
     /// global filter — Admins still need to see and edit training orgs to clean them up.</summary>
     public bool IsTrainingOrg { get; set; }
 
-    /// <summary>Only meaningful when Level == Country; enforced in the Application layer, not a
-    /// DB constraint. Determines whether the Custom Order flow appears on the Field App for
-    /// retail points under this country.</summary>
-    public bool CanHandleCustomOrders { get; set; }
-
     public DateTimeOffset CreatedAtUtc { get; set; }
     public string? CreatedBy { get; set; }
     public DateTimeOffset? ModifiedAtUtc { get; set; }

@@ -16,9 +16,6 @@ public class Test : IAuditable, ISoftDeletable, IHierarchyScoped
 
     public Guid TechnicianUserId { get; set; }
 
-    /// <summary>Set only if the customer shared contact details and this test became a Lead.</summary>
-    public Guid? CustomerId { get; set; }
-
     public int? AgeYears { get; set; }
 
     public Gender Gender { get; set; }

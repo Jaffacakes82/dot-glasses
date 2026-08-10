@@ -21,8 +21,10 @@ public interface IEventHistoryQueryService
     Task<PagedResult<ReferralEventRow>> ListReferralsAsync(int page, int pageSize, CancellationToken cancellationToken = default);
 }
 
-public record SaleOrTestEventRow(string Type, bool Custom, string Name, string Outlet, string Country, DateTimeOffset CreatedAtUtc);
-public record LeadEventRow(string Name, string PhoneMasked, string Outlet, string Reason, DateTimeOffset CreatedAtUtc);
+/// <summary>Name/ConsentGiven are null for a Test row — Tests stay deliberately anonymous (no
+/// name/phone captured at all) and carry no consent concept.</summary>
+public record SaleOrTestEventRow(string Type, bool Custom, string? Name, string Outlet, string Country, DateTimeOffset CreatedAtUtc, bool? ConsentGiven);
+public record LeadEventRow(string Name, string PhoneMasked, string Outlet, string Reason, DateTimeOffset CreatedAtUtc, bool ConsentGiven);
 public record ReferralEventRow(string Outlet, string Country, string Reason, DateTimeOffset CreatedAtUtc);
 
 /// <summary>Page is 1-based. TotalPages is 0 when TotalCount is 0 (an empty tab shows no pager,
