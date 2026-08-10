@@ -34,7 +34,8 @@
         </EditForm>
 
         <p style="font-size:12px; color:#888; margin-top:var(--space-4);">
-            Log in once online — you can keep working fully offline after that.
+            Log in once online — you can keep working fully offline after that. Sign out from
+            Settings when you hand the device to someone else.
         </p>
     </div>
 </div>
@@ -61,7 +62,7 @@
             var result = await response.Content.ReadFromJsonAsync<LoginResponse>();
             if (result is not null)
             {
-                TokenStore.SetToken(result.AccessToken, result.ExpiresAtUtc);
+                await TokenStore.SetTokenAsync(result.AccessToken, result.ExpiresAtUtc);
                 Navigation.NavigateTo("/");
             }
         }
