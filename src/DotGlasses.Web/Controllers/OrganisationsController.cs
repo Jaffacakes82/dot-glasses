@@ -53,19 +53,6 @@ public class OrganisationsController(
         return RedirectToAction(nameof(Index), new { selectedId = id });
     }
 
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> SetCanHandleCustomOrders(Guid id, bool value, CancellationToken cancellationToken)
-    {
-        if (!await CanManageAsync(id, cancellationToken))
-        {
-            return Forbid();
-        }
-
-        await organisationAdminService.SetCanHandleCustomOrdersAsync(id, value, cancellationToken);
-        return RedirectToAction(nameof(Index), new { selectedId = id });
-    }
-
     /// <summary>Reuses ManageOrgInScope (against the org being assigned into), not the separate
     /// user-scoped ManageUsersInScope — see OrganisationsIndexViewModel's doc comment for why.</summary>
     [HttpPost]
@@ -137,7 +124,7 @@ public class OrganisationsController(
             .Select(c => BuildTree(c.Id, byId, byParent))
             .ToList();
 
-        return new OrgNode(node.Id, node.Name, LevelDisplay(node.Level), node.Kind, node.IsTrainingOrg, node.CanHandleCustomOrders, children);
+        return new OrgNode(node.Id, node.Name, LevelDisplay(node.Level), node.Kind, node.IsTrainingOrg, children);
     }
 
     private static OrgNode? FindNode(OrgNode node, Guid id) =>

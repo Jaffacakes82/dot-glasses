@@ -3,7 +3,7 @@ namespace DotGlasses.Web.Models;
 /// <summary>Real org hierarchy tree node — Type is OrganisationLevel's display string ("DGI",
 /// "Country", "Intermediate", "RetailPoint"); Kind is the entity's free-text display label (e.g.
 /// "Retailer", "Distributor"), shown separately since no business rule keys off it.</summary>
-public record OrgNode(Guid Id, string Name, string Type, string? Kind, bool IsTrainingOrg, bool CanHandleCustomOrders, IReadOnlyList<OrgNode> Children)
+public record OrgNode(Guid Id, string Name, string Type, string? Kind, bool IsTrainingOrg, IReadOnlyList<OrgNode> Children)
 {
     public static readonly IReadOnlyDictionary<string, string> TypeColor = new Dictionary<string, string>
     {

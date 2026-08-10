@@ -54,7 +54,6 @@ public class VisionTestService(IVisionTestRepository repository, IUnitOfWork uni
         Id = entity.Id,
         HierarchyPath = entity.HierarchyPath,
         TechnicianUserId = entity.TechnicianUserId,
-        CustomerId = entity.CustomerId,
         AgeYears = entity.AgeYears,
         Gender = entity.Gender.ToContract(),
         OccupationRefId = entity.OccupationRefId,

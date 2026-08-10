@@ -29,13 +29,29 @@
         else
         {
             <table class="dg-table">
-                <thead><tr><th>Type</th><th>Name</th><th>Outlet</th><th>Country</th><th>Time</th></tr></thead>
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        @if (Model.ActiveTab == "sales")
+                        {
+                            <th>Name</th>
+                            <th>Consent</th>
+                        }
+                        <th>Outlet</th>
+                        <th>Country</th>
+                        <th>Time</th>
+                    </tr>
+                </thead>
                 <tbody>
                 @foreach (var row in rows)
                 {
                     <tr>
                         <td><span class="dg-badge" style="background:@(row.Type == "Sale" ? "var(--dot-green)" : "var(--dot-blue)");">@row.Type@(row.Custom ? " · Custom" : "")</span></td>
-                        <td>@row.Name</td>
+                        @if (Model.ActiveTab == "sales")
+                        {
+                            <td>@row.Name</td>
+                            <td class="dg-muted">@(row.ConsentGiven == true ? "Yes" : "No")</td>
+                        }
                         <td class="dg-muted">@row.Outlet</td>
                         <td class="dg-muted">@row.Country</td>
                         <td class="dg-muted">@row.Time</td>
@@ -59,7 +75,7 @@
         else
         {
             <table class="dg-table">
-                <thead><tr><th>Name</th><th>Phone</th><th>Outlet</th><th>Reason not purchased</th><th>Logged</th></tr></thead>
+                <thead><tr><th>Name</th><th>Phone</th><th>Outlet</th><th>Reason not purchased</th><th>Consent</th><th>Logged</th></tr></thead>
                 <tbody>
                 @foreach (var lead in Model.Leads)
                 {
@@ -68,6 +84,7 @@
                         <td class="dg-muted">@lead.PhoneMasked</td>
                         <td class="dg-muted">@lead.Outlet</td>
                         <td class="dg-muted">@lead.Reason</td>
+                        <td class="dg-muted">@(lead.ConsentGiven ? "Yes" : "No")</td>
                         <td class="dg-muted">@lead.Logged</td>
                     </tr>
                 }

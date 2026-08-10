@@ -20,6 +20,5 @@ public class TestConfiguration : IEntityTypeConfiguration<Test>
         builder.Property(x => x.DeletedBy).HasMaxLength(256);
         builder.HasIndex(x => x.HierarchyPath);
         builder.HasIndex(x => x.TechnicianUserId);
-        builder.HasIndex(x => x.CustomerId);
     }
 }

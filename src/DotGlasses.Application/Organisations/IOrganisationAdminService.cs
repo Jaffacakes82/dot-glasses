@@ -26,10 +26,6 @@ public interface IOrganisationAdminService
 
     /// <summary>IsTrainingOrg has no Level restriction — any node can be flagged.</summary>
     Task SetTrainingOrgFlagAsync(Guid id, bool isTrainingOrg, CancellationToken cancellationToken = default);
-
-    /// <summary>Rejects if the target node isn't Country — CanHandleCustomOrders is only
-    /// meaningful at that level (see OrganisationNode's own doc comment).</summary>
-    Task SetCanHandleCustomOrdersAsync(Guid id, bool canHandleCustomOrders, CancellationToken cancellationToken = default);
 }
 
-public record OrganisationAdminNode(Guid Id, Guid? ParentId, string Name, OrganisationLevel Level, string? Kind, string HierarchyPath, bool IsTrainingOrg, bool CanHandleCustomOrders);
+public record OrganisationAdminNode(Guid Id, Guid? ParentId, string Name, OrganisationLevel Level, string? Kind, string HierarchyPath, bool IsTrainingOrg);

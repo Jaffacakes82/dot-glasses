@@ -6,8 +6,10 @@ namespace DotGlasses.Contracts.Tests;
 /// Id is client-generated (offline-sync outbox idempotency key), same as WidgetExample.
 /// Deliberately has no HierarchyPath/TechnicianUserId fields — the server derives both from the
 /// authenticated caller (see TestsController), never trusting client-submitted values for a
-/// real technician's data entry. No CustomerId/ConvertedToLeadId either — those are set later by
-/// the Lead-linking flow (see LeadService), not at Test creation.
+/// real technician's data entry. No ConvertedToLeadId either — that's set later by the
+/// Lead-linking flow (see LeadService), not at Test creation. Tests stay deliberately anonymous
+/// (no name/phone captured, and no Customer link — see CLAUDE.md's Phase 3 notes), unlike
+/// Lead/Sale.
 /// </summary>
 public class CreateTestRequest
 {

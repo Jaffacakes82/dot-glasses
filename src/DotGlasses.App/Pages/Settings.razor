@@ -1,9 +1,11 @@
 @page "/settings"
 @using DotGlasses.App.Auth
+@using DotGlasses.Contracts.Auth
 @using DotGlasses.Contracts.Sync
 @inject AuthTokenStore TokenStore
 @inject ISyncQueueStore OutboxStore
 @inject ISyncService SyncService
+@inject IUserLocationClient LocationClient
 @inject NavigationManager Navigation
 
 <PageTitle>Settings</PageTitle>
@@ -15,11 +17,28 @@
     </div>
 
     <p style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:#666; margin-bottom:var(--space-2);">Active location</p>
-    @foreach (var outlet in _outlets)
+    @if (_orgs.Count == 0)
     {
-        <div class="dg-outlet-button @(outlet == _activeOutlet ? "selected" : "")">
-            @outlet @(outlet == _activeOutlet ? " ✓" : "")
-        </div>
+        <p style="font-size:13px; color:#666;">@(_loadingOrgs ? "Loading your assigned locations…" : "No locations assigned yet — contact your admin.")</p>
+    }
+    else
+    {
+        @foreach (var org in _orgs)
+        {
+            <button class="dg-outlet-button @(org.IsActive ? "selected" : "")" type="button"
+                    disabled="@(org.IsActive || _switchingOrg || _unsentCount > 0)"
+                    @onclick="() => SwitchLocationAsync(org.OrgNodeId)">
+                @org.Name @(org.IsActive ? " ✓" : "")
+            </button>
+        }
+        @if (_unsentCount > 0)
+        {
+            <p style="font-size:12px; color:#c00; margin-top:4px;">Send unsent records before switching location — same reason sign-out is blocked below.</p>
+        }
+        @if (_locationError is not null)
+        {
+            <p style="font-size:12px; color:#c00; margin-top:4px;">@_locationError</p>
+        }
     }
 
     <p style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:#666; margin: var(--space-4) 0 var(--space-2);">Toolkit</p>
@@ -62,20 +81,59 @@
 </div>
 
 @code {
-    // Placeholder — only the outlets assigned to *this* user, per the design brief; real
-    // assignment data isn't modelled yet (see CLAUDE.md).
-    private readonly string[] _outlets = ["Kangemi Vision Centre", "Nakuru Central"];
-    private readonly string _activeOutlet = "Kangemi Vision Centre";
     private readonly string[] _toolkitItems = ["Talking points & FAQs", "Near-vision chart", "Distance-vision chart"];
+
+    private IReadOnlyList<AssignedOrgDto> _orgs = [];
+    private bool _loadingOrgs = true;
+    private bool _switchingOrg;
+    private string? _locationError;
 
     private bool _confirmingSignOut;
     private bool _busy;
     private int _unsentCount;
     private string? _message;
 
-    protected override async Task OnInitializedAsync() => await RefreshAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+        await RefreshOrgsAsync();
+    }
 
     private async Task RefreshAsync() => _unsentCount = (await OutboxStore.GetPendingAsync()).Count;
+
+    private async Task RefreshOrgsAsync()
+    {
+        _loadingOrgs = true;
+        _orgs = await LocationClient.GetMyOrgsAsync();
+        _loadingOrgs = false;
+    }
+
+    /// <summary>
+    /// Same rationale as SignOutAsync's blocked-while-queued guard below: switching location
+    /// changes the JWT's HierarchyPath, and a queued-but-unsent record still drains stamped with
+    /// whatever HierarchyPath is active *at sync time* — so switching before sending would corrupt
+    /// those records' outlet the same way signing out under someone else would.
+    /// </summary>
+    private async Task SwitchLocationAsync(Guid orgNodeId)
+    {
+        _switchingOrg = true;
+        _locationError = null;
+        try
+        {
+            var succeeded = await LocationClient.SwitchOrgAsync(orgNodeId);
+            if (!succeeded)
+            {
+                _locationError = "Couldn't switch location — check your connection and try again.";
+                return;
+            }
+
+            await RefreshOrgsAsync();
+        }
+        finally
+        {
+            _switchingOrg = false;
+        }
+    }
 
     private async Task SyncNowAsync()
     {
