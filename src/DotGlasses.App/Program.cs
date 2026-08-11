@@ -30,6 +30,7 @@ builder.Services.AddSingleton<ISyncService, SyncService>();
 builder.Services.AddSingleton<ConnectivitySyncTrigger>();
 
 builder.Services.AddSingleton<IReferenceDataClient, ReferenceDataClient>();
+builder.Services.AddSingleton<IUserLocationClient, UserLocationClient>();
 
 builder.Services.AddSingleton<IClientSessionContext, ClientSessionContext>();
 builder.Services.AddSingleton<BatchingLoggerProvider>();

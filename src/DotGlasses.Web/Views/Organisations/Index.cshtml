@@ -71,17 +71,6 @@
                     </button>
                 </form>
 
-                @if (Model.Selected.Type == "Country")
-                {
-                    <form asp-action="SetCanHandleCustomOrders" method="post">
-                        <input type="hidden" name="id" value="@Model.Selected.Id" />
-                        <input type="hidden" name="value" value="@((!Model.Selected.CanHandleCustomOrders).ToString())" />
-                        <button class="dg-btn dg-btn-ghost" style="width:100%; justify-content:center;" type="submit">
-                            @(Model.Selected.CanHandleCustomOrders ? "Disable custom orders" : "Enable custom orders")
-                        </button>
-                    </form>
-                }
-
                 @if (Model.Selected.Type != "RetailPoint")
                 {
                     <button class="dg-btn dg-btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#addChildModal">Add child node</button>

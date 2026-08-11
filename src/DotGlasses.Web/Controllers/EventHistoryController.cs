@@ -54,10 +54,10 @@ public class EventHistoryController(IEventHistoryQueryService eventHistoryQueryS
     }
 
     private static SaleOrTestEvent ToWebModel(SaleOrTestEventRow row) =>
-        new(row.Type, row.Custom, row.Name, row.Outlet, row.Country, FormatAbsolute(row.CreatedAtUtc));
+        new(row.Type, row.Custom, row.Name, row.Outlet, row.Country, FormatAbsolute(row.CreatedAtUtc), row.ConsentGiven);
 
     private static LeadEvent ToWebModel(LeadEventRow row) =>
-        new(row.Name, row.PhoneMasked, row.Outlet, row.Reason, FormatRelative(row.CreatedAtUtc));
+        new(row.Name, row.PhoneMasked, row.Outlet, row.Reason, FormatRelative(row.CreatedAtUtc), row.ConsentGiven);
 
     private static ReferralEvent ToWebModel(ReferralEventRow row) =>
         new(row.Outlet, row.Country, row.Reason, FormatAbsolute(row.CreatedAtUtc));
