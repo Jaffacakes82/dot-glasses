@@ -1118,16 +1118,16 @@ about what changes*, taken with the user in a structured review session on 2026-
 **Delivery**: one feature branch + PR per phase (a push to `main` triggers the deploy pipeline —
 keep `main` deployable). Commit + update this file after each phase.
 
-**Where this stands (2026-08-10):** Phases 1 and 2 are merged to `main`
+**Where this stands (2026-08-11):** Phases 1–3 are merged to `main`
 ([PR #1](https://github.com/Jaffacakes82/dot-glasses/pull/1),
-[PR #2](https://github.com/Jaffacakes82/dot-glasses/pull/2)). Phase 3 (make inert data real) is
-done, verified live, and committed on `feat/phase-3-inert-data`, branched fresh off `main` —
-about to be pushed/PR'd. Phases 4–8 are untouched. Two `[OPEN]` items are worth flagging
-deliberately rather than letting drift: offline record attribution at sync time vs creation time
-(from Phase 1), and Phase 3's location-switching feature only works online (re-issuing a JWT is
-inherently a server round-trip) — a technician who needs to switch outlets while genuinely offline
-can't, and the Field App doesn't yet say so explicitly beyond the generic "check your connection"
-message.
+[PR #2](https://github.com/Jaffacakes82/dot-glasses/pull/2),
+[PR #3](https://github.com/Jaffacakes82/dot-glasses/pull/3)). Phase 4 (Lead conversion) is done,
+verified live, and committed on `feat/phase-4-lead-conversion`, branched fresh off `main` — about
+to be pushed/PR'd. Phases 5–8 are untouched. Two `[OPEN]` items are worth flagging deliberately
+rather than letting drift: offline record attribution at sync time vs creation time (from Phase
+1), and Phase 3's location-switching feature only works online (re-issuing a JWT is inherently a
+server round-trip) — a technician who needs to switch outlets while genuinely offline can't, and
+the Field App doesn't yet say so explicitly beyond the generic "check your connection" message.
 
 ### Phase 1 — Field App data integrity (highest priority: this loses real data today)
 
@@ -1326,6 +1326,104 @@ never reflect a lead worked later. Build:
   lead?" — rather than silently linking or silently duplicating. This supersedes the deferred
   "lead-match confirm popup" noted in the Field App UI wiring section.
 
+**Phase 4 status: implemented and verified live (2026-08-11), on branch
+`feat/phase-4-lead-conversion`, not yet merged.**
+
+**Server-side foundation** (shared by all three surfaces): `LeadDto` gained
+`CustomerFullName`/`CustomerPhoneNumber` (joined through `Customer` in `LeadService`, which now
+also needs a batch customer lookup — `ICustomerRepository.GetByIdsAsync`, same rationale as
+`EventHistoryQueryService`'s own `GetCustomersByIdAsync`). `ILeadRepository`/`ILeadService` gained
+`ListOpenAsync` (`ConvertedFlag == false`, hierarchy scoping automatic) and
+`FindOpenByCustomerIdAsync`/`FindOpenMatchAsync` (customer-match lookup, the latter doing the
+name+phone → Customer → open-Lead chain). Two new `LeadsController` (API) actions:
+`GET api/v1/leads/open` and `GET api/v1/leads/match?fullName=&phoneNumber=` (204 if no match).
+`LeadEventRow`/`LeadEvent` gained `Id`/`ConvertedFlag` so the Admin Portal's Leads tab can link to
+a conversion action and show which rows are already converted — `SaleService`'s existing
+`SourceLeadId` handling (atomic `ConvertedFlag`/`SaleId` update, "already converted" rejection)
+needed no changes at all; it was already fully built and simply had nothing calling it, exactly as
+the roadmap said.
+
+**Field App**: new `ILeadsClient` (`App/Leads`, mirrors `UserLocationClient`'s fail-soft pattern —
+empty list/null rather than throwing, since a lookup failure shouldn't block recording a Sale
+normally) backs a new `/leads` worklist page (`Leads.razor`, linked from a new Home tile) and
+`ConsultationForm.razor`'s new `SourceLeadId` query param (`consultation/sale?sourceLeadId=...`,
+same convention as the existing `SourceTestId` Test→Lead flow). Prefilling deliberately carries
+over only what a Lead actually captured — name, phone, age, gender, occupation, consent, and the
+lens/prescription preference if one exists — and leaves frame colour, coating, hard case, and
+"order from DOT Glasses" for the technician to fill in fresh, since **Lead has no equivalent
+fields for any of those** (confirmed by diffing `Lead`/`Sale`'s entity shapes before writing any
+prefill code) — they're new decisions made at the point of sale, not something a Lead could have
+recorded. The automatic-match prompt lives in `HandleSubmit`: a fresh Sale (no `SourceLeadId` set)
+checks `FindOpenMatchAsync` once per form visit before proceeding to the existing price-confirm
+step; a match shows a new confirm card ("existing lead found — convert it instead?") that either
+sets `SourceLeadId` and continues, or proceeds as an ordinary unlinked Sale. Checked once
+(`_leadMatchChecked`) so declining doesn't re-prompt on a second submit after fixing an unrelated
+validation error.
+
+**Admin Portal**: new `LeadConversionController` (`GET`/`POST /Leads/Convert/{id}`) + `Views/
+LeadConversion/Convert.cshtml`, linked from a new "Convert to sale"/"Converted" column on Event
+History's Leads tab. This is the Admin Portal's first Sale-creation surface at all (flagged as a
+separate, larger, explicitly-deferred task when `ConsultationForm.razor` was originally wired —
+see the Field App UI wiring section above) — scoped deliberately smaller than porting the Field
+App's full dynamic lens-range picker into server-rendered Razor: when the source Lead already
+captured a lens/prescription preference, that preference is shown read-only and carried over
+unchanged (`LensCarriedOver` on the view model); the admin only supplies the genuinely-new Sale
+fields (coating, frame colour/coverage, hard case, order-from-DGI, consent). Only when a Lead
+captured *no* preference at all (a real, documented case — `Lead.LensRangeType` is nullable
+because "a Lead can carry no product preference at all") does the form also render a full lens-
+range picker, built from plain `<select>`s populated via `IReferenceDataQueryService`/
+`IPresetCatalogueQueryService` (both already existed for the API, now used directly from an MVC
+controller for the first time — nothing stopped this, `DotGlasses.Web` has always been allowed to
+reference `Application` freely) rather than the Field App's client-side-reactive picker — the
+server's `CreateSaleRequestValidator` remains the authority either way, so an admin picking an
+illegal lens/coating combination gets a real validator error, not a silently-accepted bad row.
+`LeadConversionFormModel`'s property names deliberately mirror `CreateSaleRequest`'s own 1:1, so a
+validation failure's `FluentValidation` errors can be remapped onto `"Form.{PropertyName}"`
+`ModelState` keys with no translation table, matching this codebase's now-established "one
+page-level `asp-validation-summary`" simplification (see the Reference Data admin wiring section).
+
+**The resulting Sale is stamped with the *Lead's own* `TechnicianUserId`/`HierarchyPath`, not the
+converting admin's** — a deliberate, documented deviation from every other "stamp from the
+authenticated caller" write path in this codebase. The sale is happening at the Lead's outlet;
+attributing it to wherever the admin's own org node sits (which could be DGI root) would corrupt
+Event History's audit trail and the Dashboard's per-technician/per-outlet rankings exactly the way
+Phase 1's offline-sync attribution `[OPEN]` item already does — reading `Lead.TechnicianUserId`/
+`HierarchyPath` off the fetched `LeadDto` and passing them straight into `ISaleService.CreateAsync`
+was the one-line fix. Reading/writing the Lead needed no new RBAC: `ILeadService.GetByIdAsync` and
+`ISaleService.CreateAsync` both go through the standard hierarchy-scoping query filter already, so
+an admin can only ever see/convert leads inside their own subtree — the same mechanism Event
+History's own Leads tab already relies on, confirmed live (see below), not just assumed.
+
+**Verified live end-to-end**, all three surfaces, real browser against the real stack: recorded
+two Leads as the seeded RetailPoint technician — one with a captured 6-Lens Set/+2.50 preference
+("Beta WithPreference"), one with none ("Alpha NoPreference"). (1) **Field App worklist**: `/leads`
+listed both real (not placeholder) open leads; tapping "Convert to sale" on Beta navigated to
+`consultation/sale?sourceLeadId=...` and confirmed every prefillable field (name, phone, lens
+range, both lens powers, PD bucket) actually carried over via direct DOM inspection, not just
+visual skim; completing the Sale form and saving correctly removed Beta from the worklist
+afterward. (2) **Automatic match prompt**: recorded a brand-new, unlinked Sale for "Alpha
+NoPreference" (matching name+phone, no `sourceLeadId` param) and confirmed the "existing lead
+found" card appeared before the price-confirm step; accepting it, saving, and reloading `/leads`
+confirmed Alpha also disappeared from the worklist — proving the match→convert path actually sets
+`SourceLeadId` server-side, not just that the prompt renders. (3) **Admin Portal**: as the seeded
+DGI Admin, converted a third, older open Lead ("Broken Record", no captured preference) through
+`/Leads/Convert/{id}` — confirmed the full "no preference" lens-range picker rendered, submitted a
+6-Lens Set/+2.50 selection, and confirmed both that the Leads tab immediately showed it
+"CONVERTED" and that the resulting Sale in the Sales tab was stamped with outlet "Kangemi Vision
+Centre — Outreach Post" (the Lead's own outlet) rather than "DOT Glasses International" (the DGI
+Admin's own org) — the concrete, observable proof that the deliberate Lead-attribution decision
+above actually took effect, not just that a Sale got created.
+
+One real bug caught during this pass, **not a bug in the shipped feature** — a test-harness
+mistake worth recording so it isn't rediscovered: an early manual verification attempt used
+`document.querySelector('form button[type="submit"]')` to submit the conversion form via
+JavaScript, which matched `_Layout.cshtml`'s sidebar sign-out form (also a `<form>` containing a
+`type="submit"` button, and earlier in DOM order) instead of the conversion form — silently
+signing the tester out and redirecting to `/Account/Login` on every attempt, which briefly looked
+like a real authentication bug in the new controller. Scoping the selector to the actual form
+(matched by a field only the conversion form has) resolved it immediately; the controller/view
+were correct throughout.
+
 ### Phase 5 — Email delivery
 
 Implement a real **Azure Communication Services `IEmailSender`**, replacing `LoggingEmailSender`.
@@ -1382,10 +1480,11 @@ provisioning is usable outside a dev session (the set-password link is copied by
 
 **Many of the items below are now scheduled** by the agreed roadmap above (2026-08-09) rather than
 still open-ended — email delivery (Phase 5), offline reference-data caching and the outbox
-retry/discard gap and browser-storage hygiene (Phase 1), the Leads-list/convert-to-sale entry
-point (Phase 4), catalogue name-sniffing and Organisations' missing delete/deactivate (Phase 6).
-"Switch active location" (Phase 3) and the two inert-flag removals it also covered are done, see
-that section below. Where a bullet below and the roadmap disagree, **the roadmap is the
+retry/discard gap and browser-storage hygiene (Phase 1), catalogue name-sniffing and
+Organisations' missing delete/deactivate (Phase 6). "Switch active location" (Phase 3) and the two
+inert-flag removals it also covered are done, see that section below. The Leads-list/convert-to-
+sale entry point (Phase 4) is also done, see that section below. Where a bullet below and the
+roadmap disagree, **the roadmap is the
 decision**; these bullets are kept for the context they carry about how each gap arose.
 
 One correction to a stale claim repeated in several bullets below:
@@ -1444,10 +1543,9 @@ also out of date.
   upload feature exists yet. The blob storage *infrastructure* to build one against now does
   (`AppHost`'s `reference-data-images` container, see the Deployment section above) — building
   the actual upload UI/API is separate application-layer work, still open.
-- No Leads-list/"convert to sale" entry point exists yet — a Sale recorded via
-  `ConsultationForm.razor` can never set `SourceLeadId`, so a Lead's `ConvertedFlag`/`SaleId`
-  currently only ever get set via the Test→Lead→(same-session)→Sale path, never by converting an
-  existing Lead found later. Needs an Event History/Leads screen action once one exists.
+- ~~No Leads-list/"convert to sale" entry point exists yet~~ — **resolved by Phase 4** (Field App
+  leads worklist, Admin Portal `LeadConversionController`, and the automatic name+phone match
+  prompt on a fresh Sale — see that section above).
 - Full offline (IndexedDB) caching of reference data/preset catalogues — `IReferenceDataClient`
   currently needs connectivity to load the first time each session; a technician who's never
   been online since app install can't record anything yet.

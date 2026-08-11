@@ -1,0 +1,167 @@
+@model DotGlasses.Web.Models.LeadConversionViewModel
+@{
+    ViewData["Title"] = "Convert lead to sale";
+}
+
+@await Html.PartialAsync("_PageHeader", new DotGlasses.Web.Models.PageHeaderViewModel
+{
+    Crumb = "Event History",
+    Title = "Convert lead to sale",
+})
+
+@if (!ViewData.ModelState.IsValid)
+{
+    <div class="alert alert-danger" style="border-radius:var(--radius-md); margin-bottom:var(--space-4);" asp-validation-summary="All"></div>
+}
+
+<div class="dg-card" style="max-width:640px; margin-bottom:var(--space-4);">
+    <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin:0 0 4px; font-size:15px;">Lead details</h3>
+    <p style="margin:0;"><strong>@Model.CustomerFullName</strong>@(string.IsNullOrWhiteSpace(Model.CustomerPhoneNumber) ? "" : $" · {Model.CustomerPhoneNumber}")</p>
+    @if (Model.LensCarriedOver)
+    {
+        <p style="font-size:13px; color:var(--text-muted-2); margin:8px 0 0;">
+            This lead already captured a product preference — it carries over unchanged:
+            <br /><span style="color:inherit;">@Model.LensSummary</span>
+        </p>
+    }
+    else
+    {
+        <p style="font-size:13px; color:var(--text-muted-2); margin:8px 0 0;">
+            This lead has no lens/prescription preference on file — choose one below.
+        </p>
+    }
+</div>
+
+<form asp-controller="LeadConversion" asp-action="Convert" asp-route-id="@Model.Lead.Id" method="post" class="dg-card" style="max-width:640px; display:flex; flex-direction:column; gap:var(--space-3);">
+    @Html.AntiForgeryToken()
+
+    @if (!Model.LensCarriedOver)
+    {
+        <div>
+            <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin:0 0 8px; font-size:15px;">Lens range</h3>
+            <label>Range type</label>
+            <select class="form-select" asp-for="Form.LensRangeType" asp-items="Html.GetEnumSelectList<DotGlasses.Contracts.Common.LensRangeType>()">
+                <option value="">— Choose —</option>
+            </select>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
+                <div>
+                    <label>Preset catalogue</label>
+                    <select class="form-select" asp-for="Form.PresetCatalogueId">
+                        <option value="">—</option>
+                        @foreach (var catalogue in Model.AvailableCatalogues)
+                        {
+                            <option value="@catalogue.Id">@catalogue.Name</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label>Preset pupil distance (0-4)</label>
+                    <input class="form-control" type="number" min="0" max="4" asp-for="Form.PresetPupilDistanceBucket" />
+                </div>
+                <div>
+                    <label>Left lens option</label>
+                    <select class="form-select" asp-for="Form.LensOptionLeftId">
+                        <option value="">—</option>
+                        @foreach (var catalogue in Model.AvailableCatalogues)
+                        {
+                            @foreach (var option in catalogue.LensOptions)
+                            {
+                                <option value="@option.Id">@catalogue.Name — @option.Label</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label>Right lens option</label>
+                    <select class="form-select" asp-for="Form.LensOptionRightId">
+                        <option value="">—</option>
+                        @foreach (var catalogue in Model.AvailableCatalogues)
+                        {
+                            @foreach (var option in catalogue.LensOptions)
+                            {
+                                <option value="@option.Id">@catalogue.Name — @option.Label</option>
+                            }
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <p style="font-size:12px; color:var(--text-muted-2); margin:8px 0 4px;">— or, for a Custom range —</p>
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8px;">
+                <div><label>Sphere (R)</label><input class="form-control" type="number" step="0.25" asp-for="Form.CustomSphereRight" /></div>
+                <div><label>Cylinder (R)</label><input class="form-control" type="number" step="0.25" asp-for="Form.CustomCylinderRight" /></div>
+                <div><label>Axis (R)</label><input class="form-control" type="number" step="1" asp-for="Form.CustomAxisRight" /></div>
+                <div><label>Add power (R)</label><input class="form-control" type="number" step="0.25" asp-for="Form.CustomAddPowerRight" /></div>
+                <div><label>Sphere (L)</label><input class="form-control" type="number" step="0.25" asp-for="Form.CustomSphereLeft" /></div>
+                <div><label>Cylinder (L)</label><input class="form-control" type="number" step="0.25" asp-for="Form.CustomCylinderLeft" /></div>
+                <div><label>Axis (L)</label><input class="form-control" type="number" step="1" asp-for="Form.CustomAxisLeft" /></div>
+                <div><label>Add power (L)</label><input class="form-control" type="number" step="0.25" asp-for="Form.CustomAddPowerLeft" /></div>
+                <div><label>Pupil distance (mm)</label><input class="form-control" type="number" min="54" max="74" asp-for="Form.PupilDistanceMm" /></div>
+                <div style="display:flex; align-items:flex-end;"><label><input type="checkbox" asp-for="Form.ChildrensFrame" style="width:auto; margin-right:6px;" />Children's frame</label></div>
+            </div>
+        </div>
+    }
+
+    <div>
+        <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin:0 0 8px; font-size:15px;">Sale details</h3>
+
+        <label><input type="checkbox" asp-for="Form.ConsentGiven" style="width:auto; margin-right:6px;" />Customer consents to be contacted for follow-ups/marketing</label>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
+            <div>
+                <label>Coating</label>
+                <select class="form-select" asp-for="Form.CoatingRefId">
+                    <option value="">— Choose —</option>
+                    @foreach (var coating in Model.Coatings)
+                    {
+                        <option value="@coating.Id">@coating.Label</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label>Frame coverage</label>
+                <select class="form-select" asp-for="Form.FrameCoverage" asp-items="Html.GetEnumSelectList<DotGlasses.Contracts.Sales.FrameCoverage>()"></select>
+            </div>
+            <div>
+                <label>Frame colour</label>
+                <select class="form-select" asp-for="Form.FrameColourRefId">
+                    <option value="">— Choose —</option>
+                    @foreach (var colour in Model.FrameColours)
+                    {
+                        <option value="@colour.Id">@colour.Label</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label>Frame colour — "Other" text</label>
+                <input class="form-control" asp-for="Form.FrameColourOtherText" />
+            </div>
+        </div>
+
+        <label style="display:block; margin-top:8px;"><input type="checkbox" asp-for="Form.HardCaseSold" style="width:auto; margin-right:6px;" />Hard case sold</label>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:4px;">
+            <div>
+                <label>Hard case colour</label>
+                <select class="form-select" asp-for="Form.HardCaseColourRefId">
+                    <option value="">—</option>
+                    @foreach (var colour in Model.HardCaseColours)
+                    {
+                        <option value="@colour.Id">@colour.Label</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label>Hard case colour — "Other" text</label>
+                <input class="form-control" asp-for="Form.HardCaseOtherColourText" />
+            </div>
+        </div>
+
+        <label style="display:block; margin-top:8px;"><input type="checkbox" asp-for="Form.OrderFromDotGlasses" style="width:auto; margin-right:6px;" />Order this lens from DOT Glasses (Custom range only)</label>
+    </div>
+
+    <div style="display:flex; gap:8px; margin-top:var(--space-2);">
+        <a class="dg-btn dg-btn-ghost" asp-controller="EventHistory" asp-action="Index" asp-route-tab="leads">Cancel</a>
+        <button class="dg-btn dg-btn-primary" type="submit">Convert to sale</button>
+    </div>
+</form>

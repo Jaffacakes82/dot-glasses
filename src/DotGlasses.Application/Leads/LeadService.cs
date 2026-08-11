@@ -16,13 +16,43 @@ public class LeadService(
     public async Task<LeadDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var entity = await repository.GetByIdAsync(id, cancellationToken);
-        return entity is null ? null : ToDto(entity);
+        if (entity is null)
+        {
+            return null;
+        }
+
+        var customer = await customerRepository.GetByIdAsync(entity.CustomerId, cancellationToken);
+        return ToDto(entity, customer);
     }
 
     public async Task<IReadOnlyList<LeadDto>> ListAsync(CancellationToken cancellationToken = default)
     {
         var entities = await repository.ListAsync(cancellationToken);
-        return entities.Select(ToDto).ToList();
+        var customers = await customerRepository.GetByIdsAsync(entities.Select(l => l.CustomerId), cancellationToken);
+        return entities.Select(l => ToDto(l, customers.GetValueOrDefault(l.CustomerId))).ToList();
+    }
+
+    public async Task<IReadOnlyList<LeadDto>> ListOpenAsync(CancellationToken cancellationToken = default)
+    {
+        var entities = await repository.ListOpenAsync(cancellationToken);
+        var customers = await customerRepository.GetByIdsAsync(entities.Select(l => l.CustomerId), cancellationToken);
+        return entities.Select(l => ToDto(l, customers.GetValueOrDefault(l.CustomerId))).ToList();
+    }
+
+    /// <summary>The most recent open Lead for an exact name+phone match — backs the Field App's
+    /// "convert this instead?" prompt when recording a Sale for a customer who already has an
+    /// unconverted Lead. Null if there's no Customer match at all, or the matching Customer has
+    /// no open Lead.</summary>
+    public async Task<LeadDto?> FindOpenMatchAsync(string hierarchyPath, string fullName, string? phoneNumber, CancellationToken cancellationToken = default)
+    {
+        var customer = await customerRepository.FindByNameAndPhoneAsync(hierarchyPath, fullName, phoneNumber, cancellationToken);
+        if (customer is null)
+        {
+            return null;
+        }
+
+        var entity = await repository.FindOpenByCustomerIdAsync(customer.Id, cancellationToken);
+        return entity is null ? null : ToDto(entity, customer);
     }
 
     public async Task<LeadDto> CreateAsync(CreateLeadRequest request, Guid technicianUserId, string hierarchyPath, CancellationToken cancellationToken = default)
@@ -30,17 +60,18 @@ public class LeadService(
         var existing = await repository.GetByIdAsync(request.Id, cancellationToken);
         if (existing is not null)
         {
-            return ToDto(existing);
+            var existingCustomer = await customerRepository.GetByIdAsync(existing.CustomerId, cancellationToken);
+            return ToDto(existing, existingCustomer);
         }
 
-        var customerId = await FindOrCreateCustomerAsync(hierarchyPath, request.FullName, request.PhoneNumber, cancellationToken);
+        var customer = await FindOrCreateCustomerAsync(hierarchyPath, request.FullName, request.PhoneNumber, cancellationToken);
 
         var entity = new Lead
         {
             Id = request.Id,
             HierarchyPath = hierarchyPath,
             TechnicianUserId = technicianUserId,
-            CustomerId = customerId,
+            CustomerId = customer.Id,
             SourceTestId = request.SourceTestId,
             AgeYears = request.AgeYears,
             Gender = request.Gender.ToDomain(),
@@ -83,18 +114,18 @@ public class LeadService(
         // update (if any) commit atomically in one transaction — see CLAUDE.md's IUnitOfWork note.
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return ToDto(entity);
+        return ToDto(entity, customer);
     }
 
     /// <summary>Exact name+phone match within the retail point — "don't create a duplicate
     /// Customer row for a repeat name+phone". Fuzzy/suggested-match UX is Field App UI work for
     /// later.</summary>
-    private async Task<Guid> FindOrCreateCustomerAsync(string hierarchyPath, string fullName, string? phoneNumber, CancellationToken cancellationToken)
+    private async Task<Customer> FindOrCreateCustomerAsync(string hierarchyPath, string fullName, string? phoneNumber, CancellationToken cancellationToken)
     {
         var existing = await customerRepository.FindByNameAndPhoneAsync(hierarchyPath, fullName, phoneNumber, cancellationToken);
         if (existing is not null)
         {
-            return existing.Id;
+            return existing;
         }
 
         var customer = new Customer
@@ -106,15 +137,17 @@ public class LeadService(
         };
 
         customerRepository.Add(customer);
-        return customer.Id;
+        return customer;
     }
 
-    private static LeadDto ToDto(Lead entity) => new()
+    private static LeadDto ToDto(Lead entity, Customer? customer) => new()
     {
         Id = entity.Id,
         HierarchyPath = entity.HierarchyPath,
         TechnicianUserId = entity.TechnicianUserId,
         CustomerId = entity.CustomerId,
+        CustomerFullName = customer?.FullName ?? "—",
+        CustomerPhoneNumber = customer?.PhoneNumber,
         SourceTestId = entity.SourceTestId,
         AgeYears = entity.AgeYears,
         Gender = entity.Gender.ToContract(),
