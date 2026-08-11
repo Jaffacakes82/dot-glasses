@@ -684,8 +684,9 @@ Directory gets a matching "assign to org" action from the user's side.
 **`IUserAdminService.AssignUserToOrgAsync(userId, orgNodeId)`** (Infrastructure) — idempotent
 no-op if the pair already exists (same precedent as `PresetCatalogueAdminService.
 AssignCatalogueToOrgAsync`), never touches the user's primary org
-(`OrgNodeId`/`HierarchyPath`/`OrgLevel`) — still no "switch active location" UI to make changing
-which org drives a multi-org user's JWT/cookie claims meaningful (unchanged `[OPEN]` item).
+(`OrgNodeId`/`HierarchyPath`/`OrgLevel`) — at the time this was written there was still no "switch
+active location" UI to make changing which org drives a multi-org user's JWT/cookie claims
+meaningful; that gap is closed by Phase 3, see the section below.
 
 **`OrganisationsIndexViewModel` gains `AssignableUsers`** (every user in the caller's own scope,
 via `IUserAdminService.ListAsync()`, already prefix-filtered) **and `SelectedAssignedUserNames`**
@@ -1117,11 +1118,16 @@ about what changes*, taken with the user in a structured review session on 2026-
 **Delivery**: one feature branch + PR per phase (a push to `main` triggers the deploy pipeline —
 keep `main` deployable). Commit + update this file after each phase.
 
-**Where this stands (2026-08-10):** Phase 1 is done, verified live, pushed, and PR'd —
-[PR #1](https://github.com/Jaffacakes82/dot-glasses/pull/1), `feat/field-app-data-integrity` into
-`main`. Not merged yet. Phase 2 (Access model) is next. Phases 3–8 are untouched. One new
-`[OPEN]` item came out of Phase 1 (offline record attribution at sync time vs creation time) and
-is a genuine correctness bug that should be scheduled deliberately, not left to drift.
+**Where this stands (2026-08-10):** Phases 1 and 2 are merged to `main`
+([PR #1](https://github.com/Jaffacakes82/dot-glasses/pull/1),
+[PR #2](https://github.com/Jaffacakes82/dot-glasses/pull/2)). Phase 3 (make inert data real) is
+done, verified live, and committed on `feat/phase-3-inert-data`, branched fresh off `main` —
+about to be pushed/PR'd. Phases 4–8 are untouched. Two `[OPEN]` items are worth flagging
+deliberately rather than letting drift: offline record attribution at sync time vs creation time
+(from Phase 1), and Phase 3's location-switching feature only works online (re-issuing a JWT is
+inherently a server round-trip) — a technician who needs to switch outlets while genuinely offline
+can't, and the Field App doesn't yet say so explicitly beyond the generic "check your connection"
+message.
 
 ### Phase 1 — Field App data integrity (highest priority: this loses real data today)
 
@@ -1244,6 +1250,68 @@ Three things an admin can currently configure that have **no effect anywhere**:
   "—" for every row permanently. Tests stay deliberately anonymous (the Test form captures no name
   or phone); drop the unused field and the Name column rather than leaving a dead one.
 
+**Phase 3 status: implemented and verified live (2026-08-10), on branch
+`feat/phase-3-inert-data`, not yet merged.** All four sub-items shipped in one PR (they touch
+almost entirely disjoint files):
+
+- **`CanHandleCustomOrders`/`Test.CustomerId` removed outright** — property, EF config
+  (`TestConfiguration`'s `HasIndex`), every controller/service/view reference, and the seeded
+  Kenya value, confirmed dead by grep before deleting (nothing in `DotGlasses.App`,
+  `CustomOrderService`, `SaleService`, or `LeadService` ever read either). One migration
+  (`RemoveInertFlags`) drops both columns plus `Tests`' now-orphaned `CustomerId` index — no data
+  reassignment needed, unlike Phase 2's role migration, since both were genuinely unused. `TestDto`
+  also dropped its own now-meaningless `CustomerId` field (nothing in the App consumed it).
+- **`ConsentGiven` surfaced in Event History** — `SaleOrTestEventRow`/`LeadEventRow` gained the
+  field (nullable on the shared Sale/Test row: Tests carry no consent concept at all, only Sales
+  do), threaded through `EventHistoryController`'s mappers and a new Consent column on both the
+  Sales and Leads tables. The Tests tab (sharing that same table) drops the Name column entirely
+  rather than showing a permanent "—" now that `CustomerId` is gone — Sales keeps it, gated by
+  `@if (Model.ActiveTab == "sales")` around both the header cell and the body cell.
+  `EventHistoryQueryService.ListTestsAsync` no longer does a customer lookup at all.
+- **Location switching**: new `IUserOrgAssignmentService` (Application) /
+  `UserOrgAssignmentService` (Infrastructure) — deliberately separate from `IUserAdminService`,
+  which is admin-driven management of *other* users; this is self-service, for the caller's own
+  identity only. `ListAssignedOrgsAsync`/`SwitchActiveOrgAsync` both resolve org names via
+  `IUnscopedReportQueryService.GetOrganisationNodesUnscopedAsync`, not a plain scoped
+  `OrganisationNodes` query — a secondary assigned org can sit anywhere in the tree, not
+  necessarily inside the caller's *current* active scope (switching *to* a foreign-scoped org is
+  the entire point), so a scoped query would silently drop it exactly the way Dashboard/Event
+  History's org-name resolution already had to be fixed for twice before (see those sections
+  above) — caught by design this time, not by a live bug.
+  `SwitchActiveOrgAsync` throws if the target isn't one of the caller's own `UserOrgAssignment`
+  rows — never trusts a client-submitted org Id. Two new `AuthController` actions
+  (`GET api/v1/auth/my-orgs`, `POST api/v1/auth/switch-org`) — the controller's `[AllowAnonymous]`
+  moved from the class down to just `Login`, since the two new actions need the caller's own JWT
+  identity. Switching writes the new org onto `ApplicationUser.OrgNodeId/HierarchyPath/OrgLevel`
+  (the "active" side of `UserOrgAssignment`'s own doc comment) and re-runs the same
+  `claimsPrincipalFactory.CreateAsync` + `jwtTokenService.CreateToken` pair `Login` uses, returning
+  a fresh `LoginResponse` — there's no server-side revocation of the *old* token, so the App must
+  swap it in immediately rather than treating a 200 as confirmation on its own.
+  `IUserLocationClient` (`App/Auth`, Singleton, mirrors `AuthTokenStore`'s own lifetime reasoning)
+  wraps both endpoints and writes a successful switch straight into `AuthTokenStore.SetTokenAsync`
+  itself, so no call site can forget to swap the token in. `Settings.razor`'s outlet buttons and
+  `OutletSelect.razor`'s picker both now call it instead of rendering the old hard-coded
+  `_outlets` array. **Reuses the exact same "block while records are queued" guard `SignOutAsync`
+  already had** (Phase 1) — switching location changes `HierarchyPath` for a *future* sync exactly
+  the way signing out under a different technician does, so an unsent record would drain stamped
+  with the wrong outlet the same way; `Settings.razor` disables every location button while
+  `_unsentCount > 0` with the same explanation.
+
+**Verified live**: as the seeded DGI Admin, confirmed the Organisations screen's Custom Orders
+toggle is gone from both DGI's and Kenya's detail panel. Assigned `retailpoint-user@dotglasses.dev`
+(whose original primary outlet was stamped directly by `DevUserSeeder`, which — unlike the real
+`InviteAsync` flow — never wrote a `UserOrgAssignment` row for it) to a second, different
+RetailPoint ("Nakuru Central") via Organisations' existing "Assign users" action. Signed in as that
+technician on the Field App: Settings' location list showed exactly the one real assignment (not
+the hard-coded two-outlet placeholder array), clicked it, confirmed the POST to `switch-org`
+returned 200, and decoded the resulting JWT client-side to confirm
+`dotglasses:org_node_id`/`hierarchy_path`/`org_level` all now read Nakuru Central's — not just that
+the call succeeded. Recorded a fresh Test immediately after and confirmed in the Admin Portal's
+Event History that it resolved to outlet "Nakuru Central", proving the switch has real effect on
+where new records get stamped, not just on the token payload. Also confirmed via Event History:
+Tests tab has no Name column and Sales/Leads both show real Yes/No Consent values from
+already-existing data.
+
 ### Phase 4 — Lead conversion (the highest-value missing capability)
 
 Converting a Lead into a Sale is **fully implemented and validated server-side** — atomic
@@ -1314,10 +1382,11 @@ provisioning is usable outside a dev session (the set-password link is copied by
 
 **Many of the items below are now scheduled** by the agreed roadmap above (2026-08-09) rather than
 still open-ended — email delivery (Phase 5), offline reference-data caching and the outbox
-retry/discard gap and browser-storage hygiene (Phase 1), "switch active location" (Phase 3), the
-Leads-list/convert-to-sale entry point (Phase 4), catalogue name-sniffing and Organisations'
-missing delete/deactivate (Phase 6). Where a bullet below and the roadmap disagree, **the roadmap
-is the decision**; these bullets are kept for the context they carry about how each gap arose.
+retry/discard gap and browser-storage hygiene (Phase 1), the Leads-list/convert-to-sale entry
+point (Phase 4), catalogue name-sniffing and Organisations' missing delete/deactivate (Phase 6).
+"Switch active location" (Phase 3) and the two inert-flag removals it also covered are done, see
+that section below. Where a bullet below and the roadmap disagree, **the roadmap is the
+decision**; these bullets are kept for the context they carry about how each gap arose.
 
 One correction to a stale claim repeated in several bullets below:
 `AuthorizationPolicies.ManageUsersInScope`/`HierarchyDescendantRequirement` **are** wired — every
@@ -1354,10 +1423,10 @@ also out of date.
   range until DGI configures at least one coating for each via the Preset Catalogues screen; this
   is a real, visible interim gap, not a bug — the Field App correctly refuses to offer a coating
   picker for them rather than silently allowing an unconfigured sale.
-- User Directory has no "switch active location" UI anywhere yet, so multi-org assignment via
-  `UserOrgAssignment` (now real, see Admin Portal wiring above) only ever sets the *first*
-  selected org as primary/active — a user assigned to several locations can't currently change
-  which one drives their JWT/cookie claims after the fact.
+- ~~User Directory has no "switch active location" UI~~ — **resolved by Phase 3** (Field App
+  Settings/OutletSelect, see that section below). User Directory itself still has no equivalent
+  Admin-Portal-side control, but that was never the gap — a technician's own Settings screen is
+  where this needed to live.
 - Organisations has no delete/deactivate action — the design mockup doesn't show one, so none was
   added (not an oversight). `AuthorizationPolicies.ManageUsersInScope`/
   `HierarchyDescendantRequirement` are still unwired (see the Assign users to Organisations
@@ -1423,6 +1492,13 @@ also out of date.
   `azd up` for each environment.
 - One reference-data seeding assumption not explicitly discussed on the call — see Domain
   modelling above (FrameColour's "Other" row).
+- **Location switching (Phase 3) only works online** — `POST switch-org` re-issues a JWT
+  server-side, which is inherently a round trip, so a technician who needs to change outlets while
+  genuinely offline can't; `Settings.razor`/`OutletSelect.razor` currently show the same generic
+  "check your connection and try again" message `SwitchOrgAsync` returns for any failure, rather
+  than a message specific to "you're offline right now." Not fixable client-side — there is no
+  such thing as an offline-issued JWT with a server-checked signature — so the honest fix is a
+  clearer message, not a workaround.
 
 This file should grow as real architectural decisions get made — propose updates here when a
 significant decision is agreed, not as a one-time artifact.

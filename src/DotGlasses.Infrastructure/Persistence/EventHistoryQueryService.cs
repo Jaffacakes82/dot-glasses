@@ -18,7 +18,7 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
         var items = sales.Select(s =>
         {
             var (outlet, country) = orgLookup.Resolve(s.HierarchyPath);
-            return new SaleOrTestEventRow("Sale", s.LensRangeType == LensRangeType.Custom, CustomerName(customers, s.CustomerId), outlet, country, s.CreatedAtUtc);
+            return new SaleOrTestEventRow("Sale", s.LensRangeType == LensRangeType.Custom, CustomerName(customers, s.CustomerId), outlet, country, s.CreatedAtUtc, s.ConsentGiven);
         }).ToList();
 
         return new PagedResult<SaleOrTestEventRow>(items, totalCount, page, pageSize);
@@ -26,15 +26,17 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
 
     public async Task<PagedResult<SaleOrTestEventRow>> ListTestsAsync(int page, int pageSize, CancellationToken cancellationToken = default)
     {
+        // Tests stay deliberately anonymous (no name/phone captured on the Test form at all —
+        // see CLAUDE.md's Phase 3 notes), so unlike ListSalesAsync there is no customer lookup
+        // here at all.
         var totalCount = await dbContext.Tests.CountAsync(cancellationToken);
         var tests = await dbContext.Tests.OrderByDescending(x => x.CreatedAtUtc).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
-        var customers = await GetCustomersByIdAsync(tests.Select(t => t.CustomerId), cancellationToken);
         var orgLookup = await BuildOrgLookupAsync(cancellationToken);
 
         var items = tests.Select(t =>
         {
             var (outlet, country) = orgLookup.Resolve(t.HierarchyPath);
-            return new SaleOrTestEventRow("Test", false, CustomerName(customers, t.CustomerId), outlet, country, t.CreatedAtUtc);
+            return new SaleOrTestEventRow("Test", false, Name: null, outlet, country, t.CreatedAtUtc, ConsentGiven: null);
         }).ToList();
 
         return new PagedResult<SaleOrTestEventRow>(items, totalCount, page, pageSize);
@@ -65,7 +67,7 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
             var customer = customers.GetValueOrDefault(l.CustomerId);
             var (outlet, _) = orgLookup.Resolve(l.HierarchyPath);
             var reason = refData.Resolve(l.ReasonNotPurchasedRefId, l.ReasonNotPurchasedOtherText);
-            return new LeadEventRow(customer?.FullName ?? "—", MaskPhone(customer?.PhoneNumber), outlet, reason, l.CreatedAtUtc);
+            return new LeadEventRow(customer?.FullName ?? "—", MaskPhone(customer?.PhoneNumber), outlet, reason, l.CreatedAtUtc, l.ConsentGiven);
         }).ToList();
 
         return new PagedResult<LeadEventRow>(items, totalCount, page, pageSize);

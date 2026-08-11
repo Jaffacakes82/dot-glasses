@@ -1,4 +1,7 @@
 @page "/outlet-select"
+@using DotGlasses.App.Auth
+@using DotGlasses.Contracts.Auth
+@inject IUserLocationClient LocationClient
 @inject NavigationManager Navigation
 
 <PageTitle>Select outlet</PageTitle>
@@ -11,17 +14,53 @@
         You're attached to more than one retail point — pick the one you're working from today.
     </p>
 
-    @foreach (var outlet in _outlets)
+    @if (_loading)
     {
-        <button class="dg-outlet-button" type="button" @onclick="() => SelectOutlet(outlet)">@outlet</button>
+        <p style="font-size:13px; color:#666;">Loading your assigned locations…</p>
+    }
+    else
+    {
+        @foreach (var org in _orgs)
+        {
+            <button class="dg-outlet-button" type="button" disabled="@_switching" @onclick="() => SelectOutletAsync(org.OrgNodeId)">@org.Name</button>
+        }
+        @if (_error is not null)
+        {
+            <p style="font-size:12px; color:#c00; margin-top:8px;">@_error</p>
+        }
     }
 </div>
 
 @code {
-    // Placeholder — only outlets assigned to *this* user, per the design brief; real
-    // assignment data isn't modelled yet (see CLAUDE.md). Shown only when a user has >1
-    // assigned outlet.
-    private readonly string[] _outlets = ["Kangemi Vision Centre", "Nakuru Central"];
+    private IReadOnlyList<AssignedOrgDto> _orgs = [];
+    private bool _loading = true;
+    private bool _switching;
+    private string? _error;
 
-    private void SelectOutlet(string outlet) => Navigation.NavigateTo("/");
+    protected override async Task OnInitializedAsync()
+    {
+        _orgs = await LocationClient.GetMyOrgsAsync();
+        _loading = false;
+    }
+
+    private async Task SelectOutletAsync(Guid orgNodeId)
+    {
+        _switching = true;
+        _error = null;
+        try
+        {
+            var succeeded = await LocationClient.SwitchOrgAsync(orgNodeId);
+            if (!succeeded)
+            {
+                _error = "Couldn't set that as your active location — check your connection and try again.";
+                return;
+            }
+
+            Navigation.NavigateTo("/");
+        }
+        finally
+        {
+            _switching = false;
+        }
+    }
 }

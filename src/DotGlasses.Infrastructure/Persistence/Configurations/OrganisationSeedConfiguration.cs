@@ -8,8 +8,7 @@ namespace DotGlasses.Infrastructure.Persistence.Configurations;
 /// <summary>
 /// Seeds a minimal real org tree (HasData, fixed GUIDs, same pattern as RoleSeedConfiguration) so
 /// hierarchy paths, RBAC policies, and DevUserSeeder's test accounts have something real to
-/// anchor to. Kenya is the only country flagged CanHandleCustomOrders — per the CEO conversation,
-/// the only country using custom lens orders today.
+/// anchor to.
 /// </summary>
 public class OrganisationSeedConfiguration : IEntityTypeConfiguration<OrganisationNode>
 {
@@ -29,14 +28,14 @@ public class OrganisationSeedConfiguration : IEntityTypeConfiguration<Organisati
 
         builder.HasData(
             Node(DgiId, null, "DOT Glasses International", OrganisationLevel.Dgi, null, DgiPath, now),
-            Node(KenyaId, DgiId, "Kenya", OrganisationLevel.Country, null, KenyaPath, now, canHandleCustomOrders: true),
+            Node(KenyaId, DgiId, "Kenya", OrganisationLevel.Country, null, KenyaPath, now),
             Node(KenyaRetailerId, KenyaId, "Kangemi Vision Centre", OrganisationLevel.Intermediate, "Retailer", KenyaRetailerPath, now),
             Node(KenyaRetailPointId, KenyaRetailerId, "Kangemi Vision Centre — Outreach Post", OrganisationLevel.RetailPoint, "Standalone", KenyaRetailPointPath, now));
     }
 
     private static OrganisationNode Node(
         Guid id, Guid? parentId, string name, OrganisationLevel level, string? kind, string path,
-        DateTimeOffset createdAtUtc, bool canHandleCustomOrders = false) => new()
+        DateTimeOffset createdAtUtc) => new()
     {
         Id = id,
         ParentId = parentId,
@@ -45,7 +44,6 @@ public class OrganisationSeedConfiguration : IEntityTypeConfiguration<Organisati
         Kind = kind,
         HierarchyPath = path,
         IsTrainingOrg = false,
-        CanHandleCustomOrders = canHandleCustomOrders,
         CreatedAtUtc = createdAtUtc,
     };
 }

@@ -59,7 +59,6 @@ public class OrganisationAdminService(DotGlassesDbContext dbContext, IUnscopedRe
             Kind = kind,
             HierarchyPath = $"{parent.HierarchyPath}{maxSegment + 1}/",
             IsTrainingOrg = false,
-            CanHandleCustomOrders = false,
         };
 
         dbContext.OrganisationNodes.Add(entity);
@@ -75,18 +74,6 @@ public class OrganisationAdminService(DotGlassesDbContext dbContext, IUnscopedRe
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task SetCanHandleCustomOrdersAsync(Guid id, bool canHandleCustomOrders, CancellationToken cancellationToken = default)
-    {
-        var entity = await dbContext.OrganisationNodes.FirstAsync(x => x.Id == id, cancellationToken);
-        if (entity.Level != OrganisationLevel.Country)
-        {
-            throw new InvalidOperationException("CanHandleCustomOrders only applies to Country-level nodes.");
-        }
-
-        entity.CanHandleCustomOrders = canHandleCustomOrders;
-        await dbContext.SaveChangesAsync(cancellationToken);
-    }
-
     private static OrganisationAdminNode ToAdminNode(OrganisationNode entity) =>
-        new(entity.Id, entity.ParentId, entity.Name, entity.Level, entity.Kind, entity.HierarchyPath, entity.IsTrainingOrg, entity.CanHandleCustomOrders);
+        new(entity.Id, entity.ParentId, entity.Name, entity.Level, entity.Kind, entity.HierarchyPath, entity.IsTrainingOrg);
 }

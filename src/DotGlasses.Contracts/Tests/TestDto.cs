@@ -7,7 +7,6 @@ public class TestDto
     public Guid Id { get; set; }
     public string HierarchyPath { get; set; } = string.Empty;
     public Guid TechnicianUserId { get; set; }
-    public Guid? CustomerId { get; set; }
     public int? AgeYears { get; set; }
     public Gender Gender { get; set; }
     public Guid? OccupationRefId { get; set; }

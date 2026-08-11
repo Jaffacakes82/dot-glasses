@@ -7,6 +7,13 @@
       "runtimeArgs": ["run", "--project", "src/DotGlasses.AppHost"],
       "port": 7117,
       "url": "https://localhost:7117"
+    },
+    {
+      "name": "dotglasses-app",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "src/DotGlasses.App"],
+      "port": 7299,
+      "url": "https://localhost:7299"
     }
   ]
 }
