@@ -24,7 +24,11 @@ public interface IEventHistoryQueryService
 /// <summary>Name/ConsentGiven are null for a Test row — Tests stay deliberately anonymous (no
 /// name/phone captured at all) and carry no consent concept.</summary>
 public record SaleOrTestEventRow(string Type, bool Custom, string? Name, string Outlet, string Country, DateTimeOffset CreatedAtUtc, bool? ConsentGiven);
-public record LeadEventRow(string Name, string PhoneMasked, string Outlet, string Reason, DateTimeOffset CreatedAtUtc, bool ConsentGiven);
+
+/// <summary>Id/ConvertedFlag back the Admin Portal's Leads tab conversion action (Phase 4) — a
+/// row needs its own Lead Id to link to the conversion form, and ConvertedFlag to know whether
+/// to show "Convert to sale" or an already-converted state.</summary>
+public record LeadEventRow(Guid Id, string Name, string PhoneMasked, string Outlet, string Reason, DateTimeOffset CreatedAtUtc, bool ConsentGiven, bool ConvertedFlag);
 public record ReferralEventRow(string Outlet, string Country, string Reason, DateTimeOffset CreatedAtUtc);
 
 /// <summary>Page is 1-based. TotalPages is 0 when TotalCount is 0 (an empty tab shows no pager,
