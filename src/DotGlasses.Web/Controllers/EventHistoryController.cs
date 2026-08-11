@@ -57,7 +57,7 @@ public class EventHistoryController(IEventHistoryQueryService eventHistoryQueryS
         new(row.Type, row.Custom, row.Name, row.Outlet, row.Country, FormatAbsolute(row.CreatedAtUtc), row.ConsentGiven);
 
     private static LeadEvent ToWebModel(LeadEventRow row) =>
-        new(row.Name, row.PhoneMasked, row.Outlet, row.Reason, FormatRelative(row.CreatedAtUtc), row.ConsentGiven);
+        new(row.Id, row.Name, row.PhoneMasked, row.Outlet, row.Reason, FormatRelative(row.CreatedAtUtc), row.ConsentGiven, row.ConvertedFlag);
 
     private static ReferralEvent ToWebModel(ReferralEventRow row) =>
         new(row.Outlet, row.Country, row.Reason, FormatAbsolute(row.CreatedAtUtc));

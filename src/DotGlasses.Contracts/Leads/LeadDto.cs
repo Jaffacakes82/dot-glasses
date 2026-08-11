@@ -8,6 +8,12 @@ public class LeadDto
     public string HierarchyPath { get; set; } = string.Empty;
     public Guid TechnicianUserId { get; set; }
     public Guid CustomerId { get; set; }
+
+    /// <summary>Read from the linked Customer — not stored on Lead itself, but included here so a
+    /// Sale-conversion flow (Field App or Admin Portal) can prefill name/phone without a second
+    /// round trip.</summary>
+    public string CustomerFullName { get; set; } = string.Empty;
+    public string? CustomerPhoneNumber { get; set; }
     public Guid? SourceTestId { get; set; }
     public int? AgeYears { get; set; }
     public Gender Gender { get; set; }

@@ -1,0 +1,58 @@
+@page "/leads"
+@using DotGlasses.App.Leads
+@using DotGlasses.Contracts.Leads
+@inject ILeadsClient LeadsClient
+@inject NavigationManager Navigation
+
+<PageTitle>Leads</PageTitle>
+
+<div class="dg-screen">
+    <div class="dg-top-strip">
+        <a class="back" href="/">&#8592;</a>
+        <h1>Leads</h1>
+    </div>
+
+    @if (_loading)
+    {
+        <p style="font-size:13px; color:#666;">Loading…</p>
+    }
+    else if (_leads.Count == 0)
+    {
+        <p style="font-size:13px; color:#666;">No open leads at this outlet — everything's been converted or nothing's been logged yet.</p>
+    }
+    else
+    {
+        <p style="font-size:13px; color:#666; margin-bottom:var(--space-4);">
+            Customers who weren't ready to buy yet. Tap one to record their sale — their details carry over.
+        </p>
+
+        @foreach (var lead in _leads)
+        {
+            <div class="dg-card" style="margin-bottom:var(--space-3);">
+                <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
+                    <strong>@lead.CustomerFullName</strong>
+                    <span style="font-size:12px; color:#999;">@lead.CreatedAtUtc.ToLocalTime().ToString("d MMM, HH:mm")</span>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(lead.CustomerPhoneNumber))
+                {
+                    <p style="font-size:13px; color:#666; margin:4px 0 0;">@lead.CustomerPhoneNumber</p>
+                }
+                <a class="dg-btn dg-btn-primary" style="width:100%; margin-top:var(--space-3); text-align:center;"
+                   href="@($"consultation/sale?sourceLeadId={lead.Id}")">
+                    Convert to sale
+                </a>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private IReadOnlyList<LeadDto> _leads = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _leads = await LeadsClient.ListOpenAsync();
+        _loading = false;
+    }
+}
