@@ -1,5 +1,6 @@
 using DotGlasses.App;
 using DotGlasses.App.Auth;
+using DotGlasses.App.Leads;
 using DotGlasses.App.Logging;
 using DotGlasses.App.ReferenceData;
 using DotGlasses.App.Sync;
@@ -31,6 +32,7 @@ builder.Services.AddSingleton<ConnectivitySyncTrigger>();
 
 builder.Services.AddSingleton<IReferenceDataClient, ReferenceDataClient>();
 builder.Services.AddSingleton<IUserLocationClient, UserLocationClient>();
+builder.Services.AddSingleton<ILeadsClient, LeadsClient>();
 
 builder.Services.AddSingleton<IClientSessionContext, ClientSessionContext>();
 builder.Services.AddSingleton<BatchingLoggerProvider>();

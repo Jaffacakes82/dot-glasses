@@ -11,5 +11,10 @@ public interface ICustomerRepository
 {
     Task<Customer?> FindByNameAndPhoneAsync(string hierarchyPath, string fullName, string? phoneNumber, CancellationToken cancellationToken = default);
     Task<Customer?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Batch lookup for a list of Leads/Sales resolving customer name/phone in one
+    /// query, same rationale as EventHistoryQueryService's own GetCustomersByIdAsync.</summary>
+    Task<IReadOnlyDictionary<Guid, Customer>> GetByIdsAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default);
+
     void Add(Customer entity);
 }

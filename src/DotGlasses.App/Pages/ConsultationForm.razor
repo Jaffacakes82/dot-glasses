@@ -1,5 +1,6 @@
 @page "/consultation/{Type}"
 @using System.Text.Json
+@using DotGlasses.App.Leads
 @using DotGlasses.App.ReferenceData
 @using DotGlasses.App.Validation
 @using DotGlasses.Contracts.Common
@@ -10,6 +11,7 @@
 @using DotGlasses.Contracts.Tests
 @inject NavigationManager Navigation
 @inject IReferenceDataClient ReferenceDataClient
+@inject ILeadsClient LeadsClient
 @inject ISyncQueueStore OutboxStore
 @inject ISyncService SyncService
 
@@ -31,6 +33,20 @@
     else if (!ReferenceDataClient.IsLoaded)
     {
         <p>Loading options…</p>
+    }
+    else if (_showLeadMatchConfirm)
+    {
+        <div class="dg-card" style="text-align:center;">
+            <p style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; font-size:16px;">Existing lead found</p>
+            <p style="color:#555;">
+                @_leadMatch?.CustomerFullName already has an open lead from an earlier visit. Convert it into this sale
+                instead of creating a separate record?
+            </p>
+            <div style="display:flex; gap:8px; margin-top:var(--space-4);">
+                <button class="dg-btn dg-btn-ghost" style="flex:1;" @onclick="DeclineMatchedLead">No, new customer</button>
+                <button class="dg-btn dg-btn-primary" style="flex:1;" @onclick="ConvertMatchedLead">Yes, convert it</button>
+            </div>
+        </div>
     }
     else if (_showPriceConfirm)
     {
@@ -224,6 +240,12 @@
 @code {
     [Parameter] public string Type { get; set; } = "test";
     [Parameter, SupplyParameterFromQuery] public Guid? SourceTestId { get; set; }
+
+    /// <summary>Set when this Sale form was opened from the Leads worklist to convert an open
+    /// Lead — see Leads.razor. Prefills name/phone/prescription/preference from the Lead, and is
+    /// submitted back as CreateSaleRequest.SourceLeadId so the server links them atomically.</summary>
+    [Parameter, SupplyParameterFromQuery] public Guid? SourceLeadId { get; set; }
+
     [Parameter, SupplyParameterFromQuery] public int? PrefillAge { get; set; }
     [Parameter, SupplyParameterFromQuery] public string? PrefillGender { get; set; }
 
@@ -247,6 +269,12 @@
     private string? _occupationOtherText;
     private bool _saving;
     private bool _showPriceConfirm;
+
+    // Automatic conversion-match prompt (Sale only, and only when not already converting a
+    // specific Lead via SourceLeadId) — see HandleSubmit.
+    private bool _showLeadMatchConfirm;
+    private LeadDto? _leadMatch;
+    private bool _leadMatchChecked;
 
     private readonly FormErrors _errors = new();
     private string? _summaryMessage;
@@ -310,6 +338,11 @@
             return;
         }
 
+        if (SourceLeadId is { } leadId)
+        {
+            await LoadFromLeadAsync(leadId);
+        }
+
         if (PrefillAge is { } age)
         {
             _age = age;
@@ -319,6 +352,35 @@
         {
             _gender = gender;
         }
+    }
+
+    /// <summary>
+    /// Prefills a Sale from an open Lead's already-captured details when converting from the
+    /// Leads worklist. Frame colour, coating (for a Custom range), and hard case are deliberately
+    /// left for the technician to fill in as normal — Lead never captures them (they're genuinely
+    /// new decisions made at the point of sale, not something a Lead could have recorded).
+    /// </summary>
+    private async Task LoadFromLeadAsync(Guid leadId)
+    {
+        var lead = await LeadsClient.GetByIdAsync(leadId);
+        if (lead is null)
+        {
+            _summaryMessage = "That lead couldn't be loaded — it may already have been converted or removed.";
+            return;
+        }
+
+        _name = lead.CustomerFullName;
+        _phone = lead.CustomerPhoneNumber ?? string.Empty;
+        _age = lead.AgeYears;
+        _gender = lead.Gender;
+        _occupationRefId = lead.OccupationRefId;
+        _occupationOtherText = lead.OccupationOtherText;
+        _consentGiven = lead.ConsentGiven;
+        _coatingRefId = lead.CoatingPreferenceRefId;
+        ApplyLensRange(lead.LensRangeType, lead.PresetCatalogueId, lead.LensOptionLeftId, lead.LensOptionRightId,
+            lead.CustomSphereLeft, lead.CustomCylinderLeft, lead.CustomAxisLeft, lead.CustomAddPowerLeft,
+            lead.CustomSphereRight, lead.CustomCylinderRight, lead.CustomAxisRight, lead.CustomAddPowerRight,
+            lead.PupilDistanceMm, lead.PresetPupilDistanceBucket, lead.ChildrensFrame, lead.CoatingPreferenceRefId);
     }
 
     /// <summary>
@@ -446,11 +508,38 @@
         if (IsTest)
         {
             await SaveTestAsync();
+            return;
         }
-        else
+
+        // A fresh Sale (not already converting a specific Lead) for a name+phone that matches an
+        // open Lead offers to convert it instead of silently creating an unlinked duplicate —
+        // checked once per form visit (_leadMatchChecked), so declining doesn't re-prompt on a
+        // second submit attempt after fixing an unrelated validation error.
+        if (IsSale && SourceLeadId is null && !_leadMatchChecked)
         {
-            _showPriceConfirm = true;
+            _leadMatch = await LeadsClient.FindOpenMatchAsync(_name, _phone);
+            _leadMatchChecked = true;
+            if (_leadMatch is not null)
+            {
+                _showLeadMatchConfirm = true;
+                return;
+            }
         }
+
+        _showPriceConfirm = true;
+    }
+
+    private void ConvertMatchedLead()
+    {
+        SourceLeadId = _leadMatch?.Id;
+        _showLeadMatchConfirm = false;
+        _showPriceConfirm = true;
+    }
+
+    private void DeclineMatchedLead()
+    {
+        _showLeadMatchConfirm = false;
+        _showPriceConfirm = true;
     }
 
     private async Task ConfirmAndSaveAsync()
@@ -751,6 +840,7 @@
         var request = new CreateSaleRequest
         {
             Id = FixOutboxId ?? Guid.NewGuid(),
+            SourceLeadId = SourceLeadId,
             FullName = _name,
             PhoneNumber = string.IsNullOrWhiteSpace(_phone) ? null : _phone,
             AgeYears = _age,

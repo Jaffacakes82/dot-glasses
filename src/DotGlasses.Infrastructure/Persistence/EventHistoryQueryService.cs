@@ -67,7 +67,7 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
             var customer = customers.GetValueOrDefault(l.CustomerId);
             var (outlet, _) = orgLookup.Resolve(l.HierarchyPath);
             var reason = refData.Resolve(l.ReasonNotPurchasedRefId, l.ReasonNotPurchasedOtherText);
-            return new LeadEventRow(customer?.FullName ?? "—", MaskPhone(customer?.PhoneNumber), outlet, reason, l.CreatedAtUtc, l.ConsentGiven);
+            return new LeadEventRow(l.Id, customer?.FullName ?? "—", MaskPhone(customer?.PhoneNumber), outlet, reason, l.CreatedAtUtc, l.ConsentGiven, l.ConvertedFlag);
         }).ToList();
 
         return new PagedResult<LeadEventRow>(items, totalCount, page, pageSize);

@@ -30,6 +30,30 @@ public class LeadsController(
         return dto is null ? NotFound() : Ok(dto);
     }
 
+    /// <summary>ConvertedFlag == false only — backs the Field App's leads worklist.</summary>
+    [HttpGet("open")]
+    public async Task<ActionResult<IReadOnlyList<LeadDto>>> ListOpen(CancellationToken cancellationToken) =>
+        Ok(await leadService.ListOpenAsync(cancellationToken));
+
+    /// <summary>The most recent open Lead for an exact name+phone match, or 204 if none — backs
+    /// the Field App's "convert this instead?" prompt when recording a Sale.</summary>
+    [HttpGet("match")]
+    public async Task<ActionResult<LeadDto>> Match([FromQuery] string fullName, [FromQuery] string? phoneNumber, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(currentUser.HierarchyPathPrefix))
+        {
+            return Problem("The authenticated user has no org assignment.", statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        if (string.IsNullOrWhiteSpace(fullName))
+        {
+            return BadRequest();
+        }
+
+        var match = await leadService.FindOpenMatchAsync(currentUser.HierarchyPathPrefix, fullName, phoneNumber, cancellationToken);
+        return match is null ? NoContent() : Ok(match);
+    }
+
     /// <summary>
     /// Idempotent upsert keyed on <see cref="CreateLeadRequest.Id"/>. HierarchyPath/
     /// TechnicianUserId are stamped from the authenticated caller's claims, never from the

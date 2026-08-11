@@ -14,5 +14,17 @@ public class CustomerRepository(DotGlassesDbContext dbContext) : ICustomerReposi
     public async Task<Customer?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         await dbContext.Customers.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
+    public async Task<IReadOnlyDictionary<Guid, Customer>> GetByIdsAsync(IEnumerable<Guid> ids, CancellationToken cancellationToken = default)
+    {
+        var distinctIds = ids.Distinct().ToList();
+        if (distinctIds.Count == 0)
+        {
+            return new Dictionary<Guid, Customer>();
+        }
+
+        var customers = await dbContext.Customers.Where(c => distinctIds.Contains(c.Id)).ToListAsync(cancellationToken);
+        return customers.ToDictionary(c => c.Id);
+    }
+
     public void Add(Customer entity) => dbContext.Customers.Add(entity);
 }

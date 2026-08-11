@@ -75,7 +75,7 @@
         else
         {
             <table class="dg-table">
-                <thead><tr><th>Name</th><th>Phone</th><th>Outlet</th><th>Reason not purchased</th><th>Consent</th><th>Logged</th></tr></thead>
+                <thead><tr><th>Name</th><th>Phone</th><th>Outlet</th><th>Reason not purchased</th><th>Consent</th><th>Logged</th><th></th></tr></thead>
                 <tbody>
                 @foreach (var lead in Model.Leads)
                 {
@@ -86,6 +86,16 @@
                         <td class="dg-muted">@lead.Reason</td>
                         <td class="dg-muted">@(lead.ConsentGiven ? "Yes" : "No")</td>
                         <td class="dg-muted">@lead.Logged</td>
+                        <td>
+                            @if (lead.ConvertedFlag)
+                            {
+                                <span class="dg-badge" style="background:var(--dot-beige);">Converted</span>
+                            }
+                            else
+                            {
+                                <a class="dg-btn dg-btn-ghost" style="padding:4px 12px; font-size:12px;" asp-controller="LeadConversion" asp-action="Convert" asp-route-id="@lead.Id">Convert to sale</a>
+                            }
+                        </td>
                     </tr>
                 }
                 </tbody>
