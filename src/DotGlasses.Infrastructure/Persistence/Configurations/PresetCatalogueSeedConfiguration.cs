@@ -1,4 +1,5 @@
 using DotGlasses.Domain.Entities;
+using DotGlasses.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -27,6 +28,7 @@ public class PresetCatalogueSeedConfiguration : IEntityTypeConfiguration<PresetC
                 Description = "Standard six-option lens range for outlets with local stock.",
                 RangeDescription = "+2.50 to -4.50",
                 OwningOrgNodeId = OrganisationSeedConfiguration.DgiId,
+                Kind = PresetCatalogueKind.SixLensSet,
                 CreatedAtUtc = now,
             },
             new PresetCatalogue
@@ -36,6 +38,7 @@ public class PresetCatalogueSeedConfiguration : IEntityTypeConfiguration<PresetC
                 Description = "Extended nine-option lens range for outlets with wider stock.",
                 RangeDescription = "+3.00 to -4.00",
                 OwningOrgNodeId = OrganisationSeedConfiguration.DgiId,
+                Kind = PresetCatalogueKind.NineLensSet,
                 CreatedAtUtc = now,
             });
     }
