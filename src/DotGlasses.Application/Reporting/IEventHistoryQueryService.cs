@@ -7,18 +7,21 @@ namespace DotGlasses.Application.Reporting;
 /// unlike Reference Data/Organisations' naturally small, bounded lists) — page is 1-based.</summary>
 public interface IEventHistoryQueryService
 {
-    Task<PagedResult<SaleOrTestEventRow>> ListSalesAsync(int page, int pageSize, CancellationToken cancellationToken = default);
+    /// <summary>fromUtc/toUtcExclusive filter on CreatedAtUtc; either or both may be null (no
+    /// bound on that side). toUtcExclusive is exclusive — the Web layer is responsible for
+    /// turning an inclusive "to" date into the next day's midnight before calling this.</summary>
+    Task<PagedResult<SaleOrTestEventRow>> ListSalesAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, int page, int pageSize, CancellationToken cancellationToken = default);
 
-    Task<PagedResult<SaleOrTestEventRow>> ListTestsAsync(int page, int pageSize, CancellationToken cancellationToken = default);
+    Task<PagedResult<SaleOrTestEventRow>> ListTestsAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, int page, int pageSize, CancellationToken cancellationToken = default);
 
     /// <summary>searchByName filters by the linked Customer's FullName (case-insensitive
-    /// contains); null/empty returns everything. Filtering happens before paging (a DB-level
+    /// ILIKE); null/empty returns everything. Filtering happens before paging (a DB-level
     /// subquery on Customer, not an in-memory filter after the page is loaded).</summary>
-    Task<PagedResult<LeadEventRow>> ListLeadsAsync(string? searchByName, int page, int pageSize, CancellationToken cancellationToken = default);
+    Task<PagedResult<LeadEventRow>> ListLeadsAsync(string? searchByName, DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, int page, int pageSize, CancellationToken cancellationToken = default);
 
     /// <summary>Test rows where Outcome == Referred — a filtered view of the same data
     /// ListTestsAsync shows unfiltered, not a separate entity.</summary>
-    Task<PagedResult<ReferralEventRow>> ListReferralsAsync(int page, int pageSize, CancellationToken cancellationToken = default);
+    Task<PagedResult<ReferralEventRow>> ListReferralsAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, int page, int pageSize, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Name/ConsentGiven are null for a Test row — Tests stay deliberately anonymous (no

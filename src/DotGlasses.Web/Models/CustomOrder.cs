@@ -27,3 +27,13 @@ public record CustomOrder(Guid SaleId, string Customer, string Outlet, string Pr
 
     public FulfilmentStatus? NextStatus => Flow.SkipWhile(s => s != Status).Skip(1).Cast<FulfilmentStatus?>().FirstOrDefault();
 }
+
+public class CustomOrdersViewModel
+{
+    public required IReadOnlyList<CustomOrder> Orders { get; init; }
+    public FulfilmentStatus? Status { get; init; }
+    public int Page { get; init; } = 1;
+    public int PageSize { get; init; }
+    public int TotalCount { get; init; }
+    public int TotalPages { get; init; }
+}

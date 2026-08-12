@@ -7,7 +7,8 @@ public record CataloguesIndexViewModel(
     IReadOnlyList<(Guid Id, string Label)> AllLensStrengths,
     IReadOnlyList<(Guid Id, string Label)> ActiveCoatings,
     IReadOnlyDictionary<Guid, IReadOnlyList<Guid>> AvailableCoatingsByLensStrength,
-    IReadOnlyList<(Guid Id, string Name)> AssignableOrgs);
+    IReadOnlyList<(Guid Id, string Name)> AssignableOrgs,
+    string? Search);
 
 public record CatalogueCard(Guid Id, string Name, string? Description, string? RangeDescription, PresetCatalogueKind Kind, IReadOnlyList<LensOptionCard> LensOptions, IReadOnlyList<AssignedOrgCard> AssignedOrgs);
 

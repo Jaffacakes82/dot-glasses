@@ -8,10 +8,14 @@ namespace DotGlasses.Infrastructure.Persistence;
 
 public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceDataAdminService referenceDataAdminService, IUnscopedReportQueryService unscopedReportQueryService) : IEventHistoryQueryService
 {
-    public async Task<PagedResult<SaleOrTestEventRow>> ListSalesAsync(int page, int pageSize, CancellationToken cancellationToken = default)
+    public async Task<PagedResult<SaleOrTestEventRow>> ListSalesAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, int page, int pageSize, CancellationToken cancellationToken = default)
     {
-        var totalCount = await dbContext.Sales.CountAsync(cancellationToken);
-        var sales = await dbContext.Sales.OrderByDescending(x => x.CreatedAtUtc).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+        var query = dbContext.Sales.AsQueryable();
+        if (fromUtc is { } from) query = query.Where(x => x.CreatedAtUtc >= from);
+        if (toUtcExclusive is { } to) query = query.Where(x => x.CreatedAtUtc < to);
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var sales = await query.OrderByDescending(x => x.CreatedAtUtc).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
         var customers = await GetCustomersByIdAsync(sales.Select(s => (Guid?)s.CustomerId), cancellationToken);
         var orgLookup = await BuildOrgLookupAsync(cancellationToken);
 
@@ -24,13 +28,17 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
         return new PagedResult<SaleOrTestEventRow>(items, totalCount, page, pageSize);
     }
 
-    public async Task<PagedResult<SaleOrTestEventRow>> ListTestsAsync(int page, int pageSize, CancellationToken cancellationToken = default)
+    public async Task<PagedResult<SaleOrTestEventRow>> ListTestsAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, int page, int pageSize, CancellationToken cancellationToken = default)
     {
         // Tests stay deliberately anonymous (no name/phone captured on the Test form at all —
         // see CLAUDE.md's Phase 3 notes), so unlike ListSalesAsync there is no customer lookup
         // here at all.
-        var totalCount = await dbContext.Tests.CountAsync(cancellationToken);
-        var tests = await dbContext.Tests.OrderByDescending(x => x.CreatedAtUtc).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+        var query = dbContext.Tests.AsQueryable();
+        if (fromUtc is { } from) query = query.Where(x => x.CreatedAtUtc >= from);
+        if (toUtcExclusive is { } to) query = query.Where(x => x.CreatedAtUtc < to);
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var tests = await query.OrderByDescending(x => x.CreatedAtUtc).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
         var orgLookup = await BuildOrgLookupAsync(cancellationToken);
 
         var items = tests.Select(t =>
@@ -42,16 +50,22 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
         return new PagedResult<SaleOrTestEventRow>(items, totalCount, page, pageSize);
     }
 
-    public async Task<PagedResult<LeadEventRow>> ListLeadsAsync(string? searchByName, int page, int pageSize, CancellationToken cancellationToken = default)
+    public async Task<PagedResult<LeadEventRow>> ListLeadsAsync(string? searchByName, DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, int page, int pageSize, CancellationToken cancellationToken = default)
     {
         var query = dbContext.Leads.AsQueryable();
+        if (fromUtc is { } from) query = query.Where(x => x.CreatedAtUtc >= from);
+        if (toUtcExclusive is { } to) query = query.Where(x => x.CreatedAtUtc < to);
+
         if (!string.IsNullOrWhiteSpace(searchByName))
         {
             // A DB-level subquery on Customer rather than an in-memory filter after loading — the
             // filter must apply before paging, or "page 2" would silently mean something
             // different depending on how many rows on page 1 the search happened to exclude.
+            // EF.Functions.ILike translates to Postgres ILIKE — plain .Contains() translates to
+            // LIKE, which is case-sensitive absent a citext column/collation (neither exists in
+            // this schema), so a search for "jane" would silently miss a stored "Jane Doe".
             var matchingCustomerIds = dbContext.Customers
-                .Where(c => c.FullName.Contains(searchByName))
+                .Where(c => EF.Functions.ILike(c.FullName, $"%{searchByName}%"))
                 .Select(c => c.Id);
             query = query.Where(l => matchingCustomerIds.Contains(l.CustomerId));
         }
@@ -73,9 +87,12 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
         return new PagedResult<LeadEventRow>(items, totalCount, page, pageSize);
     }
 
-    public async Task<PagedResult<ReferralEventRow>> ListReferralsAsync(int page, int pageSize, CancellationToken cancellationToken = default)
+    public async Task<PagedResult<ReferralEventRow>> ListReferralsAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, int page, int pageSize, CancellationToken cancellationToken = default)
     {
         var query = dbContext.Tests.Where(t => t.Outcome == TestOutcome.Referred);
+        if (fromUtc is { } from) query = query.Where(x => x.CreatedAtUtc >= from);
+        if (toUtcExclusive is { } to) query = query.Where(x => x.CreatedAtUtc < to);
+
         var totalCount = await query.CountAsync(cancellationToken);
         var referrals = await query.OrderByDescending(x => x.CreatedAtUtc).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
         var orgLookup = await BuildOrgLookupAsync(cancellationToken);

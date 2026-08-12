@@ -11,12 +11,33 @@
     Title = "Event History",
 })
 
-<div style="display:flex; gap:var(--space-2); margin-bottom:var(--space-5);">
-    <a class="@PillClass("sales")" style="padding:8px 20px; font-size:13px;" asp-action="Index" asp-route-tab="sales">Sales</a>
-    <a class="@PillClass("tests")" style="padding:8px 20px; font-size:13px;" asp-action="Index" asp-route-tab="tests">Tests</a>
-    <a class="@PillClass("leads")" style="padding:8px 20px; font-size:13px;" asp-action="Index" asp-route-tab="leads">Leads</a>
-    <a class="@PillClass("referrals")" style="padding:8px 20px; font-size:13px;" asp-action="Index" asp-route-tab="referrals">Referrals</a>
+<div style="display:flex; gap:var(--space-2); margin-bottom:var(--space-4); flex-wrap:wrap;">
+    <a class="@PillClass("sales")" style="padding:8px 20px; font-size:13px;" asp-action="Index" asp-route-tab="sales" asp-route-fromDate="@Model.FromDate?.ToString("yyyy-MM-dd")" asp-route-toDate="@Model.ToDate?.ToString("yyyy-MM-dd")">Sales</a>
+    <a class="@PillClass("tests")" style="padding:8px 20px; font-size:13px;" asp-action="Index" asp-route-tab="tests" asp-route-fromDate="@Model.FromDate?.ToString("yyyy-MM-dd")" asp-route-toDate="@Model.ToDate?.ToString("yyyy-MM-dd")">Tests</a>
+    <a class="@PillClass("leads")" style="padding:8px 20px; font-size:13px;" asp-action="Index" asp-route-tab="leads" asp-route-fromDate="@Model.FromDate?.ToString("yyyy-MM-dd")" asp-route-toDate="@Model.ToDate?.ToString("yyyy-MM-dd")">Leads</a>
+    <a class="@PillClass("referrals")" style="padding:8px 20px; font-size:13px;" asp-action="Index" asp-route-tab="referrals" asp-route-fromDate="@Model.FromDate?.ToString("yyyy-MM-dd")" asp-route-toDate="@Model.ToDate?.ToString("yyyy-MM-dd")">Referrals</a>
 </div>
+
+<form method="get" asp-action="Index" style="display:flex; align-items:flex-end; gap:8px; margin-bottom:var(--space-5); flex-wrap:wrap;">
+    <input type="hidden" name="tab" value="@Model.ActiveTab" />
+    @if (Model.ActiveTab == "leads")
+    {
+        <input type="hidden" name="search" value="@Model.SearchQuery" />
+    }
+    <div>
+        <label class="dg-stat-label" style="display:block; margin-bottom:4px;">From</label>
+        <input class="form-control" type="date" name="fromDate" value="@Model.FromDate?.ToString("yyyy-MM-dd")" />
+    </div>
+    <div>
+        <label class="dg-stat-label" style="display:block; margin-bottom:4px;">To</label>
+        <input class="form-control" type="date" name="toDate" value="@Model.ToDate?.ToString("yyyy-MM-dd")" />
+    </div>
+    <button class="dg-btn dg-btn-ghost" style="padding:8px 16px; font-size:13px;" type="submit">Apply</button>
+    @if (Model.FromDate.HasValue || Model.ToDate.HasValue)
+    {
+        <a class="dg-btn dg-btn-ghost" style="padding:8px 16px; font-size:13px;" asp-action="Index" asp-route-tab="@Model.ActiveTab" asp-route-search="@Model.SearchQuery">Clear dates</a>
+    }
+</form>
 
 <div class="dg-card">
     @if (Model.ActiveTab is "sales" or "tests")
@@ -65,6 +86,8 @@
     {
         <form method="get" asp-action="Index" style="display:flex; gap:8px; margin-bottom:var(--space-4);">
             <input type="hidden" name="tab" value="leads" />
+            <input type="hidden" name="fromDate" value="@Model.FromDate?.ToString("yyyy-MM-dd")" />
+            <input type="hidden" name="toDate" value="@Model.ToDate?.ToString("yyyy-MM-dd")" />
             <input class="form-control" style="max-width:280px;" name="search" value="@Model.SearchQuery" placeholder="Search by name" />
             <button class="dg-btn dg-btn-ghost" type="submit">Search</button>
         </form>
@@ -135,11 +158,11 @@
             <div style="display:flex; gap:var(--space-2);">
                 @if (Model.Page > 1)
                 {
-                    <a class="dg-btn dg-btn-ghost" style="padding:6px 16px; font-size:13px;" asp-action="Index" asp-route-tab="@Model.ActiveTab" asp-route-search="@Model.SearchQuery" asp-route-page="@(Model.Page - 1)">Previous</a>
+                    <a class="dg-btn dg-btn-ghost" style="padding:6px 16px; font-size:13px;" asp-action="Index" asp-route-tab="@Model.ActiveTab" asp-route-search="@Model.SearchQuery" asp-route-fromDate="@Model.FromDate?.ToString("yyyy-MM-dd")" asp-route-toDate="@Model.ToDate?.ToString("yyyy-MM-dd")" asp-route-page="@(Model.Page - 1)">Previous</a>
                 }
                 @if (Model.Page < Model.TotalPages)
                 {
-                    <a class="dg-btn dg-btn-ghost" style="padding:6px 16px; font-size:13px;" asp-action="Index" asp-route-tab="@Model.ActiveTab" asp-route-search="@Model.SearchQuery" asp-route-page="@(Model.Page + 1)">Next</a>
+                    <a class="dg-btn dg-btn-ghost" style="padding:6px 16px; font-size:13px;" asp-action="Index" asp-route-tab="@Model.ActiveTab" asp-route-search="@Model.SearchQuery" asp-route-fromDate="@Model.FromDate?.ToString("yyyy-MM-dd")" asp-route-toDate="@Model.ToDate?.ToString("yyyy-MM-dd")" asp-route-page="@(Model.Page + 1)">Next</a>
                 }
             </div>
         </div>

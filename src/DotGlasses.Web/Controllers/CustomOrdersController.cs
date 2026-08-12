@@ -1,4 +1,5 @@
 using DotGlasses.Application.CustomOrders;
+using DotGlasses.Domain.Enums;
 using DotGlasses.Web.Authorization;
 using DotGlasses.Web.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -9,10 +10,22 @@ namespace DotGlasses.Web.Controllers;
 [Authorize(Policy = AuthorizationPolicies.CustomOrdersView)]
 public class CustomOrdersController(ICustomOrderService customOrderService) : Controller
 {
-    public async Task<IActionResult> Index(CancellationToken cancellationToken)
+    private const int PageSize = 25;
+
+    public async Task<IActionResult> Index(FulfilmentStatus? status, int page = 1, CancellationToken cancellationToken = default)
     {
-        var orders = await customOrderService.ListAsync(cancellationToken);
-        return View(orders.Select(o => new CustomOrder(o.SaleId, o.CustomerName, o.Outlet, o.Prescription, o.Status)).ToList());
+        page = Math.Max(1, page);
+        var ordersPage = await customOrderService.ListAsync(status, page, PageSize, cancellationToken);
+
+        return View(new CustomOrdersViewModel
+        {
+            Orders = ordersPage.Items.Select(o => new CustomOrder(o.SaleId, o.CustomerName, o.Outlet, o.Prescription, o.Status)).ToList(),
+            Status = status,
+            Page = page,
+            PageSize = PageSize,
+            TotalCount = ordersPage.TotalCount,
+            TotalPages = ordersPage.TotalPages,
+        });
     }
 
     /// <summary>Reuses the page-level CustomOrdersView policy for the write action too (2026-08-05

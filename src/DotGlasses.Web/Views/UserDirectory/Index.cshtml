@@ -1,4 +1,5 @@
-@model IReadOnlyList<DotGlasses.Web.Models.DirectoryUser>
+@model DotGlasses.Web.Models.UserDirectoryViewModel
+@using DotGlasses.Application.Common
 @using DotGlasses.Application.Organisations
 @{
     ViewData["Title"] = "User Directory";
@@ -27,11 +28,49 @@
     <div class="alert alert-danger" style="border-radius:var(--radius-md); margin-bottom:var(--space-4);" asp-validation-summary="All"></div>
 }
 
+<form method="get" asp-action="Index" style="display:flex; align-items:flex-end; gap:8px; margin-bottom:var(--space-4); flex-wrap:wrap;">
+    <div>
+        <label class="dg-stat-label" style="display:block; margin-bottom:4px;">Search</label>
+        <input class="form-control" name="search" value="@Model.Search" placeholder="Name or email" />
+    </div>
+    <div>
+        <label class="dg-stat-label" style="display:block; margin-bottom:4px;">Role</label>
+        <select class="form-select" name="role">
+            <option value="">All roles</option>
+            @foreach (var roleName in RoleNames.All)
+            {
+                <option value="@roleName" selected="@(Model.Role == roleName ? "selected" : null)">@roleName</option>
+            }
+        </select>
+    </div>
+    <div>
+        <label class="dg-stat-label" style="display:block; margin-bottom:4px;">Status</label>
+        <select class="form-select" name="status">
+            <option value="">All statuses</option>
+            @foreach (var statusName in new[] { "Active", "Invited", "Suspended" })
+            {
+                <option value="@statusName" selected="@(Model.Status == statusName ? "selected" : null)">@statusName</option>
+            }
+        </select>
+    </div>
+    <button class="dg-btn dg-btn-ghost" style="padding:8px 16px; font-size:13px;" type="submit">Apply</button>
+    @if (!string.IsNullOrEmpty(Model.Search) || !string.IsNullOrEmpty(Model.Role) || !string.IsNullOrEmpty(Model.Status))
+    {
+        <a class="dg-btn dg-btn-ghost" style="padding:8px 16px; font-size:13px;" asp-action="Index">Clear</a>
+    }
+</form>
+
 <div class="dg-card">
+    @if (Model.Users.Count == 0)
+    {
+        <div class="dg-empty-state"><div class="dg-ring"></div><p>No users match the current filters.</p></div>
+    }
+    else
+    {
     <table class="dg-table">
         <thead><tr><th>Name</th><th>Role</th><th>Scope</th><th>Last login</th><th>Sales</th><th>Status</th><th></th></tr></thead>
         <tbody>
-        @foreach (var user in Model)
+        @foreach (var user in Model.Users)
         {
             <tr>
                 <td>@user.Name</td>
@@ -72,11 +111,29 @@
         }
         </tbody>
     </table>
+    }
     <p style="font-size:12px; color:var(--text-muted); margin: var(--space-4) 0 0;">
         An admin only sees history for users at or below their own scope. If a user is shared
         across multiple locations, an admin only sees activity at the locations they have in
         common with that user.
     </p>
+
+    @if (Model.TotalPages > 1)
+    {
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:var(--space-4); padding-top:var(--space-4); border-top:1px solid var(--border-default);">
+            <span class="dg-muted" style="font-size:13px;">Page @Model.Page of @Model.TotalPages (@Model.TotalCount total)</span>
+            <div style="display:flex; gap:var(--space-2);">
+                @if (Model.Page > 1)
+                {
+                    <a class="dg-btn dg-btn-ghost" style="padding:6px 16px; font-size:13px;" asp-action="Index" asp-route-search="@Model.Search" asp-route-role="@Model.Role" asp-route-status="@Model.Status" asp-route-page="@(Model.Page - 1)">Previous</a>
+                }
+                @if (Model.Page < Model.TotalPages)
+                {
+                    <a class="dg-btn dg-btn-ghost" style="padding:6px 16px; font-size:13px;" asp-action="Index" asp-route-search="@Model.Search" asp-route-role="@Model.Role" asp-route-status="@Model.Status" asp-route-page="@(Model.Page + 1)">Next</a>
+                }
+            </div>
+        </div>
+    }
 </div>
 
 <div class="modal fade" id="inviteUserModal" tabindex="-1" aria-hidden="true">

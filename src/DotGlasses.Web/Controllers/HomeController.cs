@@ -9,12 +9,15 @@ namespace DotGlasses.Web.Controllers;
 [Authorize]
 public class HomeController(IDashboardQueryService dashboardQueryService) : Controller
 {
-    public async Task<IActionResult> Index(CancellationToken cancellationToken)
+    public async Task<IActionResult> Index(DateOnly? fromDate, DateOnly? toDate, CancellationToken cancellationToken)
     {
-        var snapshot = await dashboardQueryService.GetAsync(cancellationToken);
+        var (fromUtc, toUtcExclusive) = DateRange.ToUtcRange(fromDate, toDate);
+        var snapshot = await dashboardQueryService.GetAsync(fromUtc, toUtcExclusive, cancellationToken);
 
         var model = new DashboardViewModel
         {
+            FromDate = fromDate,
+            ToDate = toDate,
             PendingLeads = snapshot.PendingLeads,
             TotalTests = snapshot.TotalTests,
             StandardSales = snapshot.StandardSales,

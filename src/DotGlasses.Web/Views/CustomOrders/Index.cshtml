@@ -1,4 +1,5 @@
-@model IReadOnlyList<DotGlasses.Web.Models.CustomOrder>
+@model DotGlasses.Web.Models.CustomOrdersViewModel
+@using DotGlasses.Domain.Enums
 @{
     ViewData["Title"] = "Custom Orders";
 }
@@ -15,17 +16,25 @@
     approval (outlet → retailer → country) is a Day 2 feature; v1 is a flat status queue.
 </p>
 
-<div class="dg-card">
-    @if (Model.Count == 0)
+<div style="display:flex; gap:var(--space-2); margin-bottom:var(--space-4); flex-wrap:wrap;">
+    <a class="@(Model.Status is null ? "dg-btn dg-btn-primary" : "dg-btn dg-btn-ghost")" style="padding:8px 20px; font-size:13px;" asp-action="Index">All</a>
+    @foreach (var status in new[] { FulfilmentStatus.Submitted, FulfilmentStatus.InLab, FulfilmentStatus.ReadyForPickup, FulfilmentStatus.Fulfilled })
     {
-        <div class="dg-empty-state"><div class="dg-ring"></div><p>No custom orders yet.</p></div>
+        <a class="@(Model.Status == status ? "dg-btn dg-btn-primary" : "dg-btn dg-btn-ghost")" style="padding:8px 20px; font-size:13px;" asp-action="Index" asp-route-status="@status">@DotGlasses.Web.Models.CustomOrder.StatusLabel[status]</a>
+    }
+</div>
+
+<div class="dg-card">
+    @if (Model.Orders.Count == 0)
+    {
+        <div class="dg-empty-state"><div class="dg-ring"></div><p>No custom orders match the current filter.</p></div>
     }
     else
     {
         <table class="dg-table">
             <thead><tr><th>Customer</th><th>Source outlet</th><th>Prescription</th><th>Status</th><th></th></tr></thead>
             <tbody>
-            @foreach (var order in Model)
+            @foreach (var order in Model.Orders)
             {
                 <tr>
                     <td>@order.Customer</td>
@@ -45,5 +54,22 @@
             }
             </tbody>
         </table>
+    }
+
+    @if (Model.TotalPages > 1)
+    {
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:var(--space-4); padding-top:var(--space-4); border-top:1px solid var(--border-default);">
+            <span class="dg-muted" style="font-size:13px;">Page @Model.Page of @Model.TotalPages (@Model.TotalCount total)</span>
+            <div style="display:flex; gap:var(--space-2);">
+                @if (Model.Page > 1)
+                {
+                    <a class="dg-btn dg-btn-ghost" style="padding:6px 16px; font-size:13px;" asp-action="Index" asp-route-status="@Model.Status" asp-route-page="@(Model.Page - 1)">Previous</a>
+                }
+                @if (Model.Page < Model.TotalPages)
+                {
+                    <a class="dg-btn dg-btn-ghost" style="padding:6px 16px; font-size:13px;" asp-action="Index" asp-route-status="@Model.Status" asp-route-page="@(Model.Page + 1)">Next</a>
+                }
+            </div>
+        </div>
     }
 </div>
