@@ -39,10 +39,9 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
         foreach (var user in users)
         {
             var roles = await userManager.GetRolesAsync(user);
-            var assignedOrgNames = assignments
-                .Where(a => a.UserId == user.Id)
-                .Select(a => orgNames.GetValueOrDefault(a.OrgNodeId, "Unknown"))
-                .ToList();
+            var userAssignments = assignments.Where(a => a.UserId == user.Id).ToList();
+            var assignedOrgNames = userAssignments.Select(a => orgNames.GetValueOrDefault(a.OrgNodeId, "Unknown")).ToList();
+            var assignedOrgIds = userAssignments.Select(a => a.OrgNodeId).ToList();
 
             rows.Add(new UserAdminRow(
                 user.Id,
@@ -50,6 +49,8 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
                 string.IsNullOrWhiteSpace(user.FullName) ? user.UserName ?? "—" : user.FullName,
                 roles.FirstOrDefault() ?? "—",
                 assignedOrgNames,
+                assignedOrgIds,
+                user.OrgNodeId,
                 ResolveStatus(user),
                 user.LastLoginUtc,
                 salesCounts.GetValueOrDefault(user.Id, 0),
@@ -140,6 +141,25 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
             CreatedAtUtc = DateTimeOffset.UtcNow,
         });
 
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task UnassignUserFromOrgAsync(Guid userId, Guid orgNodeId, CancellationToken cancellationToken = default)
+    {
+        var user = await userManager.FindByIdAsync(userId.ToString()) ?? throw new InvalidOperationException("User not found.");
+        if (user.OrgNodeId == orgNodeId)
+        {
+            throw new InvalidOperationException("Can't un-assign a user's primary org — switch their primary org first.");
+        }
+
+        var entity = await dbContext.UserOrgAssignments
+            .FirstOrDefaultAsync(a => a.UserId == userId && a.OrgNodeId == orgNodeId, cancellationToken);
+        if (entity is null)
+        {
+            return;
+        }
+
+        dbContext.UserOrgAssignments.Remove(entity);
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 

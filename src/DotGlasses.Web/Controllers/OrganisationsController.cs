@@ -15,7 +15,8 @@ public class OrganisationsController(
     IOrganisationAdminService organisationAdminService,
     IUserAdminService userAdminService,
     IAuthorizationService authorizationService,
-    IValidator<CreateChildOrganisationRequest> createChildValidator) : Controller
+    IValidator<CreateChildOrganisationRequest> createChildValidator,
+    IValidator<RenameOrganisationRequest> renameValidator) : Controller
 {
     public async Task<IActionResult> Index(Guid? selectedId, CancellationToken cancellationToken) =>
         View(await BuildViewModelAsync(selectedId, cancellationToken));
@@ -68,13 +69,86 @@ public class OrganisationsController(
         return RedirectToAction(nameof(Index), new { selectedId = orgNodeId });
     }
 
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UnassignUser(Guid orgNodeId, Guid userId, CancellationToken cancellationToken)
+    {
+        if (!await CanManageAsync(orgNodeId, cancellationToken))
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            await userAdminService.UnassignUserFromOrgAsync(userId, orgNodeId, cancellationToken);
+        }
+        catch (InvalidOperationException ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            return View(nameof(Index), await BuildViewModelAsync(orgNodeId, cancellationToken));
+        }
+
+        return RedirectToAction(nameof(Index), new { selectedId = orgNodeId });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Rename(RenameOrganisationRequest request, CancellationToken cancellationToken)
+    {
+        if (!await CanManageAsync(request.Id, cancellationToken))
+        {
+            return Forbid();
+        }
+
+        var validationResult = await renameValidator.ValidateAsync(request, cancellationToken);
+        if (!validationResult.IsValid)
+        {
+            validationResult.AddToModelState(ModelState);
+            return View(nameof(Index), await BuildViewModelAsync(request.Id, cancellationToken));
+        }
+
+        await organisationAdminService.RenameAsync(request.Id, request.Name, cancellationToken);
+        return RedirectToAction(nameof(Index), new { selectedId = request.Id });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SetActive(Guid id, bool value, CancellationToken cancellationToken)
+    {
+        if (!await CanManageAsync(id, cancellationToken))
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            await organisationAdminService.SetActiveAsync(id, value, cancellationToken);
+        }
+        catch (InvalidOperationException ex)
+        {
+            ModelState.AddModelError(string.Empty, ex.Message);
+            return View(nameof(Index), await BuildViewModelAsync(id, cancellationToken));
+        }
+
+        return value ? RedirectToAction(nameof(Index), new { selectedId = id }) : RedirectToAction(nameof(Index));
+    }
+
     /// <summary>Resource-based check against the target node's own HierarchyPath — see
     /// HierarchyDescendantRequirement. Re-checked here even though the view already hides the
-    /// triggering button/form for a user who'd fail it; never trust the hidden-button UX alone.</summary>
+    /// triggering button/form for a user who'd fail it; never trust the hidden-button UX alone.
+    /// Falls back to ListDeactivatedAsync if the target isn't in the active list — reactivating a
+    /// deactivated node is the one action whose own target is, by definition, invisible to
+    /// ListAsync.</summary>
     private async Task<bool> CanManageAsync(Guid targetNodeId, CancellationToken cancellationToken)
     {
         var nodes = await organisationAdminService.ListAsync(cancellationToken);
         var target = nodes.FirstOrDefault(n => n.Id == targetNodeId);
+        if (target is null)
+        {
+            var deactivatedNodes = await organisationAdminService.ListDeactivatedAsync(cancellationToken);
+            target = deactivatedNodes.FirstOrDefault(n => n.Id == targetNodeId);
+        }
+
         if (target is null)
         {
             return false;
@@ -108,12 +182,16 @@ public class OrganisationsController(
 
         var users = await userAdminService.ListAsync(cancellationToken);
         var assignableUsers = users.Select(u => (u.Id, DisplayName: $"{u.DisplayName} ({u.Email})")).ToList();
-        var selectedAssignedUserNames = users
-            .Where(u => u.OrgNames.Contains(selected.Name))
-            .Select(u => u.DisplayName)
+        var selectedAssignedUsers = users
+            .Where(u => u.OrgNodeIds.Contains(selected.Id))
+            .Select(u => (u.Id, u.DisplayName))
             .ToList();
 
-        return new OrganisationsIndexViewModel(tree, selected, canManage, validChildLevels, assignableUsers, selectedAssignedUserNames);
+        var deactivatedNodes = (await organisationAdminService.ListDeactivatedAsync(cancellationToken))
+            .Select(n => (n.Id, n.Name))
+            .ToList();
+
+        return new OrganisationsIndexViewModel(tree, selected, canManage, selected.Children.Count > 0, validChildLevels, assignableUsers, selectedAssignedUsers, deactivatedNodes);
     }
 
     private static OrgNode BuildTree(Guid nodeId, IReadOnlyDictionary<Guid, OrganisationAdminNode> byId, ILookup<Guid?, OrganisationAdminNode> byParent)

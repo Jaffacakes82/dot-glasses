@@ -1128,19 +1128,20 @@ about what changes*, taken with the user in a structured review session on 2026-
 **Delivery**: one feature branch + PR per phase (a push to `main` triggers the deploy pipeline —
 keep `main` deployable). Commit + update this file after each phase.
 
-**Where this stands (2026-08-11):** Phases 1–4 are merged to `main`
+**Where this stands (2026-08-12):** Phases 1–5 are merged to `main`
 ([PR #1](https://github.com/Jaffacakes82/dot-glasses/pull/1),
 [PR #2](https://github.com/Jaffacakes82/dot-glasses/pull/2),
 [PR #3](https://github.com/Jaffacakes82/dot-glasses/pull/3),
-[PR #4](https://github.com/Jaffacakes82/dot-glasses/pull/4)). Phase 5 (email delivery) is done,
-verified live (the local-dev fallback path — real ACS delivery needs the user's own `azd up`/
-deploy to provision `acs.bicep`, which Claude cannot do, see that section below), and committed on
-`feat/phase-5-email-delivery`, branched fresh off `main` — about to be pushed/PR'd. Phases 6–8 are
-untouched. Two `[OPEN]` items are worth flagging deliberately rather than letting drift: offline
-record attribution at sync time vs creation time (from Phase 1), and Phase 3's location-switching
-feature only works online (re-issuing a JWT is inherently a server round-trip) — a technician who
-needs to switch outlets while genuinely offline can't, and the Field App doesn't yet say so
-explicitly beyond the generic "check your connection" message.
+[PR #4](https://github.com/Jaffacakes82/dot-glasses/pull/4),
+[PR #5](https://github.com/Jaffacakes82/dot-glasses/pull/5)). Phase 6 (admin editing gaps) is
+done, verified live, and pushed/PR'd —
+[PR #6](https://github.com/Jaffacakes82/dot-glasses/pull/6), `feat/phase-6-admin-editing-gaps`
+into `main`, not yet merged. Phases 7–8 are untouched. Two `[OPEN]` items are worth flagging
+deliberately rather than letting drift: offline record attribution at sync time vs creation time
+(from Phase 1), and Phase 3's location-switching feature only works online (re-issuing a JWT is
+inherently a server round-trip) — a technician who needs to switch outlets while genuinely offline
+can't, and the Field App doesn't yet say so explicitly beyond the generic "check your connection"
+message.
 
 ### Phase 1 — Field App data integrity (highest priority: this loses real data today)
 
@@ -1503,6 +1504,120 @@ on that day.
   invisible to technicians. Supersedes the "known rough edge" flagged in Field App UI wiring.
 - **Organisations: rename + deactivate, and un-assign a user.** A node cannot be renamed,
   re-levelled or deactivated after creation, and a user assigned to it can never be removed.
+
+**Phase 6 status: implemented and verified live (2026-08-12), on branch
+`feat/phase-6-admin-editing-gaps`, not yet merged.** All four sub-items shipped in one pass, each
+following the existing per-screen admin-service pattern (queries `DbContext` directly, no
+repository interface) rather than introducing anything new architecturally:
+
+- **Reference Data edit + reorder**: `IReferenceDataAdminService` gained `UpdateAsync` (Label/
+  ImageUrl only — Category/Code/IsOtherOption stay fixed after creation, since changing
+  IsOtherOption after the fact would need the same "at most one active Other per category" guard
+  `CreateAsync` already has, and nothing asked for that) and `MoveUpAsync`/`MoveDownAsync`
+  (swaps `SortOrder` with the adjacent *active* item in the same category — retired items are
+  excluded from the ordering, matching what's actually visible in the UI). The view gained a
+  pencil-icon edit modal per option (mirroring `Catalogues/Index.cshtml`'s existing per-card edit
+  modal) and ↑/↓ buttons on each active chip.
+- **Preset Catalogues duplicate-lens guard**: new `IPresetCatalogueAdminService.
+  LensOptionExistsAsync`, checked in `AddLensOptionRequestValidator`'s existing `CustomAsync` rule
+  (alongside the pre-existing active/exists check). The "Add lens" `<select>` in
+  `Catalogues/Index.cshtml` also filters out strengths already on that catalogue client-side —
+  belt-and-suspenders with the server-side validator, not a substitute for it.
+- **Preset Catalogues un-assign**: new `ListAssignedOrgsAsync`/`UnassignCatalogueFromOrgAsync`.
+  `ListAssignedOrgsAsync` deliberately uses a *plain scoped* `OrganisationNodes` query, not
+  `IUnscopedReportQueryService` — unlike resolving an *ancestor's* name (the bug fixed twice
+  before in Dashboard/Event History, see those sections above), an assignment outside the
+  caller's own hierarchy scope is genuinely not this caller's to manage, so silently resolving to
+  "Unknown" for it is correct scoping, not a bug. `CatalogueCard.AssignedOrgCount` (an `int`) is
+  now `AssignedOrgs` (a real list) so the view can render a remove button per assignment; the now
+  provably-unused `PresetCatalogueAdminDto.AssignedOrgCount` field and its `GroupBy` computation
+  were deleted rather than left dead.
+- **Preset Catalogues `Kind` field**: new `Domain.Enums.PresetCatalogueKind` (`Other`/
+  `SixLensSet`/`NineLensSet`, mirrored as `Contracts.Common.PresetCatalogueKind` per the
+  Contracts-must-not-reference-Domain rule) — a new nullable-free column on `PresetCatalogue`,
+  defaulting to `Other`. `PresetCatalogueAdminService.HasCatalogueWithKindAsync` backs a new
+  `CustomAsync` rule on both `CreateCatalogueRequestValidator`/`UpdateCatalogueRequestValidator`:
+  at most one catalogue may hold `SixLensSet`, at most one `NineLensSet`, any number may hold
+  `Other`. The two seeded catalogues (`PresetCatalogueSeedConfiguration`) were stamped with their
+  real kind in the same migration. `PresetCatalogueDto` (Contracts) and `PresetCatalogueQueryService`
+  now carry `Kind` through to the Field App, and `LensRangeSelector.razor`'s `SixLensCatalogue`/
+  `NineLensCatalogue` properties switched from `.Name.Contains("6-Lens"/"9-Lens")` to
+  `.Kind == PresetCatalogueKind.SixLensSet`/`NineLensSet` — verified live that switching the Sale
+  form's lens-range picker between 6-Lens/9-Lens Set correctly loads each catalogue's real roster
+  by `Kind`, not name.
+- **Organisations rename + deactivate**: new `IOrganisationAdminService.RenameAsync`/
+  `SetActiveAsync`. Deactivate reuses `OrganisationNode`'s **existing** `IsDeleted`/
+  `ISoftDeletable` fields — already wired into `DotGlassesDbContext`'s global query filter, so no
+  new column/migration was needed for this half of the feature, just a first real consumer.
+  Deactivating calls `dbContext.OrganisationNodes.Remove(entity)` rather than setting
+  `IsDeleted = true` by hand — `AuditSaveChangesInterceptor` already turns a `Remove()` on an
+  `ISoftDeletable` entity into a soft-delete (state flip, stamps `DeletedAtUtc`/`DeletedBy`), the
+  same sanctioned pattern `WidgetExampleRepository` already uses; reactivating has no equivalent
+  "undelete" in the interceptor, so it clears `IsDeleted`/`DeletedAtUtc`/`DeletedBy` by hand.
+  Deactivating a node with active (non-deleted) children throws — deactivate the children first,
+  rather than silently orphaning them under a node that's disappeared from every admin's tree.
+  New `ListDeactivatedAsync` (manual `IgnoreQueryFilters()` + hand-applied
+  `ICurrentUserContext.HierarchyPathPrefix` check) surfaces a caller's own deactivated nodes for
+  display/reactivation — the standard EF query filter combines hierarchy-scoping and soft-delete
+  into one AND'd expression with no way to bypass just one half, so this is the same
+  manual-prefix-filter technique `IUserAdminService.ListAsync` already uses for `ApplicationUser`,
+  applied here for a different reason (bypassing soft-delete, not the absence of `IHierarchyScoped`).
+- **Organisations un-assign a user**: new `IUserAdminService.UnassignUserFromOrgAsync`, guarded
+  against removing a user's *primary* org (`ApplicationUser.OrgNodeId`) — throws rather than
+  silently leaving the user with no org driving their JWT/hierarchy scope, since there's still no
+  "switch primary" UI to move it first. `UserAdminRow` gained `OrgNodeIds`/`PrimaryOrgNodeId`
+  alongside the existing `OrgNames` (Id-parallel-to-name arrays) — resolves the `[OPEN]` gap
+  flagged when "Assign users" first shipped ("matches by name, only correct because org names
+  happen to be unique"); `OrganisationsController`'s `SelectedAssignedUsers` now matches by
+  `OrgNodeId`, not name.
+
+**Two real bugs found and fixed via the live pass, neither caught by the (unmodified) existing
+test suite**:
+1. `OrganisationsController`'s new `UnassignUser`/`SetActive` actions initially had no
+   `try`/`catch` around their service calls — the primary-org guard and the has-active-children
+   guard both throw `InvalidOperationException` on purpose, and an uncaught one meant the *first*
+   live click of the primary-org guard surfaced correctly (return `Forbid()`... no — actually
+   surfaced as the framework's default unhandled-exception behavior) rather than the clean
+   inline error every other validation failure on this screen gets. Fixed the same way
+   `CreateChild`/`Rename` handle a `FluentValidation` failure: catch, `ModelState.AddModelError`,
+   re-render `Index` with the same `BuildViewModelAsync`.
+2. **Reactivating a deactivated node always failed** — two compounding causes, both found by
+   actually clicking "Reactivate" against a real deactivated row rather than just reading the
+   code back: (a) `CanManageAsync`'s authorization check resolves its target via
+   `organisationAdminService.ListAsync()`, which — correctly, for every *other* action on this
+   screen — only returns active nodes; for `SetActive(id, isActive: true)` specifically, the
+   node being acted on is by definition *not* in that list, so the check always found no target
+   and returned `Forbid()`. Fixed by falling back to `ListDeactivatedAsync()` when the active
+   list doesn't contain the target. (b) Once that was fixed, `SetActiveAsync`'s own entity fetch
+   (`dbContext.OrganisationNodes.FirstAsync(x => x.Id == id, ...)`) hit the *same* class of
+   problem one layer down — the standard query filter hides the very row being reactivated, so
+   `FirstAsync` threw `"Sequence contains no elements"` (caught by the try/catch above, but never
+   should have been thrown at all). Fixed by adding `.IgnoreQueryFilters()` to that one fetch —
+   safe because the whole point of the method is to explicitly flip `IsDeleted`, not accidentally
+   read/write some other tenant's row (the `id` is already caller-supplied and authorized before
+   this line runs). Both fixes verified by actually deactivating and then reactivating the same
+   real node (Nakuru Central) and confirming it reappeared in the tree, not just that no exception
+   was thrown.
+
+**Verified live end-to-end**, real browser against the real running stack, as the seeded DGI
+Admin: on Reference Data, reordered two options with ↑/↓ and confirmed the swap persisted across
+a reload, edited an option's label via the new modal, reverted it. On Preset Catalogues: confirmed
+both seeded catalogues render "Field App picker role: SixLensSet/NineLensSet"; unassigned Kangemi
+Vision Centre — Outreach Post from the 6-Lens Set catalogue and confirmed it dropped off the
+assigned-orgs list; confirmed the "Add lens" dropdown for each catalogue only offers strengths not
+already on it. On Organisations: renamed a node and reverted it; assigned
+`retailpoint-user@dotglasses.dev` (a seeded account with no pre-existing `UserOrgAssignment` row)
+to their own real primary org via "Assign users", then confirmed attempting to un-assign it from
+that same node correctly failed with "Can't un-assign a user's primary org" rather than crashing
+or silently succeeding; un-assigned a genuinely-secondary assignment (Grace Njoroge from Nakuru
+Central) and confirmed it succeeded; deactivated the childless Nakuru Central node, confirmed it
+disappeared from the tree and appeared in a new "Deactivated orgs" list, then reactivated it and
+confirmed it reappeared in the tree (this round-trip is what surfaced bug 2 above); confirmed the
+DGI root node correctly refuses to offer a Deactivate button at all, since it has children.
+Separately, on the Field App as the seeded RetailPoint technician: opened a new Sale, confirmed
+the 6-Lens Set lens-power dropdown shows the correct 8-item roster, switched to 9-Lens Set and
+confirmed the dropdown swapped to the correct 12-item roster — proving the `Kind`-based Field App
+resolution works end-to-end, not just that the Admin Portal displays the field.
 
 ### Phase 7 — Reporting usability (export explicitly deprioritised)
 

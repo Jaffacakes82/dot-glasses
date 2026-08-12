@@ -41,11 +41,52 @@
                             <img src="@option.ImageUrl" alt="@option.Label" style="width:18px; height:18px; border-radius:50%; object-fit:cover;" />
                         }
                         @option.Label
+                        <form asp-action="MoveUp" method="post" style="display:inline;">
+                            <input type="hidden" name="id" value="@option.Id" />
+                            <button type="submit" aria-label="Move @option.Label up" style="border:none; background:none; cursor:pointer; padding:0; color:#888; font-size:11px; line-height:1;">&uarr;</button>
+                        </form>
+                        <form asp-action="MoveDown" method="post" style="display:inline;">
+                            <input type="hidden" name="id" value="@option.Id" />
+                            <button type="submit" aria-label="Move @option.Label down" style="border:none; background:none; cursor:pointer; padding:0; color:#888; font-size:11px; line-height:1;">&darr;</button>
+                        </form>
+                        <button type="button" aria-label="Edit @option.Label" data-bs-toggle="modal" data-bs-target="#editRefDataModal-@option.Id"
+                                style="border:none; background:none; cursor:pointer; padding:0; color:#888; font-size:12px; line-height:1;">&#9998;</button>
                         <form asp-action="Deactivate" method="post" style="display:inline;">
                             <input type="hidden" name="id" value="@option.Id" />
                             <button type="submit" aria-label="Retire @option.Label" style="border:none; background:none; cursor:pointer; padding:0; color:#888; font-size:13px; line-height:1;">&times;</button>
                         </form>
                     </span>
+
+                    <div class="modal fade" id="editRefDataModal-@option.Id" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog">
+                            <div class="modal-content" style="border-radius:var(--radius-md); border:none;">
+                                <form asp-action="Update" method="post">
+                                    <input type="hidden" name="Id" value="@option.Id" />
+                                    <div class="modal-header">
+                                        <h2 class="dg-page-title" style="font-size:20px;">Edit @option.Label</h2>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="dg-auth-field">
+                                            <label>Label</label>
+                                            <input class="form-control" name="Label" value="@option.Label" />
+                                        </div>
+                                        @if (list.ShowImageField)
+                                        {
+                                            <div class="dg-auth-field">
+                                                <label>Image URL</label>
+                                                <input class="form-control" name="ImageUrl" value="@option.ImageUrl" />
+                                            </div>
+                                        }
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button class="dg-btn dg-btn-ghost" type="button" data-bs-dismiss="modal">Cancel</button>
+                                        <button class="dg-btn dg-btn-primary" type="submit">Save</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
                 }
             </div>
 

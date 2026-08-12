@@ -38,7 +38,7 @@ public class CataloguesController(
             return View(nameof(Index), await BuildViewModelAsync(cancellationToken));
         }
 
-        await catalogueAdminService.CreateAsync(request.Name, request.Description, request.RangeDescription, currentUserContext.OrgNodeId!.Value, cancellationToken);
+        await catalogueAdminService.CreateAsync(request.Name, request.Description, request.RangeDescription, currentUserContext.OrgNodeId!.Value, request.Kind, cancellationToken);
         return RedirectToAction(nameof(Index));
     }
 
@@ -53,7 +53,7 @@ public class CataloguesController(
             return View(nameof(Index), await BuildViewModelAsync(cancellationToken));
         }
 
-        await catalogueAdminService.UpdateAsync(request.Id, request.Name, request.Description, request.RangeDescription, cancellationToken);
+        await catalogueAdminService.UpdateAsync(request.Id, request.Name, request.Description, request.RangeDescription, request.Kind, cancellationToken);
         return RedirectToAction(nameof(Index));
     }
 
@@ -101,6 +101,14 @@ public class CataloguesController(
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UnassignCatalogue(Guid catalogueId, Guid orgNodeId, CancellationToken cancellationToken)
+    {
+        await catalogueAdminService.UnassignCatalogueFromOrgAsync(catalogueId, orgNodeId, cancellationToken);
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> SetCoatingAvailability(SetCoatingAvailabilityRequest request, CancellationToken cancellationToken)
     {
         var validationResult = await coatingAvailabilityValidator.ValidateAsync(request, cancellationToken);
@@ -143,10 +151,15 @@ public class CataloguesController(
             .Select(o => (o.Id, o.Name))
             .ToList();
 
-        var catalogueCards = catalogues.Select(c => new CatalogueCard(
-            c.Id, c.Name, c.Description, c.RangeDescription,
-            c.LensOptions.Select(l => new LensOptionCard(l.Id, l.LensStrengthRefId, l.Label, l.SortOrder)).ToList(),
-            c.AssignedOrgCount)).ToList();
+        var catalogueCards = new List<CatalogueCard>();
+        foreach (var c in catalogues)
+        {
+            var assignedOrgs = await catalogueAdminService.ListAssignedOrgsAsync(c.Id, cancellationToken);
+            catalogueCards.Add(new CatalogueCard(
+                c.Id, c.Name, c.Description, c.RangeDescription, c.Kind,
+                c.LensOptions.Select(l => new LensOptionCard(l.Id, l.LensStrengthRefId, l.Label, l.SortOrder)).ToList(),
+                assignedOrgs.Select(a => new AssignedOrgCard(a.OrgNodeId, a.OrgName)).ToList()));
+        }
 
         return new CataloguesIndexViewModel(
             catalogueCards,
