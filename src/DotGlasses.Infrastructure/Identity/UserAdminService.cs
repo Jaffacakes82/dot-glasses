@@ -1,4 +1,5 @@
 using DotGlasses.Application.Common;
+using DotGlasses.Application.Reporting;
 using DotGlasses.Application.Users;
 using DotGlasses.Domain.Entities;
 using DotGlasses.Infrastructure.Persistence;
@@ -58,6 +59,38 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
         }
 
         return rows;
+    }
+
+    public async Task<PagedResult<UserAdminRow>> ListPagedAsync(string? search, string? role, string? status, int page, int pageSize, CancellationToken cancellationToken = default)
+    {
+        // Reuses ListAsync (correct hierarchy-prefix scoping + role resolution already lives
+        // there) rather than duplicating it — filters/pages the already-materialized result
+        // instead of pushing to SQL, since role/status aren't queryable columns (role lives in
+        // AspNetUserRoles, status is derived from PasswordHash/LockoutEnd) and the underlying
+        // scoped user count is already small enough that ListAsync loads it all into memory today.
+        IEnumerable<UserAdminRow> filtered = await ListAsync(cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            filtered = filtered.Where(u =>
+                u.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                u.Email.Contains(search, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(role))
+        {
+            filtered = filtered.Where(u => u.Role == role);
+        }
+
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            filtered = filtered.Where(u => u.Status == status);
+        }
+
+        var filteredList = filtered.ToList();
+        var items = filteredList.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+        return new PagedResult<UserAdminRow>(items, filteredList.Count, page, pageSize);
     }
 
     public async Task<bool> EmailExistsAsync(string email, CancellationToken cancellationToken = default) =>

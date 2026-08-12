@@ -10,14 +10,17 @@ public class EventHistoryController(IEventHistoryQueryService eventHistoryQueryS
 {
     private const int PageSize = 25;
 
-    public async Task<IActionResult> Index(string tab = "sales", string? search = null, int page = 1, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> Index(string tab = "sales", string? search = null, DateOnly? fromDate = null, DateOnly? toDate = null, int page = 1, CancellationToken cancellationToken = default)
     {
         page = Math.Max(1, page);
+        var (fromUtc, toUtcExclusive) = DateRange.ToUtcRange(fromDate, toDate);
 
         var model = new EventHistoryViewModel
         {
             ActiveTab = tab,
             SearchQuery = search,
+            FromDate = fromDate,
+            ToDate = toDate,
             Page = page,
             PageSize = PageSize,
         };
@@ -25,25 +28,25 @@ public class EventHistoryController(IEventHistoryQueryService eventHistoryQueryS
         switch (tab)
         {
             case "sales":
-                var salesPage = await eventHistoryQueryService.ListSalesAsync(page, PageSize, cancellationToken);
+                var salesPage = await eventHistoryQueryService.ListSalesAsync(fromUtc, toUtcExclusive, page, PageSize, cancellationToken);
                 model.Events = salesPage.Items.Select(ToWebModel).ToList();
                 model.TotalCount = salesPage.TotalCount;
                 model.TotalPages = salesPage.TotalPages;
                 break;
             case "tests":
-                var testsPage = await eventHistoryQueryService.ListTestsAsync(page, PageSize, cancellationToken);
+                var testsPage = await eventHistoryQueryService.ListTestsAsync(fromUtc, toUtcExclusive, page, PageSize, cancellationToken);
                 model.Events = testsPage.Items.Select(ToWebModel).ToList();
                 model.TotalCount = testsPage.TotalCount;
                 model.TotalPages = testsPage.TotalPages;
                 break;
             case "leads":
-                var leadsPage = await eventHistoryQueryService.ListLeadsAsync(search, page, PageSize, cancellationToken);
+                var leadsPage = await eventHistoryQueryService.ListLeadsAsync(search, fromUtc, toUtcExclusive, page, PageSize, cancellationToken);
                 model.Leads = leadsPage.Items.Select(ToWebModel).ToList();
                 model.TotalCount = leadsPage.TotalCount;
                 model.TotalPages = leadsPage.TotalPages;
                 break;
             case "referrals":
-                var referralsPage = await eventHistoryQueryService.ListReferralsAsync(page, PageSize, cancellationToken);
+                var referralsPage = await eventHistoryQueryService.ListReferralsAsync(fromUtc, toUtcExclusive, page, PageSize, cancellationToken);
                 model.Referrals = referralsPage.Items.Select(ToWebModel).ToList();
                 model.TotalCount = referralsPage.TotalCount;
                 model.TotalPages = referralsPage.TotalPages;
