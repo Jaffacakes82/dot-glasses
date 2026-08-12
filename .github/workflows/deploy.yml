@@ -55,6 +55,12 @@ jobs:
 
       - uses: Azure/setup-azd@v2
 
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
       - name: Log in with Azure (federated credentials)
         run: |
           azd auth login \
@@ -64,6 +70,37 @@ jobs:
 
       - name: Provision + deploy (Web/AppHost)
         run: azd up --no-prompt
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      # Phase 8 (2026-08-12) — replaces reliance on Program.cs's auto-migrate-on-boot for any
+      # real environment (that code path is deliberately gated to IsDevelopment() only, see its
+      # own comment — it never ran here even before this step existed). Runs after `azd up` so
+      # the Postgres Flexible Server and its schema-less database definitely exist. Auth: the
+      # `azure/login` step above authenticates the plain `az` CLI (separate credential store from
+      # `azd auth login`) via the same OIDC federated identity, so `az account get-access-token`
+      # can mint a short-lived Postgres AAD token — the server has no password auth at all
+      # (`passwordAuth: 'Disabled'`, Entra ID only, see AZURE_POSTGRES_PASSWORD's own comment
+      # above). AZURE_POSTGRES_AAD_USERNAME is a new repo/environment variable the user must set
+      # to whatever identity name `az postgres flexible-server ad-admin create` was run against
+      # for this deploying principal — that grant is itself a one-time infra/RBAC step outside
+      # what Claude can do from a coding session (no infra touched from a developer machine, see
+      # CLAUDE.md's Deployment section), so this step is written but not yet end-to-end verified
+      # against a real server.
+      - name: Apply database migrations
+        env:
+          AZURE_POSTGRES_AAD_USERNAME: ${{ vars.AZURE_POSTGRES_AAD_USERNAME }}
+        run: |
+          set -euo pipefail
+          POSTGRES_HOST=$(azd env get-value POSTGRES_HOSTNAME)
+          PG_TOKEN=$(az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv)
+          export ConnectionStrings__dotglassesdb="Host=${POSTGRES_HOST};Port=5432;Database=dotglassesdb;Username=${AZURE_POSTGRES_AAD_USERNAME};Password=${PG_TOKEN};Ssl Mode=Require;Trust Server Certificate=true"
+          dotnet tool install --global dotnet-ef --version 10.*
+          dotnet ef database update \
+            --project src/DotGlasses.Infrastructure \
+            --startup-project src/DotGlasses.Web
 
   deploy-app-staging:
     if: github.event.workflow_run.conclusion == 'success'
@@ -125,6 +162,12 @@ jobs:
 
       - uses: Azure/setup-azd@v2
 
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
       - name: Log in with Azure (federated credentials)
         run: |
           azd auth login \
@@ -134,6 +177,24 @@ jobs:
 
       - name: Provision + deploy (Web/AppHost)
         run: azd up --no-prompt
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      # See deploy-web-staging's "Apply database migrations" step comment.
+      - name: Apply database migrations
+        env:
+          AZURE_POSTGRES_AAD_USERNAME: ${{ vars.AZURE_POSTGRES_AAD_USERNAME }}
+        run: |
+          set -euo pipefail
+          POSTGRES_HOST=$(azd env get-value POSTGRES_HOSTNAME)
+          PG_TOKEN=$(az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv)
+          export ConnectionStrings__dotglassesdb="Host=${POSTGRES_HOST};Port=5432;Database=dotglassesdb;Username=${AZURE_POSTGRES_AAD_USERNAME};Password=${PG_TOKEN};Ssl Mode=Require;Trust Server Certificate=true"
+          dotnet tool install --global dotnet-ef --version 10.*
+          dotnet ef database update \
+            --project src/DotGlasses.Infrastructure \
+            --startup-project src/DotGlasses.Web
 
   deploy-app-production:
     needs: deploy-app-staging
