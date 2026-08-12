@@ -9,11 +9,35 @@
     Title = "MI Reporting Dashboard",
 })
 
+<form method="get" asp-action="Index" style="display:flex; align-items:flex-end; gap:8px; margin-bottom:var(--space-4); flex-wrap:wrap;">
+    <div>
+        <label class="dg-stat-label" style="display:block; margin-bottom:4px;">From</label>
+        <input class="form-control" type="date" name="fromDate" value="@Model.FromDate?.ToString("yyyy-MM-dd")" />
+    </div>
+    <div>
+        <label class="dg-stat-label" style="display:block; margin-bottom:4px;">To</label>
+        <input class="form-control" type="date" name="toDate" value="@Model.ToDate?.ToString("yyyy-MM-dd")" />
+    </div>
+    <button class="dg-btn dg-btn-ghost" style="padding:8px 16px; font-size:13px;" type="submit">Apply</button>
+    @if (Model.FromDate.HasValue || Model.ToDate.HasValue)
+    {
+        <a class="dg-btn dg-btn-ghost" style="padding:8px 16px; font-size:13px;" asp-action="Index">All time</a>
+    }
+</form>
+
 <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-5);">
-    <div class="dg-card"><div class="dg-stat-label">Pending leads</div><div class="dg-stat-value">@Model.PendingLeads</div></div>
-    <div class="dg-card"><div class="dg-stat-label">Total tests</div><div class="dg-stat-value">@Model.TotalTests</div></div>
-    <div class="dg-card"><div class="dg-stat-label">Standard sales</div><div class="dg-stat-value">@Model.StandardSales</div></div>
-    <div class="dg-card"><div class="dg-stat-label">Custom orders</div><div class="dg-stat-value">@Model.CustomOrders</div></div>
+    <a class="dg-card" style="display:block; text-decoration:none; color:inherit;" asp-controller="EventHistory" asp-action="Index" asp-route-tab="leads" asp-route-fromDate="@Model.FromDate?.ToString("yyyy-MM-dd")" asp-route-toDate="@Model.ToDate?.ToString("yyyy-MM-dd")">
+        <div class="dg-stat-label">Pending leads</div><div class="dg-stat-value">@Model.PendingLeads</div>
+    </a>
+    <a class="dg-card" style="display:block; text-decoration:none; color:inherit;" asp-controller="EventHistory" asp-action="Index" asp-route-tab="tests" asp-route-fromDate="@Model.FromDate?.ToString("yyyy-MM-dd")" asp-route-toDate="@Model.ToDate?.ToString("yyyy-MM-dd")">
+        <div class="dg-stat-label">Total tests</div><div class="dg-stat-value">@Model.TotalTests</div>
+    </a>
+    <a class="dg-card" style="display:block; text-decoration:none; color:inherit;" asp-controller="EventHistory" asp-action="Index" asp-route-tab="sales" asp-route-fromDate="@Model.FromDate?.ToString("yyyy-MM-dd")" asp-route-toDate="@Model.ToDate?.ToString("yyyy-MM-dd")">
+        <div class="dg-stat-label">Standard sales</div><div class="dg-stat-value">@Model.StandardSales</div>
+    </a>
+    <a class="dg-card" style="display:block; text-decoration:none; color:inherit;" asp-controller="CustomOrders" asp-action="Index">
+        <div class="dg-stat-label">Custom orders</div><div class="dg-stat-value">@Model.CustomOrders</div>
+    </a>
     <div class="dg-card"><div class="dg-stat-label">Test-to-sale conversion</div><div class="dg-stat-value">@Model.TestToSaleConversion.ToString("0.0")%</div></div>
     <div class="dg-card"><div class="dg-stat-label">Needed-to-sale conversion</div><div class="dg-stat-value">@Model.NeededToSaleConversion.ToString("0.0")%</div></div>
 </div>
@@ -73,11 +97,11 @@
     </div>
 
     <div style="display:flex; flex-direction:column; gap:var(--space-5);">
-        <div class="dg-card">
+        <a class="dg-card" style="display:block; text-decoration:none; color:inherit;" asp-controller="EventHistory" asp-action="Index" asp-route-tab="referrals" asp-route-fromDate="@Model.FromDate?.ToString("yyyy-MM-dd")" asp-route-toDate="@Model.ToDate?.ToString("yyyy-MM-dd")">
             <div class="dg-stat-label" style="margin-bottom:var(--space-3);">Referrals logged</div>
             <div class="dg-stat-value" style="margin-top:0;">@Model.ReferralsLogged</div>
             <p style="font-size:13px; color:var(--text-muted-2); margin-bottom:0;">See Event History for detail.</p>
-        </div>
+        </a>
 
         <div class="dg-card">
             <div class="dg-stat-label" style="margin-bottom:var(--space-3);">Conversion trend (last 6 weeks)</div>

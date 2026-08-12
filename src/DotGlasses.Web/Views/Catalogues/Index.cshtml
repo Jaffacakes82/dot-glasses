@@ -18,6 +18,20 @@
     <div class="alert alert-danger" style="border-radius:var(--radius-md); margin-bottom:var(--space-4);" asp-validation-summary="All"></div>
 }
 
+<form method="get" asp-action="Index" style="display:flex; gap:8px; margin-bottom:var(--space-4);">
+    <input class="form-control" style="max-width:280px;" name="search" value="@Model.Search" placeholder="Search by package name" />
+    <button class="dg-btn dg-btn-ghost" style="padding:8px 16px; font-size:13px;" type="submit">Search</button>
+    @if (!string.IsNullOrEmpty(Model.Search))
+    {
+        <a class="dg-btn dg-btn-ghost" style="padding:8px 16px; font-size:13px;" asp-action="Index">Clear</a>
+    }
+</form>
+
+@if (Model.Catalogues.Count == 0)
+{
+    <div class="dg-empty-state"><div class="dg-ring"></div><p>No catalogues match "@Model.Search".</p></div>
+}
+
 <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-6);">
     @foreach (var catalogue in Model.Catalogues)
     {

@@ -25,11 +25,13 @@ public class UserDirectoryController(
         ["Suspended"] = "#cccccc",
     };
 
-    public async Task<IActionResult> Index(CancellationToken cancellationToken)
+    private const int PageSize = 25;
+
+    public async Task<IActionResult> Index(string? search, string? role, string? status, int page = 1, CancellationToken cancellationToken = default)
     {
         ViewData["StatusColor"] = StatusColor;
         ViewData["AvailableOrgs"] = await organisationAdminService.ListAsync(cancellationToken);
-        return View(await BuildUserListAsync(cancellationToken));
+        return View(await BuildUserListAsync(search, role, status, page, cancellationToken));
     }
 
     [HttpPost]
@@ -42,7 +44,7 @@ public class UserDirectoryController(
             validationResult.AddToModelState(ModelState);
             ViewData["StatusColor"] = StatusColor;
             ViewData["AvailableOrgs"] = await organisationAdminService.ListAsync(cancellationToken);
-            return View(nameof(Index), await BuildUserListAsync(cancellationToken));
+            return View(nameof(Index), await BuildUserListAsync(null, null, null, 1, cancellationToken));
         }
 
         if (!await CanManageOrgAsync(request.OrgNodeIds[0], cancellationToken))
@@ -133,14 +135,16 @@ public class UserDirectoryController(
         return result.Succeeded ? target : null;
     }
 
-    private async Task<IReadOnlyList<DirectoryUser>> BuildUserListAsync(CancellationToken cancellationToken)
+    private async Task<UserDirectoryViewModel> BuildUserListAsync(string? search, string? role, string? status, int page, CancellationToken cancellationToken)
     {
-        var rows = await userAdminService.ListAsync(cancellationToken);
-        var result = new List<DirectoryUser>();
-        foreach (var row in rows)
+        page = Math.Max(1, page);
+        var pageResult = await userAdminService.ListPagedAsync(search, role, status, page, PageSize, cancellationToken);
+
+        var users = new List<DirectoryUser>();
+        foreach (var row in pageResult.Items)
         {
             var canManage = (await authorizationService.AuthorizeAsync(User, row.HierarchyPath, AuthorizationPolicies.ManageUsersInScope)).Succeeded;
-            result.Add(new DirectoryUser(
+            users.Add(new DirectoryUser(
                 row.Id,
                 row.DisplayName,
                 row.Role,
@@ -151,6 +155,16 @@ public class UserDirectoryController(
                 canManage));
         }
 
-        return result;
+        return new UserDirectoryViewModel
+        {
+            Users = users,
+            Search = search,
+            Role = role,
+            Status = status,
+            Page = page,
+            PageSize = PageSize,
+            TotalCount = pageResult.TotalCount,
+            TotalPages = pageResult.TotalPages,
+        };
     }
 }

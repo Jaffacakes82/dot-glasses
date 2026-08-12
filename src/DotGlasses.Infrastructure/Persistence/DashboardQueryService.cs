@@ -20,21 +20,27 @@ public class DashboardQueryService(DotGlassesDbContext dbContext, IUnscopedRepor
     private const int TrendBuckets = 6;
     private static readonly TimeSpan BucketWidth = TimeSpan.FromDays(7);
 
-    public async Task<DashboardSnapshot> GetAsync(CancellationToken cancellationToken = default)
+    public async Task<DashboardSnapshot> GetAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, CancellationToken cancellationToken = default)
     {
         var orgLookup = new OrgLookup(await unscopedReportQueryService.GetOrganisationNodesUnscopedAsync(cancellationToken));
 
-        var tests = (await dbContext.Tests.ToListAsync(cancellationToken))
+        var allTests = (await dbContext.Tests.ToListAsync(cancellationToken))
             .Where(t => !orgLookup.IsUnderTrainingOrg(t.HierarchyPath))
             .ToList();
-        var leads = (await dbContext.Leads.ToListAsync(cancellationToken))
+        var tests = allTests.Where(t => InRange(t.CreatedAtUtc, fromUtc, toUtcExclusive)).ToList();
+        var allLeads = (await dbContext.Leads.ToListAsync(cancellationToken))
             .Where(l => !orgLookup.IsUnderTrainingOrg(l.HierarchyPath))
             .ToList();
+        var leads = allLeads.Where(l => InRange(l.CreatedAtUtc, fromUtc, toUtcExclusive)).ToList();
         var sales = (await dbContext.Sales.ToListAsync(cancellationToken))
-            .Where(s => !orgLookup.IsUnderTrainingOrg(s.HierarchyPath))
+            .Where(s => !orgLookup.IsUnderTrainingOrg(s.HierarchyPath) && InRange(s.CreatedAtUtc, fromUtc, toUtcExclusive))
             .ToList();
 
-        var leadsById = leads.ToDictionary(l => l.Id);
+        // Built from allLeads (unfiltered), not the date-filtered leads above — whether a Test
+        // converted is a fact about the Test→Lead→Sale chain regardless of when the resulting
+        // Lead/Sale record was created, so narrowing the date range narrows which Tests are being
+        // measured, not the universe used to determine whether each one converted.
+        var leadsById = allLeads.ToDictionary(l => l.Id);
 
         bool TestConvertedToSale(Test t) =>
             t.ConvertedToLeadId is { } leadId && leadsById.TryGetValue(leadId, out var lead) && lead.SaleId is not null;
@@ -54,7 +60,9 @@ public class DashboardQueryService(DotGlassesDbContext dbContext, IUnscopedRepor
         var genderMalePercent = genderTotal == 0 ? 0 : (int)Math.Round(100.0 * maleCount / genderTotal);
         var genderFemalePercent = genderTotal == 0 ? 0 : 100 - genderMalePercent;
 
-        var trend = BuildTrend(tests, TestConvertedToSale);
+        // Always the real last 6 weeks, not date-range-filtered — see IDashboardQueryService's
+        // doc comment for why a "trend over time" widget stays fixed regardless of the filter.
+        var trend = BuildTrend(allTests, TestConvertedToSale);
 
         var technicianNames = await dbContext.Users
             .ToDictionaryAsync(u => u.Id, u => string.IsNullOrWhiteSpace(u.FullName) ? u.UserName ?? "—" : u.FullName, cancellationToken);
@@ -75,6 +83,9 @@ public class DashboardQueryService(DotGlassesDbContext dbContext, IUnscopedRepor
             RankByKey(sales, tests, s => orgLookup.Country(s.HierarchyPath), t => orgLookup.Country(t.HierarchyPath)),
             RankByKey(sales, tests, s => technicianNames.GetValueOrDefault(s.TechnicianUserId, "—"), t => technicianNames.GetValueOrDefault(t.TechnicianUserId, "—")));
     }
+
+    private static bool InRange(DateTimeOffset createdAtUtc, DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive) =>
+        (fromUtc is null || createdAtUtc >= fromUtc) && (toUtcExclusive is null || createdAtUtc < toUtcExclusive);
 
     private static double ConversionPercent<T>(IReadOnlyCollection<T> population, Func<T, bool> converted) =>
         population.Count == 0 ? 0 : 100.0 * population.Count(converted) / population.Count;

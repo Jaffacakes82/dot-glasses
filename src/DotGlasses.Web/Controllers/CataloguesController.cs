@@ -24,8 +24,8 @@ public class CataloguesController(
     IValidator<AssignCataloguesRequest> assignValidator,
     IValidator<SetCoatingAvailabilityRequest> coatingAvailabilityValidator) : Controller
 {
-    public async Task<IActionResult> Index(CancellationToken cancellationToken) =>
-        View(await BuildViewModelAsync(cancellationToken));
+    public async Task<IActionResult> Index(string? search, CancellationToken cancellationToken) =>
+        View(await BuildViewModelAsync(search, cancellationToken));
 
     [HttpPost]
     [ValidateAntiForgeryToken]
@@ -35,7 +35,7 @@ public class CataloguesController(
         if (!validationResult.IsValid)
         {
             validationResult.AddToModelState(ModelState);
-            return View(nameof(Index), await BuildViewModelAsync(cancellationToken));
+            return View(nameof(Index), await BuildViewModelAsync(null, cancellationToken));
         }
 
         await catalogueAdminService.CreateAsync(request.Name, request.Description, request.RangeDescription, currentUserContext.OrgNodeId!.Value, request.Kind, cancellationToken);
@@ -50,7 +50,7 @@ public class CataloguesController(
         if (!validationResult.IsValid)
         {
             validationResult.AddToModelState(ModelState);
-            return View(nameof(Index), await BuildViewModelAsync(cancellationToken));
+            return View(nameof(Index), await BuildViewModelAsync(null, cancellationToken));
         }
 
         await catalogueAdminService.UpdateAsync(request.Id, request.Name, request.Description, request.RangeDescription, request.Kind, cancellationToken);
@@ -65,7 +65,7 @@ public class CataloguesController(
         if (!validationResult.IsValid)
         {
             validationResult.AddToModelState(ModelState);
-            return View(nameof(Index), await BuildViewModelAsync(cancellationToken));
+            return View(nameof(Index), await BuildViewModelAsync(null, cancellationToken));
         }
 
         await catalogueAdminService.AddLensOptionAsync(request.CatalogueId, request.LensStrengthRefId, cancellationToken);
@@ -88,7 +88,7 @@ public class CataloguesController(
         if (!validationResult.IsValid)
         {
             validationResult.AddToModelState(ModelState);
-            return View(nameof(Index), await BuildViewModelAsync(cancellationToken));
+            return View(nameof(Index), await BuildViewModelAsync(null, cancellationToken));
         }
 
         foreach (var catalogueId in request.CatalogueIds)
@@ -115,7 +115,7 @@ public class CataloguesController(
         if (!validationResult.IsValid)
         {
             validationResult.AddToModelState(ModelState);
-            return View(nameof(Index), await BuildViewModelAsync(cancellationToken));
+            return View(nameof(Index), await BuildViewModelAsync(null, cancellationToken));
         }
 
         if (request.Available)
@@ -130,9 +130,17 @@ public class CataloguesController(
         return RedirectToAction(nameof(Index));
     }
 
-    private async Task<CataloguesIndexViewModel> BuildViewModelAsync(CancellationToken cancellationToken)
+    private async Task<CataloguesIndexViewModel> BuildViewModelAsync(string? search, CancellationToken cancellationToken)
     {
         var catalogues = await catalogueAdminService.ListAsync(cancellationToken);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            // In-memory filter, not a DB-level Where — catalogue count is structurally small
+            // (at most one SixLensSet, one NineLensSet, any number of Other), so ListAsync
+            // already loads every catalogue every request; pushing this to SQL would add
+            // complexity with no real benefit at this volume.
+            catalogues = catalogues.Where(c => c.Name.Contains(search, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
         var orgs = await organisationAdminService.ListAsync(cancellationToken);
         var referenceItems = await referenceDataAdminService.ListAllAsync(cancellationToken);
 
@@ -166,6 +174,7 @@ public class CataloguesController(
             lensStrengths.Select(x => (x.Id, x.Label)).ToList(),
             coatings.Select(x => (x.Id, x.Label)).ToList(),
             availableCoatingsByStrength,
-            assignableOrgs);
+            assignableOrgs,
+            search);
     }
 }

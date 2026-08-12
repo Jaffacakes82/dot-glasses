@@ -8,6 +8,8 @@ public class EventHistoryViewModel
 {
     public required string ActiveTab { get; init; }
     public string? SearchQuery { get; init; }
+    public DateOnly? FromDate { get; init; }
+    public DateOnly? ToDate { get; init; }
     public IReadOnlyList<SaleOrTestEvent> Events { get; set; } = [];
     public IReadOnlyList<LeadEvent> Leads { get; set; } = [];
     public IReadOnlyList<ReferralEvent> Referrals { get; set; } = [];

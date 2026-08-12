@@ -1,3 +1,4 @@
+using DotGlasses.Application.Reporting;
 using DotGlasses.Domain.Enums;
 
 namespace DotGlasses.Application.CustomOrders;
@@ -10,7 +11,9 @@ namespace DotGlasses.Application.CustomOrders;
 /// AuthorizationPolicies.CustomOrdersView's page-level gate.</summary>
 public interface ICustomOrderService
 {
-    Task<IReadOnlyList<CustomOrderRow>> ListAsync(CancellationToken cancellationToken = default);
+    /// <summary>status filters to an exact FulfilmentStatus; null returns every status. Filters
+    /// before paging (a DB-level Where, not an in-memory filter after the page is loaded).</summary>
+    Task<PagedResult<CustomOrderRow>> ListAsync(FulfilmentStatus? status, int page, int pageSize, CancellationToken cancellationToken = default);
 
     /// <summary>Linear, forward-only: Submitted -> InLab -> ReadyForPickup -> Fulfilled. Throws
     /// if the Sale isn't a custom order (FulfilmentStatus is null) or is already Fulfilled.</summary>
