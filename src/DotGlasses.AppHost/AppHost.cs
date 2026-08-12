@@ -1,6 +1,7 @@
 using Azure.Provisioning;
 using Azure.Provisioning.AppContainers;
 using Azure.Provisioning.Expressions;
+using Azure.Provisioning.KeyVault;
 using Azure.Provisioning.PostgreSql;
 using Azure.Provisioning.Roles;
 using Azure.Provisioning.Storage;
@@ -137,6 +138,26 @@ if (builder.ExecutionContext.IsPublishMode)
     var acs = builder.AddBicepTemplate("acs", "acs.bicep");
     web.WithEnvironment("ACS_CONNECTION_STRING", acs.GetOutput("communicationServiceConnectionString"))
         .WithEnvironment("ACS_SENDER_DOMAIN", acs.GetOutput("managedDomainName"));
+
+    // Phase 8 (2026-08-12) — the JWT signing key/issuer/audience move out of appsettings into
+    // Key Vault for staging/production; appsettings.json's own Jwt section stays deliberately
+    // empty outside Development (see JwtOptions' doc comment). Unlike ACS, Key Vault *does* have
+    // a real Aspire hosting integration (Aspire.Hosting.Azure.KeyVault) — so this is
+    // AddAzureKeyVault + WithReference, not the raw-Bicep-template escape hatch, and RBAC (Key
+    // Vault Secrets User on Web's managed identity) is wired automatically by that integration
+    // the same way Storage's role assignment already is (see CLAUDE.md's Deployment section).
+    // No local emulator exists for Key Vault (same class of gap as ACS), so this whole block is
+    // publish-only — plain `dotnet run` keeps reading the literal dev-only key committed in
+    // appsettings.Development.json, unaffected.
+    var keyVault = builder.AddAzureKeyVault("keyvault");
+    keyVault.ConfigureInfrastructure(infra =>
+    {
+        var vault = infra.GetProvisionableResources().OfType<KeyVaultService>().Single();
+        // Key Vault names are globally unique (public DNS) — CAF pattern + hash, same reasoning
+        // as Postgres/Storage above.
+        vault.Name = BicepFunction.Interpolate($"kv-{Workload}-{EnvToken()}-{ShortHash()}");
+    });
+    web.WithReference(keyVault);
 }
 
 builder.Build().Run();
