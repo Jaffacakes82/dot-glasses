@@ -1134,8 +1134,9 @@ keep `main` deployable). Commit + update this file after each phase.
 [PR #3](https://github.com/Jaffacakes82/dot-glasses/pull/3),
 [PR #4](https://github.com/Jaffacakes82/dot-glasses/pull/4),
 [PR #5](https://github.com/Jaffacakes82/dot-glasses/pull/5)). Phase 6 (admin editing gaps) is
-done, verified live, and committed on `feat/phase-6-admin-editing-gaps`, branched fresh off
-`main` — about to be pushed/PR'd. Phases 7–8 are untouched. Two `[OPEN]` items are worth flagging
+done, verified live, and pushed/PR'd —
+[PR #6](https://github.com/Jaffacakes82/dot-glasses/pull/6), `feat/phase-6-admin-editing-gaps`
+into `main`, not yet merged. Phases 7–8 are untouched. Two `[OPEN]` items are worth flagging
 deliberately rather than letting drift: offline record attribution at sync time vs creation time
 (from Phase 1), and Phase 3's location-switching feature only works online (re-issuing a JWT is
 inherently a server round-trip) — a technician who needs to switch outlets while genuinely offline
