@@ -205,13 +205,13 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         }
     }
 
-    // Matched by name against the two seeded catalogues ("6-Lens Set"/"9-Lens Set") — the domain
-    // model doesn't otherwise tie LensRangeType.SixLensSet/NineLensSet to a specific
-    // PresetCatalogueId, since only these two catalogue archetypes exist today. If DGI/Country
-    // admins ever create additional named catalogues, this matching needs to become explicit
-    // (e.g. a "kind" field on PresetCatalogue) rather than name-sniffing — flagged in CLAUDE.md.
-    private PresetCatalogueDto? SixLensCatalogue => Catalogues.FirstOrDefault(c => c.Name.Contains("6-Lens", StringComparison.OrdinalIgnoreCase));
-    private PresetCatalogueDto? NineLensCatalogue => Catalogues.FirstOrDefault(c => c.Name.Contains("9-Lens", StringComparison.OrdinalIgnoreCase));
+    // Matched by PresetCatalogueDto.Kind (Phase 6) — PresetCatalogueAdminService enforces at most
+    // one catalogue may hold each of SixLensSet/NineLensSet, so this is unambiguous regardless of
+    // how many "Other"-kind catalogues DGI/Country admins create. Previously matched by name
+    // substring ("6-Lens"/"9-Lens"), which broke the moment a third catalogue existed — see
+    // CLAUDE.md's Phase 6 section.
+    private PresetCatalogueDto? SixLensCatalogue => Catalogues.FirstOrDefault(c => c.Kind == PresetCatalogueKind.SixLensSet);
+    private PresetCatalogueDto? NineLensCatalogue => Catalogues.FirstOrDefault(c => c.Kind == PresetCatalogueKind.NineLensSet);
 
     private string SelectedRangeLabel => Model.LensRangeType switch
     {

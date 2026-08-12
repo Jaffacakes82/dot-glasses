@@ -2,6 +2,7 @@ using DotGlasses.Application.PresetCatalogues;
 using DotGlasses.Application.Reporting;
 using DotGlasses.Contracts.PresetCatalogues;
 using Microsoft.EntityFrameworkCore;
+using ContractPresetCatalogueKind = DotGlasses.Contracts.Common.PresetCatalogueKind;
 
 namespace DotGlasses.Infrastructure.Persistence;
 
@@ -50,6 +51,7 @@ public class PresetCatalogueQueryService(DotGlassesDbContext dbContext, IUnscope
         {
             Id = c.Id,
             Name = c.Name,
+            Kind = (ContractPresetCatalogueKind)(int)c.Kind,
             LensOptions = lensOptions.Where(l => l.PresetCatalogueId == c.Id).Select(l => new LensOptionDto
             {
                 Id = l.Id,
