@@ -941,9 +941,19 @@ correctly. The invite form's role `<select>` now offers only Admin/User.
   it against a real Azure subscription on every local start and hang waiting for `az login`
   credentials that don't exist in dev — caught live (Web never started; the `DotGlasses.AppHost.exe`
   process was running but had no child Web process, and curl against `localhost:7117` just hung)
-  before shipping, not by build/test. `IEmailSender` stays `LoggingEmailSender` — swapping in a
-  real ACS-backed sender is still explicit `[OPEN]` work the user is doing themselves; only the
-  infra needed to exist for that swap to be possible.
+  before shipping, not by build/test. `IEmailSender` stayed `LoggingEmailSender` at the time —
+  the real ACS-backed sender landed later, see the Phase 5 section above.
+
+  **Custom domain decision (2026-08-12, not yet implemented):** if/when `acs.bicep` moves off the
+  free Azure Managed Domain to a real verified `dotglasses.com` domain, prod and non-prod must use
+  **separate subdomains** (e.g. `prod.dotglasses.com` / `nonprod.dotglasses.com`), each linked to
+  its own Email Communication Service resource — not the same root domain shared across both ACS
+  instances. Confirmed against Microsoft's own docs: a verified custom domain can only be linked
+  to one Email Communication Service resource at a time; sharing one domain between prod/non-prod
+  would mean disconnecting and reconnecting it on every deploy. This still needs the same
+  interactive, portal-driven DNS verification step per subdomain that the managed-domain choice
+  was made to avoid for now — flagged here, not implemented, since it needs the user's own DNS
+  access to `dotglasses.com`.
 - **The Field App's `/infra` now exists too** (2026-08-06) — resolving the gap flagged when the
   root project's infra was first built. `azd infra gen` doesn't apply here (it's specifically the
   Aspire-manifest→Bicep synthesis path, confirmed by running it from `src/DotGlasses.App` and
@@ -1546,6 +1556,12 @@ also out of date.
   (`AzureEmailSender`, see that section above). Real delivery still only activates once the user's
   own `azd up`/deploy provisions `acs.bicep` for a given environment — until then (and always in
   local dev) `LoggingEmailSender` remains the fallback, by design, not as a remaining gap.
+- `acs.bicep` still provisions the free Azure Managed Domain, not a real verified `dotglasses.com`
+  domain — moving to a custom domain is real follow-up work, not started. When it happens: prod
+  and non-prod must each get their own **subdomain** (`prod.dotglasses.com`/
+  `nonprod.dotglasses.com`), not share one root domain across both ACS instances — a verified
+  custom domain can only be linked to one Email Communication Service resource at a time (see the
+  Deployment section's ACS bullet above for the full decision + why).
 - The Field App's `ConsultationForm.razor` is wired to the real API (see Field App UI wiring
   above); the Admin Portal's equivalent modal still doesn't exist. All seven Admin Portal screens
   are wired to real data now (see the Admin Portal wiring sections above) — nothing left to scope
