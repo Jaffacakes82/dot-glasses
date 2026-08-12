@@ -1128,15 +1128,15 @@ about what changes*, taken with the user in a structured review session on 2026-
 **Delivery**: one feature branch + PR per phase (a push to `main` triggers the deploy pipeline —
 keep `main` deployable). Commit + update this file after each phase.
 
-**Where this stands (2026-08-12):** Phases 1–5 are merged to `main`
+**Where this stands (2026-08-12):** Phases 1–6 are merged to `main`
 ([PR #1](https://github.com/Jaffacakes82/dot-glasses/pull/1),
 [PR #2](https://github.com/Jaffacakes82/dot-glasses/pull/2),
 [PR #3](https://github.com/Jaffacakes82/dot-glasses/pull/3),
 [PR #4](https://github.com/Jaffacakes82/dot-glasses/pull/4),
-[PR #5](https://github.com/Jaffacakes82/dot-glasses/pull/5)). Phase 6 (admin editing gaps) is
-done, verified live, and pushed/PR'd —
-[PR #6](https://github.com/Jaffacakes82/dot-glasses/pull/6), `feat/phase-6-admin-editing-gaps`
-into `main`, not yet merged. Phases 7–8 are untouched. Two `[OPEN]` items are worth flagging
+[PR #5](https://github.com/Jaffacakes82/dot-glasses/pull/5),
+[PR #6](https://github.com/Jaffacakes82/dot-glasses/pull/6)). Phase 7 (reporting usability) is
+done, verified live, and committed on `feat/phase-7-reporting-usability`, branched fresh off
+`main` — about to be pushed/PR'd. Phase 8 is untouched. Two `[OPEN]` items are worth flagging
 deliberately rather than letting drift: offline record attribution at sync time vs creation time
 (from Phase 1), and Phase 3's location-switching feature only works online (re-issuing a JWT is
 inherently a server round-trip) — a technician who needs to switch outlets while genuinely offline
@@ -1627,6 +1627,94 @@ resolution works end-to-end, not just that the Admin Portal displays the field.
   Catalogues each render a full unfiltered list. Also fix Event History's Leads search, which is a
   case-sensitive substring `LIKE` on PostgreSQL.
 - **Export is deliberately later**, not never — and when it lands it carries the consent rule above.
+
+**Phase 7 status: implemented and verified live (2026-08-12), on branch
+`feat/phase-7-reporting-usability`, not yet merged.** All three sub-items shipped in one pass:
+
+- **Event History Leads search fixed**: `EventHistoryQueryService.ListLeadsAsync`'s
+  `Customer.FullName.Contains(searchByName)` translated to Postgres `LIKE` (case-sensitive absent
+  a `citext` column/collation, neither of which exists anywhere in this schema) despite the
+  interface's own doc comment already claiming "case-insensitive contains" — switched to
+  `EF.Functions.ILike`, which translates to `ILIKE` directly, no migration needed. Verified live:
+  searching `"jane"` now matches a stored `"Jane Doe"`.
+- **Event History date-range filter**: all four `IEventHistoryQueryService` list methods gained
+  `DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive` params (before the paging params,
+  matching the existing filter-before-paging convention `ListLeadsAsync`'s search already
+  established) — a plain `Where(x => x.CreatedAtUtc >= from)` / `< to` per method, not a shared
+  generic helper (an `Expression.Invoke`-based composition was tried first and dropped — fragile
+  for EF Core SQL translation versus four near-identical two-line filters, and "three similar
+  lines beats a premature abstraction" already governs this codebase). New `DateOnly?` → `(from,
+  toExclusive)` conversion lives in `DotGlasses.Web.DateRange` (a small static helper, not
+  Application-layer — date-range display/input format is a Web concern, same reasoning
+  `EventHistoryController`'s own relative/absolute time formatting already uses) and is shared by
+  `EventHistoryController` and `HomeController` so a Dashboard drill-down and Event History's own
+  filter agree on identical UTC-day boundaries. Deliberately treats picked dates as UTC-day
+  boundaries, not the viewer's local timezone — a reasonable simplification, not a per-user
+  timezone lookup.
+- **Dashboard date-range filter + drill-down**: `IDashboardQueryService.GetAsync` gained the same
+  `fromUtc`/`toUtcExclusive` pair, filtering every Test/Lead/Sale aggregate — **except** the
+  rolling 6-week `ConversionTrendPercent` chart, which stays fixed to the real last 6 weeks
+  regardless of the selected filter (its own label literally says "last 6 weeks"; re-scoping a
+  "trend over time" widget to an arbitrary custom window would defeat its purpose).
+  A real correctness bug caught before it shipped, not live: `TestConvertedToSale`'s `leadsById`
+  lookup must be built from the **unfiltered** full Lead set, not the date-filtered one — whether
+  a Test converted is a fact about the Test→Lead→Sale chain regardless of when the resulting
+  Lead/Sale record was created, so narrowing the date range should narrow which Tests are being
+  *measured*, not the universe used to determine whether each one *converted*. Every stat
+  tile/list that has a natural Event History or Custom Orders equivalent became a link carrying
+  the current date range (Pending leads → Leads tab, Total tests → Tests tab, Standard sales →
+  Sales tab, Referrals logged → Referrals tab, Custom orders → the Custom Orders screen itself,
+  not Event History, since that's the more relevant existing screen). Top-N ranked
+  lists (Top outlets/retailers/countries/technicians) stay non-interactive — Event History has no
+  outlet/technician-level filter to link into, and adding one was out of scope for this pass, matching
+  this session's established "ship the simplest real thing" bar for admin screens.
+- **User Directory / Custom Orders / Preset Catalogues search+filter+paging**: `IUserAdminService`
+  gained a new `ListPagedAsync` (search/role/status + paging) **alongside**, not replacing, the
+  existing unpaged `ListAsync` — `OrganisationsController`'s "Assign users" and the
+  `FindManageableUserAsync` resource checks both still need the full unfiltered scoped set.
+  `ListPagedAsync` reuses `ListAsync` internally and filters/pages the already-materialized
+  result rather than pushing to SQL, since role (`AspNetUserRoles`) and status (derived from
+  `PasswordHash`/`LockoutEnd`, not a stored column) aren't queryable columns and the underlying
+  scoped user count is already small enough that `ListAsync` loads it all into memory today — no
+  worse than existing behavior, just filtered afterward. `ICustomOrderService.ListAsync` (a
+  single-consumer method, confirmed via grep before changing its signature directly rather than
+  adding a parallel method) gained a `FulfilmentStatus?` filter + real `PagedResult<T>` paging,
+  DB-level `Where`+`Skip`/`Take` since `Sale` rows are a genuine DB query, not an in-memory
+  collection like User Directory's Identity-backed rows. Preset Catalogues got a name search only
+  (no paging) — deliberately lower priority than the other two, since
+  `PresetCatalogueAdminService.HasCatalogueWithKindAsync` already caps `SixLensSet`/`NineLensSet`
+  to one each and only `Kind.Other` can grow unbounded; the search filters the already-fully-loaded
+  `ListAsync()` result in the controller rather than adding a new service method, proportionate to
+  a structurally-small table.
+- **A real bug found and fixed via the live pass, not caught by build/test**: every
+  `asp-route-fromDate="@Model.FromDate"`/`asp-route-toDate="@Model.ToDate"` binding (9 occurrences
+  across `Views/Home/Index.cshtml` and `Views/EventHistory/Index.cshtml`) implicitly called
+  `DateOnly.ToString()` using the request's current culture, which rendered as day/month/year
+  (e.g. `05/08/2026` for August 5th) — but the receiving controller's default `DateOnly` model
+  binder parsed that same string back as month/day/year, silently swapping day and month (August
+  5th became May 8th) and returning zero matching rows. Caught by clicking a Dashboard drill-down
+  tile with a date filter applied and seeing the date input show the wrong date on the landing
+  page, not by any automated check. Fixed by explicitly formatting every such route-value binding
+  as `@Model.FromDate?.ToString("yyyy-MM-dd")` (ISO 8601, culture-invariant), matching the format
+  already used correctly for the `<input type="date" value="...">` bindings on the same pages —
+  the bug was specifically in the `asp-route-*` attribute bindings that had no explicit format
+  applied.
+
+**Verified live end-to-end**, real browser against the real running stack, as the seeded DGI
+Admin: on Event History, confirmed a lowercase `"jane"` search now matches `"Jane Doe"` (previously
+silently returned nothing); applied a Dashboard date-range filter narrowing Total Tests from 7 to
+1 and confirmed the drill-down link's `Total tests` tile — and, after the culture-format fix, the
+`fromDate`/`toDate` query-string values themselves — landed on Event History's Tests tab showing
+exactly that same 1 matching row, not zero. On User Directory, confirmed the role filter narrowed
+to the one `User`-role account and a `"grace"` search matched `"Grace Njoroge"`. On Custom Orders,
+confirmed the status-filter pills render with correct query strings and don't crash on an
+unmatched filter (0 real custom orders existed in this session's data at verification time — the
+paging/filter code path itself mirrors Event History's already-proven `ListSalesAsync` shape
+verbatim, so this was accepted as sufficient rather than forcing a full Field App Custom-Sale
+round trip through Blazor's SPA form state, which proved unreliable to drive via automated
+browser control for this pass). On Preset Catalogues, confirmed searching `"6"` narrows to just
+the 6-Lens Set catalogue and a no-match search shows the empty state with the literal query
+echoed back.
 
 ### Phase 8 — Production readiness (all four agreed)
 

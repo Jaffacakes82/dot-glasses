@@ -15,7 +15,12 @@ namespace DotGlasses.Application.Dashboard;
 /// scope decisions, see CLAUDE.md).</summary>
 public interface IDashboardQueryService
 {
-    Task<DashboardSnapshot> GetAsync(CancellationToken cancellationToken = default);
+    /// <summary>fromUtc/toUtcExclusive filter every aggregate (Tests/Leads/Sales) by
+    /// CreatedAtUtc; either or both may be null for an open-ended/all-time range. The rolling
+    /// 6-week ConversionTrendPercent bucket is unaffected by the range — it always covers the
+    /// most recent 6 real-time weeks, since a "trend over time" widget doesn't make sense
+    /// re-scoped to an arbitrary custom window.</summary>
+    Task<DashboardSnapshot> GetAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, CancellationToken cancellationToken = default);
 }
 
 public record DashboardSnapshot(

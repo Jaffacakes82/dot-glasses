@@ -1,3 +1,5 @@
+using DotGlasses.Application.Reporting;
+
 namespace DotGlasses.Application.Users;
 
 /// <summary>Admin-only user management — backs the Admin Portal's User Directory screen. Trades
@@ -12,6 +14,13 @@ namespace DotGlasses.Application.Users;
 public interface IUserAdminService
 {
     Task<IReadOnlyList<UserAdminRow>> ListAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Search/role/status-filtered, paged view for the User Directory screen itself —
+    /// deliberately separate from ListAsync, which several other callers (Organisations'
+    /// "Assign users", the resource-based CanManage checks) need as the full unfiltered scoped
+    /// set. search matches DisplayName or Email (case-insensitive); role/status are exact
+    /// matches. Filters before paging.</summary>
+    Task<PagedResult<UserAdminRow>> ListPagedAsync(string? search, string? role, string? status, int page, int pageSize, CancellationToken cancellationToken = default);
 
     Task<bool> EmailExistsAsync(string email, CancellationToken cancellationToken = default);
 

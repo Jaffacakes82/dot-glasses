@@ -1,4 +1,5 @@
 using DotGlasses.Application.CustomOrders;
+using DotGlasses.Application.Reporting;
 using DotGlasses.Domain.Entities;
 using DomainFulfilmentStatus = DotGlasses.Domain.Enums.FulfilmentStatus;
 using Microsoft.EntityFrameworkCore;
@@ -10,12 +11,16 @@ namespace DotGlasses.Infrastructure.Persistence;
 /// repository interface needed for this shape).</summary>
 public class CustomOrderService(DotGlassesDbContext dbContext) : ICustomOrderService
 {
-    public async Task<IReadOnlyList<CustomOrderRow>> ListAsync(CancellationToken cancellationToken = default)
+    public async Task<PagedResult<CustomOrderRow>> ListAsync(DomainFulfilmentStatus? status, int page, int pageSize, CancellationToken cancellationToken = default)
     {
-        var sales = await dbContext.Sales
-            .Where(x => x.FulfilmentStatus != null)
-            .OrderByDescending(x => x.CreatedAtUtc)
-            .ToListAsync(cancellationToken);
+        var query = dbContext.Sales.Where(x => x.FulfilmentStatus != null);
+        if (status is { } value)
+        {
+            query = query.Where(x => x.FulfilmentStatus == value);
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var sales = await query.OrderByDescending(x => x.CreatedAtUtc).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
 
         var customerIds = sales.Select(s => s.CustomerId).Distinct().ToList();
         var customers = await dbContext.Customers
@@ -25,7 +30,7 @@ public class CustomOrderService(DotGlassesDbContext dbContext) : ICustomOrderSer
         var orgByPath = (await dbContext.OrganisationNodes.ToListAsync(cancellationToken))
             .ToDictionary(n => n.HierarchyPath);
 
-        return sales.Select(s => new CustomOrderRow(
+        var items = sales.Select(s => new CustomOrderRow(
             s.Id,
             customers.TryGetValue(s.CustomerId, out var customer) ? customer.FullName : "—",
             orgByPath.TryGetValue(s.HierarchyPath, out var org) ? org.Name : "Unknown outlet",
@@ -33,6 +38,8 @@ public class CustomOrderService(DotGlassesDbContext dbContext) : ICustomOrderSer
             s.FulfilmentStatus!.Value,
             s.CreatedAtUtc))
             .ToList();
+
+        return new PagedResult<CustomOrderRow>(items, totalCount, page, pageSize);
     }
 
     public async Task AdvanceStatusAsync(Guid saleId, CancellationToken cancellationToken = default)
