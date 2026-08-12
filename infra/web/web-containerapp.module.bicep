@@ -21,6 +21,8 @@ param acs_outputs_communicationserviceconnectionstring string
 
 param acs_outputs_manageddomainname string
 
+param keyvault_outputs_vaulturi string
+
 param web_identity_outputs_clientid string
 
 param env_outputs_azure_container_registry_endpoint string
@@ -112,6 +114,14 @@ resource web 'Microsoft.App/containerApps@2025-10-02-preview' = {
             {
               name: 'ACS_SENDER_DOMAIN'
               value: acs_outputs_manageddomainname
+            }
+            {
+              name: 'ConnectionStrings__keyvault'
+              value: keyvault_outputs_vaulturi
+            }
+            {
+              name: 'KEYVAULT_URI'
+              value: keyvault_outputs_vaulturi
             }
             {
               name: 'AZURE_CLIENT_ID'

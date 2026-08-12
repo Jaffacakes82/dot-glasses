@@ -1,9 +1,13 @@
 namespace DotGlasses.Web.Auth;
 
 /// <summary>
-/// [OPEN] Dev placeholder values live in appsettings.Development.json. Production must source
-/// Key/Issuer/Audience from a real secret store (Azure Key Vault / App Configuration) — not
-/// committed to source — before this ships.
+/// Dev placeholder values live in appsettings.Development.json. Staging/production source
+/// Key/Issuer/Audience from Azure Key Vault (Phase 8, 2026-08-12) — see AppHost.cs's
+/// IsPublishMode-gated Key Vault resource and Program.cs's conditional AddAzureKeyVaultSecrets
+/// call. Secret names use Key Vault's "--" section-separator convention: Jwt--Key, Jwt--Issuer,
+/// Jwt--Audience. Those three secrets must be set in the real Key Vault by the user (via `az
+/// keyvault secret set` or the portal) after `azd up` provisions it — Claude cannot create them,
+/// see CLAUDE.md's "no infra deployed from a developer machine" rule.
 /// </summary>
 public class JwtOptions
 {

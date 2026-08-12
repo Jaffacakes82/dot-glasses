@@ -31,6 +31,20 @@ builder.Host.UseSerilog((context, services, configuration) => configuration
 
 builder.AddServiceDefaults();
 
+// --- Secrets (Phase 8) -------------------------------------------------------------------
+// Key Vault only exists in staging/production (AppHost.cs gates its declaration to
+// IsPublishMode — no local Key Vault emulator exists, same class of gap as ACS). Guarded on the
+// injected "keyvault" connection string's presence, not IsDevelopment(): the real signal is
+// whether AppHost actually wired a reference, not which environment this happens to be — same
+// conditional-registration reasoning AddInfrastructure's AzureEmailSender already uses for ACS.
+// Must run before JwtOptions/DevSeedOptions are bound below, since it merges Key Vault secrets
+// (Jwt--Key, Jwt--Issuer, Jwt--Audience — Key Vault's "--" section-separator convention) into
+// configuration that those bindings read from.
+if (builder.Configuration.GetConnectionString("keyvault") is not null)
+{
+    builder.Configuration.AddAzureKeyVaultSecrets("keyvault");
+}
+
 // --- Persistence -----------------------------------------------------------------------
 // "dotglassesdb" must match the database resource name AppHost gives Postgres.
 //
@@ -50,9 +64,12 @@ builder.Services.AddInfrastructure();
 builder.Services
     .AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
     {
-        // [OPEN] relaxed for local dev ergonomics; tighten before production.
-        options.Password.RequireNonAlphanumeric = false;
-        options.Password.RequireUppercase = false;
+        // Tightened 2026-08-12 (Phase 8) — previously relaxed for local dev ergonomics
+        // (RequireNonAlphanumeric/RequireUppercase both false). One global policy, not
+        // environment-conditional: every seeded dev password ("DevPassw0rd!") already satisfies
+        // these rules, so tightening doesn't break local dev.
+        options.Password.RequireNonAlphanumeric = true;
+        options.Password.RequireUppercase = true;
         options.Password.RequiredLength = 8;
     })
     .AddEntityFrameworkStores<DotGlassesDbContext>()
