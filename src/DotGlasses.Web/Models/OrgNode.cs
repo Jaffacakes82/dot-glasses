@@ -15,18 +15,22 @@ public record OrgNode(Guid Id, string Name, string Type, string? Kind, bool IsTr
 }
 
 /// <summary>Tree (left panel) + the currently selected node (right detail panel) — CanManage
-/// drives whether "Add child node", the two flag toggles, and "Assign users" are shown for
-/// Selected, per AuthorizationPolicies.ManageOrgInScope resolved against Selected's own
-/// HierarchyPath (the same check for all four — see CLAUDE.md's Assign users section: this
-/// reuses org-scoped ManageOrgInScope rather than the separate user-scoped
+/// drives whether "Add child node", the two flag toggles, "Rename", "Deactivate" and
+/// "Assign users" are shown for Selected, per AuthorizationPolicies.ManageOrgInScope resolved
+/// against Selected's own HierarchyPath (the same check for all of them — see CLAUDE.md's Assign
+/// users section: this reuses org-scoped ManageOrgInScope rather than the separate user-scoped
 /// ManageUsersInScope, which stays reserved for User Directory's own future actions).
 /// AssignableUsers is every user in the caller's own hierarchy scope (IUserAdminService.
-/// ListAsync, already scoped); SelectedAssignedUserNames is who's already assigned to
-/// Selected specifically.</summary>
+/// ListAsync, already scoped); SelectedAssignedUsers is who's already assigned to Selected
+/// specifically, matched by OrgNodeId (Phase 6 — previously matched by name, see CLAUDE.md).
+/// DeactivatedNodes is the caller's own deactivated orgs, shown separately since a deactivated
+/// node no longer appears in Tree at all (the standard scoped query filters it out).</summary>
 public record OrganisationsIndexViewModel(
     OrgNode Tree,
     OrgNode Selected,
     bool CanManage,
+    bool SelectedHasChildren,
     IReadOnlyList<(string Value, string Label)> ValidChildLevels,
     IReadOnlyList<(Guid Id, string DisplayName)> AssignableUsers,
-    IReadOnlyList<string> SelectedAssignedUserNames);
+    IReadOnlyList<(Guid UserId, string DisplayName)> SelectedAssignedUsers,
+    IReadOnlyList<(Guid Id, string Name)> DeactivatedNodes);

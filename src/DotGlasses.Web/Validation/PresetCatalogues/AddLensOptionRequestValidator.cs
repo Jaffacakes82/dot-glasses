@@ -1,3 +1,4 @@
+using DotGlasses.Application.PresetCatalogues;
 using DotGlasses.Application.ReferenceData;
 using DotGlasses.Web.Models;
 using FluentValidation;
@@ -7,7 +8,7 @@ namespace DotGlasses.Web.Validation.PresetCatalogues;
 
 public class AddLensOptionRequestValidator : AbstractValidator<AddLensOptionRequest>
 {
-    public AddLensOptionRequestValidator(IReferenceDataLookupService referenceData)
+    public AddLensOptionRequestValidator(IReferenceDataLookupService referenceData, IPresetCatalogueAdminService catalogueAdminService)
     {
         RuleFor(x => x.CatalogueId).NotEmpty();
 
@@ -17,6 +18,12 @@ public class AddLensOptionRequestValidator : AbstractValidator<AddLensOptionRequ
             if (lookup is not { IsActive: true })
             {
                 context.AddFailure(nameof(request.LensStrengthRefId), "LensStrengthRefId must reference an existing, active LensStrength reference-data item.");
+                return;
+            }
+
+            if (await catalogueAdminService.LensOptionExistsAsync(request.CatalogueId, request.LensStrengthRefId, cancellationToken))
+            {
+                context.AddFailure(nameof(request.LensStrengthRefId), "This lens strength is already on this catalogue.");
             }
         });
     }

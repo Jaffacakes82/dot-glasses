@@ -51,6 +51,48 @@ public partial class ReferenceDataAdminService(DotGlassesDbContext dbContext) : 
         return ToAdminItem(entity);
     }
 
+    public async Task<ReferenceDataAdminItem> UpdateAsync(Guid id, string label, string? imageUrl, CancellationToken cancellationToken = default)
+    {
+        var entity = await dbContext.ReferenceDataItems.FirstAsync(x => x.Id == id, cancellationToken);
+        entity.Label = label;
+        entity.ImageUrl = string.IsNullOrWhiteSpace(imageUrl) ? null : imageUrl;
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return ToAdminItem(entity);
+    }
+
+    public async Task MoveUpAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var entity = await dbContext.ReferenceDataItems.FirstAsync(x => x.Id == id, cancellationToken);
+        var neighbor = await dbContext.ReferenceDataItems
+            .Where(x => x.Category == entity.Category && x.IsActive && x.SortOrder < entity.SortOrder)
+            .OrderByDescending(x => x.SortOrder)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (neighbor is null)
+        {
+            return;
+        }
+
+        (entity.SortOrder, neighbor.SortOrder) = (neighbor.SortOrder, entity.SortOrder);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task MoveDownAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var entity = await dbContext.ReferenceDataItems.FirstAsync(x => x.Id == id, cancellationToken);
+        var neighbor = await dbContext.ReferenceDataItems
+            .Where(x => x.Category == entity.Category && x.IsActive && x.SortOrder > entity.SortOrder)
+            .OrderBy(x => x.SortOrder)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (neighbor is null)
+        {
+            return;
+        }
+
+        (entity.SortOrder, neighbor.SortOrder) = (neighbor.SortOrder, entity.SortOrder);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task DeactivateAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var entity = await dbContext.ReferenceDataItems.FirstAsync(x => x.Id == id, cancellationToken);

@@ -1,4 +1,5 @@
 using DotGlasses.Domain.Common;
+using DotGlasses.Domain.Enums;
 
 namespace DotGlasses.Domain.Entities;
 
@@ -27,6 +28,10 @@ public class PresetCatalogue : IAuditable, ISoftDeletable
     public string? RangeDescription { get; set; }
 
     public Guid OwningOrgNodeId { get; set; }
+
+    /// <summary>Other by default. At most one catalogue may hold SixLensSet, and at most one may
+    /// hold NineLensSet — enforced in PresetCatalogueAdminService, not here.</summary>
+    public PresetCatalogueKind Kind { get; set; } = PresetCatalogueKind.Other;
 
     public DateTimeOffset CreatedAtUtc { get; set; }
     public string? CreatedBy { get; set; }

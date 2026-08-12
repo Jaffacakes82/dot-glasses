@@ -10,7 +10,10 @@ using Microsoft.AspNetCore.Mvc;
 namespace DotGlasses.Web.Controllers;
 
 [Authorize(Policy = AuthorizationPolicies.ReferenceDataManage)]
-public class ReferenceDataController(IReferenceDataAdminService referenceDataAdminService, IValidator<CreateReferenceDataItemRequest> createValidator) : Controller
+public class ReferenceDataController(
+    IReferenceDataAdminService referenceDataAdminService,
+    IValidator<CreateReferenceDataItemRequest> createValidator,
+    IValidator<UpdateReferenceDataItemRequest> updateValidator) : Controller
 {
     /// <summary>Display name/scope-note copy per category, and whether its Create form should
     /// show the image-URL field (only Frame colour, per the CEO's ask for a swatch photo).
@@ -41,6 +44,37 @@ public class ReferenceDataController(IReferenceDataAdminService referenceDataAdm
         }
 
         await referenceDataAdminService.CreateAsync(request.Category, request.Label, request.ImageUrl, request.IsOtherOption, cancellationToken);
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Update(UpdateReferenceDataItemRequest request, CancellationToken cancellationToken)
+    {
+        var validationResult = await updateValidator.ValidateAsync(request, cancellationToken);
+        if (!validationResult.IsValid)
+        {
+            validationResult.AddToModelState(ModelState);
+            return View(nameof(Index), await BuildViewModelAsync(cancellationToken));
+        }
+
+        await referenceDataAdminService.UpdateAsync(request.Id, request.Label, request.ImageUrl, cancellationToken);
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> MoveUp(Guid id, CancellationToken cancellationToken)
+    {
+        await referenceDataAdminService.MoveUpAsync(id, cancellationToken);
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> MoveDown(Guid id, CancellationToken cancellationToken)
+    {
+        await referenceDataAdminService.MoveDownAsync(id, cancellationToken);
         return RedirectToAction(nameof(Index));
     }
 

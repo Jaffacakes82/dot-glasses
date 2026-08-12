@@ -32,7 +32,27 @@
             {
                 <p class="dg-crumb">Diopter range: @catalogue.RangeDescription</p>
             }
-            <p class="dg-stat-label">Assigned to @catalogue.AssignedOrgCount org(s)</p>
+            @if (catalogue.Kind != DotGlasses.Domain.Enums.PresetCatalogueKind.Other)
+            {
+                <p class="dg-crumb">Field App picker role: <strong>@catalogue.Kind</strong></p>
+            }
+            <p class="dg-stat-label">Assigned to @catalogue.AssignedOrgs.Count org(s)</p>
+            @if (catalogue.AssignedOrgs.Any())
+            {
+                <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:var(--space-2);">
+                    @foreach (var assignedOrg in catalogue.AssignedOrgs)
+                    {
+                        <span class="dg-badge" style="background:#f2f2f2; display:inline-flex; align-items:center; gap:6px;">
+                            @assignedOrg.OrgName
+                            <form asp-action="UnassignCatalogue" method="post" style="display:inline;">
+                                <input type="hidden" name="catalogueId" value="@catalogue.Id" />
+                                <input type="hidden" name="orgNodeId" value="@assignedOrg.OrgNodeId" />
+                                <button type="submit" aria-label="Unassign from @assignedOrg.OrgName" style="border:none; background:none; cursor:pointer; padding:0; color:#888; font-size:13px; line-height:1;">&times;</button>
+                            </form>
+                        </span>
+                    }
+                </div>
+            }
 
             <div style="display:flex; flex-wrap:wrap; gap:6px; margin:var(--space-3) 0;">
                 @if (!catalogue.LensOptions.Any())
@@ -51,16 +71,26 @@
                 }
             </div>
 
-            <form asp-action="AddLensOption" method="post" style="display:flex; gap:var(--space-2);">
-                <input type="hidden" name="CatalogueId" value="@catalogue.Id" />
-                <select class="form-select" name="LensStrengthRefId" style="flex:1;">
-                    @foreach (var strength in Model.AllLensStrengths)
-                    {
-                        <option value="@strength.Id">@strength.Label</option>
-                    }
-                </select>
-                <button class="dg-btn dg-btn-ghost" style="padding:8px 16px; font-size:13px; white-space:nowrap;" type="submit">Add lens</button>
-            </form>
+            @{
+                var availableStrengths = Model.AllLensStrengths.Where(s => !catalogue.LensOptions.Any(l => l.LensStrengthRefId == s.Id)).ToList();
+            }
+            @if (availableStrengths.Any())
+            {
+                <form asp-action="AddLensOption" method="post" style="display:flex; gap:var(--space-2);">
+                    <input type="hidden" name="CatalogueId" value="@catalogue.Id" />
+                    <select class="form-select" name="LensStrengthRefId" style="flex:1;">
+                        @foreach (var strength in availableStrengths)
+                        {
+                            <option value="@strength.Id">@strength.Label</option>
+                        }
+                    </select>
+                    <button class="dg-btn dg-btn-ghost" style="padding:8px 16px; font-size:13px; white-space:nowrap;" type="submit">Add lens</button>
+                </form>
+            }
+            else
+            {
+                <p style="font-size:12px; color:#999; margin:0;">Every active lens strength is already on this catalogue.</p>
+            }
         </div>
 
         <div class="modal fade" id="editCatalogueModal-@catalogue.Id" tabindex="-1" aria-hidden="true">
@@ -84,6 +114,16 @@
                             <div class="dg-auth-field">
                                 <label>Diopter / strength range</label>
                                 <input class="form-control" name="RangeDescription" value="@catalogue.RangeDescription" />
+                            </div>
+                            <div class="dg-auth-field">
+                                <label>Field App picker role</label>
+                                <select class="form-select" name="Kind">
+                                    @foreach (var kind in Enum.GetValues<DotGlasses.Domain.Enums.PresetCatalogueKind>())
+                                    {
+                                        <option value="@((int)kind)" selected="@(catalogue.Kind == kind ? "selected" : null)">@kind</option>
+                                    }
+                                </select>
+                                <p class="dg-crumb" style="margin-top:4px;">SixLensSet/NineLensSet drive the Field App's 6-Lens/9-Lens buttons — only one catalogue may hold each.</p>
                             </div>
                         </div>
                         <div class="modal-footer">
@@ -197,6 +237,16 @@
                     <div class="dg-auth-field">
                         <label>Diopter / strength range</label>
                         <input class="form-control" name="RangeDescription" />
+                    </div>
+                    <div class="dg-auth-field">
+                        <label>Field App picker role</label>
+                        <select class="form-select" name="Kind">
+                            @foreach (var kind in Enum.GetValues<DotGlasses.Domain.Enums.PresetCatalogueKind>())
+                            {
+                                <option value="@((int)kind)">@kind</option>
+                            }
+                        </select>
+                        <p class="dg-crumb" style="margin-top:4px;">SixLensSet/NineLensSet drive the Field App's 6-Lens/9-Lens buttons — only one catalogue may hold each.</p>
                     </div>
                 </div>
                 <div class="modal-footer">

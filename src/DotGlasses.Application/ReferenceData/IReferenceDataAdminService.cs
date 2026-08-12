@@ -22,6 +22,19 @@ public interface IReferenceDataAdminService
     /// <summary>Code is derived from label (slugified), SortOrder is max+1 within the category.</summary>
     Task<ReferenceDataAdminItem> CreateAsync(ReferenceDataCategory category, string label, string? imageUrl, bool isOtherOption, CancellationToken cancellationToken = default);
 
+    /// <summary>Label/ImageUrl only — Category, Code and IsOtherOption are set at creation and
+    /// stay fixed (changing IsOtherOption after the fact would need the same "at most one active
+    /// Other per category" guard CreateAsync already has, and nothing has asked for that yet).</summary>
+    Task<ReferenceDataAdminItem> UpdateAsync(Guid id, string label, string? imageUrl, CancellationToken cancellationToken = default);
+
+    /// <summary>Swaps SortOrder with the previous active item in the same category. No-op if
+    /// already first.</summary>
+    Task MoveUpAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Swaps SortOrder with the next active item in the same category. No-op if
+    /// already last.</summary>
+    Task MoveDownAsync(Guid id, CancellationToken cancellationToken = default);
+
     /// <summary>Soft-retire — IsActive = false. Never a hard delete: historical Test/Lead/Sale
     /// rows may still reference this item by Id.</summary>
     Task DeactivateAsync(Guid id, CancellationToken cancellationToken = default);

@@ -38,16 +38,28 @@ public interface IUserAdminService
     /// "switch active location" UI to make changing which org drives a multi-org user's JWT/
     /// cookie claims meaningful (see CLAUDE.md's [OPEN] items).</summary>
     Task AssignUserToOrgAsync(Guid userId, Guid orgNodeId, CancellationToken cancellationToken = default);
+
+    /// <summary>Removes a UserOrgAssignment row — the Organisations screen's un-assign action
+    /// (Phase 6). No-op if the pairing doesn't exist. Throws if orgNodeId is the user's own
+    /// primary org (ApplicationUser.OrgNodeId) — removing that would leave the user with no org
+    /// driving their JWT/hierarchy scope, and there's no "switch primary" UI yet to move it
+    /// first.</summary>
+    Task UnassignUserFromOrgAsync(Guid userId, Guid orgNodeId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Status is "Invited" (no password set yet), "Suspended" (locked out), or "Active" —
-/// derived from Identity's own fields, not a stored column.</summary>
+/// derived from Identity's own fields, not a stored column. OrgNodeIds is parallel to OrgNames
+/// (same order) — added alongside OrgNames (Phase 6) so callers needing to act on a specific
+/// assignment (e.g. un-assign) don't have to match by name, which is only unique by
+/// coincidence.</summary>
 public record UserAdminRow(
     Guid Id,
     string Email,
     string DisplayName,
     string Role,
     IReadOnlyList<string> OrgNames,
+    IReadOnlyList<Guid> OrgNodeIds,
+    Guid? PrimaryOrgNodeId,
     string Status,
     DateTimeOffset? LastLoginUtc,
     int SalesCount,

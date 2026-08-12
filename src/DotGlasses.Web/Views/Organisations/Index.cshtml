@@ -43,14 +43,24 @@
             <p style="font-size:13px; color:var(--text-muted-2);">No inventory/SKU data shown here — stock is tracked externally in Zoho.</p>
         }
 
-        @if (Model.SelectedAssignedUserNames.Count > 0)
+        @if (Model.SelectedAssignedUsers.Count > 0)
         {
             <div style="margin-top:var(--space-3);">
                 <p class="dg-stat-label">Assigned users</p>
-                <ul style="margin:0; padding-left:18px; font-size:13px; color:var(--text-muted-2);">
-                    @foreach (var name in Model.SelectedAssignedUserNames)
+                <ul style="margin:0; padding-left:18px; font-size:13px; color:var(--text-muted-2); list-style:none;">
+                    @foreach (var user in Model.SelectedAssignedUsers)
                     {
-                        <li>@name</li>
+                        <li style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
+                            @user.DisplayName
+                            @if (Model.CanManage)
+                            {
+                                <form asp-action="UnassignUser" method="post" style="display:inline;">
+                                    <input type="hidden" name="orgNodeId" value="@Model.Selected.Id" />
+                                    <input type="hidden" name="userId" value="@user.UserId" />
+                                    <button type="submit" aria-label="Unassign @user.DisplayName" style="border:none; background:none; cursor:pointer; padding:0; color:#888; font-size:12px; line-height:1;">&times;</button>
+                                </form>
+                            }
+                        </li>
                     }
                 </ul>
             </div>
@@ -63,6 +73,8 @@
         else
         {
             <div style="display:flex; flex-direction:column; gap:var(--space-2); margin-top:var(--space-4);">
+                <button class="dg-btn dg-btn-ghost" type="button" data-bs-toggle="modal" data-bs-target="#renameModal">Rename</button>
+
                 <form asp-action="SetTrainingOrgFlag" method="post">
                     <input type="hidden" name="id" value="@Model.Selected.Id" />
                     <input type="hidden" name="value" value="@((!Model.Selected.IsTrainingOrg).ToString())" />
@@ -80,8 +92,65 @@
                 {
                     <button class="dg-btn dg-btn-ghost" type="button" data-bs-toggle="modal" data-bs-target="#assignUserModal">Assign users</button>
                 }
+
+                @if (Model.SelectedHasChildren)
+                {
+                    <p style="font-size:12px; color:#999; margin:0;">Deactivate this node's child orgs first before deactivating it.</p>
+                }
+                else
+                {
+                    <form asp-action="SetActive" method="post" onsubmit="return confirm('Deactivate @Model.Selected.Name? It will disappear from the tree until reactivated.');">
+                        <input type="hidden" name="id" value="@Model.Selected.Id" />
+                        <input type="hidden" name="value" value="false" />
+                        <button class="dg-btn dg-btn-ghost" style="width:100%; justify-content:center; color:#b00;" type="submit">Deactivate</button>
+                    </form>
+                }
             </div>
         }
+    </div>
+</div>
+
+@if (Model.DeactivatedNodes.Count > 0)
+{
+    <div class="dg-card" style="margin-top:var(--space-4);">
+        <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin-top:0; font-size:14px;">Deactivated orgs</h3>
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+            @foreach (var node in Model.DeactivatedNodes)
+            {
+                <span class="dg-badge" style="background:#f2f2f2; color:#999; display:inline-flex; align-items:center; gap:6px;">
+                    @node.Name
+                    <form asp-action="SetActive" method="post" style="display:inline;">
+                        <input type="hidden" name="id" value="@node.Id" />
+                        <input type="hidden" name="value" value="true" />
+                        <button type="submit" style="border:none; background:none; cursor:pointer; padding:0; color:var(--dot-blue); font-size:12px; text-decoration:underline;">Reactivate</button>
+                    </form>
+                </span>
+            }
+        </div>
+    </div>
+}
+
+<div class="modal fade" id="renameModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content" style="border-radius:var(--radius-md); border:none;">
+            <form asp-action="Rename" method="post">
+                <input type="hidden" name="Id" value="@Model.Selected.Id" />
+                <div class="modal-header">
+                    <h2 class="dg-page-title" style="font-size:20px;">Rename @Model.Selected.Name</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="dg-auth-field">
+                        <label>Name</label>
+                        <input class="form-control" name="Name" value="@Model.Selected.Name" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="dg-btn dg-btn-ghost" type="button" data-bs-dismiss="modal">Cancel</button>
+                    <button class="dg-btn dg-btn-primary" type="submit">Save</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 
