@@ -153,9 +153,10 @@ if (builder.ExecutionContext.IsPublishMode)
     keyVault.ConfigureInfrastructure(infra =>
     {
         var vault = infra.GetProvisionableResources().OfType<KeyVaultService>().Single();
-        // Key Vault names are globally unique (public DNS) — CAF pattern + hash, same reasoning
-        // as Postgres/Storage above.
-        vault.Name = BicepFunction.Interpolate($"kv-{Workload}-{EnvToken()}-{ShortHash()}");
+        // Key Vault names are globally unique (public DNS) and cap out at 24 characters — the
+        // full "dotglasses" workload token overflows that (kv-dotglasses-nonprod-<hash> is 28
+        // chars), the same problem Storage already solved with ShortWorkload; reuse it here too.
+        vault.Name = BicepFunction.Interpolate($"kv-{ShortWorkload}-{EnvToken()}-{ShortHash()}");
     });
     web.WithReference(keyVault);
 }

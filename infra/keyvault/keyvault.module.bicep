@@ -2,7 +2,7 @@
 param location string = resourceGroup().location
 
 resource keyvault 'Microsoft.KeyVault/vaults@2024-11-01' = {
-  name: 'kv-dotglasses-${substring(resourceGroup().name, 14)}-${take(uniqueString(resourceGroup().id), 6)}'
+  name: 'kv-dg-${substring(resourceGroup().name, 14)}-${take(uniqueString(resourceGroup().id), 6)}'
   location: location
   properties: {
     tenantId: tenant().tenantId
