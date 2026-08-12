@@ -14,22 +14,26 @@ namespace DotGlasses.Web.HostedServices;
 /// seeded via migration now (see Persistence/Configurations/RoleSeedConfiguration.cs), not here —
 /// roles are non-secret reference data that needs to exist in every environment, whereas these
 /// dev accounts are gated behind DevSeedOptions being configured (never set in production) and
-/// their passwords are only ever a local-dev convenience. The below-DGI accounts' credentials
-/// are fixed (not configurable via DevSeedOptions) since they exist purely to exercise RBAC
-/// locally, not for per-environment customization. Real seeding (who gets provisioned, at which
-/// org node, by whom) is pending the CEO conversation — do not treat DevSeedOptions as production
-/// account provisioning. The "Kenya Manager" account name/constants predate the 2026-08-10
-/// Manager→Admin role collapse (see CLAUDE.md's Access model section) and are left as-is — it's
-/// now just an Admin account at Country level, kept under its original username so the existing
-/// local Postgres data volume's seeded account is reused rather than duplicated.
+/// their passwords are only ever a local-dev convenience. Real seeding (who gets provisioned, at
+/// which org node, by whom) is pending the CEO conversation — do not treat DevSeedOptions as
+/// production account provisioning. The "Kenya Manager" account name/constants predate the
+/// 2026-08-10 Manager→Admin role collapse (see CLAUDE.md's Access model section) and are left
+/// as-is — it's now just an Admin account at Country level, kept under its original username so
+/// the existing local Postgres data volume's seeded account is reused rather than duplicated.
+///
+/// Passwords for all three accounts (Phase 8, 2026-08-12) come from DevSeedOptions/user secrets,
+/// not hardcoded constants — KenyaManagerPassword/RetailPointUserPassword used to be literal
+/// `const string`s in this file (a public repo), which is the exact gap CLAUDE.md's Phase 8
+/// flagged. Usernames stay as `const string` — they're plain identifiers, not secrets, and
+/// KenyaManagerUserName in particular is deliberately fixed for the reuse-the-existing-seeded-
+/// account reason above. Each of the two below-DGI accounts is now individually gated on its own
+/// password being set, not just piggybacking on the top-level Admin check, so setting only some
+/// of the three secrets locally seeds only the corresponding accounts rather than erroring.
 /// </summary>
 public class DevUserSeeder(IServiceScopeFactory scopeFactory, IOptions<DevSeedOptions> devSeedOptions) : IHostedService
 {
     public const string KenyaManagerUserName = "kenya-manager@dotglasses.dev";
-    public const string KenyaManagerPassword = "DevPassw0rd!";
-
     public const string RetailPointUserUserName = "retailpoint-user@dotglasses.dev";
-    public const string RetailPointUserPassword = "DevPassw0rd!";
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -47,15 +51,21 @@ public class DevUserSeeder(IServiceScopeFactory scopeFactory, IOptions<DevSeedOp
             OrganisationSeedConfiguration.DgiId, OrganisationSeedConfiguration.DgiPath, OrganisationLevel.Dgi,
             RoleNames.Admin);
 
-        await CreateOrUpdateAsync(
-            userManager, KenyaManagerUserName, KenyaManagerPassword,
-            OrganisationSeedConfiguration.KenyaId, OrganisationSeedConfiguration.KenyaPath, OrganisationLevel.Country,
-            RoleNames.Admin);
+        if (!string.IsNullOrEmpty(seed.KenyaManagerPassword))
+        {
+            await CreateOrUpdateAsync(
+                userManager, KenyaManagerUserName, seed.KenyaManagerPassword,
+                OrganisationSeedConfiguration.KenyaId, OrganisationSeedConfiguration.KenyaPath, OrganisationLevel.Country,
+                RoleNames.Admin);
+        }
 
-        await CreateOrUpdateAsync(
-            userManager, RetailPointUserUserName, RetailPointUserPassword,
-            OrganisationSeedConfiguration.KenyaRetailPointId, OrganisationSeedConfiguration.KenyaRetailPointPath, OrganisationLevel.RetailPoint,
-            RoleNames.User);
+        if (!string.IsNullOrEmpty(seed.RetailPointUserPassword))
+        {
+            await CreateOrUpdateAsync(
+                userManager, RetailPointUserUserName, seed.RetailPointUserPassword,
+                OrganisationSeedConfiguration.KenyaRetailPointId, OrganisationSeedConfiguration.KenyaRetailPointPath, OrganisationLevel.RetailPoint,
+                RoleNames.User);
+        }
     }
 
     /// <summary>
@@ -110,4 +120,6 @@ public class DevSeedOptions
 
     public string? AdminUserName { get; set; }
     public string? AdminPassword { get; set; }
+    public string? KenyaManagerPassword { get; set; }
+    public string? RetailPointUserPassword { get; set; }
 }

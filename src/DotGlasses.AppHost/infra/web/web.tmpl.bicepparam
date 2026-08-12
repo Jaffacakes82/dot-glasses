@@ -6,6 +6,7 @@ param env_outputs_azure_container_apps_environment_default_domain = '{{ .Env.ENV
 param env_outputs_azure_container_apps_environment_id = '{{ .Env.ENV_AZURE_CONTAINER_APPS_ENVIRONMENT_ID }}'
 param env_outputs_azure_container_registry_endpoint = '{{ .Env.ENV_AZURE_CONTAINER_REGISTRY_ENDPOINT }}'
 param env_outputs_azure_container_registry_managed_identity_id = '{{ .Env.ENV_AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID }}'
+param keyvault_outputs_vaulturi = '{{ .Env.KEYVAULT_VAULTURI }}'
 param postgres_outputs_connectionstring = '{{ .Env.POSTGRES_CONNECTIONSTRING }}'
 param postgres_outputs_hostname = '{{ .Env.POSTGRES_HOSTNAME }}'
 param storage_outputs_blobendpoint = '{{ .Env.STORAGE_BLOBENDPOINT }}'

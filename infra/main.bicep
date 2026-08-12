@@ -48,6 +48,13 @@ module env_acr 'env-acr/env-acr.module.bicep' = {
     location: location
   }
 }
+module keyvault 'keyvault/keyvault.module.bicep' = {
+  name: 'keyvault'
+  scope: rg
+  params: {
+    location: location
+  }
+}
 module postgres 'postgres/postgres.module.bicep' = {
   name: 'postgres'
   scope: rg
@@ -67,6 +74,15 @@ module web_identity 'web-identity/web-identity.module.bicep' = {
   scope: rg
   params: {
     location: location
+  }
+}
+module web_roles_keyvault 'web-roles-keyvault/web-roles-keyvault.module.bicep' = {
+  name: 'web-roles-keyvault'
+  scope: rg
+  params: {
+    keyvault_outputs_name: keyvault.outputs.name
+    location: location
+    principalId: web_identity.outputs.principalId
   }
 }
 module web_roles_postgres 'web-roles-postgres/web-roles-postgres.module.bicep' = {
@@ -96,6 +112,7 @@ output ENV_AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN string = env.outputs.
 output ENV_AZURE_CONTAINER_APPS_ENVIRONMENT_ID string = env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_ID
 output ENV_AZURE_CONTAINER_REGISTRY_ENDPOINT string = env.outputs.AZURE_CONTAINER_REGISTRY_ENDPOINT
 output ENV_AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID string = env.outputs.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID
+output KEYVAULT_VAULTURI string = keyvault.outputs.vaultUri
 output POSTGRES_CONNECTIONSTRING string = postgres.outputs.connectionString
 output POSTGRES_HOSTNAME string = postgres.outputs.hostName
 output STORAGE_BLOBENDPOINT string = storage.outputs.blobEndpoint

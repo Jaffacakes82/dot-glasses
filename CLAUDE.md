@@ -1128,15 +1128,17 @@ about what changes*, taken with the user in a structured review session on 2026-
 **Delivery**: one feature branch + PR per phase (a push to `main` triggers the deploy pipeline —
 keep `main` deployable). Commit + update this file after each phase.
 
-**Where this stands (2026-08-12):** Phases 1–6 are merged to `main`
+**Where this stands (2026-08-12):** Phases 1–7 are merged to `main`
 ([PR #1](https://github.com/Jaffacakes82/dot-glasses/pull/1),
 [PR #2](https://github.com/Jaffacakes82/dot-glasses/pull/2),
 [PR #3](https://github.com/Jaffacakes82/dot-glasses/pull/3),
 [PR #4](https://github.com/Jaffacakes82/dot-glasses/pull/4),
 [PR #5](https://github.com/Jaffacakes82/dot-glasses/pull/5),
-[PR #6](https://github.com/Jaffacakes82/dot-glasses/pull/6)). Phase 7 (reporting usability) is
-done, verified live, and committed on `feat/phase-7-reporting-usability`, branched fresh off
-`main` — about to be pushed/PR'd. Phase 8 is untouched. Two `[OPEN]` items are worth flagging
+[PR #6](https://github.com/Jaffacakes82/dot-glasses/pull/6),
+[PR #7](https://github.com/Jaffacakes82/dot-glasses/pull/7)). Phase 8 (production readiness) is
+done, verified live, and committed on `feat/phase-8-production-readiness`, branched fresh off
+`main` — about to be pushed/PR'd, the last phase of the agreed roadmap. Two `[OPEN]` items are
+worth flagging
 deliberately rather than letting drift: offline record attribution at sync time vs creation time
 (from Phase 1), and Phase 3's location-switching feature only works online (re-issuing a JWT is
 inherently a server round-trip) — a technician who needs to switch outlets while genuinely offline
@@ -1728,6 +1730,75 @@ echoed back.
 - **Field App URL placeholders**: `appsettings.Staging.json`/`appsettings.Production.json` both
   still carry `REPLACE-AFTER-FIRST-DEPLOY`. Resolvable only after the first successful `azd up`
   per environment — wire the mechanism and flag precisely what the user fills in and when.
+
+**Phase 8 status: implemented and verified live (2026-08-12), on branch
+`feat/phase-8-production-readiness`, not yet merged.** All four sub-items:
+
+- **Secrets**: JWT `Key`/`Issuer`/`Audience` move to Azure Key Vault for staging/production.
+  `AppHost.cs` declares `AddAzureKeyVault("keyvault")` gated behind `IsPublishMode` (no local
+  emulator, same class of gap as ACS — plain `dotnet run` never touches it), CAF-named via
+  `ConfigureInfrastructure` (`kv-{Workload}-{EnvToken}-{ShortHash}`) the same way Postgres/
+  Storage already are, and `web.WithReference(keyVault)` wires RBAC (Key Vault Secrets User on
+  Web's managed identity) automatically — unlike ACS, Key Vault has a real Aspire hosting
+  integration (`Aspire.Hosting.Azure.KeyVault`), so this is the standard `AddAzureKeyVault` path,
+  not the raw-Bicep-template escape hatch. `Program.cs` conditionally calls
+  `AddAzureKeyVaultSecrets("keyvault")` — guarded on the injected `"keyvault"` connection string
+  being present, not `IsDevelopment()` (the real signal is whether AppHost actually wired a
+  reference, matching `AddInfrastructure`'s own ACS-conditional reasoning), and run before
+  `JwtOptions`/`DevSeedOptions` are bound since it merges secrets into configuration those
+  bindings read from. Secret names use Key Vault's `--` section-separator convention
+  (`Jwt--Key`/`Jwt--Issuer`/`Jwt--Audience`) — those three must be set in the real Key Vault by
+  the user after `azd up` provisions it (`az keyvault secret set` or the portal); Claude cannot
+  create them, per the "no infra deployed from a developer machine" rule. `/infra` was
+  regenerated via `azd infra gen --force` (new `infra/keyvault/`, `infra/web-roles-keyvault/`
+  modules, `KEYVAULT_VAULTURI` output threaded into `web-containerapp.module.bicep` as
+  `ConnectionStrings__keyvault`/`KEYVAULT_URI`), not hand-edited.
+- **Password policy tightened**: `RequireNonAlphanumeric`/`RequireUppercase` both flipped `true`
+  (were `false` for dev ergonomics), `RequiredLength` stays 8. One global policy, not
+  environment-conditional — every seeded dev password (`DevPassw0rd!`) already satisfies the
+  tightened rules, confirmed by live sign-in (below), so nothing environment-specific was needed.
+- **Hard-coded dev passwords removed**: `DevUserSeeder`'s `KenyaManagerPassword`/
+  `RetailPointUserPassword` `const string`s (literal secrets in a public repo) are gone.
+  `DevSeedOptions` gained `KenyaManagerPassword`/`RetailPointUserPassword`, sourced from user
+  secrets locally (`dotnet user-secrets set DevSeed:KenyaManagerPassword ...` etc., from
+  `src/DotGlasses.Web`) and never committed — `appsettings.Development.json`'s `DevSeed` section
+  keeps only the non-secret `AdminUserName`. Each of the two below-DGI accounts is now
+  individually gated on its own password being set (not piggybacking on the top-level Admin
+  check), so partial secrets locally seed only the corresponding accounts rather than erroring.
+  Usernames stay `const string` — plain identifiers, not secrets.
+- **Migration strategy**: `deploy.yml`'s `deploy-web-staging`/`deploy-web-production` jobs gain an
+  explicit "Apply database migrations" step after `azd up`, replacing reliance on
+  auto-migrate-on-boot (which was already `IsDevelopment()`-gated in `Program.cs` and never ran
+  in a real environment even before this step existed — this closes the gap left by that guard,
+  it doesn't change it). A new `azure/login@v2` step (separate credential store from `azd auth
+  login`) authenticates the plain `az` CLI via the same OIDC federated identity, so
+  `az account get-access-token --resource-type oss-rdbms` can mint a short-lived Postgres AAD
+  token — the server has no password auth at all (Entra ID only) — which
+  `dotnet ef database update --project src/DotGlasses.Infrastructure --startup-project
+  src/DotGlasses.Web` then uses via an inline `ConnectionStrings__dotglassesdb`. **Needs one more
+  manual, one-time step outside what Claude can do from a coding session**: a new
+  `AZURE_POSTGRES_AAD_USERNAME` repo/environment variable set to whatever identity
+  `az postgres flexible-server ad-admin create` was granted for the deploying principal — that
+  grant is itself infra/RBAC work this repo's "no infra touched from a developer machine" rule
+  puts on the user, so this step is written but **not yet end-to-end verified against a real
+  server** (flagged, not guessed at).
+- **Field App URL placeholders**: no code change needed — `appsettings.Staging.json`/
+  `appsettings.Production.json` (added earlier, see the Field App config-per-environment section)
+  already carry the `REPLACE-AFTER-FIRST-DEPLOY` placeholder with a `_comment` explaining exactly
+  what to fill in and when; that already satisfies "wire the mechanism and flag precisely," so
+  this sub-item was confirmed rather than re-done.
+
+**Verified live**: `dotnet build`/`dotnet test` both clean (0 errors, 18 tests passing). Started
+the local Aspire stack (`AppHost`) — Key Vault's `IsPublishMode` gate correctly means local dev
+never touches it, confirmed by `Program.cs`'s conditional skipping `AddAzureKeyVaultSecrets`
+entirely (no `"keyvault"` connection string exists locally) — and signed in as all three seeded
+accounts (DGI Admin, Kenya Admin, RetailPoint User) using passwords now sourced from user secrets
+rather than hardcoded constants, confirming the tightened password policy didn't reject the
+existing seeded password and RBAC/nav-visibility (Reference Data correctly DGI-only, hidden for
+the Kenya Admin) is unaffected. The Key Vault and migration-pipeline code paths themselves could
+not be verified end-to-end against real Azure infra in this session, per the same "no infra
+deployed from a developer machine" rule the migration-strategy bullet above already invokes —
+only code correctness and the local-dev fallback behavior were confirmed live.
 
 ### Explicitly decided *against* (do not build)
 
