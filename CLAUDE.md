@@ -941,9 +941,19 @@ correctly. The invite form's role `<select>` now offers only Admin/User.
   it against a real Azure subscription on every local start and hang waiting for `az login`
   credentials that don't exist in dev — caught live (Web never started; the `DotGlasses.AppHost.exe`
   process was running but had no child Web process, and curl against `localhost:7117` just hung)
-  before shipping, not by build/test. `IEmailSender` stays `LoggingEmailSender` — swapping in a
-  real ACS-backed sender is still explicit `[OPEN]` work the user is doing themselves; only the
-  infra needed to exist for that swap to be possible.
+  before shipping, not by build/test. `IEmailSender` stayed `LoggingEmailSender` at the time —
+  the real ACS-backed sender landed later, see the Phase 5 section above.
+
+  **Custom domain decision (2026-08-12, not yet implemented):** if/when `acs.bicep` moves off the
+  free Azure Managed Domain to a real verified `dotglasses.com` domain, prod and non-prod must use
+  **separate subdomains** (e.g. `prod.dotglasses.com` / `nonprod.dotglasses.com`), each linked to
+  its own Email Communication Service resource — not the same root domain shared across both ACS
+  instances. Confirmed against Microsoft's own docs: a verified custom domain can only be linked
+  to one Email Communication Service resource at a time; sharing one domain between prod/non-prod
+  would mean disconnecting and reconnecting it on every deploy. This still needs the same
+  interactive, portal-driven DNS verification step per subdomain that the managed-domain choice
+  was made to avoid for now — flagged here, not implemented, since it needs the user's own DNS
+  access to `dotglasses.com`.
 - **The Field App's `/infra` now exists too** (2026-08-06) — resolving the gap flagged when the
   root project's infra was first built. `azd infra gen` doesn't apply here (it's specifically the
   Aspire-manifest→Bicep synthesis path, confirmed by running it from `src/DotGlasses.App` and
@@ -1118,16 +1128,19 @@ about what changes*, taken with the user in a structured review session on 2026-
 **Delivery**: one feature branch + PR per phase (a push to `main` triggers the deploy pipeline —
 keep `main` deployable). Commit + update this file after each phase.
 
-**Where this stands (2026-08-11):** Phases 1–3 are merged to `main`
+**Where this stands (2026-08-11):** Phases 1–4 are merged to `main`
 ([PR #1](https://github.com/Jaffacakes82/dot-glasses/pull/1),
 [PR #2](https://github.com/Jaffacakes82/dot-glasses/pull/2),
-[PR #3](https://github.com/Jaffacakes82/dot-glasses/pull/3)). Phase 4 (Lead conversion) is done,
-verified live, and committed on `feat/phase-4-lead-conversion`, branched fresh off `main` — about
-to be pushed/PR'd. Phases 5–8 are untouched. Two `[OPEN]` items are worth flagging deliberately
-rather than letting drift: offline record attribution at sync time vs creation time (from Phase
-1), and Phase 3's location-switching feature only works online (re-issuing a JWT is inherently a
-server round-trip) — a technician who needs to switch outlets while genuinely offline can't, and
-the Field App doesn't yet say so explicitly beyond the generic "check your connection" message.
+[PR #3](https://github.com/Jaffacakes82/dot-glasses/pull/3),
+[PR #4](https://github.com/Jaffacakes82/dot-glasses/pull/4)). Phase 5 (email delivery) is done,
+verified live (the local-dev fallback path — real ACS delivery needs the user's own `azd up`/
+deploy to provision `acs.bicep`, which Claude cannot do, see that section below), and committed on
+`feat/phase-5-email-delivery`, branched fresh off `main` — about to be pushed/PR'd. Phases 6–8 are
+untouched. Two `[OPEN]` items are worth flagging deliberately rather than letting drift: offline
+record attribution at sync time vs creation time (from Phase 1), and Phase 3's location-switching
+feature only works online (re-issuing a JWT is inherently a server round-trip) — a technician who
+needs to switch outlets while genuinely offline can't, and the Field App doesn't yet say so
+explicitly beyond the generic "check your connection" message.
 
 ### Phase 1 — Field App data integrity (highest priority: this loses real data today)
 
@@ -1432,6 +1445,52 @@ string and a verified sender address; Claude writes the sender. Token/link mecha
 — only what `UserDirectoryController` does after `InviteAsync` returns. Until this lands, no user
 provisioning is usable outside a dev session (the set-password link is copied by hand).
 
+**Phase 5 status: implemented and verified live (2026-08-11), on branch
+`feat/phase-5-email-delivery`, not yet merged.** Turned out to need less than expected once
+actually read: `UserDirectoryController` already called `emailSender.SendPasswordSetupInviteAsync`
+on both `Invite` and `ResetPassword` (with no try/catch) and already showed the raw set-password
+link via `TempData` unconditionally regardless — that half of "only what `UserDirectoryController`
+does after `InviteAsync` returns" was done in an earlier pass and needed zero changes here.
+Likewise `AppHost.cs` already injected `ACS_CONNECTION_STRING`/`ACS_SENDER_DOMAIN` into `web`'s
+environment, gated behind `IsPublishMode`, from a previous pass — also needed no changes. The only
+real gap was `DependencyInjection.AddInfrastructure` hard-registering `LoggingEmailSender`
+unconditionally, with nothing ever reading those two environment variables.
+
+**New `AzureEmailSender`** (Infrastructure/Notifications, `Azure.Communication.Email` 1.1.0 —
+confirmed as the correct official package via `dotnet package search` before adding it, no Aspire
+hosting integration needed here since this is a client SDK, not a resource provisioner) — sends via
+`EmailClient.SendAsync(WaitUntil.Started, ...)`. Sender address is always
+`DoNotReply@{ACS_SENDER_DOMAIN}` — the free Azure Managed Domain a fresh `acs.bicep` provisions
+only accepts that one fixed local-part, confirmed against Microsoft's own Managed Domain docs
+before hardcoding it. **Deliberately never throws** — catches and logs instead — because
+`UserDirectoryController`'s existing (unchanged) call site has no try/catch and relies on the
+send failing soft: a real ACS outage/bad-credentials/throttling failure must not turn an otherwise-
+successful invite/reset into a 500, and the shown link is exactly the fallback for that case, not
+just a pre-real-delivery placeholder.
+
+**`AddInfrastructure`'s new `AddEmailSender` private helper** picks `AzureEmailSender` over
+`LoggingEmailSender` by checking whether `ACS_CONNECTION_STRING`/`ACS_SENDER_DOMAIN` are present in
+`IConfiguration` (resolved inside the DI factory registration, not by changing `AddInfrastructure`'s
+own signature to take `IConfiguration` — ASP.NET Core's environment-variables configuration
+provider already surfaces whatever `AppHost.cs`'s `WithEnvironment` injects). Since those two
+values only exist when `acs.bicep` actually provisioned (`IsPublishMode` — `azd provision`/`azd up`
+only, never plain `dotnet run`), local dev always resolves `LoggingEmailSender` automatically, with
+no dev-only config needed to suppress the real sender.
+
+**What still genuinely needs the user, and why Claude can't self-serve it**: this repo's own rule
+is no infra is ever deployed from a developer machine (see the Deployment section above) — actually
+provisioning `acs.bicep` (which is what would generate the real connection string + managed-domain
+sender address `AzureEmailSender` reads) only happens via `azd up`/`azd provision` against a real
+Azure subscription, run by the user or the GitHub Actions pipeline, never by Claude. **This means
+real outbound delivery could not be end-to-end verified live in this session** — only the code path
+and the local-dev fallback could be. What was verified live: triggering a password reset in the
+running local dev stack (no `ACS_CONNECTION_STRING` set, matching every real local session) still
+produces the exact same "no email sending is wired up yet, copy this link" UX as before — confirming
+the conditional registration correctly falls back with zero regression to the existing dev
+workflow. The real-delivery path will start working automatically the next time the user's own
+`azd up`/deploy provisions `acs.bicep` for `staging`/`production` — no further code change needed
+on that day.
+
 ### Phase 6 — Admin editing gaps (all four agreed)
 
 - **Reference Data: edit + reorder.** A label, image URL or sort order cannot be changed after
@@ -1479,12 +1538,11 @@ provisioning is usable outside a dev session (the set-password link is copied by
 ## `[OPEN]` items — implement simplest placeholder, flag, don't guess
 
 **Many of the items below are now scheduled** by the agreed roadmap above (2026-08-09) rather than
-still open-ended — email delivery (Phase 5), offline reference-data caching and the outbox
-retry/discard gap and browser-storage hygiene (Phase 1), catalogue name-sniffing and
-Organisations' missing delete/deactivate (Phase 6). "Switch active location" (Phase 3) and the two
-inert-flag removals it also covered are done, see that section below. The Leads-list/convert-to-
-sale entry point (Phase 4) is also done, see that section below. Where a bullet below and the
-roadmap disagree, **the roadmap is the
+still open-ended — offline reference-data caching and the outbox retry/discard gap and browser-
+storage hygiene (Phase 1), catalogue name-sniffing and Organisations' missing delete/deactivate
+(Phase 6). "Switch active location" (Phase 3), the Leads-list/convert-to-sale entry point (Phase
+4), and email delivery (Phase 5, modulo the user's own `azd up` for real ACS credentials) are all
+done, see those sections above. Where a bullet below and the roadmap disagree, **the roadmap is the
 decision**; these bullets are kept for the context they carry about how each gap arose.
 
 One correction to a stale claim repeated in several bullets below:
@@ -1494,14 +1552,16 @@ the target user's own `HierarchyPath` through it, and the row-level action butto
 same way. The "not yet wired to a controller" doc comments on the requirement class itself are
 also out of date.
 
-- Real per-user provisioning beyond the three seeded `DevUserSeeder` accounts now exists (User
-  Directory's invite flow, see Admin Portal wiring above) — but real email delivery doesn't. The
-  set-password link is shown once in the Admin Portal UI for manual relay; `IEmailSender` is a
-  logging-only stub (`LoggingEmailSender`, Infrastructure). **Needed before any of this is usable
-  outside a dev session**: a real Azure Communication Services `IEmailSender` implementation —
-  the user is setting this up themselves; the token/link mechanics don't need to change at all
-  when it lands, only what `UserDirectoryController` does with the link after `InviteAsync`
-  returns it.
+- ~~Real per-user provisioning... but real email delivery doesn't~~ — **resolved by Phase 5**
+  (`AzureEmailSender`, see that section above). Real delivery still only activates once the user's
+  own `azd up`/deploy provisions `acs.bicep` for a given environment — until then (and always in
+  local dev) `LoggingEmailSender` remains the fallback, by design, not as a remaining gap.
+- `acs.bicep` still provisions the free Azure Managed Domain, not a real verified `dotglasses.com`
+  domain — moving to a custom domain is real follow-up work, not started. When it happens: prod
+  and non-prod must each get their own **subdomain** (`prod.dotglasses.com`/
+  `nonprod.dotglasses.com`), not share one root domain across both ACS instances — a verified
+  custom domain can only be linked to one Email Communication Service resource at a time (see the
+  Deployment section's ACS bullet above for the full decision + why).
 - The Field App's `ConsultationForm.razor` is wired to the real API (see Field App UI wiring
   above); the Admin Portal's equivalent modal still doesn't exist. All seven Admin Portal screens
   are wired to real data now (see the Admin Portal wiring sections above) — nothing left to scope
