@@ -152,6 +152,13 @@ public class ReferenceDataSeedConfiguration : IEntityTypeConfiguration<Reference
         Add(LensStrengthBifocal200Id, ReferenceDataCategory.LensStrength, "bifocal_0_00_2_00", "+0.00 / +2.00 (Bifocal)");
         Add(LensStrengthBifocal125Id, ReferenceDataCategory.LensStrength, "bifocal_0_00_1_25", "+0.00 / +1.25 (Bifocal)");
 
+        // LensType ← Bifocal/Progressive/Other, asked on a custom lens carrying two distinct
+        // powers (2026-09-03 triage — see CLAUDE.md's Reference Data category list).
+        sort = 0;
+        Add(new("b0000000-0000-0000-0000-000000000059"), ReferenceDataCategory.LensType, "bifocal", "Bifocal");
+        Add(new("b0000000-0000-0000-0000-000000000060"), ReferenceDataCategory.LensType, "progressive", "Progressive");
+        Add(new("b0000000-0000-0000-0000-000000000061"), ReferenceDataCategory.LensType, "other", "Other", isOther: true);
+
         builder.HasData(items);
     }
 }
