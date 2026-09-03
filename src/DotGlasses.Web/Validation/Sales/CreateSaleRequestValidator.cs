@@ -135,8 +135,8 @@ public class CreateSaleRequestValidator : AbstractValidator<CreateSaleRequest>
 
             ValidateCustomPower(request.CustomSphereLeft, nameof(request.CustomSphereLeft), -10m, 10m, 0.25m, context);
             ValidateCustomPower(request.CustomSphereRight, nameof(request.CustomSphereRight), -10m, 10m, 0.25m, context);
-            ValidateCustomPower(request.CustomCylinderLeft, nameof(request.CustomCylinderLeft), -6m, 0.25m, 0.25m, context);
-            ValidateCustomPower(request.CustomCylinderRight, nameof(request.CustomCylinderRight), -6m, 0.25m, 0.25m, context);
+            ValidateCustomPower(request.CustomCylinderLeft, nameof(request.CustomCylinderLeft), -10m, 10m, 0.25m, context);
+            ValidateCustomPower(request.CustomCylinderRight, nameof(request.CustomCylinderRight), -10m, 10m, 0.25m, context);
             ValidateCustomPower(request.CustomAddPowerLeft, nameof(request.CustomAddPowerLeft), 0m, 3m, 0.25m, context);
             ValidateCustomPower(request.CustomAddPowerRight, nameof(request.CustomAddPowerRight), 0m, 3m, 0.25m, context);
             ValidateCustomAxis(request.CustomAxisLeft, nameof(request.CustomAxisLeft), context);
