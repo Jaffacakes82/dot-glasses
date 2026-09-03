@@ -30,16 +30,22 @@ public interface ICustomOrderService
 public record CustomOrderRow(Guid SaleId, string CustomerName, string Outlet, string Prescription, FulfilmentStatus Status, DateTimeOffset CreatedAtUtc);
 
 /// <summary>"Active" = not yet Fulfilled (Submitted/InLab/ReadyForPickup) — see ListGroupedAsync's
-/// doc comment for why this count ignores the current status filter.</summary>
-public record RetailerOrderGroup(string RetailerName, int ActiveCount, IReadOnlyList<RetailPointOrderGroup> RetailPoints);
+/// doc comment for why this count ignores the current status filter. Grouped by RetailerId, not
+/// name — OrganisationNode names aren't guaranteed unique, so grouping by name alone could merge
+/// two distinct nodes that happen to share a display name. RetailerId is Guid.Empty when no
+/// resolvable parent node exists (falls back to one shared "Unknown retailer" bucket).</summary>
+public record RetailerOrderGroup(Guid RetailerId, string RetailerName, int ActiveCount, IReadOnlyList<RetailPointOrderGroup> RetailPoints);
 
 /// <summary>RetailPointName is whatever node is the immediate parent of the order's own
 /// RetailPoint node — normally an Intermediate reseller, but could itself be the Country node if
 /// no reseller tier exists between them. Nested multi-level reseller chains collapsing to one
 /// "retailer" tier, and the retailer-vs-retail-point grouping toggle, are both explicitly Day 2
-/// per the ticket.</summary>
-public record RetailPointOrderGroup(string RetailPointName, int ActiveCount, IReadOnlyList<CustomerOrderGroup> Customers);
+/// per the ticket. Grouped by RetailPointId for the same reason as RetailerOrderGroup.</summary>
+public record RetailPointOrderGroup(Guid RetailPointId, string RetailPointName, int ActiveCount, IReadOnlyList<CustomerOrderGroup> Customers);
 
-public record CustomerOrderGroup(string CustomerName, IReadOnlyList<CustomOrderRow> Orders);
+/// <summary>Grouped by CustomerId, not name — two distinct Customer rows can share a display
+/// name (matching is "exact name + phone, no fuzzy matching" per CLAUDE.md), so grouping by name
+/// alone could silently merge two different people's orders under one card.</summary>
+public record CustomerOrderGroup(Guid CustomerId, string CustomerName, IReadOnlyList<CustomOrderRow> Orders);
 
 public record CustomOrderGroupedResult(IReadOnlyList<RetailerOrderGroup> Retailers, int TotalCount);
