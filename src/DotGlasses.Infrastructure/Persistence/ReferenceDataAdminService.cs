@@ -178,7 +178,7 @@ public partial class ReferenceDataAdminService(DotGlassesDbContext dbContext) : 
         await EnsureActiveCoatingAsync(coatingRefIdA, cancellationToken);
         await EnsureActiveCoatingAsync(coatingRefIdB, cancellationToken);
 
-        var (lower, higher) = Canonicalize(coatingRefIdA, coatingRefIdB);
+        var (lower, higher) = CoatingExclusion.Canonicalize(coatingRefIdA, coatingRefIdB);
         if (await dbContext.CoatingExclusions.AnyAsync(e => e.CoatingRefIdA == lower && e.CoatingRefIdB == higher, cancellationToken))
         {
             throw new InvalidOperationException("This exclusion already exists.");
@@ -222,12 +222,9 @@ public partial class ReferenceDataAdminService(DotGlassesDbContext dbContext) : 
 
     private async Task<bool> HasExclusionAsync(Guid coatingRefIdA, Guid coatingRefIdB, CancellationToken cancellationToken)
     {
-        var (lower, higher) = Canonicalize(coatingRefIdA, coatingRefIdB);
+        var (lower, higher) = CoatingExclusion.Canonicalize(coatingRefIdA, coatingRefIdB);
         return await dbContext.CoatingExclusions.AnyAsync(e => e.CoatingRefIdA == lower && e.CoatingRefIdB == higher, cancellationToken);
     }
-
-    private static (Guid Lower, Guid Higher) Canonicalize(Guid a, Guid b) =>
-        a.CompareTo(b) <= 0 ? (a, b) : (b, a);
 
     private async Task<IReadOnlyDictionary<Guid, string>> GetCoatingLabelsAsync(CancellationToken cancellationToken) =>
         await dbContext.ReferenceDataItems

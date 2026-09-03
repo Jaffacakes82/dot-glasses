@@ -18,4 +18,10 @@ public class CoatingExclusion
     public Guid CoatingRefIdB { get; set; }
 
     public DateTimeOffset CreatedAtUtc { get; set; }
+
+    /// <summary>The single shared canonicalization rule every read/write site uses — see this
+    /// type's own doc comment for why canonicalizing (rather than checking both orderings) is the
+    /// chosen approach.</summary>
+    public static (Guid Lower, Guid Higher) Canonicalize(Guid a, Guid b) =>
+        a.CompareTo(b) <= 0 ? (a, b) : (b, a);
 }
