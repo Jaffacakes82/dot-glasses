@@ -132,6 +132,17 @@
                                             SelectedId="_occupationRefId" SelectedIdChanged="v => _occupationRefId = v"
                                             OtherText="_occupationOtherText" OtherTextChanged="v => _occupationOtherText = v"
                                             Errors="_errors" Field="OccupationRefId" OtherField="OccupationOtherText" />
+
+                    <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues" Coatings="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
+                                       LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
+                                       AllowNoPreference="true" Errors="_errors" CoatingField="CoatingPreferenceRefId" RangeTypeChanged="StateHasChanged" />
+                    @if (_lensRange.LensRangeType is not (LensRangeType.SixLensSet or LensRangeType.NineLensSet))
+                    {
+                        <ReferenceDataDropdown Label="Coating preference (optional)" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
+                                                SelectedId="_coatingPreferenceRefId" SelectedIdChanged="v => _coatingPreferenceRefId = v"
+                                                Errors="_errors" Field="CoatingPreferenceRefId" />
+                    }
+
                     <div class="dg-field">
                         <label>Did the customer share contact details?</label>
                         <div style="display:flex; gap:8px;">
@@ -288,6 +299,9 @@
     // Lead-only
     private Guid? _reasonNotPurchasedRefId;
     private string? _reasonNotPurchasedOtherText;
+
+    // Custom-range coating preference — shared between Test (NeedsGlasses) and Lead, both of
+    // which treat coating as optional (unlike Sale, which requires it).
     private Guid? _coatingPreferenceRefId;
 
     // Sale-only
@@ -319,7 +333,7 @@
         [.. TestFields, .. LensFields, "FullName", "PhoneNumber", "CoatingRefId", "FrameColourRefId", "FrameColourOtherText",
          "HardCaseColourRefId", "HardCaseOtherColourText"];
 
-    private string[] KnownFields => IsTest ? TestFields : IsSale ? SaleFields : LeadFields;
+    private string[] KnownFields => IsTest ? [.. TestFields, .. LensFields] : IsSale ? SaleFields : LeadFields;
 
     protected override async Task OnInitializedAsync()
     {
@@ -651,6 +665,13 @@
 
     private void ValidateTest()
     {
+        if (_testOutcome == TestOutcome.NeedsGlasses)
+        {
+            // A Test may carry no product preference at all; only validate the range if one is
+            // chosen — same reasoning as Lead.
+            ValidateLensRange(bucketRequired: false);
+        }
+
         if (_testOutcome != TestOutcome.Referred)
         {
             return;
@@ -842,6 +863,26 @@
             ReferralReasonRefId = _testOutcome == TestOutcome.Referred ? _referralReasonRefId : null,
             ReferralOtherText = _testOutcome == TestOutcome.Referred ? _referralOtherText : null,
             ReferralLocationFreeText = _testOutcome == TestOutcome.Referred ? _referralLocationFreeText : null,
+            LensRangeType = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.LensRangeType : null,
+            PresetCatalogueId = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.PresetCatalogueId : null,
+            LensOptionLeftId = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.LensOptionLeftId : null,
+            LensOptionRightId = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.LensOptionRightId : null,
+            CustomSphereLeft = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomSphereLeft : null,
+            CustomCylinderLeft = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomCylinderLeft : null,
+            CustomAxisLeft = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomAxisLeft : null,
+            CustomAddPowerLeft = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomAddPowerLeft : null,
+            CustomSphereRight = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomSphereRight : null,
+            CustomCylinderRight = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomCylinderRight : null,
+            CustomAxisRight = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomAxisRight : null,
+            CustomAddPowerRight = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomAddPowerRight : null,
+            LensTypeRefId = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.LensTypeRefId : null,
+            LensTypeOtherText = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.LensTypeOtherText : null,
+            PupilDistanceMm = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.PupilDistanceMm : null,
+            PresetPupilDistanceBucket = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.PresetPupilDistanceBucket : null,
+            ChildrensFrame = _testOutcome == TestOutcome.NeedsGlasses && _lensRange.ChildrensFrame,
+            CoatingPreferenceRefId = _testOutcome == TestOutcome.NeedsGlasses
+                ? (_lensRange.LensRangeType is LensRangeType.SixLensSet or LensRangeType.NineLensSet ? _lensRange.CoatingRefId : _coatingPreferenceRefId)
+                : null,
         };
 
         return await SubmitAsync(request.Id, "Test", "api/v1/tests", request) ? request.Id : null;
@@ -1001,7 +1042,8 @@
                                border-radius:var(--radius-md); border: @(selected ? "2px solid var(--dot-orange)" : "1px solid var(--border-default)");">
                     @if (colour.ImageUrl is { } imageUrl)
                     {
-                        <img src="@imageUrl" alt="@colour.Label" style="width:48px; height:48px; object-fit:contain;" />
+                        <img src="@imageUrl" alt="@colour.Label" style="width:48px; height:48px; object-fit:contain;"
+                             onerror="this.style.visibility='hidden'" />
                     }
                     else
                     {
