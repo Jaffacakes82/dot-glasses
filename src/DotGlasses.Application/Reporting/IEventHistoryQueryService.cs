@@ -22,6 +22,18 @@ public interface IEventHistoryQueryService
     /// <summary>Test rows where Outcome == Referred — a filtered view of the same data
     /// ListTestsAsync shows unfiltered, not a separate entity.</summary>
     Task<PagedResult<ReferralEventRow>> ListReferralsAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, int page, int pageSize, CancellationToken cancellationToken = default);
+
+    /// <summary>Export variants of the four List* methods above — same filter parameters, same
+    /// scoping and ordering, just unpaged (every matching row, not one page of them). Exists so
+    /// the CSV export drives off the exact same filtered query the on-screen list uses, not a
+    /// second, divergent query path that could silently drift out of sync with it.</summary>
+    Task<IReadOnlyList<SaleOrTestEventRow>> ExportSalesAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<SaleOrTestEventRow>> ExportTestsAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<LeadEventRow>> ExportLeadsAsync(string? searchByName, DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<ReferralEventRow>> ExportReferralsAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Name/ConsentGiven are null for a Test row — Tests stay deliberately anonymous (no
