@@ -1,5 +1,4 @@
 using DotGlasses.Application.CustomOrders;
-using DotGlasses.Application.Reporting;
 using DotGlasses.Domain.Entities;
 using DomainFulfilmentStatus = DotGlasses.Domain.Enums.FulfilmentStatus;
 using Microsoft.EntityFrameworkCore;
@@ -11,35 +10,47 @@ namespace DotGlasses.Infrastructure.Persistence;
 /// repository interface needed for this shape).</summary>
 public class CustomOrderService(DotGlassesDbContext dbContext) : ICustomOrderService
 {
-    public async Task<PagedResult<CustomOrderRow>> ListAsync(DomainFulfilmentStatus? status, int page, int pageSize, CancellationToken cancellationToken = default)
+    public async Task<CustomOrderGroupedResult> ListGroupedAsync(DomainFulfilmentStatus? status, CancellationToken cancellationToken = default)
     {
-        var query = dbContext.Sales.Where(x => x.FulfilmentStatus != null);
-        if (status is { } value)
-        {
-            query = query.Where(x => x.FulfilmentStatus == value);
-        }
+        var allOrders = await dbContext.Sales.Where(x => x.FulfilmentStatus != null).ToListAsync(cancellationToken);
+        var enriched = await EnrichAsync(allOrders, cancellationToken);
 
-        var totalCount = await query.CountAsync(cancellationToken);
-        var sales = await query.OrderByDescending(x => x.CreatedAtUtc).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+        // Computed from the caller's entire scoped order set, not `visible` below — see
+        // ICustomOrderService's doc comment for why this deliberately ignores the status filter.
+        var activeCountsByRetailer = enriched
+            .Where(e => IsActive(e.Sale.FulfilmentStatus!.Value))
+            .GroupBy(e => e.RetailerName)
+            .ToDictionary(g => g.Key, g => g.Count());
+        var activeCountsByRetailPoint = enriched
+            .Where(e => IsActive(e.Sale.FulfilmentStatus!.Value))
+            .GroupBy(e => (e.RetailerName, e.RetailPointName))
+            .ToDictionary(g => g.Key, g => g.Count());
 
-        var customerIds = sales.Select(s => s.CustomerId).Distinct().ToList();
-        var customers = await dbContext.Customers
-            .Where(c => customerIds.Contains(c.Id))
-            .ToDictionaryAsync(c => c.Id, cancellationToken);
+        var visible = (status is { } value ? enriched.Where(e => e.Sale.FulfilmentStatus == value) : enriched).ToList();
 
-        var orgByPath = (await dbContext.OrganisationNodes.ToListAsync(cancellationToken))
-            .ToDictionary(n => n.HierarchyPath);
-
-        var items = sales.Select(s => new CustomOrderRow(
-            s.Id,
-            customers.TryGetValue(s.CustomerId, out var customer) ? customer.FullName : "—",
-            orgByPath.TryGetValue(s.HierarchyPath, out var org) ? org.Name : "Unknown outlet",
-            FormatPrescription(s),
-            s.FulfilmentStatus!.Value,
-            s.CreatedAtUtc))
+        var retailers = visible
+            .GroupBy(e => e.RetailerName)
+            .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(retailerGroup => new RetailerOrderGroup(
+                retailerGroup.Key,
+                activeCountsByRetailer.GetValueOrDefault(retailerGroup.Key),
+                retailerGroup
+                    .GroupBy(e => e.RetailPointName)
+                    .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                    .Select(retailPointGroup => new RetailPointOrderGroup(
+                        retailPointGroup.Key,
+                        activeCountsByRetailPoint.GetValueOrDefault((retailerGroup.Key, retailPointGroup.Key)),
+                        retailPointGroup
+                            .GroupBy(e => e.CustomerName)
+                            .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                            .Select(customerGroup => new CustomerOrderGroup(
+                                customerGroup.Key,
+                                customerGroup.Select(ToRow).OrderByDescending(r => r.CreatedAtUtc).ToList()))
+                            .ToList()))
+                    .ToList()))
             .ToList();
 
-        return new PagedResult<CustomOrderRow>(items, totalCount, page, pageSize);
+        return new CustomOrderGroupedResult(retailers, visible.Count);
     }
 
     public async Task AdvanceStatusAsync(Guid saleId, CancellationToken cancellationToken = default)
@@ -62,6 +73,41 @@ public class CustomOrderService(DotGlassesDbContext dbContext) : ICustomOrderSer
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>Resolves each order's retail point and "retailer" (the retail point's immediate
+    /// parent node — see RetailPointOrderGroup's doc comment) via a plain scoped
+    /// OrganisationNodes query, not IUnscopedReportQueryService: CustomOrdersView requires Country
+    /// level+, so both nodes are always within the caller's own subtree, never above it — the
+    /// ancestor-resolution pitfall (CLAUDE.md) doesn't apply here.</summary>
+    private async Task<List<EnrichedOrder>> EnrichAsync(List<Sale> orders, CancellationToken cancellationToken)
+    {
+        var customerIds = orders.Select(s => s.CustomerId).Distinct().ToList();
+        var customers = await dbContext.Customers
+            .Where(c => customerIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, cancellationToken);
+
+        var orgNodes = await dbContext.OrganisationNodes.ToListAsync(cancellationToken);
+        var orgByPath = orgNodes.ToDictionary(n => n.HierarchyPath);
+        var orgById = orgNodes.ToDictionary(n => n.Id);
+
+        return orders.Select(s =>
+        {
+            orgByPath.TryGetValue(s.HierarchyPath, out var retailPoint);
+            var retailer = retailPoint?.ParentId is { } parentId && orgById.TryGetValue(parentId, out var parent) ? parent : null;
+            var customerName = customers.TryGetValue(s.CustomerId, out var customer) ? customer.FullName : "—";
+            return new EnrichedOrder(s, retailer?.Name ?? "Unknown retailer", retailPoint?.Name ?? "Unknown outlet", customerName);
+        }).ToList();
+    }
+
+    private static CustomOrderRow ToRow(EnrichedOrder e) => new(
+        e.Sale.Id,
+        e.CustomerName,
+        e.RetailPointName,
+        FormatPrescription(e.Sale),
+        e.Sale.FulfilmentStatus!.Value,
+        e.Sale.CreatedAtUtc);
+
+    private static bool IsActive(DomainFulfilmentStatus status) => status != DomainFulfilmentStatus.Fulfilled;
+
     private static string FormatPrescription(Sale s) =>
         $"OD {FormatEye(s.CustomSphereRight, s.CustomCylinderRight, s.CustomAddPowerRight)} / OS {FormatEye(s.CustomSphereLeft, s.CustomCylinderLeft, s.CustomAddPowerLeft)}";
 
@@ -82,4 +128,6 @@ public class CustomOrderService(DotGlassesDbContext dbContext) : ICustomOrderSer
     }
 
     private static string FormatPower(decimal v) => v >= 0 ? $"+{v:0.00}" : v.ToString("0.00");
+
+    private sealed record EnrichedOrder(Sale Sale, string RetailerName, string RetailPointName, string CustomerName);
 }

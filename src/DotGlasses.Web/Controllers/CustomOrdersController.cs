@@ -10,21 +10,15 @@ namespace DotGlasses.Web.Controllers;
 [Authorize(Policy = AuthorizationPolicies.CustomOrdersView)]
 public class CustomOrdersController(ICustomOrderService customOrderService) : Controller
 {
-    private const int PageSize = 25;
-
-    public async Task<IActionResult> Index(FulfilmentStatus? status, int page = 1, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> Index(FulfilmentStatus? status, CancellationToken cancellationToken = default)
     {
-        page = Math.Max(1, page);
-        var ordersPage = await customOrderService.ListAsync(status, page, PageSize, cancellationToken);
+        var grouped = await customOrderService.ListGroupedAsync(status, cancellationToken);
 
         return View(new CustomOrdersViewModel
         {
-            Orders = ordersPage.Items.Select(o => new CustomOrder(o.SaleId, o.CustomerName, o.Outlet, o.Prescription, o.Status)).ToList(),
+            Retailers = grouped.Retailers.Select(ToWebModel).ToList(),
             Status = status,
-            Page = page,
-            PageSize = PageSize,
-            TotalCount = ordersPage.TotalCount,
-            TotalPages = ordersPage.TotalPages,
+            TotalCount = grouped.TotalCount,
         });
     }
 
@@ -38,4 +32,13 @@ public class CustomOrdersController(ICustomOrderService customOrderService) : Co
         await customOrderService.AdvanceStatusAsync(saleId, cancellationToken);
         return RedirectToAction(nameof(Index));
     }
+
+    private static RetailerGroup ToWebModel(RetailerOrderGroup g) =>
+        new(g.RetailerName, g.ActiveCount, g.RetailPoints.Select(ToWebModel).ToList());
+
+    private static RetailPointGroup ToWebModel(RetailPointOrderGroup g) =>
+        new(g.RetailPointName, g.ActiveCount, g.Customers.Select(ToWebModel).ToList());
+
+    private static CustomerGroup ToWebModel(CustomerOrderGroup g) =>
+        new(g.CustomerName, g.Orders.Select(o => new CustomOrder(o.SaleId, o.CustomerName, o.Outlet, o.Prescription, o.Status)).ToList());
 }
