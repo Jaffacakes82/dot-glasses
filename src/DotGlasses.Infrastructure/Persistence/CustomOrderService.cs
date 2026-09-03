@@ -19,32 +19,35 @@ public class CustomOrderService(DotGlassesDbContext dbContext) : ICustomOrderSer
         // ICustomOrderService's doc comment for why this deliberately ignores the status filter.
         var activeCountsByRetailer = enriched
             .Where(e => IsActive(e.Sale.FulfilmentStatus!.Value))
-            .GroupBy(e => e.RetailerName)
+            .GroupBy(e => e.RetailerId)
             .ToDictionary(g => g.Key, g => g.Count());
         var activeCountsByRetailPoint = enriched
             .Where(e => IsActive(e.Sale.FulfilmentStatus!.Value))
-            .GroupBy(e => (e.RetailerName, e.RetailPointName))
+            .GroupBy(e => (e.RetailerId, e.RetailPointId))
             .ToDictionary(g => g.Key, g => g.Count());
 
         var visible = (status is { } value ? enriched.Where(e => e.Sale.FulfilmentStatus == value) : enriched).ToList();
 
         var retailers = visible
-            .GroupBy(e => e.RetailerName)
-            .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(e => e.RetailerId)
+            .OrderBy(g => g.First().RetailerName, StringComparer.OrdinalIgnoreCase)
             .Select(retailerGroup => new RetailerOrderGroup(
                 retailerGroup.Key,
+                retailerGroup.First().RetailerName,
                 activeCountsByRetailer.GetValueOrDefault(retailerGroup.Key),
                 retailerGroup
-                    .GroupBy(e => e.RetailPointName)
-                    .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                    .GroupBy(e => e.RetailPointId)
+                    .OrderBy(g => g.First().RetailPointName, StringComparer.OrdinalIgnoreCase)
                     .Select(retailPointGroup => new RetailPointOrderGroup(
                         retailPointGroup.Key,
+                        retailPointGroup.First().RetailPointName,
                         activeCountsByRetailPoint.GetValueOrDefault((retailerGroup.Key, retailPointGroup.Key)),
                         retailPointGroup
-                            .GroupBy(e => e.CustomerName)
-                            .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                            .GroupBy(e => e.CustomerId)
+                            .OrderBy(g => g.First().CustomerName, StringComparer.OrdinalIgnoreCase)
                             .Select(customerGroup => new CustomerOrderGroup(
                                 customerGroup.Key,
+                                customerGroup.First().CustomerName,
                                 customerGroup.Select(ToRow).OrderByDescending(r => r.CreatedAtUtc).ToList()))
                             .ToList()))
                     .ToList()))
@@ -93,8 +96,12 @@ public class CustomOrderService(DotGlassesDbContext dbContext) : ICustomOrderSer
         {
             orgByPath.TryGetValue(s.HierarchyPath, out var retailPoint);
             var retailer = retailPoint?.ParentId is { } parentId && orgById.TryGetValue(parentId, out var parent) ? parent : null;
-            var customerName = customers.TryGetValue(s.CustomerId, out var customer) ? customer.FullName : "—";
-            return new EnrichedOrder(s, retailer?.Name ?? "Unknown retailer", retailPoint?.Name ?? "Unknown outlet", customerName);
+            var customer = customers.GetValueOrDefault(s.CustomerId);
+            return new EnrichedOrder(
+                s,
+                retailer?.Id ?? Guid.Empty, retailer?.Name ?? "Unknown retailer",
+                retailPoint?.Id ?? Guid.Empty, retailPoint?.Name ?? "Unknown outlet",
+                s.CustomerId, customer?.FullName ?? "—");
         }).ToList();
     }
 
@@ -129,5 +136,5 @@ public class CustomOrderService(DotGlassesDbContext dbContext) : ICustomOrderSer
 
     private static string FormatPower(decimal v) => v >= 0 ? $"+{v:0.00}" : v.ToString("0.00");
 
-    private sealed record EnrichedOrder(Sale Sale, string RetailerName, string RetailPointName, string CustomerName);
+    private sealed record EnrichedOrder(Sale Sale, Guid RetailerId, string RetailerName, Guid RetailPointId, string RetailPointName, Guid CustomerId, string CustomerName);
 }
