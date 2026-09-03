@@ -179,6 +179,7 @@
                 @if (IsSale)
                 {
                     <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues" Coatings="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
+                                       LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
                                        AllowNoPreference="false" Errors="_errors" CoatingField="CoatingRefId" RangeTypeChanged="StateHasChanged" />
 
                     @if (_lensRange.LensRangeType == LensRangeType.Custom)
@@ -219,6 +220,7 @@
                                             Errors="_errors" Field="ReasonNotPurchasedRefId" OtherField="ReasonNotPurchasedOtherText" />
 
                     <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues" Coatings="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
+                                       LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
                                        AllowNoPreference="true" Errors="_errors" CoatingField="CoatingPreferenceRefId" RangeTypeChanged="StateHasChanged" />
 
                     @if (_lensRange.LensRangeType is not (LensRangeType.SixLensSet or LensRangeType.NineLensSet))
@@ -321,7 +323,7 @@
     private static readonly string[] LensFields =
         ["LensRangeType", "PresetCatalogueId", "LensOptionLeftId", "LensOptionRightId", "CustomSphereLeft", "CustomSphereRight",
          "CustomCylinderLeft", "CustomCylinderRight", "CustomAxisLeft", "CustomAxisRight", "CustomAddPowerLeft", "CustomAddPowerRight",
-         "PupilDistanceMm", "PresetPupilDistanceBucket"];
+         "LensTypeRefId", "LensTypeOtherText", "PupilDistanceMm", "PresetPupilDistanceBucket"];
 
     private static readonly string[] LeadFields =
         [.. TestFields, .. LensFields, "FullName", "PhoneNumber", "ReasonNotPurchasedRefId", "ReasonNotPurchasedOtherText", "CoatingPreferenceRefId"];
@@ -786,7 +788,24 @@
                 _errors.AddIf(_lensRange.CustomSphereRight is null, "CustomSphereRight", "Choose the right sphere.");
                 ValidateAxis(_lensRange.CustomAxisLeft, "CustomAxisLeft");
                 ValidateAxis(_lensRange.CustomAxisRight, "CustomAxisRight");
-                _errors.AddIf(_lensRange.PupilDistanceMm is null, "PupilDistanceMm", "Choose a pupil distance.");
+
+                // Two distinct powers on an eye (a base sphere plus an add power) need a lens
+                // type — bifocal, progressive, or other.
+                if (_lensRange.CustomAddPowerLeft is not null || _lensRange.CustomAddPowerRight is not null)
+                {
+                    if (_lensRange.LensTypeRefId is null)
+                    {
+                        _errors.Add("LensTypeRefId", "Choose a lens type.");
+                    }
+                    else
+                    {
+                        ValidateOtherText(ReferenceDataCategory.LensType, _lensRange.LensTypeRefId, _lensRange.LensTypeOtherText, "LensTypeOtherText", "a lens type");
+                    }
+                }
+
+                // Optional on a Lead (often no time to measure during a busy event/day) — still
+                // required on a Sale, where the eventual order needs it.
+                _errors.AddIf(IsSale && _lensRange.PupilDistanceMm is null, "PupilDistanceMm", "Choose a pupil distance.");
                 break;
         }
     }
@@ -868,6 +887,8 @@
             CustomCylinderRight = _lensRange.CustomCylinderRight,
             CustomAxisRight = _lensRange.CustomAxisRight,
             CustomAddPowerRight = _lensRange.CustomAddPowerRight,
+            LensTypeRefId = _lensRange.LensTypeRefId,
+            LensTypeOtherText = _lensRange.LensTypeOtherText,
             PupilDistanceMm = _lensRange.PupilDistanceMm,
             PresetPupilDistanceBucket = _lensRange.PresetPupilDistanceBucket,
             ChildrensFrame = _lensRange.ChildrensFrame,
@@ -907,6 +928,8 @@
             CustomCylinderRight = _lensRange.CustomCylinderRight,
             CustomAxisRight = _lensRange.CustomAxisRight,
             CustomAddPowerRight = _lensRange.CustomAddPowerRight,
+            LensTypeRefId = _lensRange.LensTypeRefId,
+            LensTypeOtherText = _lensRange.LensTypeOtherText,
             OrderFromDotGlasses = _lensRange.LensRangeType == LensRangeType.Custom && _orderFromDotGlasses,
             PupilDistanceMm = _lensRange.PupilDistanceMm,
             PresetPupilDistanceBucket = _lensRange.PresetPupilDistanceBucket,
