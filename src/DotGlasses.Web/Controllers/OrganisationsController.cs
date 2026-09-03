@@ -177,7 +177,7 @@ public class OrganisationsController(
 
         var validChildLevels = new[] { OrganisationLevel.Country, OrganisationLevel.Intermediate, OrganisationLevel.RetailPoint }
             .Where(level => organisationAdminService.IsValidChildLevel(selectedAdmin.Level, level))
-            .Select(level => (Value: level.ToString(), Label: level.ToString()))
+            .Select(level => (Value: level.ToString(), Label: ChildLevelLabel(level)))
             .ToList();
 
         var users = await userAdminService.ListAsync(cancellationToken);
@@ -209,4 +209,15 @@ public class OrganisationsController(
         node.Id == id ? node : node.Children.Select(c => FindNode(c, id)).FirstOrDefault(n => n is not null);
 
     private static string LevelDisplay(OrganisationLevel level) => level == OrganisationLevel.Dgi ? "DGI" : level.ToString();
+
+    /// <summary>Level-appropriate label for the "add child" action and its target-level dropdown
+    /// — replaces the generic "node" wording the Organisations screen used to show regardless of
+    /// what level/kind was actually being added.</summary>
+    private static string ChildLevelLabel(OrganisationLevel level) => level switch
+    {
+        OrganisationLevel.Country => "Country office",
+        OrganisationLevel.Intermediate => "Retailer/distributor",
+        OrganisationLevel.RetailPoint => "Retail point",
+        _ => level.ToString(),
+    };
 }

@@ -172,7 +172,7 @@
                                         OtherText="_occupationOtherText" OtherTextChanged="v => _occupationOtherText = v"
                                         Errors="_errors" Field="OccupationRefId" OtherField="OccupationOtherText" />
                 <div class="dg-field">
-                    <label><input type="checkbox" @bind="_consentGiven" style="width:auto; margin-right:8px;" />Customer consents to be contacted by DOT Glasses for follow-ups/marketing</label>
+                    <label><input type="checkbox" @bind="_consentGiven" style="width:auto; margin-right:8px;" />Customer consents to be contacted by Dot Glasses for follow-ups/marketing</label>
                 </div>
 
                 @if (IsSale)
@@ -183,7 +183,7 @@
                     @if (_lensRange.LensRangeType == LensRangeType.Custom)
                     {
                         <div class="dg-field">
-                            <label><input type="checkbox" @bind="_orderFromDotGlasses" style="width:auto; margin-right:8px;" />Order this lens from DOT Glasses (outlet doesn't have stock)</label>
+                            <label><input type="checkbox" @bind="_orderFromDotGlasses" style="width:auto; margin-right:8px;" />Order this lens from Dot Glasses (outlet doesn't have stock)</label>
                         </div>
                         <ReferenceDataDropdown Label="Coating" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
                                                 SelectedId="_coatingRefId" SelectedIdChanged="v => _coatingRefId = v"
