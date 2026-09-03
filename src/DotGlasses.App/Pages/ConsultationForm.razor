@@ -230,10 +230,13 @@
                 }
             }
 
-            <div style="margin-top:auto; display:flex; gap:8px; padding-top:var(--space-4);">
-                <a class="dg-btn dg-btn-ghost" style="flex:1; text-align:center;" href="/">Cancel</a>
-                <button type="submit" class="dg-btn dg-btn-primary" style="flex:1;" disabled="@_saving">@(IsTest ? "Save test" : "Save")</button>
-            </div>
+            @if (!(IsTest && _testOutcome == TestOutcome.NeedsGlasses && _contactShared == true))
+            {
+                <div style="margin-top:auto; display:flex; gap:8px; padding-top:var(--space-4);">
+                    <a class="dg-btn dg-btn-ghost" style="flex:1; text-align:center;" href="/">Cancel</a>
+                    <button type="submit" class="dg-btn dg-btn-primary" style="flex:1;" disabled="@_saving">@(IsTest ? "Save test" : "Save")</button>
+                </div>
+            }
         </EditForm>
     }
 </div>
@@ -527,6 +530,21 @@
 
     private async Task HandleSubmit()
     {
+        // A technician who has indicated the customer shared contact details must continue as a
+        // Lead — the Test entity has nowhere to store name/phone, so saving a plain Test here
+        // would silently discard them. The submit button is hidden in this state, but this
+        // backstops an Enter-key submit bypassing that. Deliberately not folded into Validate()/
+        // ValidateTest(): ContinueAsLeadAsync calls Validate() too, and this check must NOT block
+        // that path — only the plain-Test submit HandleSubmit itself drives.
+        if (IsTest && _testOutcome == TestOutcome.NeedsGlasses && _contactShared == true)
+        {
+            _errors.Clear();
+            _errors.Unattributed.Clear();
+            _errors.Add("Outcome", "This customer shared contact details — continue as a Lead instead of saving a plain test.");
+            _summaryMessage = "Please fix the highlighted fields before saving.";
+            return;
+        }
+
         if (!Validate())
         {
             return;
