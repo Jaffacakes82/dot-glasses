@@ -17,7 +17,12 @@ public class LeadConversionFormModel
 {
     public bool ConsentGiven { get; set; }
 
-    public Guid? CoatingRefId { get; set; }
+    /// <summary>At least one required — see CreateSaleRequest.CoatingRefIds/ADR-0001. No live
+    /// pairing-auto-add or exclusion-blocking in this admin form (Day-2 nicety for this
+    /// occasional manual-entry path); the exclusion rule is still enforced server-side via the
+    /// same CreateSaleRequestValidator the Field App posts through, surfaced as a validation
+    /// error on submit like every other field here.</summary>
+    public List<Guid> CoatingRefIds { get; set; } = [];
     public Guid? FrameColourRefId { get; set; }
     public string? FrameColourOtherText { get; set; }
     public FrameCoverage FrameCoverage { get; set; } = FrameCoverage.FullFrame;

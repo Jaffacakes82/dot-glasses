@@ -104,13 +104,16 @@ public class ReferenceDataSeedConfiguration : IEntityTypeConfiguration<Reference
         Add(new("b0000000-0000-0000-0000-000000000033"), ReferenceDataCategory.ReferralReason, "young_child", "Child under eligible age without approval from a specialist");
         Add(new("b0000000-0000-0000-0000-000000000034"), ReferenceDataCategory.ReferralReason, "other", "Other", isOther: true);
 
-        // Coating ← Bradley's 5-item list from the call (not Kobo's 7-item coating_types).
+        // Coating ← Bradley's 5-item list from the call (not Kobo's 7-item coating_types), plus
+        // Anti-glare (2026-09-03, ticket 05/ADR-0001) — seeded with no pairing/exclusion rules
+        // of its own.
         sort = 0;
         Add(CoatingPhotochromicId, ReferenceDataCategory.Coating, "photochromic", "Photochromic");
         Add(CoatingClearId, ReferenceDataCategory.Coating, "clear", "Clear");
         Add(new("b0000000-0000-0000-0000-000000000025"), ReferenceDataCategory.Coating, "blue_block", "Blue block");
         Add(new("b0000000-0000-0000-0000-000000000026"), ReferenceDataCategory.Coating, "polarized", "Polarized");
         Add(new("b0000000-0000-0000-0000-000000000027"), ReferenceDataCategory.Coating, "sunglasses", "Sunglasses");
+        Add(new("b0000000-0000-0000-0000-000000000062"), ReferenceDataCategory.Coating, "anti_glare", "Anti-glare");
 
         // FrameColour ← the 6 colours named on the call, matching the e-commerce site, + Other.
         sort = 0;

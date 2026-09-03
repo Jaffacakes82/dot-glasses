@@ -9,8 +9,8 @@ public interface ISaleService
 
     /// <summary>Idempotent upsert keyed on <see cref="CreateSaleRequest.Id"/>. If
     /// <see cref="CreateSaleRequest.SourceLeadId"/> is set, atomically sets that Lead's
-    /// ConvertedFlag/SaleId in the same transaction. For a preset LensRangeType, CoatingRefId is
-    /// derived from the chosen LensOption, not read from the request. hierarchyPath/
+    /// ConvertedFlag/SaleId in the same transaction. CoatingRefIds is persisted as-is (validated
+    /// by CreateSaleRequestValidator, not re-derived here) — see ADR-0001. hierarchyPath/
     /// technicianUserId come from the authenticated caller, not the request body.</summary>
     Task<SaleDto> CreateAsync(CreateSaleRequest request, Guid technicianUserId, string hierarchyPath, CancellationToken cancellationToken = default);
 }

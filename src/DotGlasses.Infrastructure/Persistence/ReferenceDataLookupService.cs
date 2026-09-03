@@ -34,4 +34,10 @@ public class ReferenceDataLookupService(DotGlassesDbContext dbContext) : IRefere
         return await dbContext.LensStrengthCoatingOptions
             .AnyAsync(x => x.LensStrengthRefId == lensStrengthRefId && x.CoatingRefId == coatingRefId, cancellationToken);
     }
+
+    public async Task<bool> AreCoatingsExcludedAsync(Guid coatingRefIdA, Guid coatingRefIdB, CancellationToken cancellationToken = default)
+    {
+        var (lower, higher) = coatingRefIdA.CompareTo(coatingRefIdB) <= 0 ? (coatingRefIdA, coatingRefIdB) : (coatingRefIdB, coatingRefIdA);
+        return await dbContext.CoatingExclusions.AnyAsync(x => x.CoatingRefIdA == lower && x.CoatingRefIdB == higher, cancellationToken);
+    }
 }

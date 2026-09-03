@@ -40,10 +40,13 @@ public class DotGlassesDbContext(DbContextOptions<DotGlassesDbContext> options, 
     public DbSet<PresetCatalogueAssignment> PresetCatalogueAssignments => Set<PresetCatalogueAssignment>();
     public DbSet<LensOption> LensOptions => Set<LensOption>();
     public DbSet<LensStrengthCoatingOption> LensStrengthCoatingOptions => Set<LensStrengthCoatingOption>();
+    public DbSet<CoatingPairing> CoatingPairings => Set<CoatingPairing>();
+    public DbSet<CoatingExclusion> CoatingExclusions => Set<CoatingExclusion>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Test> Tests => Set<Test>();
     public DbSet<Lead> Leads => Set<Lead>();
     public DbSet<Sale> Sales => Set<Sale>();
+    public DbSet<SaleCoating> SaleCoatings => Set<SaleCoating>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

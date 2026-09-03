@@ -33,7 +33,7 @@ public class SaleDto
     public Guid FrameColourRefId { get; set; }
     public string? FrameColourOtherText { get; set; }
     public FrameCoverage FrameCoverage { get; set; }
-    public Guid CoatingRefId { get; set; }
+    public List<Guid> CoatingRefIds { get; set; } = [];
     public bool HardCaseSold { get; set; }
     public Guid? HardCaseColourRefId { get; set; }
     public string? HardCaseOtherColourText { get; set; }

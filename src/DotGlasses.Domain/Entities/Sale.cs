@@ -9,6 +9,8 @@ namespace DotGlasses.Domain.Entities;
 /// immediately — FulfilmentStatus tracks it through the lab/pickup workflow on this same row
 /// (2026-08-05 decision) rather than a separate entity, matching the flat single-status queue the
 /// Custom Orders admin screen shows; Id is client-generated (offline-sync outbox idempotency key).
+/// The lens's Coating set lives in SaleCoating (2026-09-03, see ADR-0001), not a field here — a
+/// lens can carry more than one Coating at once.
 /// </summary>
 public class Sale : IAuditable, ISoftDeletable, IHierarchyScoped
 {
@@ -74,11 +76,6 @@ public class Sale : IAuditable, ISoftDeletable, IHierarchyScoped
     public Guid FrameColourRefId { get; set; }
     public string? FrameColourOtherText { get; set; }
     public FrameCoverage FrameCoverage { get; set; }
-
-    /// <summary>FK to ReferenceDataItem (Category = Coating) — client-submitted, validated in the
-    /// Application layer against the legal set for the chosen lens (any active Coating for
-    /// Custom; the configured LensStrengthCoatingOption set for a preset range).</summary>
-    public Guid CoatingRefId { get; set; }
 
     public bool HardCaseSold { get; set; }
     /// <summary>FK to ReferenceDataItem (Category = HardCaseColour), set only when HardCaseSold.</summary>
