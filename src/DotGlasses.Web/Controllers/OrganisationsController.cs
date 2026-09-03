@@ -208,6 +208,9 @@ public class OrganisationsController(
     private static OrgNode? FindNode(OrgNode node, Guid id) =>
         node.Id == id ? node : node.Children.Select(c => FindNode(c, id)).FirstOrDefault(n => n is not null);
 
+    /// <summary>The tree/badge display for a node's own level ("DGI" for the root, otherwise the
+    /// raw enum name) — contrast with <see cref="ChildLevelLabel"/> below, which labels the level
+    /// a new child is about to be created at, not an existing node's own level.</summary>
     private static string LevelDisplay(OrganisationLevel level) => level == OrganisationLevel.Dgi ? "DGI" : level.ToString();
 
     /// <summary>Level-appropriate label for the "add child" action and its target-level dropdown
