@@ -189,6 +189,13 @@ else if (Model.LensRangeType == LensRangeType.Custom)
     /// will come back under.</summary>
     [Parameter] public string CoatingField { get; set; } = "CoatingRefId";
 
+    /// <summary>Fired whenever Model.LensRangeType changes. Model is a shared reference-type
+    /// object, so mutating its properties here doesn't by itself make the parent re-render —
+    /// without this, a field the parent conditionally shows based on LensRangeType (e.g. the
+    /// Coating dropdown) only catches up the next time some unrelated field happens to trigger
+    /// the parent's own render, not immediately when the range switches.</summary>
+    [Parameter] public EventCallback RangeTypeChanged { get; set; }
+
     /// <summary>
     /// When there's no "no preference" option, the select's first entry (6-Lens Set) is what the
     /// browser displays — but the model starts null, so display and model disagreed until the
@@ -221,7 +228,7 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         _ => "none",
     };
 
-    private void OnRangeChanged(ChangeEventArgs e)
+    private async Task OnRangeChanged(ChangeEventArgs e)
     {
         var value = e.Value?.ToString();
 
@@ -256,6 +263,8 @@ else if (Model.LensRangeType == LensRangeType.Custom)
             LensRangeType.NineLensSet => NineLensCatalogue?.Id,
             _ => null,
         };
+
+        await RangeTypeChanged.InvokeAsync();
     }
 
     private static Guid? ParseGuid(object? value) =>
@@ -291,7 +300,7 @@ else if (Model.LensRangeType == LensRangeType.Custom)
     }
 
     private static IEnumerable<decimal> SphereSteps => Steps(-10m, 10m, 0.25m);
-    private static IEnumerable<decimal> CylinderSteps => Steps(-6m, 0.25m, 0.25m);
+    private static IEnumerable<decimal> CylinderSteps => Steps(-10m, 10m, 0.25m);
     private static IEnumerable<decimal> AddPowerSteps => Steps(0m, 3m, 0.25m);
 
     private static IEnumerable<decimal> Steps(decimal min, decimal max, decimal step)
