@@ -52,15 +52,19 @@ public class CreateTestRequestValidator : AbstractValidator<CreateTestRequest>
         }
     }
 
+    /// <summary>"Referred or treated" is orthogonal to Outcome (2026-09-03) — not gated on any
+    /// particular outcome/result. Mirrored near-identically in CreateLeadRequestValidator/
+    /// CreateSaleRequestValidator, since Test/Lead/Sale share the exact same five-field shape.</summary>
     private static async Task ValidateReferralAsync(
         CreateTestRequest request, ValidationContext<CreateTestRequest> context,
         IReferenceDataLookupService referenceData, CancellationToken cancellationToken)
     {
-        if (request.Outcome != TestOutcome.Referred)
+        if (!request.ReferredOrTreated)
         {
-            if (request.ReferralReasonRefId is not null || request.ReferralOtherText is not null || request.ReferralLocationFreeText is not null)
+            if (request.ReferralReasonRefId is not null || request.ReferralOtherText is not null
+                || request.ReferralLocationFreeText is not null || request.TreatedInFacility)
             {
-                context.AddFailure(nameof(request.Outcome), "Referral fields must be empty unless Outcome is Referred.");
+                context.AddFailure(nameof(request.ReferredOrTreated), "Referral/treatment fields must be empty unless ReferredOrTreated is true.");
             }
 
             return;
@@ -68,7 +72,7 @@ public class CreateTestRequestValidator : AbstractValidator<CreateTestRequest>
 
         if (request.ReferralReasonRefId is not { } referralReasonRefId)
         {
-            context.AddFailure(nameof(request.ReferralReasonRefId), "ReferralReasonRefId is required when Outcome is Referred.");
+            context.AddFailure(nameof(request.ReferralReasonRefId), "ReferralReasonRefId is required when ReferredOrTreated is true.");
         }
         else
         {
@@ -83,9 +87,18 @@ public class CreateTestRequestValidator : AbstractValidator<CreateTestRequest>
             }
         }
 
-        if (string.IsNullOrWhiteSpace(request.ReferralLocationFreeText))
+        // Treated in-house has no external location to name — the reason stays required either
+        // way, only the location requirement flips.
+        if (request.TreatedInFacility)
         {
-            context.AddFailure(nameof(request.ReferralLocationFreeText), "ReferralLocationFreeText is required when Outcome is Referred.");
+            if (!string.IsNullOrWhiteSpace(request.ReferralLocationFreeText))
+            {
+                context.AddFailure(nameof(request.ReferralLocationFreeText), "ReferralLocationFreeText must be empty when TreatedInFacility is true.");
+            }
+        }
+        else if (string.IsNullOrWhiteSpace(request.ReferralLocationFreeText))
+        {
+            context.AddFailure(nameof(request.ReferralLocationFreeText), "ReferralLocationFreeText is required when ReferredOrTreated is true and TreatedInFacility is false.");
         }
     }
 }

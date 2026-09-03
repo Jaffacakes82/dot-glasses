@@ -19,7 +19,12 @@ public class CreateTestRequest
     public Guid? OccupationRefId { get; set; }
     public string? OccupationOtherText { get; set; }
     public TestOutcome Outcome { get; set; }
+
+    /// <summary>Independent of Outcome — see CreateLeadRequest/CreateSaleRequest's identical
+    /// block for the full shape shared across all three.</summary>
+    public bool ReferredOrTreated { get; set; }
     public Guid? ReferralReasonRefId { get; set; }
     public string? ReferralOtherText { get; set; }
     public string? ReferralLocationFreeText { get; set; }
+    public bool TreatedInFacility { get; set; }
 }
