@@ -1,4 +1,5 @@
 using DotGlasses.Application.ReferenceData;
+using DotGlasses.Domain.Entities;
 using DotGlasses.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -37,7 +38,7 @@ public class ReferenceDataLookupService(DotGlassesDbContext dbContext) : IRefere
 
     public async Task<bool> AreCoatingsExcludedAsync(Guid coatingRefIdA, Guid coatingRefIdB, CancellationToken cancellationToken = default)
     {
-        var (lower, higher) = coatingRefIdA.CompareTo(coatingRefIdB) <= 0 ? (coatingRefIdA, coatingRefIdB) : (coatingRefIdB, coatingRefIdA);
+        var (lower, higher) = CoatingExclusion.Canonicalize(coatingRefIdA, coatingRefIdB);
         return await dbContext.CoatingExclusions.AnyAsync(x => x.CoatingRefIdA == lower && x.CoatingRefIdB == higher, cancellationToken);
     }
 }
