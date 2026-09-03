@@ -2,6 +2,7 @@
 @{
     ViewData["Title"] = "Organisations";
     ViewData["SelectedId"] = Model.Selected.Id;
+    var addChildLabel = Model.ValidChildLevels.Count == 1 ? Model.ValidChildLevels[0].Label : "sub-organisation";
 }
 
 @await Html.PartialAsync("_PageHeader", new DotGlasses.Web.Models.PageHeaderViewModel
@@ -85,7 +86,7 @@
 
                 @if (Model.Selected.Type != "RetailPoint")
                 {
-                    <button class="dg-btn dg-btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#addChildModal">Add child node</button>
+                    <button class="dg-btn dg-btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#addChildModal">Add @addChildLabel</button>
                 }
 
                 @if (Model.AssignableUsers.Count > 0)
@@ -162,7 +163,7 @@
                 <form asp-action="CreateChild" method="post">
                     <input type="hidden" name="ParentId" value="@Model.Selected.Id" />
                     <div class="modal-header">
-                        <h2 class="dg-page-title" style="font-size:20px;">Add child node under @Model.Selected.Name</h2>
+                        <h2 class="dg-page-title" style="font-size:20px;">Add @addChildLabel under @Model.Selected.Name</h2>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
@@ -189,7 +190,7 @@
                         else if (Model.ValidChildLevels.Count == 1)
                         {
                             <input type="hidden" name="Level" value="@Model.ValidChildLevels[0].Value" />
-                            <p style="font-size:12px; color:var(--text-muted);">This will be created as a @Model.ValidChildLevels[0].Label node.</p>
+                            <p style="font-size:12px; color:var(--text-muted);">This will be created as a @Model.ValidChildLevels[0].Label.</p>
                         }
                     </div>
                     <div class="modal-footer">

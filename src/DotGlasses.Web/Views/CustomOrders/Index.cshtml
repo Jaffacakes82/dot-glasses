@@ -12,7 +12,7 @@
 
 <p style="max-width:680px; color:var(--text-muted-2); margin-bottom:var(--space-5);">
     This queue is populated from the Field App's Sale flow whenever a technician records a Custom
-    prescription and marks it to order from DOT Glasses (the outlet doesn't have stock). Multi-tier
+    prescription and marks it to order from Dot Glasses (the outlet doesn't have stock). Multi-tier
     approval (outlet → retailer → country) is a Day 2 feature; v1 is a flat status queue.
 </p>
 
@@ -40,7 +40,7 @@
                     <td>@order.Customer</td>
                     <td class="dg-muted">@order.Outlet</td>
                     <td class="dg-muted">@order.Prescription</td>
-                    <td><span class="dg-badge" style="background:@DotGlasses.Web.Models.CustomOrder.StatusColor[order.Status];">@DotGlasses.Web.Models.CustomOrder.StatusLabel[order.Status]</span></td>
+                    <td><span class="dg-badge" style="background:@DotGlasses.Web.Models.CustomOrder.StatusColor[order.Status]; color:@(order.Status == FulfilmentStatus.Fulfilled ? "var(--dot-white)" : "var(--dot-black)");">@DotGlasses.Web.Models.CustomOrder.StatusLabel[order.Status]</span></td>
                     <td>
                         @if (order.NextStatus is { } next)
                         {

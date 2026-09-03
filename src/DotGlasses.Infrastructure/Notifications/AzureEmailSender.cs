@@ -24,10 +24,10 @@ public class AzureEmailSender(EmailClient emailClient, string senderAddress, ILo
 {
     public async Task SendPasswordSetupInviteAsync(string toEmail, string recipientName, string setPasswordUrl, CancellationToken cancellationToken = default)
     {
-        var content = new EmailContent("Set your DOT Glasses password")
+        var content = new EmailContent("Set your Dot Glasses password")
         {
             PlainText = $"Hi {recipientName},\n\n"
-                + "You've been invited to the DOT Glasses platform. Set your password using the link below:\n\n"
+                + "You've been invited to the Dot Glasses platform. Set your password using the link below:\n\n"
                 + $"{setPasswordUrl}\n\n"
                 + "If you weren't expecting this invitation, you can ignore this email.",
         };

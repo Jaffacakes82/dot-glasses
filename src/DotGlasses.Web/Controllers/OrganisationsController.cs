@@ -177,7 +177,7 @@ public class OrganisationsController(
 
         var validChildLevels = new[] { OrganisationLevel.Country, OrganisationLevel.Intermediate, OrganisationLevel.RetailPoint }
             .Where(level => organisationAdminService.IsValidChildLevel(selectedAdmin.Level, level))
-            .Select(level => (Value: level.ToString(), Label: level.ToString()))
+            .Select(level => (Value: level.ToString(), Label: ChildLevelLabel(level)))
             .ToList();
 
         var users = await userAdminService.ListAsync(cancellationToken);
@@ -208,5 +208,19 @@ public class OrganisationsController(
     private static OrgNode? FindNode(OrgNode node, Guid id) =>
         node.Id == id ? node : node.Children.Select(c => FindNode(c, id)).FirstOrDefault(n => n is not null);
 
+    /// <summary>The tree/badge display for a node's own level ("DGI" for the root, otherwise the
+    /// raw enum name) — contrast with <see cref="ChildLevelLabel"/> below, which labels the level
+    /// a new child is about to be created at, not an existing node's own level.</summary>
     private static string LevelDisplay(OrganisationLevel level) => level == OrganisationLevel.Dgi ? "DGI" : level.ToString();
+
+    /// <summary>Level-appropriate label for the "add child" action and its target-level dropdown
+    /// — replaces the generic "node" wording the Organisations screen used to show regardless of
+    /// what level/kind was actually being added.</summary>
+    private static string ChildLevelLabel(OrganisationLevel level) => level switch
+    {
+        OrganisationLevel.Country => "Country office",
+        OrganisationLevel.Intermediate => "Retailer/distributor",
+        OrganisationLevel.RetailPoint => "Retail point",
+        _ => level.ToString(),
+    };
 }
