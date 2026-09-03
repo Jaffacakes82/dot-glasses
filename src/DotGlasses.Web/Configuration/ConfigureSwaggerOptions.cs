@@ -17,7 +17,7 @@ public class ConfigureSwaggerOptions(IApiVersionDescriptionProvider provider) : 
         {
             options.SwaggerDoc(description.GroupName, new OpenApiInfo
             {
-                Title = "DOT Glasses API",
+                Title = "Dot Glasses API",
                 Version = description.ApiVersion.ToString(),
             });
         }
