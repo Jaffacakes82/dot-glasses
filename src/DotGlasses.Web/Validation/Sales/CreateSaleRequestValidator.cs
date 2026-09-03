@@ -101,22 +101,7 @@ public class CreateSaleRequestValidator : AbstractValidator<CreateSaleRequest>
                 context.AddFailure(nameof(request.PresetPupilDistanceBucket), $"PresetPupilDistanceBucket is required and must be between 0 and {maxPdBucket} for a preset LensRangeType{(request.ChildrensFrame ? " (0-2 for a children's frame)" : "")}.");
             }
 
-            if (request.CoatingRefId is not { } presetCoatingRefId)
-            {
-                context.AddFailure(nameof(request.CoatingRefId), "CoatingRefId is required for a preset LensRangeType.");
-            }
-            else
-            {
-                var presetCoatingLookup = await referenceData.LookupAsync(presetCoatingRefId, ReferenceDataCategory.Coating, cancellationToken);
-                if (presetCoatingLookup is not { IsActive: true })
-                {
-                    context.AddFailure(nameof(request.CoatingRefId), "CoatingRefId must reference an existing, active Coating reference-data item.");
-                }
-                else if (!await referenceData.IsCoatingAvailableForLensOptionAsync(leftId, presetCoatingRefId, cancellationToken))
-                {
-                    context.AddFailure(nameof(request.CoatingRefId), "CoatingRefId is not configured as available for the chosen lens option (see Reference Data > Lens Strength).");
-                }
-            }
+            await ValidateCoatingsAsync(request, context, referenceData, leftId, cancellationToken);
 
             return;
         }
@@ -156,16 +141,54 @@ public class CreateSaleRequestValidator : AbstractValidator<CreateSaleRequest>
                 context.AddFailure(nameof(request.PupilDistanceMm), "PupilDistanceMm must be a whole millimetre value.");
             }
 
-            if (request.CoatingRefId is not { } coatingRefId)
+            await ValidateCoatingsAsync(request, context, referenceData, restrictToLensOptionId: null, cancellationToken);
+        }
+    }
+
+    /// <summary>Shared by both the preset and Custom branches — coating pairing/exclusion rules
+    /// apply universally, per ADR-0001. restrictToLensOptionId narrows to the coatings configured
+    /// as available for that LensOption's strength (preset only); null means any active Coating
+    /// (Custom).</summary>
+    private static async Task ValidateCoatingsAsync(
+        CreateSaleRequest request, ValidationContext<CreateSaleRequest> context,
+        IReferenceDataLookupService referenceData, Guid? restrictToLensOptionId, CancellationToken cancellationToken)
+    {
+        if (request.CoatingRefIds.Count == 0)
+        {
+            context.AddFailure(nameof(request.CoatingRefIds), "Choose at least one coating.");
+            return;
+        }
+
+        if (request.CoatingRefIds.Distinct().Count() != request.CoatingRefIds.Count)
+        {
+            context.AddFailure(nameof(request.CoatingRefIds), "CoatingRefIds must not contain duplicates.");
+            return;
+        }
+
+        foreach (var coatingRefId in request.CoatingRefIds)
+        {
+            var lookup = await referenceData.LookupAsync(coatingRefId, ReferenceDataCategory.Coating, cancellationToken);
+            if (lookup is not { IsActive: true })
             {
-                context.AddFailure(nameof(request.CoatingRefId), "CoatingRefId is required for a Custom LensRangeType.");
+                context.AddFailure(nameof(request.CoatingRefIds), "CoatingRefIds must only reference existing, active Coating reference-data items.");
+                return;
             }
-            else
+
+            if (restrictToLensOptionId is { } lensOptionId && !await referenceData.IsCoatingAvailableForLensOptionAsync(lensOptionId, coatingRefId, cancellationToken))
             {
-                var coatingLookup = await referenceData.LookupAsync(coatingRefId, ReferenceDataCategory.Coating, cancellationToken);
-                if (coatingLookup is not { IsActive: true })
+                context.AddFailure(nameof(request.CoatingRefIds), "Every coating must be configured as available for the chosen lens option (see Reference Data > Lens Strength).");
+                return;
+            }
+        }
+
+        for (var i = 0; i < request.CoatingRefIds.Count; i++)
+        {
+            for (var j = i + 1; j < request.CoatingRefIds.Count; j++)
+            {
+                if (await referenceData.AreCoatingsExcludedAsync(request.CoatingRefIds[i], request.CoatingRefIds[j], cancellationToken))
                 {
-                    context.AddFailure(nameof(request.CoatingRefId), "CoatingRefId must reference an existing, active Coating reference-data item.");
+                    context.AddFailure(nameof(request.CoatingRefIds), "This coating combination isn't allowed — two of the selected coatings exclude each other.");
+                    return;
                 }
             }
         }

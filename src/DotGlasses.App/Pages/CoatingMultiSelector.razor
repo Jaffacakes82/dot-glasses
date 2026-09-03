@@ -1,0 +1,117 @@
+@using DotGlasses.App.Validation
+@using DotGlasses.Contracts.ReferenceData
+
+<div class="dg-field">
+    <label>@Label</label>
+    @if (Items.Count == 0)
+    {
+        <p style="color:#c00; font-size:12px;">No coatings available.</p>
+    }
+    else
+    {
+        @foreach (var item in Items.OrderBy(i => i.SortOrder))
+        {
+            <label style="display:flex; align-items:center; gap:6px; font-weight:normal; margin-bottom:2px;" @key="(item.Id, _toggleVersion)">
+                <input type="checkbox" style="width:auto;" checked="@SelectedIds.Contains(item.Id)" @onchange="e => ToggleAsync(item.Id, e.Value is true)" />
+                @item.Label
+            </label>
+        }
+    }
+    @if (_conflictMessage is not null)
+    {
+        <p style="color:#c00; font-size:12px; margin-top:4px;">@_conflictMessage</p>
+    }
+    <FieldError Errors="Errors" For="@Field" />
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "Coating";
+    [Parameter, EditorRequired] public IReadOnlyList<ReferenceDataItemDto> AllItems { get; set; } = [];
+
+    /// <summary>Narrows which coatings are offered (preset lens's configured set); null offers
+    /// every item in AllItems (Custom range — "all coatings ... remain available").</summary>
+    [Parameter] public IReadOnlyList<Guid>? RestrictToIds { get; set; }
+
+    [Parameter, EditorRequired] public IReadOnlyList<Guid> SelectedIds { get; set; } = [];
+    [Parameter] public EventCallback<List<Guid>> SelectedIdsChanged { get; set; }
+
+    [Parameter] public IReadOnlyList<CoatingPairingDto> Pairings { get; set; } = [];
+    [Parameter] public IReadOnlyList<CoatingExclusionDto> Exclusions { get; set; } = [];
+
+    [Parameter] public FormErrors? Errors { get; set; }
+    [Parameter] public string Field { get; set; } = "CoatingRefIds";
+
+    private string? _conflictMessage;
+
+    /// <summary>Bumped on every toggle attempt (blocked or not) and folded into each checkbox's
+    /// @key. A native checkbox click flips the browser's own DOM state before our @onchange
+    /// handler runs — when a click is blocked, SelectedIds (and so the computed `checked` value)
+    /// ends up unchanged, and Blazor's diff then skips re-writing the `checked` property since it
+    /// looks identical to the last render, leaving the browser's already-flipped visual state in
+    /// place even though the underlying selection was never touched. Changing @key forces Blazor
+    /// to discard and recreate the element instead of diffing it, which re-applies the correct
+    /// `checked` value from scratch.</summary>
+    private int _toggleVersion;
+
+    private IReadOnlyList<ReferenceDataItemDto> Items =>
+        RestrictToIds is null ? AllItems : AllItems.Where(i => RestrictToIds.Contains(i.Id)).ToList();
+
+    /// <summary>
+    /// Checking a coating that would violate an exclusion with something already selected is
+    /// blocked outright (never silently resolved by removing the existing pick) — see ADR-0001.
+    /// Checking a valid coating also auto-adds any coating it directionally pairs with, skipping
+    /// (not blocking) any paired target that would itself conflict with the existing set, so the
+    /// user's explicit choice always succeeds even when a convenience auto-add can't be applied.
+    /// Unchecking never cascades — removing a coating that triggered a pairing leaves the
+    /// paired-in coating exactly where it is.
+    /// </summary>
+    private async Task ToggleAsync(Guid coatingId, bool isChecked)
+    {
+        _conflictMessage = null;
+        _toggleVersion++;
+        var selection = SelectedIds.ToList();
+
+        if (isChecked)
+        {
+            if (FindConflict(coatingId, selection) is { } conflictId)
+            {
+                _conflictMessage = $"Can't add \"{LabelFor(coatingId)}\" — it conflicts with \"{LabelFor(conflictId)}\", which is already selected.";
+                return;
+            }
+
+            selection.Add(coatingId);
+
+            foreach (var pairedId in Pairings.Where(p => p.TriggerCoatingRefId == coatingId).Select(p => p.PairedCoatingRefId))
+            {
+                if (!selection.Contains(pairedId) && FindConflict(pairedId, selection) is null)
+                {
+                    selection.Add(pairedId);
+                }
+            }
+        }
+        else
+        {
+            selection.Remove(coatingId);
+        }
+
+        await SelectedIdsChanged.InvokeAsync(selection);
+    }
+
+    private Guid? FindConflict(Guid candidateId, List<Guid> currentSelection)
+    {
+        foreach (var existingId in currentSelection)
+        {
+            var excluded = Exclusions.Any(x =>
+                (x.CoatingRefIdA == candidateId && x.CoatingRefIdB == existingId) ||
+                (x.CoatingRefIdB == candidateId && x.CoatingRefIdA == existingId));
+            if (excluded)
+            {
+                return existingId;
+            }
+        }
+
+        return null;
+    }
+
+    private string LabelFor(Guid coatingId) => AllItems.FirstOrDefault(i => i.Id == coatingId)?.Label ?? "that coating";
+}

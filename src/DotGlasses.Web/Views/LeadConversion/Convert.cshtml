@@ -110,14 +110,15 @@
 
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
             <div>
-                <label>Coating</label>
-                <select class="form-select" asp-for="Form.CoatingRefId">
-                    <option value="">— Choose —</option>
-                    @foreach (var coating in Model.Coatings)
-                    {
-                        <option value="@coating.Id">@coating.Label</option>
-                    }
-                </select>
+                <label>Coating (choose at least one)</label>
+                @foreach (var coating in Model.Coatings)
+                {
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="Form.CoatingRefIds" value="@coating.Id" id="coating-@coating.Id"
+                               checked="@(Model.Form.CoatingRefIds.Contains(coating.Id) ? "checked" : null)" />
+                        <label class="form-check-label" for="coating-@coating.Id">@coating.Label</label>
+                    </div>
+                }
             </div>
             <div>
                 <label>Frame coverage</label>

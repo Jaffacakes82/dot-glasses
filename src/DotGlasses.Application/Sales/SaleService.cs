@@ -17,13 +17,20 @@ public class SaleService(
     public async Task<SaleDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var entity = await repository.GetByIdAsync(id, cancellationToken);
-        return entity is null ? null : ToDto(entity);
+        if (entity is null)
+        {
+            return null;
+        }
+
+        var coatingsBySale = await repository.GetCoatingRefIdsBySaleIdsAsync([entity.Id], cancellationToken);
+        return ToDto(entity, coatingsBySale.GetValueOrDefault(entity.Id, []));
     }
 
     public async Task<IReadOnlyList<SaleDto>> ListAsync(CancellationToken cancellationToken = default)
     {
         var entities = await repository.ListAsync(cancellationToken);
-        return entities.Select(ToDto).ToList();
+        var coatingsBySale = await repository.GetCoatingRefIdsBySaleIdsAsync(entities.Select(e => e.Id).ToList(), cancellationToken);
+        return entities.Select(e => ToDto(e, coatingsBySale.GetValueOrDefault(e.Id, []))).ToList();
     }
 
     public async Task<SaleDto> CreateAsync(CreateSaleRequest request, Guid technicianUserId, string hierarchyPath, CancellationToken cancellationToken = default)
@@ -31,7 +38,8 @@ public class SaleService(
         var existing = await repository.GetByIdAsync(request.Id, cancellationToken);
         if (existing is not null)
         {
-            return ToDto(existing);
+            var existingCoatings = await repository.GetCoatingRefIdsBySaleIdsAsync([existing.Id], cancellationToken);
+            return ToDto(existing, existingCoatings.GetValueOrDefault(existing.Id, []));
         }
 
         var customerId = await FindOrCreateCustomerAsync(hierarchyPath, request.FullName, request.PhoneNumber, cancellationToken);
@@ -69,13 +77,19 @@ public class SaleService(
             FrameColourRefId = request.FrameColourRefId,
             FrameColourOtherText = request.FrameColourOtherText,
             FrameCoverage = ToDomainFrameCoverage(request.FrameCoverage),
-            CoatingRefId = request.CoatingRefId!.Value,
             HardCaseSold = request.HardCaseSold,
             HardCaseColourRefId = request.HardCaseColourRefId,
             HardCaseOtherColourText = request.HardCaseOtherColourText,
         };
 
         repository.Add(entity);
+        repository.AddCoatings(request.CoatingRefIds.Distinct().Select(coatingRefId => new SaleCoating
+        {
+            Id = Guid.NewGuid(),
+            SaleId = entity.Id,
+            CoatingRefId = coatingRefId,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+        }));
 
         if (request.SourceLeadId is { } sourceLeadId)
         {
@@ -92,7 +106,7 @@ public class SaleService(
         // SaleId update (if any) commit atomically — see CLAUDE.md's IUnitOfWork note.
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return ToDto(entity);
+        return ToDto(entity, request.CoatingRefIds);
     }
 
     /// <summary>Exact name+phone match within the retail point — see LeadService's identical helper.</summary>
@@ -116,7 +130,7 @@ public class SaleService(
         return customer.Id;
     }
 
-    private static SaleDto ToDto(Sale entity) => new()
+    private static SaleDto ToDto(Sale entity, IReadOnlyList<Guid> coatingRefIds) => new()
     {
         Id = entity.Id,
         HierarchyPath = entity.HierarchyPath,
@@ -147,7 +161,7 @@ public class SaleService(
         FrameColourRefId = entity.FrameColourRefId,
         FrameColourOtherText = entity.FrameColourOtherText,
         FrameCoverage = ToContractFrameCoverage(entity.FrameCoverage),
-        CoatingRefId = entity.CoatingRefId,
+        CoatingRefIds = coatingRefIds.ToList(),
         HardCaseSold = entity.HardCaseSold,
         HardCaseColourRefId = entity.HardCaseColourRefId,
         HardCaseOtherColourText = entity.HardCaseOtherColourText,

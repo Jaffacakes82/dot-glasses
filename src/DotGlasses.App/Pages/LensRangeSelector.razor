@@ -2,7 +2,6 @@
 @using DotGlasses.App.Validation
 @using DotGlasses.Contracts.Common
 @using DotGlasses.Contracts.PresetCatalogues
-@using DotGlasses.Contracts.ReferenceData
 
 <div class="dg-field">
     <label>Lens range</label>
@@ -65,24 +64,9 @@
         @if (Model.LensOptionLeftId is not null)
         {
             var leftOption = catalogue.LensOptions.FirstOrDefault(o => o.Id == Model.LensOptionLeftId);
-            var availableCoatingIds = leftOption?.AvailableCoatingIds ?? [];
-            @if (availableCoatingIds.Count == 0)
+            @if ((leftOption?.AvailableCoatingIds ?? []).Count == 0)
             {
                 <p style="color:#c00; font-size:12px;">No coatings are configured for this lens yet — it can't be sold on a preset range until DGI configures one in Reference Data.</p>
-            }
-            else
-            {
-                <div class="dg-field">
-                    <label>Coating</label>
-                    <select value="@Model.CoatingRefId" @onchange="e => Model.CoatingRefId = ParseGuid(e.Value)">
-                        <option value="">Select...</option>
-                        @foreach (var coatingId in availableCoatingIds)
-                        {
-                            <option value="@coatingId">@(Coatings.FirstOrDefault(c => c.Id == coatingId)?.Label ?? coatingId.ToString())</option>
-                        }
-                    </select>
-                    <FieldError Errors="Errors" For="@CoatingField" />
-                </div>
             }
         }
     }
@@ -177,24 +161,21 @@ else if (Model.LensRangeType == LensRangeType.Custom)
 @code {
     [Parameter, EditorRequired] public LensRangeSelection Model { get; set; } = null!;
     [Parameter, EditorRequired] public IReadOnlyList<PresetCatalogueDto> Catalogues { get; set; } = [];
-    [Parameter] public IReadOnlyList<ReferenceDataItemDto> Coatings { get; set; } = [];
 
     /// <summary>A Lead can carry no product preference at all; a Sale must always have one.</summary>
     [Parameter] public bool AllowNoPreference { get; set; }
 
     [Parameter] public FormErrors? Errors { get; set; }
 
-    /// <summary>Lead and Sale name the coating field differently on the wire
-    /// (CoatingPreferenceRefId vs CoatingRefId), so the parent supplies the key server errors
-    /// will come back under.</summary>
-    [Parameter] public string CoatingField { get; set; } = "CoatingRefId";
-
-    /// <summary>Fired whenever Model.LensRangeType changes. Model is a shared reference-type
-    /// object, so mutating its properties here doesn't by itself make the parent re-render —
-    /// without this, a field the parent conditionally shows based on LensRangeType (e.g. the
-    /// Coating dropdown) only catches up the next time some unrelated field happens to trigger
-    /// the parent's own render, not immediately when the range switches.</summary>
-    [Parameter] public EventCallback RangeTypeChanged { get; set; }
+    /// <summary>Fired whenever Model.LensRangeType or Model.LensOptionLeftId changes. Model is a
+    /// shared reference-type object, so mutating its properties here doesn't by itself make the
+    /// parent re-render — without this, anything the parent conditionally shows/restricts based on
+    /// these fields (the coating picker, restricted to the left lens's configured coatings) only
+    /// catches up the next time some unrelated field happens to trigger the parent's own render,
+    /// not immediately when the range/lens changes. The parent is also responsible for clearing
+    /// its own coating selection in response — this component no longer owns coating state at
+    /// all, see ADR-0001.</summary>
+    [Parameter] public EventCallback SelectionChanged { get; set; }
 
     /// <summary>
     /// When there's no "no preference" option, the select's first entry (6-Lens Set) is what the
@@ -237,7 +218,6 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         Model.PresetCatalogueId = null;
         Model.LensOptionLeftId = null;
         Model.LensOptionRightId = null;
-        Model.CoatingRefId = null;
         Model.CustomSphereLeft = null;
         Model.CustomCylinderLeft = null;
         Model.CustomAxisLeft = null;
@@ -264,7 +244,7 @@ else if (Model.LensRangeType == LensRangeType.Custom)
             _ => null,
         };
 
-        await RangeTypeChanged.InvokeAsync();
+        await SelectionChanged.InvokeAsync();
     }
 
     private static Guid? ParseGuid(object? value) =>
@@ -291,12 +271,14 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         }
     }
 
-    private void OnLeftLensChanged(ChangeEventArgs e)
+    private async Task OnLeftLensChanged(ChangeEventArgs e)
     {
         Model.LensOptionLeftId = ParseGuid(e.Value);
         // Available coatings are keyed off the left-eye lens ("left eye wins" — see SaleService's
-        // documented single-CoatingRefId simplification) — any prior pick may no longer be valid.
-        Model.CoatingRefId = null;
+        // historical single-CoatingRefId simplification, still true for which lens drives
+        // availability now that Coating is a set) — the parent must re-derive/clear its own
+        // coating selection since any prior pick may no longer be valid.
+        await SelectionChanged.InvokeAsync();
     }
 
     private static IEnumerable<decimal> SphereSteps => Steps(-10m, 10m, 0.25m);

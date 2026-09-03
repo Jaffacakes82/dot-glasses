@@ -20,6 +20,10 @@ public interface IReferenceDataLookupService
     /// CoatingId (2026-08-05 rework, see LensOption's own doc comment). False (not an exception)
     /// if the LensOption doesn't exist, or the strength has no coatings configured yet.</summary>
     Task<bool> IsCoatingAvailableForLensOptionAsync(Guid lensOptionId, Guid coatingRefId, CancellationToken cancellationToken = default);
+
+    /// <summary>True if coatingRefIdA/coatingRefIdB can never both be present in the same
+    /// Coating set (symmetric — checks both orderings) — see ADR-0001.</summary>
+    Task<bool> AreCoatingsExcludedAsync(Guid coatingRefIdA, Guid coatingRefIdB, CancellationToken cancellationToken = default);
 }
 
 public record ReferenceDataLookupResult(bool IsActive, bool IsOtherOption);

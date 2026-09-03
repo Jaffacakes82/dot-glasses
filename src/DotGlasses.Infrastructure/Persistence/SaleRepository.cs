@@ -13,4 +13,17 @@ public class SaleRepository(DotGlassesDbContext dbContext) : ISaleRepository
         await dbContext.Sales.OrderByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
 
     public void Add(Sale entity) => dbContext.Sales.Add(entity);
+
+    public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<Guid>>> GetCoatingRefIdsBySaleIdsAsync(IReadOnlyCollection<Guid> saleIds, CancellationToken cancellationToken = default)
+    {
+        var rows = await dbContext.SaleCoatings
+            .Where(x => saleIds.Contains(x.SaleId))
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .GroupBy(x => x.SaleId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<Guid>)g.Select(x => x.CoatingRefId).ToList());
+    }
+
+    public void AddCoatings(IEnumerable<SaleCoating> coatings) => dbContext.SaleCoatings.AddRange(coatings);
 }
