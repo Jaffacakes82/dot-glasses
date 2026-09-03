@@ -83,7 +83,7 @@
                 </td>
                 <td class="dg-muted">@user.LastLogin</td>
                 <td class="dg-muted">@user.Sales</td>
-                <td><span class="dg-badge" style="background:@statusColor[user.Status];">@user.Status</span></td>
+                <td><span class="dg-badge" style="background:@statusColor[user.Status]; color:@(user.Status == "Active" ? "var(--dot-white)" : "var(--dot-black)");">@user.Status</span></td>
                 <td style="white-space:nowrap;">
                     @if (user.CanManage)
                     {

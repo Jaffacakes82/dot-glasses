@@ -15,7 +15,7 @@ public record OrgNode(Guid Id, string Name, string Type, string? Kind, bool IsTr
 }
 
 /// <summary>Tree (left panel) + the currently selected node (right detail panel) — CanManage
-/// drives whether "Add child node", the two flag toggles, "Rename", "Deactivate" and
+/// drives whether the level-appropriate "Add ..." action, the two flag toggles, "Rename", "Deactivate" and
 /// "Assign users" are shown for Selected, per AuthorizationPolicies.ManageOrgInScope resolved
 /// against Selected's own HierarchyPath (the same check for all of them — see CLAUDE.md's Assign
 /// users section: this reuses org-scoped ManageOrgInScope rather than the separate user-scoped

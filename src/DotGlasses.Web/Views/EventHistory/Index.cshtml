@@ -67,7 +67,7 @@
                 @foreach (var row in rows)
                 {
                     <tr>
-                        <td><span class="dg-badge" style="background:@(row.Type == "Sale" ? "var(--dot-green)" : "var(--dot-blue)");">@row.Type@(row.Custom ? " · Custom" : "")</span></td>
+                        <td><span class="dg-badge" style="background:@(row.Type == "Sale" ? "var(--dot-green)" : "var(--dot-blue)"); color:@(row.Type == "Sale" ? "var(--dot-white)" : "var(--dot-black)");">@row.Type@(row.Custom ? " · Custom" : "")</span></td>
                         @if (Model.ActiveTab == "sales")
                         {
                             <td>@row.Name</td>
