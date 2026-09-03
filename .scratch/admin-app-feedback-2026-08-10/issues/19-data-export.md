@@ -53,13 +53,13 @@ original decision to defer export.
   rules already enforced on those screens' normal queries.
 
 **Acceptance criteria:**
-- [ ] Event History has a working export producing a file with the currently-filtered rows,
+- [x] Event History has a working export producing a file with the currently-filtered rows,
       including `ConsentGiven` for any lead/customer-derived row.
-- [ ] Organisations has a working export of the currently-listed rows, scoped to the caller's own
+- [x] Organisations has a working export of the currently-listed rows, scoped to the caller's own
       subtree.
-- [ ] Custom Orders has a working export of the currently-listed rows, scoped to the caller's own
+- [x] Custom Orders has a working export of the currently-listed rows, scoped to the caller's own
       subtree.
-- [ ] A user cannot export rows they could not otherwise see on screen (scoping/filter parity is
+- [x] A user cannot export rows they could not otherwise see on screen (scoping/filter parity is
       enforced server-side, not just hidden in the UI).
 
 **Out of scope:**
