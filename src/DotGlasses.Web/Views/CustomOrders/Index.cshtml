@@ -16,12 +16,15 @@
     approval (outlet → retailer → country) is a Day 2 feature; v1 is a flat status queue.
 </p>
 
-<div style="display:flex; gap:var(--space-2); margin-bottom:var(--space-4); flex-wrap:wrap;">
-    <a class="@(Model.Status is null ? "dg-btn dg-btn-primary" : "dg-btn dg-btn-ghost")" style="padding:8px 20px; font-size:13px;" asp-action="Index">All</a>
-    @foreach (var status in new[] { FulfilmentStatus.Submitted, FulfilmentStatus.InLab, FulfilmentStatus.ReadyForPickup, FulfilmentStatus.Fulfilled })
-    {
-        <a class="@(Model.Status == status ? "dg-btn dg-btn-primary" : "dg-btn dg-btn-ghost")" style="padding:8px 20px; font-size:13px;" asp-action="Index" asp-route-status="@status">@DotGlasses.Web.Models.CustomOrder.StatusLabel[status]</a>
-    }
+<div style="display:flex; justify-content:space-between; align-items:center; gap:var(--space-2); margin-bottom:var(--space-4); flex-wrap:wrap;">
+    <div style="display:flex; gap:var(--space-2); flex-wrap:wrap;">
+        <a class="@(Model.Status is null ? "dg-btn dg-btn-primary" : "dg-btn dg-btn-ghost")" style="padding:8px 20px; font-size:13px;" asp-action="Index">All</a>
+        @foreach (var status in new[] { FulfilmentStatus.Submitted, FulfilmentStatus.InLab, FulfilmentStatus.ReadyForPickup, FulfilmentStatus.Fulfilled })
+        {
+            <a class="@(Model.Status == status ? "dg-btn dg-btn-primary" : "dg-btn dg-btn-ghost")" style="padding:8px 20px; font-size:13px;" asp-action="Index" asp-route-status="@status">@DotGlasses.Web.Models.CustomOrder.StatusLabel[status]</a>
+        }
+    </div>
+    <a class="dg-btn dg-btn-ghost" style="padding:8px 20px; font-size:13px;" asp-action="Export" asp-route-status="@Model.Status">Export CSV</a>
 </div>
 
 <div class="dg-card">
