@@ -12,9 +12,11 @@ public class TestDto
     public Guid? OccupationRefId { get; set; }
     public string? OccupationOtherText { get; set; }
     public TestOutcome Outcome { get; set; }
+    public bool ReferredOrTreated { get; set; }
     public Guid? ReferralReasonRefId { get; set; }
     public string? ReferralOtherText { get; set; }
     public string? ReferralLocationFreeText { get; set; }
+    public bool TreatedInFacility { get; set; }
     public Guid? ConvertedToLeadId { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; }
     public DateTimeOffset? ModifiedAtUtc { get; set; }

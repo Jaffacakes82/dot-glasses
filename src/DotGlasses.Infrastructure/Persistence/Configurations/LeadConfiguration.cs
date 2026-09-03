@@ -14,6 +14,8 @@ public class LeadConfiguration : IEntityTypeConfiguration<Lead>
         builder.Property(x => x.HierarchyPath).IsRequired().HasMaxLength(1000);
         builder.Property(x => x.OccupationOtherText).HasMaxLength(200);
         builder.Property(x => x.ReasonNotPurchasedOtherText).HasMaxLength(200);
+        builder.Property(x => x.ReferralOtherText).HasMaxLength(200);
+        builder.Property(x => x.ReferralLocationFreeText).HasMaxLength(500);
         builder.Property(x => x.CreatedBy).HasMaxLength(256);
         builder.Property(x => x.ModifiedBy).HasMaxLength(256);
         builder.Property(x => x.DeletedBy).HasMaxLength(256);
