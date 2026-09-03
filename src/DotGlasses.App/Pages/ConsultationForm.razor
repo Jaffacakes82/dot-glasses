@@ -14,12 +14,13 @@
 @inject ILeadsClient LeadsClient
 @inject ISyncQueueStore OutboxStore
 @inject ISyncService SyncService
+@inject IJSRuntime JS
 
 <PageTitle>Record @Type</PageTitle>
 
 <div class="dg-screen">
     <div class="dg-top-strip">
-        <a class="back" href="/">&#8592;</a>
+        <button class="back" type="button" @onclick="NavigateBackAsync">&#8592;</button>
         <h1>Record @Type</h1>
     </div>
 
@@ -178,7 +179,7 @@
                 @if (IsSale)
                 {
                     <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues" Coatings="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
-                                       AllowNoPreference="false" Errors="_errors" CoatingField="CoatingRefId" />
+                                       AllowNoPreference="false" Errors="_errors" CoatingField="CoatingRefId" RangeTypeChanged="StateHasChanged" />
 
                     @if (_lensRange.LensRangeType == LensRangeType.Custom)
                     {
@@ -200,7 +201,7 @@
                     </div>
 
                     <div class="dg-field">
-                        <label><input type="checkbox" @bind="_hardCaseSold" style="width:auto; margin-right:8px;" />Hard case sold</label>
+                        <label style="display:flex; align-items:center; justify-content:space-between; gap:8px;">Did this person buy a hard case? (click for yes)<input type="checkbox" @bind="_hardCaseSold" style="width:auto; flex:none;" /></label>
                     </div>
                     @if (_hardCaseSold)
                     {
@@ -218,7 +219,7 @@
                                             Errors="_errors" Field="ReasonNotPurchasedRefId" OtherField="ReasonNotPurchasedOtherText" />
 
                     <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues" Coatings="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
-                                       AllowNoPreference="true" Errors="_errors" CoatingField="CoatingPreferenceRefId" />
+                                       AllowNoPreference="true" Errors="_errors" CoatingField="CoatingPreferenceRefId" RangeTypeChanged="StateHasChanged" />
 
                     @if (_lensRange.LensRangeType is not (LensRangeType.SixLensSet or LensRangeType.NineLensSet))
                     {
@@ -495,6 +496,34 @@
     }
 
     private async Task RetryReferenceDataAsync() => await ReferenceDataClient.RefreshAsync();
+
+    /// <summary>Heuristic "has the technician started filling this in" check — not a field-by-field
+    /// diff against a pristine snapshot, just the fields a technician would actually type or pick
+    /// before abandoning the form. Drives the explicit back-navigation confirmation below so
+    /// leaving a part-filled form is never silent data loss.</summary>
+    private bool HasUnsavedData =>
+        _age is not null || !string.IsNullOrWhiteSpace(_name) || !string.IsNullOrWhiteSpace(_phone)
+        || _occupationRefId is not null || _consentGiven
+        || (IsTest && (_testOutcome != TestOutcome.NoGlassesNeeded || _referralLocationFreeText is not null))
+        || _reasonNotPurchasedRefId is not null || _coatingPreferenceRefId is not null
+        || _frameColourRefId is not null || _coatingRefId is not null || _hardCaseSold
+        || _lensRange.LensOptionLeftId is not null || _lensRange.LensOptionRightId is not null
+        || _lensRange.CustomSphereLeft is not null || _lensRange.CustomSphereRight is not null
+        || _lensRange.PupilDistanceMm is not null || _lensRange.PresetPupilDistanceBucket is not null;
+
+    /// <summary>Explicit in-app back control (see CLAUDE.md ticket 02) — steps back to Home via
+    /// the app's own navigation rather than a bare history.back(), and warns before discarding a
+    /// part-filled form instead of silently losing it. Purely additive: the phone's native back
+    /// gesture/button is untouched by this.</summary>
+    private async Task NavigateBackAsync()
+    {
+        if (HasUnsavedData && !await JS.InvokeAsync<bool>("confirm", "Discard this record? Anything entered so far will be lost."))
+        {
+            return;
+        }
+
+        Navigation.NavigateTo("/");
+    }
 
     private async Task HandleSubmit()
     {
