@@ -99,6 +99,20 @@
                 <div><label>Add power (L)</label><input class="form-control" type="number" step="0.25" asp-for="Form.CustomAddPowerLeft" /></div>
                 <div><label>Pupil distance (mm)</label><input class="form-control" type="number" min="54" max="74" asp-for="Form.PupilDistanceMm" /></div>
                 <div style="display:flex; align-items:flex-end;"><label><input type="checkbox" asp-for="Form.ChildrensFrame" style="width:auto; margin-right:6px;" />Children's frame</label></div>
+                <div>
+                    <label>Lens type (required if an add power is set)</label>
+                    <select class="form-select" asp-for="Form.LensTypeRefId">
+                        <option value="">—</option>
+                        @foreach (var lensType in Model.LensTypes)
+                        {
+                            <option value="@lensType.Id">@lensType.Label</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label>Lens type — "Other" text</label>
+                    <input class="form-control" asp-for="Form.LensTypeOtherText" />
+                </div>
             </div>
         </div>
     }

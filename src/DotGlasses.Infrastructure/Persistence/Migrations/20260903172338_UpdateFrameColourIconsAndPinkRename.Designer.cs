@@ -3,6 +3,7 @@ using System;
 using DotGlasses.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace DotGlasses.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(DotGlassesDbContext))]
-    partial class DotGlassesDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260903172338_UpdateFrameColourIconsAndPinkRename")]
+    partial class UpdateFrameColourIconsAndPinkRename
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1643,12 +1646,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.Property<int?>("AgeYears")
                         .HasColumnType("integer");
 
-                    b.Property<bool>("ChildrensFrame")
-                        .HasColumnType("boolean");
-
-                    b.Property<Guid?>("CoatingPreferenceRefId")
-                        .HasColumnType("uuid");
-
                     b.Property<Guid?>("ConvertedToLeadId")
                         .HasColumnType("uuid");
 
@@ -1658,38 +1655,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.Property<string>("CreatedBy")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
-
-                    b.Property<decimal?>("CustomAddPowerLeft")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomAddPowerRight")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomAxisLeft")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomAxisRight")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomCylinderLeft")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomCylinderRight")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomSphereLeft")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomSphereRight")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
 
                     b.Property<DateTimeOffset?>("DeletedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -1709,22 +1674,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
-                    b.Property<Guid?>("LensOptionLeftId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("LensOptionRightId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int?>("LensRangeType")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("LensTypeOtherText")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<Guid?>("LensTypeRefId")
-                        .HasColumnType("uuid");
-
                     b.Property<DateTimeOffset?>("ModifiedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -1741,16 +1690,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
 
                     b.Property<int>("Outcome")
                         .HasColumnType("integer");
-
-                    b.Property<Guid?>("PresetCatalogueId")
-                        .HasColumnType("uuid");
-
-                    b.Property<int?>("PresetPupilDistanceBucket")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal?>("PupilDistanceMm")
-                        .HasPrecision(4, 1)
-                        .HasColumnType("numeric(4,1)");
 
                     b.Property<string>("ReferralLocationFreeText")
                         .HasMaxLength(500)

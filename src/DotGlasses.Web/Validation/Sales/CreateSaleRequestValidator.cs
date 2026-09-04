@@ -64,7 +64,8 @@ public class CreateSaleRequestValidator : AbstractValidator<CreateSaleRequest>
         IReferenceDataLookupService referenceData, CancellationToken cancellationToken)
     {
         var customFieldsSet = request.CustomSphereLeft is not null || request.CustomCylinderLeft is not null || request.CustomAxisLeft is not null || request.CustomAddPowerLeft is not null
-            || request.CustomSphereRight is not null || request.CustomCylinderRight is not null || request.CustomAxisRight is not null || request.CustomAddPowerRight is not null;
+            || request.CustomSphereRight is not null || request.CustomCylinderRight is not null || request.CustomAxisRight is not null || request.CustomAddPowerRight is not null
+            || request.LensTypeRefId is not null || request.LensTypeOtherText is not null;
         var presetFieldsSet = request.PresetCatalogueId is not null || request.LensOptionLeftId is not null || request.LensOptionRightId is not null;
 
         if (request.LensRangeType is ContractLensRangeType.SixLensSet or ContractLensRangeType.NineLensSet)
@@ -141,6 +142,7 @@ public class CreateSaleRequestValidator : AbstractValidator<CreateSaleRequest>
             ValidateCustomPower(request.CustomAddPowerRight, nameof(request.CustomAddPowerRight), 0m, 3m, 0.25m, context);
             ValidateCustomAxis(request.CustomAxisLeft, nameof(request.CustomAxisLeft), context);
             ValidateCustomAxis(request.CustomAxisRight, nameof(request.CustomAxisRight), context);
+            await ValidateLensTypeAsync(request, context, referenceData, cancellationToken);
 
             if (request.PresetPupilDistanceBucket is not null)
             {
@@ -168,6 +170,41 @@ public class CreateSaleRequestValidator : AbstractValidator<CreateSaleRequest>
                     context.AddFailure(nameof(request.CoatingRefId), "CoatingRefId must reference an existing, active Coating reference-data item.");
                 }
             }
+        }
+    }
+
+    /// <summary>Asked only once either eye carries two distinct powers (a base sphere plus an add
+    /// power) — required in that case, must stay empty otherwise (enforced via customFieldsSet
+    /// above, same as every other Custom-only field).</summary>
+    private static async Task ValidateLensTypeAsync(
+        CreateSaleRequest request, ValidationContext<CreateSaleRequest> context,
+        IReferenceDataLookupService referenceData, CancellationToken cancellationToken)
+    {
+        var hasTwoPowers = request.CustomAddPowerLeft is not null || request.CustomAddPowerRight is not null;
+        if (!hasTwoPowers)
+        {
+            if (request.LensTypeRefId is not null || request.LensTypeOtherText is not null)
+            {
+                context.AddFailure(nameof(request.LensTypeRefId), "LensTypeRefId/LensTypeOtherText must be empty unless an add power is set.");
+            }
+
+            return;
+        }
+
+        if (request.LensTypeRefId is not { } lensTypeRefId)
+        {
+            context.AddFailure(nameof(request.LensTypeRefId), "LensTypeRefId is required when an add power is set (two distinct powers on that eye).");
+            return;
+        }
+
+        var lookup = await referenceData.LookupAsync(lensTypeRefId, ReferenceDataCategory.LensType, cancellationToken);
+        if (lookup is not { IsActive: true })
+        {
+            context.AddFailure(nameof(request.LensTypeRefId), "LensTypeRefId must reference an existing, active LensType reference-data item.");
+        }
+        else if (lookup.IsOtherOption && string.IsNullOrWhiteSpace(request.LensTypeOtherText))
+        {
+            context.AddFailure(nameof(request.LensTypeOtherText), "LensTypeOtherText is required when LensType is \"Other\".");
         }
     }
 
