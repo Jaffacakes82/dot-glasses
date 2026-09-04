@@ -1,9 +1,10 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\DotGlasses.Domain\DotGlasses.Domain.csproj" />
+    <!-- Contracts only, deliberately: DotGlasses.App (Blazor WASM) references this project, so
+         anything Rules drags in it drags in too. No Domain, no Application, no Infrastructure,
+         no EF Core, no ASP.NET — see ADR-0002 and CLAUDE.md's App-reference rule. -->
     <ProjectReference Include="..\DotGlasses.Contracts\DotGlasses.Contracts.csproj" />
-    <ProjectReference Include="..\DotGlasses.Rules\DotGlasses.Rules.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

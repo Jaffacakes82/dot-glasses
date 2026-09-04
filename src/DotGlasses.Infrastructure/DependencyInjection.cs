@@ -52,6 +52,9 @@ public static class DependencyInjection
         services.AddScoped<IReferenceDataLookupService, ReferenceDataLookupService>();
         services.AddScoped<IReferenceDataQueryService, ReferenceDataQueryService>();
         services.AddScoped<IReferenceDataAdminService, ReferenceDataAdminService>();
+        // Scoped, so the snapshot is read at most once per request and never cached beyond it —
+        // see IReferenceDataSnapshotProvider/ADR-0002 for why crossing requests is deliberately out.
+        services.AddScoped<IReferenceDataSnapshotProvider, ReferenceDataSnapshotProvider>();
         services.AddScoped<IOrganisationAdminService, OrganisationAdminService>();
         services.AddScoped<IPresetCatalogueQueryService, PresetCatalogueQueryService>();
         services.AddScoped<IPresetCatalogueAdminService, PresetCatalogueAdminService>();
