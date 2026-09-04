@@ -6,7 +6,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DotGlasses.Infrastructure.Persistence;
 
-public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceDataAdminService referenceDataAdminService, IUnscopedReportQueryService unscopedReportQueryService) : IEventHistoryQueryService
+/// <summary>Reference-data labels come from IReferenceDataSnapshotProvider, which loads retired
+/// items too — a historical Lead/referral pointing at a since-retired reason must still render
+/// that reason rather than an em-dash, so the Field-App-facing active-only view is the wrong
+/// source here.</summary>
+public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceDataSnapshotProvider referenceDataSnapshotProvider, IUnscopedReportQueryService unscopedReportQueryService) : IEventHistoryQueryService
 {
     public async Task<PagedResult<SaleOrTestEventRow>> ListSalesAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, int page, int pageSize, CancellationToken cancellationToken = default)
     {
@@ -136,13 +140,13 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
     {
         var customers = await GetCustomersByIdAsync(leads.Select(l => (Guid?)l.CustomerId), cancellationToken);
         var orgLookup = await BuildOrgLookupAsync(cancellationToken);
-        var refData = await BuildReferenceDataLookupAsync(cancellationToken);
+        var referenceData = await referenceDataSnapshotProvider.GetAsync(cancellationToken);
 
         return leads.Select(l =>
         {
             var customer = customers.GetValueOrDefault(l.CustomerId);
             var (outlet, _) = orgLookup.Resolve(l.HierarchyPath);
-            var reason = refData.Resolve(l.ReasonNotPurchasedRefId, l.ReasonNotPurchasedOtherText);
+            var reason = referenceData.ResolveLabel(l.ReasonNotPurchasedRefId, l.ReasonNotPurchasedOtherText);
             return new LeadEventRow(l.Id, customer?.FullName ?? "—", MaskPhone(customer?.PhoneNumber), outlet, reason, l.CreatedAtUtc, l.ConsentGiven, l.ConvertedFlag);
         }).ToList();
     }
@@ -170,12 +174,12 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
     private async Task<List<ReferralEventRow>> MapReferralsAsync(List<ReferralSourceRow> referrals, CancellationToken cancellationToken)
     {
         var orgLookup = await BuildOrgLookupAsync(cancellationToken);
-        var refData = await BuildReferenceDataLookupAsync(cancellationToken);
+        var referenceData = await referenceDataSnapshotProvider.GetAsync(cancellationToken);
 
         return referrals.Select(t =>
         {
             var (outlet, country) = orgLookup.Resolve(t.HierarchyPath);
-            var reason = refData.Resolve(t.ReferralReasonRefId, t.ReferralOtherText);
+            var reason = referenceData.ResolveLabel(t.ReferralReasonRefId, t.ReferralOtherText);
             return new ReferralEventRow(t.Source, outlet, country, reason, t.TreatedInFacility, t.CreatedAtUtc);
         }).ToList();
     }
@@ -226,15 +230,6 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
         return new OrgLookup(nodes);
     }
 
-    private async Task<ReferenceDataLookup> BuildReferenceDataLookupAsync(CancellationToken cancellationToken)
-    {
-        // ListAllAsync (not the Field-App-facing ListActiveAsync) so a historical event
-        // referencing a since-retired reference-data item still resolves a label instead of
-        // silently failing.
-        var items = await referenceDataAdminService.ListAllAsync(cancellationToken);
-        return new ReferenceDataLookup(items);
-    }
-
     private sealed class OrgLookup(IReadOnlyList<OrganisationNodeSummary> nodes)
     {
         private readonly Dictionary<string, OrganisationNodeSummary> _byPath = nodes.ToDictionary(n => n.HierarchyPath);
@@ -245,21 +240,6 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
             var outlet = _byPath.TryGetValue(hierarchyPath, out var node) ? node.Name : "Unknown outlet";
             var country = _countries.FirstOrDefault(c => hierarchyPath.StartsWith(c.HierarchyPath, StringComparison.Ordinal))?.Name ?? "Unknown country";
             return (outlet, country);
-        }
-    }
-
-    private sealed class ReferenceDataLookup(IReadOnlyList<ReferenceDataAdminItem> items)
-    {
-        private readonly Dictionary<Guid, ReferenceDataAdminItem> _byId = items.ToDictionary(i => i.Id);
-
-        public string Resolve(Guid? refId, string? otherText)
-        {
-            if (refId is null || !_byId.TryGetValue(refId.Value, out var item))
-            {
-                return "—";
-            }
-
-            return item.IsOtherOption && !string.IsNullOrWhiteSpace(otherText) ? otherText : item.Label;
         }
     }
 
