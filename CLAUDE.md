@@ -280,8 +280,17 @@ once in this codebase:
 
 ## Testing
 
-xUnit. EF Core InMemory provider is acceptable for now (`Infrastructure.Tests`).
-`WebApplicationFactory` for `Web.Tests` integration tests.
+xUnit. Integration tests run against a **real containerised Postgres** via Testcontainers, not
+the EF Core InMemory provider — InMemory implements no transactions (so atomicity is untestable
+under it) and does not reproduce the SQL string-matching semantics the hierarchy filter depends
+on. `Infrastructure.Tests` shares one container per assembly and applies the real migrations;
+`Web.Tests` points `WebApplicationFactory` at its own container. The two assemblies deliberately
+use different state-isolation strategies (fresh database per test vs a shared one) because the
+Web host bakes its connection string in at build time — each file says so where it matters.
+
+**`Application.Tests` must stay dependency-free** — pure rule and service tests, hand-written
+dictionary-backed fakes, no container, no database. No mocking library is referenced by any
+project, deliberately; don't add one.
 
 ## Running locally
 
