@@ -147,17 +147,13 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
         }).ToList();
     }
 
-    /// <summary>Row shape shared by Test/Lead/Sale once projected down to just the "referred or
-    /// treated" fields — lets Concat below translate to a single SQL UNION ALL instead of three
-    /// separate queries. Not one of the three real entities: none of them individually carries a
-    /// "Source" discriminator.</summary>
-    private record ReferralSourceRow(string Source, string HierarchyPath, Guid? ReferralReasonRefId, string? ReferralOtherText, bool TreatedInFacility, DateTimeOffset CreatedAtUtc);
-
     private IQueryable<ReferralSourceRow> FilterReferrals(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive)
     {
         // Merged across all three entities (2026-09-03 — "referred or treated" is no longer
-        // Test-only). Each Select projects to the same shape so Concat translates to a single SQL
-        // UNION ALL — ordering/paging happens once, after the union, not per-entity.
+        // Test-only). Each Select projects to the same ReferralSourceRow shape so Concat
+        // translates to a single SQL UNION ALL — ordering/paging happens once, after the union,
+        // not per-entity. A named record (not an anonymous type) is required here so
+        // FilterReferrals/MapReferralsAsync have a concrete type to share as their signature.
         var testRows = dbContext.Tests.Where(t => t.ReferredOrTreated)
             .Select(t => new ReferralSourceRow("Test", t.HierarchyPath, t.ReferralReasonRefId, t.ReferralOtherText, t.TreatedInFacility, t.CreatedAtUtc));
         var leadRows = dbContext.Leads.Where(l => l.ReferredOrTreated)
@@ -266,4 +262,8 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
             return item.IsOtherOption && !string.IsNullOrWhiteSpace(otherText) ? otherText : item.Label;
         }
     }
+
+    /// <summary>Common projected shape for the Test/Lead/Sale union behind FilterReferrals — see
+    /// its doc comment for why this needs to be a named record rather than an anonymous type.</summary>
+    private sealed record ReferralSourceRow(string Source, string HierarchyPath, Guid? ReferralReasonRefId, string? ReferralOtherText, bool TreatedInFacility, DateTimeOffset CreatedAtUtc);
 }

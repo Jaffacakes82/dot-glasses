@@ -28,12 +28,16 @@ public record CustomOrder(Guid SaleId, string Customer, string Outlet, string Pr
     public FulfilmentStatus? NextStatus => Flow.SkipWhile(s => s != Status).Skip(1).Cast<FulfilmentStatus?>().FirstOrDefault();
 }
 
+/// <summary>Retailer -> retail point -> customer name, in that order (2026-09-03) — see
+/// ICustomOrderService.ListGroupedAsync's doc comment for how ActiveCount is computed and why it
+/// ignores the current Status filter.</summary>
+public record RetailerGroup(string RetailerName, int ActiveCount, IReadOnlyList<RetailPointGroup> RetailPoints);
+public record RetailPointGroup(string RetailPointName, int ActiveCount, IReadOnlyList<CustomerGroup> Customers);
+public record CustomerGroup(string CustomerName, IReadOnlyList<CustomOrder> Orders);
+
 public class CustomOrdersViewModel
 {
-    public required IReadOnlyList<CustomOrder> Orders { get; init; }
+    public required IReadOnlyList<RetailerGroup> Retailers { get; init; }
     public FulfilmentStatus? Status { get; init; }
-    public int Page { get; init; } = 1;
-    public int PageSize { get; init; }
     public int TotalCount { get; init; }
-    public int TotalPages { get; init; }
 }
