@@ -72,7 +72,7 @@ public class CustomOrderService(DotGlassesDbContext dbContext) : ICustomOrderSer
         var sale = await dbContext.Sales.FirstAsync(x => x.Id == saleId, cancellationToken);
         if (sale.FulfilmentStatus is not { } current)
         {
-            throw new InvalidOperationException("This Sale is not a custom order routed to fulfilment.");
+            throw new DotGlasses.Domain.Common.DomainRuleViolationException("This Sale is not a custom order routed to fulfilment.");
         }
 
         sale.FulfilmentStatus = current switch
@@ -80,7 +80,7 @@ public class CustomOrderService(DotGlassesDbContext dbContext) : ICustomOrderSer
             DomainFulfilmentStatus.Submitted => DomainFulfilmentStatus.InLab,
             DomainFulfilmentStatus.InLab => DomainFulfilmentStatus.ReadyForPickup,
             DomainFulfilmentStatus.ReadyForPickup => DomainFulfilmentStatus.Fulfilled,
-            DomainFulfilmentStatus.Fulfilled => throw new InvalidOperationException("This custom order is already Fulfilled."),
+            DomainFulfilmentStatus.Fulfilled => throw new DotGlasses.Domain.Common.DomainRuleViolationException("This custom order is already Fulfilled."),
             _ => throw new ArgumentOutOfRangeException(nameof(current), current, null),
         };
 

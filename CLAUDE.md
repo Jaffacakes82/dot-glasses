@@ -30,6 +30,19 @@ are the record of *how* things got built; don't restate that here.
   repository interface exists only where a service genuinely needs `Add`/`Update`/`GetById`
   (`IVisionTestRepository`/`ILeadRepository`/`ISaleRepository`, `ICustomerRepository`).
 - Controller-based Web API (not Minimal APIs), versioned from `v1`, Swagger-visible (dev only).
+- **A business-rule rejection throws `DomainRuleViolationException`** (`Domain/Common`, the only
+  layer `Application`, `Infrastructure` and `Web` can all see — see ADR-0003). Its message is
+  user-facing copy, shown verbatim; never a code. Never catch one in a controller:
+  `DomainRuleViolationFilter`, registered globally in `Program.cs`, is the single place it becomes
+  a response — a 400 `ValidationProblemDetails` (keyed on `""`) for `[ApiController]` actions, and
+  for a server-rendered screen a redirect back to the screen the POST came from with the copy in
+  TempData, rendered by `Views/Shared/_DomainRuleViolation.cshtml` from `_Layout`. A filter can't
+  re-render an arbitrary MVC view (no controller instance on `ExceptionContext`, and each screen
+  builds its view model in its own private helper), so POST-redirect-GET is how every screen is
+  served alike. **`InvalidOperationException` now means only "missing/out-of-scope row or a bug"**
+  — that's what EF throws for `FirstAsync` on an empty sequence, and it is deliberately left to
+  surface as a 500: keeping the two types distinct is what makes a rejection recognisable at any
+  catch site. Don't reach for a `Result` type; ADR-0003 rejected it with reasoning.
 - Deliberately **not** using `AddFluentValidationAutoValidation()` — it runs FluentValidation
   synchronously inside ASP.NET's model-binding pipeline, which can't invoke the async rules
   several validators need for DB-backed checks (throws

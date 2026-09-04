@@ -91,16 +91,7 @@ public class OrganisationsController(
             return Forbid();
         }
 
-        try
-        {
-            await userAdminService.UnassignUserFromOrgAsync(userId, orgNodeId, cancellationToken);
-        }
-        catch (InvalidOperationException ex)
-        {
-            ModelState.AddModelError(string.Empty, ex.Message);
-            return View(nameof(Index), await BuildViewModelAsync(orgNodeId, cancellationToken));
-        }
-
+        await userAdminService.UnassignUserFromOrgAsync(userId, orgNodeId, cancellationToken);
         return RedirectToAction(nameof(Index), new { selectedId = orgNodeId });
     }
 
@@ -133,16 +124,7 @@ public class OrganisationsController(
             return Forbid();
         }
 
-        try
-        {
-            await organisationAdminService.SetActiveAsync(id, value, cancellationToken);
-        }
-        catch (InvalidOperationException ex)
-        {
-            ModelState.AddModelError(string.Empty, ex.Message);
-            return View(nameof(Index), await BuildViewModelAsync(id, cancellationToken));
-        }
-
+        await organisationAdminService.SetActiveAsync(id, value, cancellationToken);
         return value ? RedirectToAction(nameof(Index), new { selectedId = id }) : RedirectToAction(nameof(Index));
     }
 
