@@ -1,6 +1,7 @@
 using DotGlasses.Domain.Entities;
 using DotGlasses.Domain.Enums;
 using DotGlasses.Infrastructure.Persistence;
+using DotGlasses.Infrastructure.Tests.Postgres;
 using DotGlasses.Infrastructure.Tests.TestDoubles;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,18 +15,24 @@ namespace DotGlasses.Infrastructure.Tests.Persistence;
 /// resubmit); the out-of-scope case matters because the sale is hidden by the hierarchy query
 /// filter rather than absent, so a naive FirstAsync would surface EF's own "sequence contains no
 /// elements" instead.
+///
+/// The out-of-scope case is also why this class runs against real Postgres rather than the
+/// in-memory provider it was first written for: it turns entirely on the query filter's prefix
+/// match, which the in-memory provider evaluated in C# and Postgres evaluates in SQL. Testing it
+/// where the application actually runs it is the point of the harness.
 /// </summary>
-public class CustomOrderAdvanceStatusTests
+[Collection(PostgresCollection.Name)]
+public class CustomOrderAdvanceStatusTests(PostgresContainerFixture postgres)
 {
-    private static DotGlassesDbContext CreateContext(string databaseName, string hierarchyPathPrefix = "") =>
-        new(
-            new DbContextOptionsBuilder<DotGlassesDbContext>().UseInMemoryDatabase(databaseName).Options,
+    private static DotGlassesDbContext CreateContext(string connectionString, string hierarchyPathPrefix = "") =>
+        PostgresContainerFixture.CreateContext(
+            connectionString,
             FakeHttpContextAccessor.Create(isAuthenticated: true, hierarchyPathPrefix));
 
-    private static async Task<Guid> SeedSaleAsync(string databaseName, FulfilmentStatus? status, string hierarchyPath = "/1/4/")
+    private static async Task<Guid> SeedSaleAsync(string connectionString, FulfilmentStatus? status, string hierarchyPath = "/1/4/")
     {
         var saleId = Guid.NewGuid();
-        await using var seedContext = CreateContext(databaseName);
+        await using var seedContext = CreateContext(connectionString);
 
         seedContext.Sales.Add(new Sale
         {
@@ -43,10 +50,10 @@ public class CustomOrderAdvanceStatusTests
     [Fact]
     public async Task AdvancingAnActiveOrder_MovesItToTheNextStatus()
     {
-        var dbName = Guid.NewGuid().ToString();
-        var saleId = await SeedSaleAsync(dbName, FulfilmentStatus.Submitted);
+        var connectionString = await postgres.CreateDatabaseAsync();
+        var saleId = await SeedSaleAsync(connectionString, FulfilmentStatus.Submitted);
 
-        await using var context = CreateContext(dbName, hierarchyPathPrefix: "/1/");
+        await using var context = CreateContext(connectionString, hierarchyPathPrefix: "/1/");
         await new CustomOrderService(context).AdvanceStatusAsync(saleId);
 
         Assert.Equal(FulfilmentStatus.InLab, (await context.Sales.SingleAsync(x => x.Id == saleId)).FulfilmentStatus);
@@ -55,10 +62,10 @@ public class CustomOrderAdvanceStatusTests
     [Fact]
     public async Task AdvancingAnAlreadyFulfilledOrder_ExplainsItselfRatherThanFailingRaw()
     {
-        var dbName = Guid.NewGuid().ToString();
-        var saleId = await SeedSaleAsync(dbName, FulfilmentStatus.Fulfilled);
+        var connectionString = await postgres.CreateDatabaseAsync();
+        var saleId = await SeedSaleAsync(connectionString, FulfilmentStatus.Fulfilled);
 
-        await using var context = CreateContext(dbName, hierarchyPathPrefix: "/1/");
+        await using var context = CreateContext(connectionString, hierarchyPathPrefix: "/1/");
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => new CustomOrderService(context).AdvanceStatusAsync(saleId));
         Assert.Equal("This custom order is already Fulfilled.", ex.Message);
@@ -67,10 +74,10 @@ public class CustomOrderAdvanceStatusTests
     [Fact]
     public async Task AdvancingAnOrderOutsideTheCallersScope_ExplainsItselfRatherThanFailingRaw()
     {
-        var dbName = Guid.NewGuid().ToString();
-        var saleId = await SeedSaleAsync(dbName, FulfilmentStatus.Submitted, hierarchyPath: "/1/40/");
+        var connectionString = await postgres.CreateDatabaseAsync();
+        var saleId = await SeedSaleAsync(connectionString, FulfilmentStatus.Submitted, hierarchyPath: "/1/40/");
 
-        await using var context = CreateContext(dbName, hierarchyPathPrefix: "/1/4/");
+        await using var context = CreateContext(connectionString, hierarchyPathPrefix: "/1/4/");
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => new CustomOrderService(context).AdvanceStatusAsync(saleId));
         Assert.Equal("This custom order is no longer available.", ex.Message);
@@ -79,10 +86,10 @@ public class CustomOrderAdvanceStatusTests
     [Fact]
     public async Task AdvancingASaleThatIsNotACustomOrder_ExplainsItselfRatherThanFailingRaw()
     {
-        var dbName = Guid.NewGuid().ToString();
-        var saleId = await SeedSaleAsync(dbName, status: null);
+        var connectionString = await postgres.CreateDatabaseAsync();
+        var saleId = await SeedSaleAsync(connectionString, status: null);
 
-        await using var context = CreateContext(dbName, hierarchyPathPrefix: "/1/");
+        await using var context = CreateContext(connectionString, hierarchyPathPrefix: "/1/");
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => new CustomOrderService(context).AdvanceStatusAsync(saleId));
         Assert.Equal("This Sale is not a custom order routed to fulfilment.", ex.Message);

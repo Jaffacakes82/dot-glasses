@@ -9,7 +9,8 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace DotGlasses.Web.Tests;
 
-public class WidgetExamplesApiTests(CustomWebApplicationFactory factory) : IClassFixture<CustomWebApplicationFactory>
+[Collection(WebApiCollection.Name)]
+public class WidgetExamplesApiTests(CustomWebApplicationFactory factory)
 {
     private static HttpClient CreateAuthenticatedClient(CustomWebApplicationFactory factory, string userName, params string[] roles)
     {
