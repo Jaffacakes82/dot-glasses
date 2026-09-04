@@ -2,7 +2,7 @@ namespace DotGlasses.Web.Models;
 
 public record SaleOrTestEvent(string Type, bool Custom, string? Name, string Outlet, string Country, string Time, bool? ConsentGiven);
 public record LeadEvent(Guid Id, string Name, string PhoneMasked, string Outlet, string Reason, string Logged, bool ConsentGiven, bool ConvertedFlag);
-public record ReferralEvent(string Outlet, string Country, string Reason, string Time);
+public record ReferralEvent(string Source, string Outlet, string Country, string Reason, bool TreatedInFacility, string Time);
 
 public class EventHistoryViewModel
 {

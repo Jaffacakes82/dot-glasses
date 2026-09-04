@@ -34,6 +34,25 @@ public class Sale : IAuditable, ISoftDeletable, IHierarchyScoped
 
     public bool ConsentGiven { get; set; }
 
+    /// <summary>"Referred or treated" — captured independently at creation time on each of
+    /// Test/Lead/Sale (2026-09-03); nothing carries forward automatically between them, so the
+    /// same real-world referral may legitimately be re-recorded at more than one stage of a
+    /// converting journey.</summary>
+    public bool ReferredOrTreated { get; set; }
+
+    /// <summary>FK to ReferenceDataItem (Category = ReferralReason). Required whenever
+    /// ReferredOrTreated is true, regardless of TreatedInFacility.</summary>
+    public Guid? ReferralReasonRefId { get; set; }
+    public string? ReferralOtherText { get; set; }
+
+    /// <summary>Required when ReferredOrTreated is true and TreatedInFacility is false; must be
+    /// empty when TreatedInFacility is true or when ReferredOrTreated is false.</summary>
+    public string? ReferralLocationFreeText { get; set; }
+
+    /// <summary>Treated in-house rather than referred out — hides ReferralLocationFreeText (the
+    /// reason stays required either way).</summary>
+    public bool TreatedInFacility { get; set; }
+
     public LensRangeType LensRangeType { get; set; }
 
     public Guid? PresetCatalogueId { get; set; }
@@ -49,6 +68,11 @@ public class Sale : IAuditable, ISoftDeletable, IHierarchyScoped
     public decimal? CustomCylinderRight { get; set; }
     public decimal? CustomAxisRight { get; set; }
     public decimal? CustomAddPowerRight { get; set; }
+
+    /// <summary>FK to ReferenceDataItem (Category = LensType) — asked when a Custom lens carries
+    /// two distinct powers (an add power alongside its base sphere) on either eye.</summary>
+    public Guid? LensTypeRefId { get; set; }
+    public string? LensTypeOtherText { get; set; }
 
     /// <summary>Only meaningful when LensRangeType == Custom — routes the record to fulfilment
     /// (needs manufacturing + delivery) rather than logging it as stock already on hand.</summary>

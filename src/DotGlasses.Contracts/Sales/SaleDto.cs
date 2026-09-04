@@ -14,6 +14,11 @@ public class SaleDto
     public Guid? OccupationRefId { get; set; }
     public string? OccupationOtherText { get; set; }
     public bool ConsentGiven { get; set; }
+    public bool ReferredOrTreated { get; set; }
+    public Guid? ReferralReasonRefId { get; set; }
+    public string? ReferralOtherText { get; set; }
+    public string? ReferralLocationFreeText { get; set; }
+    public bool TreatedInFacility { get; set; }
     public LensRangeType LensRangeType { get; set; }
     public Guid? PresetCatalogueId { get; set; }
     public Guid? LensOptionLeftId { get; set; }
@@ -26,6 +31,8 @@ public class SaleDto
     public decimal? CustomCylinderRight { get; set; }
     public decimal? CustomAxisRight { get; set; }
     public decimal? CustomAddPowerRight { get; set; }
+    public Guid? LensTypeRefId { get; set; }
+    public string? LensTypeOtherText { get; set; }
     public bool OrderFromDotGlasses { get; set; }
     public decimal? PupilDistanceMm { get; set; }
     public int? PresetPupilDistanceBucket { get; set; }

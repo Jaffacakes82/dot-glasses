@@ -11,4 +11,5 @@ public enum ReferenceDataCategory
     FrameColour = 4,
     HardCaseColour = 5,
     LensStrength = 6,
+    LensType = 7,
 }

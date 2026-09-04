@@ -48,7 +48,10 @@ public class DashboardQueryService(DotGlassesDbContext dbContext, IUnscopedRepor
         var pendingLeads = leads.Count(l => !l.ConvertedFlag);
         var customOrders = sales.Count(s => s.FulfilmentStatus is not null);
         var standardSales = sales.Count - customOrders;
-        var referralsLogged = tests.Count(t => t.Outcome == TestOutcome.Referred);
+        // "Referred or treated" is captured independently on each of Test/Lead/Sale (2026-09-03)
+        // — no longer tied to Test.Outcome, and the same real-world referral may legitimately be
+        // logged more than once across a converting Test → Lead → Sale journey (each stage counts).
+        var referralsLogged = tests.Count(t => t.ReferredOrTreated) + leads.Count(l => l.ReferredOrTreated) + sales.Count(s => s.ReferredOrTreated);
 
         var testToSaleConversion = ConversionPercent(tests, TestConvertedToSale);
         var neededTests = tests.Where(t => t.Outcome == TestOutcome.NeedsGlasses).ToList();

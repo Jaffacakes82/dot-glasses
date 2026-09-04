@@ -56,6 +56,17 @@ public class CustomOrderService(DotGlassesDbContext dbContext) : ICustomOrderSer
         return new CustomOrderGroupedResult(retailers, visible.Count);
     }
 
+    /// <summary>Export variant of ListGroupedAsync — same status filter and scoping (shares
+    /// EnrichAsync with the grouped list), unpaged and flat rather than grouped, so the CSV
+    /// export drives off the same underlying filtered data the on-screen list uses.</summary>
+    public async Task<IReadOnlyList<CustomOrderRow>> ExportAsync(DomainFulfilmentStatus? status, CancellationToken cancellationToken = default)
+    {
+        var allOrders = await dbContext.Sales.Where(x => x.FulfilmentStatus != null).ToListAsync(cancellationToken);
+        var enriched = await EnrichAsync(allOrders, cancellationToken);
+        var visible = status is { } value ? enriched.Where(e => e.Sale.FulfilmentStatus == value) : enriched;
+        return visible.Select(ToRow).OrderByDescending(r => r.CreatedAtUtc).ToList();
+    }
+
     public async Task AdvanceStatusAsync(Guid saleId, CancellationToken cancellationToken = default)
     {
         var sale = await dbContext.Sales.FirstAsync(x => x.Id == saleId, cancellationToken);
@@ -111,7 +122,8 @@ public class CustomOrderService(DotGlassesDbContext dbContext) : ICustomOrderSer
         e.RetailPointName,
         FormatPrescription(e.Sale),
         e.Sale.FulfilmentStatus!.Value,
-        e.Sale.CreatedAtUtc);
+        e.Sale.CreatedAtUtc,
+        e.Sale.ConsentGiven);
 
     private static bool IsActive(DomainFulfilmentStatus status) => status != DomainFulfilmentStatus.Fulfilled;
 

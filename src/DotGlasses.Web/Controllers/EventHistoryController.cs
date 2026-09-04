@@ -1,4 +1,6 @@
+using System.Globalization;
 using DotGlasses.Application.Reporting;
+using DotGlasses.Web.Export;
 using DotGlasses.Web.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -56,6 +58,49 @@ public class EventHistoryController(IEventHistoryQueryService eventHistoryQueryS
         return View(model);
     }
 
+    /// <summary>Drives off the same ExportXAsync methods as Index's ListXAsync equivalents — same
+    /// filter parameters, same scoping, just unpaged — so a user can never export rows they
+    /// couldn't otherwise see on screen.</summary>
+    public async Task<IActionResult> Export(string tab = "sales", string? search = null, DateOnly? fromDate = null, DateOnly? toDate = null, CancellationToken cancellationToken = default)
+    {
+        var (fromUtc, toUtcExclusive) = DateRange.ToUtcRange(fromDate, toDate);
+
+        byte[] csv;
+        switch (tab)
+        {
+            case "sales":
+                var sales = await eventHistoryQueryService.ExportSalesAsync(fromUtc, toUtcExclusive, cancellationToken);
+                csv = CsvExport.Build(
+                    ["Type", "Custom", "Name", "Outlet", "Country", "Created", "ConsentGiven"],
+                    sales.Select(r => (IReadOnlyList<string?>)[r.Type, r.Custom.ToString(), r.Name, r.Outlet, r.Country, FormatCsvDate(r.CreatedAtUtc), r.ConsentGiven?.ToString()]));
+                break;
+            case "tests":
+                var tests = await eventHistoryQueryService.ExportTestsAsync(fromUtc, toUtcExclusive, cancellationToken);
+                csv = CsvExport.Build(
+                    ["Type", "Outlet", "Country", "Created"],
+                    tests.Select(r => (IReadOnlyList<string?>)[r.Type, r.Outlet, r.Country, FormatCsvDate(r.CreatedAtUtc)]));
+                break;
+            case "leads":
+                var leads = await eventHistoryQueryService.ExportLeadsAsync(search, fromUtc, toUtcExclusive, cancellationToken);
+                csv = CsvExport.Build(
+                    ["Name", "Phone", "Outlet", "Reason", "ConsentGiven", "Created", "Converted"],
+                    leads.Select(r => (IReadOnlyList<string?>)[r.Name, r.PhoneMasked, r.Outlet, r.Reason, r.ConsentGiven.ToString(), FormatCsvDate(r.CreatedAtUtc), r.ConvertedFlag.ToString()]));
+                break;
+            case "referrals":
+                var referrals = await eventHistoryQueryService.ExportReferralsAsync(fromUtc, toUtcExclusive, cancellationToken);
+                csv = CsvExport.Build(
+                    ["Outlet", "Country", "Reason", "Created"],
+                    referrals.Select(r => (IReadOnlyList<string?>)[r.Outlet, r.Country, r.Reason, FormatCsvDate(r.CreatedAtUtc)]));
+                break;
+            default:
+                return BadRequest();
+        }
+
+        return File(csv, "text/csv", $"event-history-{tab}-{DateTime.UtcNow:yyyyMMddHHmmss}.csv");
+    }
+
+    private static string FormatCsvDate(DateTimeOffset timestamp) => timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+
     private static SaleOrTestEvent ToWebModel(SaleOrTestEventRow row) =>
         new(row.Type, row.Custom, row.Name, row.Outlet, row.Country, FormatAbsolute(row.CreatedAtUtc), row.ConsentGiven);
 
@@ -63,7 +108,7 @@ public class EventHistoryController(IEventHistoryQueryService eventHistoryQueryS
         new(row.Id, row.Name, row.PhoneMasked, row.Outlet, row.Reason, FormatRelative(row.CreatedAtUtc), row.ConsentGiven, row.ConvertedFlag);
 
     private static ReferralEvent ToWebModel(ReferralEventRow row) =>
-        new(row.Outlet, row.Country, row.Reason, FormatAbsolute(row.CreatedAtUtc));
+        new(row.Source, row.Outlet, row.Country, row.Reason, row.TreatedInFacility, FormatAbsolute(row.CreatedAtUtc));
 
     private static string FormatAbsolute(DateTimeOffset timestamp) => timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
 
