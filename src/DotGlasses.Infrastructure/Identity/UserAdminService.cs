@@ -1,6 +1,7 @@
 using DotGlasses.Application.Common;
 using DotGlasses.Application.Reporting;
 using DotGlasses.Application.Users;
+using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Entities;
 using DotGlasses.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
@@ -116,7 +117,7 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
         var createResult = await userManager.CreateAsync(user);
         if (!createResult.Succeeded)
         {
-            throw new InvalidOperationException(string.Join("; ", createResult.Errors.Select(e => e.Description)));
+            throw new DomainRuleViolationException(string.Join("; ", createResult.Errors.Select(e => e.Description)));
         }
 
         await userManager.AddToRoleAsync(user, role);
@@ -182,7 +183,7 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
         var user = await userManager.FindByIdAsync(userId.ToString()) ?? throw new InvalidOperationException("User not found.");
         if (user.OrgNodeId == orgNodeId)
         {
-            throw new InvalidOperationException("Can't un-assign a user's primary org — switch their primary org first.");
+            throw new DomainRuleViolationException("Can't un-assign a user's primary org — switch their primary org first.");
         }
 
         var entity = await dbContext.UserOrgAssignments

@@ -15,7 +15,7 @@ public interface IUserOrgAssignmentService
 
     /// <summary>Updates the user's active org (ApplicationUser.OrgNodeId/HierarchyPath/OrgLevel)
     /// to targetOrgNodeId — the caller must re-issue a fresh JWT/cookie afterwards for the new
-    /// claims to take effect. Throws InvalidOperationException if targetOrgNodeId isn't one of
+    /// claims to take effect. Throws DomainRuleViolationException if targetOrgNodeId isn't one of
     /// the user's own UserOrgAssignment rows — never trust a client-submitted org Id without
     /// checking membership first.</summary>
     Task SwitchActiveOrgAsync(Guid userId, Guid targetOrgNodeId, CancellationToken cancellationToken = default);

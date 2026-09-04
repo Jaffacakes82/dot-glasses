@@ -11,6 +11,7 @@ using DotGlasses.Infrastructure.Persistence.Interceptors;
 using DotGlasses.Web.Auth;
 using DotGlasses.Web.Authorization;
 using DotGlasses.Web.Configuration;
+using DotGlasses.Web.Filters;
 using DotGlasses.Web.HostedServices;
 using FluentValidation;
 using FluentValidation.AspNetCore;
@@ -155,7 +156,11 @@ builder.Services.AddApiVersioning(options =>
         options.SubstituteApiVersionInUrl = true;
     });
 
-builder.Services.AddControllersWithViews();
+// DomainRuleViolationFilter is global on purpose (ADR-0003): a business-rule rejection reaches
+// the user as a validation response on every action, API or screen, without each controller
+// having to remember to catch one. Registered by type so its ITempDataDictionaryFactory/
+// IUrlHelperFactory dependencies come from DI.
+builder.Services.AddControllersWithViews(options => options.Filters.Add<DomainRuleViolationFilter>());
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.ConfigureOptions<ConfigureSwaggerOptions>();
 builder.Services.AddSwaggerGen();
