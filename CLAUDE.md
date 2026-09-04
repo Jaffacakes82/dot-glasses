@@ -12,9 +12,28 @@ are the record of *how* things got built; don't restate that here.
   `Application` → `Domain`; `Infrastructure` → `Domain`/`Application` (implements its
   interfaces). Nothing references `Infrastructure` except `Web`'s `Program.cs` (composition
   root) and `AppHost` (orchestration).
-- **`DotGlasses.App` may only ever reference `DotGlasses.Contracts`.** If a change seems to
-  need `App` to reference anything else, that's a signal the type belongs in `Contracts`
-  instead — flag it, don't add the reference.
+- **`DotGlasses.App` may reference `DotGlasses.Contracts` and `DotGlasses.Rules`, and nothing
+  else.** If a change seems to need `App` to reference anything further, that's a signal the type
+  belongs in `Contracts` (a wire shape) or `Rules` (a rule the device and the server must agree
+  on) instead — flag it, don't add the reference.
+- **`DotGlasses.Rules` may only ever reference `DotGlasses.Contracts`** — no `Domain`, no
+  `Application`, no `Infrastructure`, no EF Core, no ASP.NET. `App` is a Blazor WASM app, so
+  anything `Rules` drags in ships to the device; the reference rule above is only worth what this
+  one enforces. It holds the consultation rules (pure functions over a request DTO plus a
+  reference-data snapshot) and `ReferenceDataSnapshot`, and it is deliberately free of I/O: two
+  adapters outside it do the loading — `ReferenceDataSnapshotProvider` (Infrastructure, from the
+  database, retired items included) and `ReferenceDataSnapshotAdapter` (App, from the
+  IndexedDB-cached API response, active items only). Rules ask "present **and** active", which is
+  correct under both fillings. Rule failure keys are request-DTO property names and that is
+  load-bearing — `FormErrors`, `ValidationProblemDetails` and `LeadConversionController`'s
+  `Form.{PropertyName}` remap all key off it. See ADR-0002.
+- **`ReferenceDataSnapshot` is the single `Guid`→label resolver server-side**, fallback `"—"`.
+  Don't add a local `ToDictionary(x => x.Id, x => x.Label)` beside it — that's the pattern it
+  replaced (seven implementations, four different fallback strings). It is registered scoped and
+  memoized per request; it is deliberately **not** cached across requests (Container Apps scales
+  to multiple replicas, so an in-memory cache would go stale per-replica on an admin edit — see
+  ADR-0002). A service that writes reference data and then re-reads it in the *same* request must
+  not use the memoized snapshot; today every Admin Portal write redirects instead.
 - **`Contracts` must not reference `Domain` or `Application`** — it's a pure wire-shape layer, not
   because of a project reference someone forgot to add but because `App` referencing `Contracts`
   must not transitively pull in `Domain`/`Application`. DTOs that need an enum define their own

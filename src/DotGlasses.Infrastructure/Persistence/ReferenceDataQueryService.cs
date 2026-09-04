@@ -1,8 +1,7 @@
+using DotGlasses.Application.Common;
 using DotGlasses.Application.ReferenceData;
 using DotGlasses.Contracts.ReferenceData;
 using Microsoft.EntityFrameworkCore;
-using DomainCategory = DotGlasses.Domain.Enums.ReferenceDataCategory;
-using ContractCategory = DotGlasses.Contracts.Common.ReferenceDataCategory;
 
 namespace DotGlasses.Infrastructure.Persistence;
 
@@ -18,7 +17,7 @@ public class ReferenceDataQueryService(DotGlassesDbContext dbContext) : IReferen
         return items.Select(x => new ReferenceDataItemDto
         {
             Id = x.Id,
-            Category = ToContractCategory(x.Category),
+            Category = x.Category.ToContract(),
             Code = x.Code,
             Label = x.Label,
             SortOrder = x.SortOrder,
@@ -38,17 +37,4 @@ public class ReferenceDataQueryService(DotGlassesDbContext dbContext) : IReferen
             Exclusions = exclusions.Select(e => new CoatingExclusionDto { Id = e.Id, CoatingRefIdA = e.CoatingRefIdA, CoatingRefIdB = e.CoatingRefIdB }).ToList(),
         };
     }
-
-    private static ContractCategory ToContractCategory(DomainCategory category) => category switch
-    {
-        DomainCategory.Occupation => ContractCategory.Occupation,
-        DomainCategory.ReasonNotPurchased => ContractCategory.ReasonNotPurchased,
-        DomainCategory.ReferralReason => ContractCategory.ReferralReason,
-        DomainCategory.Coating => ContractCategory.Coating,
-        DomainCategory.FrameColour => ContractCategory.FrameColour,
-        DomainCategory.HardCaseColour => ContractCategory.HardCaseColour,
-        DomainCategory.LensStrength => ContractCategory.LensStrength,
-        DomainCategory.LensType => ContractCategory.LensType,
-        _ => throw new ArgumentOutOfRangeException(nameof(category), category, null),
-    };
 }

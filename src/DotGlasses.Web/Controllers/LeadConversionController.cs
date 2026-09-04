@@ -7,6 +7,7 @@ using DotGlasses.Contracts.PresetCatalogues;
 using DotGlasses.Contracts.Leads;
 using DotGlasses.Contracts.ReferenceData;
 using DotGlasses.Contracts.Sales;
+using DotGlasses.Rules.ReferenceData;
 using DotGlasses.Web.Models;
 using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
@@ -34,6 +35,7 @@ public class LeadConversionController(
     ILeadService leadService,
     ISaleService saleService,
     IReferenceDataQueryService referenceDataQueryService,
+    IReferenceDataSnapshotProvider referenceDataSnapshotProvider,
     IPresetCatalogueQueryService presetCatalogueQueryService,
     IValidator<CreateSaleRequest> validator) : Controller
 {
@@ -138,13 +140,19 @@ public class LeadConversionController(
         var referenceData = await referenceDataQueryService.ListActiveAsync(cancellationToken);
         var catalogues = await presetCatalogueQueryService.ListAvailableForCallerAsync(lead.HierarchyPath, cancellationToken);
 
+        // The dropdowns above deliberately stay on the active-only list — an admin must not be
+        // able to pick a retired option. The read-only lens summary below is the opposite case:
+        // it describes what the Lead already recorded, which may point at an option retired since,
+        // so it resolves against the snapshot (retired items included) instead.
+        var referenceDataSnapshot = await referenceDataSnapshotProvider.GetAsync(cancellationToken);
+
         return new LeadConversionViewModel
         {
             Lead = lead,
             CustomerFullName = lead.CustomerFullName,
             CustomerPhoneNumber = lead.CustomerPhoneNumber,
             LensCarriedOver = lead.LensRangeType is not null,
-            LensSummary = BuildLensSummary(lead, catalogues, referenceData),
+            LensSummary = BuildLensSummary(lead, referenceDataSnapshot),
             AvailableCatalogues = catalogues,
             FrameColours = referenceData.Where(x => x.Category == ReferenceDataCategory.FrameColour).OrderBy(x => x.SortOrder).ToList(),
             Coatings = referenceData.Where(x => x.Category == ReferenceDataCategory.Coating).OrderBy(x => x.SortOrder).ToList(),
@@ -154,18 +162,23 @@ public class LeadConversionController(
         };
     }
 
-    private static string? BuildLensSummary(LeadDto lead, IReadOnlyList<PresetCatalogueDto> catalogues, IReadOnlyList<ReferenceDataItemDto> referenceData)
+    private static string? BuildLensSummary(LeadDto lead, ReferenceDataSnapshot referenceData)
     {
         switch (lead.LensRangeType)
         {
             case LensRangeType.SixLensSet or LensRangeType.NineLensSet:
-                var catalogue = catalogues.FirstOrDefault(c => c.Id == lead.PresetCatalogueId);
-                var left = catalogue?.LensOptions.FirstOrDefault(o => o.Id == lead.LensOptionLeftId)?.Label ?? "—";
-                var right = catalogue?.LensOptions.FirstOrDefault(o => o.Id == lead.LensOptionRightId)?.Label ?? "—";
+                var catalogue = referenceData.FindCatalogue(lead.PresetCatalogueId);
+                var left = referenceData.ResolveLensOptionLabel(lead.LensOptionLeftId);
+                var right = referenceData.ResolveLensOptionLabel(lead.LensOptionRightId);
                 return $"{catalogue?.Name ?? "Preset range"} — Left: {left}, Right: {right}";
             case LensRangeType.Custom:
-                var lensType = referenceData.FirstOrDefault(x => x.Id == lead.LensTypeRefId);
-                var lensTypeSummary = lensType is null ? null : $"; Lens type {(lensType.IsOtherOption ? lead.LensTypeOtherText : lensType.Label)}";
+                // Still keyed off the id being present, not off the item resolving: a Lead with no
+                // lens type recorded omits the clause entirely, exactly as before. What changes is
+                // that a lens type retired since the Lead was captured now renders its label
+                // instead of silently dropping the clause.
+                var lensTypeSummary = lead.LensTypeRefId is null
+                    ? null
+                    : $"; Lens type {referenceData.ResolveLabel(lead.LensTypeRefId, lead.LensTypeOtherText)}";
                 return $"Custom — OD (right) Sphere {lead.CustomSphereRight} / Cyl {lead.CustomCylinderRight} / Axis {lead.CustomAxisRight} / Add {lead.CustomAddPowerRight}; "
                     + $"OS (left) Sphere {lead.CustomSphereLeft} / Cyl {lead.CustomCylinderLeft} / Axis {lead.CustomAxisLeft} / Add {lead.CustomAddPowerLeft}; "
                     + $"PD {(lead.PupilDistanceMm is { } pd ? $"{pd}mm" : "not recorded")}{lensTypeSummary}";

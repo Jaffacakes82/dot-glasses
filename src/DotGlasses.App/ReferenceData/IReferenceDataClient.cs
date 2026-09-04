@@ -31,6 +31,10 @@ public interface IReferenceDataClient
 
     IReadOnlyList<ReferenceDataItemDto> GetByCategory(ReferenceDataCategory category);
 
+    /// <summary>Every cached item across every category — what ReferenceDataSnapshotAdapter fills
+    /// the shared rules' snapshot from. Active items only, because that is all the API returns.</summary>
+    IReadOnlyList<ReferenceDataItemDto> AllItems { get; }
+
     IReadOnlyList<PresetCatalogueDto> Catalogues { get; }
 
     /// <summary>Coating pairing/exclusion rules (see ADR-0001) — cached the same way as the rest
