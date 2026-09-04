@@ -279,3 +279,19 @@ Aspire dashboard). Dev-only seeded accounts (`DevUserSeeder`) require `DevSeed:A
 `DevSeed:KenyaManagerPassword` / `DevSeed:RetailPointUserPassword` set via `dotnet user-secrets
 set` from `src/DotGlasses.Web` — unset secrets simply skip seeding that account, they don't
 error. For the Field App standalone dev server: `dotnet run` on `DotGlasses.App`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live as markdown files under `.scratch/<feature-slug>/`. See
+`docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five canonical labels (`needs-triage`, `needs-info`, `ready-for-agent`,
+`ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
