@@ -1,4 +1,5 @@
 using DotGlasses.Application.PresetCatalogues;
+using DotGlasses.Application.ReferenceData;
 using DotGlasses.Domain.Entities;
 using DotGlasses.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -8,7 +9,7 @@ namespace DotGlasses.Infrastructure.Persistence;
 /// <summary>Queries DotGlassesDbContext directly rather than through a repository — no repository
 /// interface exists for PresetCatalogue/LensOption/LensStrengthCoatingOption, matching
 /// ReferenceDataAdminService/OrganisationAdminService.</summary>
-public class PresetCatalogueAdminService(DotGlassesDbContext dbContext) : IPresetCatalogueAdminService
+public class PresetCatalogueAdminService(DotGlassesDbContext dbContext, IReferenceDataSnapshotProvider referenceDataSnapshotProvider) : IPresetCatalogueAdminService
 {
     public async Task<IReadOnlyList<PresetCatalogueAdminDto>> ListAsync(CancellationToken cancellationToken = default)
     {
@@ -20,10 +21,7 @@ public class PresetCatalogueAdminService(DotGlassesDbContext dbContext) : IPrese
             .OrderBy(l => l.SortOrder)
             .ToListAsync(cancellationToken);
 
-        var lensStrengthIds = lensOptions.Select(l => l.LensStrengthRefId).Distinct().ToList();
-        var lensStrengthLabels = await dbContext.ReferenceDataItems
-            .Where(r => lensStrengthIds.Contains(r.Id))
-            .ToDictionaryAsync(r => r.Id, r => r.Label, cancellationToken);
+        var referenceData = await referenceDataSnapshotProvider.GetAsync(cancellationToken);
 
         return catalogues.Select(c => new PresetCatalogueAdminDto(
             c.Id,
@@ -33,7 +31,7 @@ public class PresetCatalogueAdminService(DotGlassesDbContext dbContext) : IPrese
             c.OwningOrgNodeId,
             c.Kind,
             lensOptions.Where(l => l.PresetCatalogueId == c.Id)
-                .Select(l => new PresetCatalogueLensOptionAdminDto(l.Id, l.LensStrengthRefId, lensStrengthLabels.GetValueOrDefault(l.LensStrengthRefId, "Unknown"), l.SortOrder))
+                .Select(l => new PresetCatalogueLensOptionAdminDto(l.Id, l.LensStrengthRefId, referenceData.ResolveLabel(l.LensStrengthRefId), l.SortOrder))
                 .ToList()))
             .ToList();
     }
@@ -101,12 +99,12 @@ public class PresetCatalogueAdminService(DotGlassesDbContext dbContext) : IPrese
         dbContext.LensOptions.Add(entity);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        var label = await dbContext.ReferenceDataItems
-            .Where(r => r.Id == lensStrengthRefId)
-            .Select(r => r.Label)
-            .FirstOrDefaultAsync(cancellationToken) ?? "Unknown";
+        // The snapshot is safe to read after the write above: this method adds a LensOption, and
+        // a LensOption's label comes from the ReferenceDataItem it points at, which nothing here
+        // touched. See ReferenceDataSnapshotProvider on the per-request memoization.
+        var referenceData = await referenceDataSnapshotProvider.GetAsync(cancellationToken);
 
-        return new PresetCatalogueLensOptionAdminDto(entity.Id, entity.LensStrengthRefId, label, entity.SortOrder);
+        return new PresetCatalogueLensOptionAdminDto(entity.Id, entity.LensStrengthRefId, referenceData.ResolveLabel(lensStrengthRefId), entity.SortOrder);
     }
 
     public async Task<bool> LensOptionExistsAsync(Guid catalogueId, Guid lensStrengthRefId, CancellationToken cancellationToken = default) =>
