@@ -102,6 +102,28 @@
                 </select>
             </div>
 
+            <div class="dg-field">
+                <label><input type="checkbox" @bind="_referredOrTreated" style="width:auto; margin-right:8px;" />Referred or treated</label>
+            </div>
+            @if (_referredOrTreated)
+            {
+                <ReferenceDataDropdown Label="Reason for referral/treatment" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.ReferralReason)"
+                                        SelectedId="_referralReasonRefId" SelectedIdChanged="v => _referralReasonRefId = v"
+                                        OtherText="_referralOtherText" OtherTextChanged="v => _referralOtherText = v"
+                                        Errors="_errors" Field="ReferralReasonRefId" OtherField="ReferralOtherText" />
+                <div class="dg-field">
+                    <label><input type="checkbox" @bind="_treatedInFacility" style="width:auto; margin-right:8px;" />Treated in facility</label>
+                </div>
+                @if (!_treatedInFacility)
+                {
+                    <div class="dg-field">
+                        <label>Referral location (hospital, clinic, etc.)</label>
+                        <input @bind="_referralLocationFreeText" />
+                        <FieldError Errors="_errors" For="ReferralLocationFreeText" />
+                    </div>
+                }
+            }
+
             @if (IsTest)
             {
                 <div class="dg-field">
@@ -109,24 +131,11 @@
                     <select @bind="_testOutcome">
                         <option value="NoGlassesNeeded">No glasses needed</option>
                         <option value="NeedsGlasses">Needs glasses</option>
-                        <option value="Referred">Referred</option>
                     </select>
                     <FieldError Errors="_errors" For="Outcome" />
                 </div>
 
-                @if (_testOutcome == TestOutcome.Referred)
-                {
-                    <ReferenceDataDropdown Label="Reason for referral" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.ReferralReason)"
-                                            SelectedId="_referralReasonRefId" SelectedIdChanged="v => _referralReasonRefId = v"
-                                            OtherText="_referralOtherText" OtherTextChanged="v => _referralOtherText = v"
-                                            Errors="_errors" Field="ReferralReasonRefId" OtherField="ReferralOtherText" />
-                    <div class="dg-field">
-                        <label>Referral location (hospital, clinic, etc.)</label>
-                        <input @bind="_referralLocationFreeText" />
-                        <FieldError Errors="_errors" For="ReferralLocationFreeText" />
-                    </div>
-                }
-                else if (_testOutcome == TestOutcome.NeedsGlasses)
+                @if (_testOutcome == TestOutcome.NeedsGlasses)
                 {
                     <ReferenceDataDropdown Label="Occupation (optional)" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Occupation)"
                                             SelectedId="_occupationRefId" SelectedIdChanged="v => _occupationRefId = v"
@@ -286,9 +295,13 @@
     // Test-only
     private TestOutcome _testOutcome = TestOutcome.NoGlassesNeeded;
     private bool? _contactShared;
+
+    // "Referred or treated" — shared across all three (Test/Lead/Sale), unconditional on outcome.
+    private bool _referredOrTreated;
     private Guid? _referralReasonRefId;
     private string? _referralOtherText;
     private string? _referralLocationFreeText;
+    private bool _treatedInFacility;
 
     // Lead/Sale shared
     private string _name = string.Empty;
@@ -319,7 +332,8 @@
     // Which server error keys this form has a control for. Anything outside these lands in the
     // summary band instead of being silently dropped — see FormErrors.Merge.
     private static readonly string[] TestFields =
-        ["AgeYears", "Gender", "OccupationRefId", "OccupationOtherText", "Outcome", "ReferralReasonRefId", "ReferralOtherText", "ReferralLocationFreeText"];
+        ["AgeYears", "Gender", "OccupationRefId", "OccupationOtherText", "Outcome",
+         "ReferredOrTreated", "ReferralReasonRefId", "ReferralOtherText", "ReferralLocationFreeText", "TreatedInFacility"];
 
     private static readonly string[] LensFields =
         ["LensRangeType", "PresetCatalogueId", "LensOptionLeftId", "LensOptionRightId", "CustomSphereLeft", "CustomSphereRight",
@@ -510,7 +524,7 @@
     private bool HasUnsavedData =>
         _age is not null || !string.IsNullOrWhiteSpace(_name) || !string.IsNullOrWhiteSpace(_phone)
         || _occupationRefId is not null || _consentGiven
-        || (IsTest && (_testOutcome != TestOutcome.NoGlassesNeeded || _referralLocationFreeText is not null))
+        || (IsTest && _testOutcome != TestOutcome.NoGlassesNeeded) || _referredOrTreated
         || _reasonNotPurchasedRefId is not null || _coatingPreferenceRefId is not null
         || _frameColourRefId is not null || _coatingRefId is not null || _hardCaseSold
         || _lensRange.LensOptionLeftId is not null || _lensRange.LensOptionRightId is not null
@@ -641,16 +655,13 @@
 
         _errors.AddIf(_age is < 0 or > 120, "AgeYears", "Age must be between 0 and 120.");
         ValidateOtherText(ReferenceDataCategory.Occupation, _occupationRefId, _occupationOtherText, "OccupationOtherText", "an occupation");
+        ValidateReferral();
 
-        if (IsTest)
-        {
-            ValidateTest();
-        }
-        else if (IsSale)
+        if (IsSale)
         {
             ValidateSale();
         }
-        else
+        else if (!IsTest)
         {
             ValidateLead();
         }
@@ -663,7 +674,9 @@
         return !_errors.Any;
     }
 
-    private void ValidateTest()
+    /// <summary>"Referred or treated" — unconditional on outcome/result, shared across all three
+    /// consultation types (mirrors CreateTestRequestValidator.ValidateReferralAsync server-side).</summary>
+    private void ValidateReferral()
     {
         if (_testOutcome == TestOutcome.NeedsGlasses)
         {
@@ -672,22 +685,25 @@
             ValidateLensRange(bucketRequired: false);
         }
 
-        if (_testOutcome != TestOutcome.Referred)
+        if (!_referredOrTreated)
         {
             return;
         }
 
         if (_referralReasonRefId is null)
         {
-            _errors.Add("ReferralReasonRefId", "Choose a reason for the referral.");
+            _errors.Add("ReferralReasonRefId", "Choose a reason for the referral/treatment.");
         }
         else
         {
             ValidateOtherText(ReferenceDataCategory.ReferralReason, _referralReasonRefId, _referralOtherText, "ReferralOtherText", "a referral reason");
         }
 
-        _errors.AddIf(string.IsNullOrWhiteSpace(_referralLocationFreeText), "ReferralLocationFreeText",
-            "Enter where the customer is being referred to.");
+        if (!_treatedInFacility)
+        {
+            _errors.AddIf(string.IsNullOrWhiteSpace(_referralLocationFreeText), "ReferralLocationFreeText",
+                "Enter where the customer is being referred to.");
+        }
     }
 
     private void ValidateLead()
@@ -860,9 +876,11 @@
             OccupationRefId = _occupationRefId,
             OccupationOtherText = _occupationOtherText,
             Outcome = _testOutcome,
-            ReferralReasonRefId = _testOutcome == TestOutcome.Referred ? _referralReasonRefId : null,
-            ReferralOtherText = _testOutcome == TestOutcome.Referred ? _referralOtherText : null,
-            ReferralLocationFreeText = _testOutcome == TestOutcome.Referred ? _referralLocationFreeText : null,
+            ReferredOrTreated = _referredOrTreated,
+            ReferralReasonRefId = _referredOrTreated ? _referralReasonRefId : null,
+            ReferralOtherText = _referredOrTreated ? _referralOtherText : null,
+            ReferralLocationFreeText = _referredOrTreated && !_treatedInFacility ? _referralLocationFreeText : null,
+            TreatedInFacility = _referredOrTreated && _treatedInFacility,
             LensRangeType = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.LensRangeType : null,
             PresetCatalogueId = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.PresetCatalogueId : null,
             LensOptionLeftId = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.LensOptionLeftId : null,
@@ -901,6 +919,11 @@
             OccupationRefId = _occupationRefId,
             OccupationOtherText = _occupationOtherText,
             ConsentGiven = _consentGiven,
+            ReferredOrTreated = _referredOrTreated,
+            ReferralReasonRefId = _referredOrTreated ? _referralReasonRefId : null,
+            ReferralOtherText = _referredOrTreated ? _referralOtherText : null,
+            ReferralLocationFreeText = _referredOrTreated && !_treatedInFacility ? _referralLocationFreeText : null,
+            TreatedInFacility = _referredOrTreated && _treatedInFacility,
             ReasonNotPurchasedRefId = _reasonNotPurchasedRefId ?? Guid.Empty,
             ReasonNotPurchasedOtherText = _reasonNotPurchasedOtherText,
             LensRangeType = _lensRange.LensRangeType,
@@ -944,6 +967,11 @@
             OccupationRefId = _occupationRefId,
             OccupationOtherText = _occupationOtherText,
             ConsentGiven = _consentGiven,
+            ReferredOrTreated = _referredOrTreated,
+            ReferralReasonRefId = _referredOrTreated ? _referralReasonRefId : null,
+            ReferralOtherText = _referredOrTreated ? _referralOtherText : null,
+            ReferralLocationFreeText = _referredOrTreated && !_treatedInFacility ? _referralLocationFreeText : null,
+            TreatedInFacility = _referredOrTreated && _treatedInFacility,
             LensRangeType = _lensRange.LensRangeType ?? LensRangeType.Custom,
             PresetCatalogueId = _lensRange.PresetCatalogueId,
             LensOptionLeftId = _lensRange.LensOptionLeftId,

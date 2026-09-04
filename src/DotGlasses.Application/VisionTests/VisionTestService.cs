@@ -38,9 +38,11 @@ public class VisionTestService(IVisionTestRepository repository, IUnitOfWork uni
             OccupationRefId = request.OccupationRefId,
             OccupationOtherText = request.OccupationOtherText,
             Outcome = ToDomainOutcome(request.Outcome),
+            ReferredOrTreated = request.ReferredOrTreated,
             ReferralReasonRefId = request.ReferralReasonRefId,
             ReferralOtherText = request.ReferralOtherText,
             ReferralLocationFreeText = request.ReferralLocationFreeText,
+            TreatedInFacility = request.TreatedInFacility,
             LensRangeType = request.LensRangeType?.ToDomain(),
             PresetCatalogueId = request.PresetCatalogueId,
             LensOptionLeftId = request.LensOptionLeftId,
@@ -77,9 +79,11 @@ public class VisionTestService(IVisionTestRepository repository, IUnitOfWork uni
         OccupationRefId = entity.OccupationRefId,
         OccupationOtherText = entity.OccupationOtherText,
         Outcome = ToContractOutcome(entity.Outcome),
+        ReferredOrTreated = entity.ReferredOrTreated,
         ReferralReasonRefId = entity.ReferralReasonRefId,
         ReferralOtherText = entity.ReferralOtherText,
         ReferralLocationFreeText = entity.ReferralLocationFreeText,
+        TreatedInFacility = entity.TreatedInFacility,
         LensRangeType = entity.LensRangeType?.ToContract(),
         PresetCatalogueId = entity.PresetCatalogueId,
         LensOptionLeftId = entity.LensOptionLeftId,
@@ -107,7 +111,6 @@ public class VisionTestService(IVisionTestRepository repository, IUnitOfWork uni
     {
         ContractOutcome.NoGlassesNeeded => DomainOutcome.NoGlassesNeeded,
         ContractOutcome.NeedsGlasses => DomainOutcome.NeedsGlasses,
-        ContractOutcome.Referred => DomainOutcome.Referred,
         _ => throw new ArgumentOutOfRangeException(nameof(outcome), outcome, null),
     };
 
@@ -115,7 +118,6 @@ public class VisionTestService(IVisionTestRepository repository, IUnitOfWork uni
     {
         DomainOutcome.NoGlassesNeeded => ContractOutcome.NoGlassesNeeded,
         DomainOutcome.NeedsGlasses => ContractOutcome.NeedsGlasses,
-        DomainOutcome.Referred => ContractOutcome.Referred,
         _ => throw new ArgumentOutOfRangeException(nameof(outcome), outcome, null),
     };
 }

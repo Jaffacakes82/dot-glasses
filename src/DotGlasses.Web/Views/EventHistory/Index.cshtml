@@ -135,14 +135,16 @@
         else
         {
             <table class="dg-table">
-                <thead><tr><th>Outlet</th><th>Country</th><th>Reason</th><th>Time</th></tr></thead>
+                <thead><tr><th>Source</th><th>Outlet</th><th>Country</th><th>Reason</th><th>Treated in facility</th><th>Time</th></tr></thead>
                 <tbody>
                 @foreach (var referral in Model.Referrals)
                 {
                     <tr>
+                        <td><span class="dg-badge" style="background:var(--dot-beige);">@referral.Source</span></td>
                         <td>@referral.Outlet</td>
                         <td class="dg-muted">@referral.Country</td>
                         <td class="dg-muted">@referral.Reason</td>
+                        <td class="dg-muted">@(referral.TreatedInFacility ? "Yes" : "No")</td>
                         <td class="dg-muted">@referral.Time</td>
                     </tr>
                 }

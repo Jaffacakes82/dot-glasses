@@ -89,7 +89,17 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
 
     public async Task<PagedResult<ReferralEventRow>> ListReferralsAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, int page, int pageSize, CancellationToken cancellationToken = default)
     {
-        var query = dbContext.Tests.Where(t => t.Outcome == TestOutcome.Referred);
+        // Merged across all three entities (2026-09-03 — "referred or treated" is no longer
+        // Test-only). Each Select projects to the same anonymous shape so Concat translates to a
+        // single SQL UNION ALL — ordering/paging happens once, after the union, not per-entity.
+        var testRows = dbContext.Tests.Where(t => t.ReferredOrTreated)
+            .Select(t => new { Source = "Test", t.HierarchyPath, t.ReferralReasonRefId, t.ReferralOtherText, t.TreatedInFacility, t.CreatedAtUtc });
+        var leadRows = dbContext.Leads.Where(l => l.ReferredOrTreated)
+            .Select(l => new { Source = "Lead", l.HierarchyPath, l.ReferralReasonRefId, l.ReferralOtherText, l.TreatedInFacility, l.CreatedAtUtc });
+        var saleRows = dbContext.Sales.Where(s => s.ReferredOrTreated)
+            .Select(s => new { Source = "Sale", s.HierarchyPath, s.ReferralReasonRefId, s.ReferralOtherText, s.TreatedInFacility, s.CreatedAtUtc });
+
+        var query = testRows.Concat(leadRows).Concat(saleRows);
         if (fromUtc is { } from) query = query.Where(x => x.CreatedAtUtc >= from);
         if (toUtcExclusive is { } to) query = query.Where(x => x.CreatedAtUtc < to);
 
@@ -102,7 +112,7 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
         {
             var (outlet, country) = orgLookup.Resolve(t.HierarchyPath);
             var reason = refData.Resolve(t.ReferralReasonRefId, t.ReferralOtherText);
-            return new ReferralEventRow(outlet, country, reason, t.CreatedAtUtc);
+            return new ReferralEventRow(t.Source, outlet, country, reason, t.TreatedInFacility, t.CreatedAtUtc);
         }).ToList();
 
         return new PagedResult<ReferralEventRow>(items, totalCount, page, pageSize);

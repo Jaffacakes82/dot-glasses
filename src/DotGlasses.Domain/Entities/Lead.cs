@@ -31,6 +31,25 @@ public class Lead : IAuditable, ISoftDeletable, IHierarchyScoped
 
     public bool ConsentGiven { get; set; }
 
+    /// <summary>"Referred or treated" — captured independently at creation time on each of
+    /// Test/Lead/Sale (2026-09-03); nothing carries forward automatically between them, so the
+    /// same real-world referral may legitimately be re-recorded at more than one stage of a
+    /// converting journey.</summary>
+    public bool ReferredOrTreated { get; set; }
+
+    /// <summary>FK to ReferenceDataItem (Category = ReferralReason). Required whenever
+    /// ReferredOrTreated is true, regardless of TreatedInFacility.</summary>
+    public Guid? ReferralReasonRefId { get; set; }
+    public string? ReferralOtherText { get; set; }
+
+    /// <summary>Required when ReferredOrTreated is true and TreatedInFacility is false; must be
+    /// empty when TreatedInFacility is true or when ReferredOrTreated is false.</summary>
+    public string? ReferralLocationFreeText { get; set; }
+
+    /// <summary>Treated in-house rather than referred out — hides ReferralLocationFreeText (the
+    /// reason stays required either way).</summary>
+    public bool TreatedInFacility { get; set; }
+
     /// <summary>FK to ReferenceDataItem (Category = ReasonNotPurchased).</summary>
     public Guid ReasonNotPurchasedRefId { get; set; }
     public string? ReasonNotPurchasedOtherText { get; set; }
