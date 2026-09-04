@@ -1,61 +1,107 @@
 using DotGlasses.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
+using Npgsql;
+using Testcontainers.PostgreSql;
 
 namespace DotGlasses.Web.Tests;
 
 /// <summary>
-/// Swaps the real Postgres DbContext for EF Core InMemory (a fresh database per factory
-/// instance) and supplies fixed Jwt settings, so tests don't need a running Postgres/AppHost —
-/// see CLAUDE.md: "EF Core InMemory provider is acceptable for now" for test projects.
+/// Boots the real application against a real, containerised Postgres.
+///
+/// The only thing swapped out is *which* Postgres the app talks to: the connection string
+/// Program.cs reads ("ConnectionStrings:dotglassesdb", the name AppHost gives the database
+/// resource) is pointed at a throwaway container, and fixed Jwt settings are supplied so tests
+/// can mint their own tokens. Everything downstream of that — Aspire's pooled
+/// AddNpgsqlDbContext registration, the audit interceptor it attaches, the global query filters,
+/// the real migration chain and its seed data — is exactly what runs in production. The
+/// previous EF Core InMemory swap could not say that: it replaced the provider outright, so the
+/// registration under test was one the application never uses, and no SQL was ever generated.
+///
+/// State isolation: one container and one database for the whole assembly, deliberately not
+/// reset between tests. The API tests address their own rows by client-generated GUID (the
+/// offline-sync idempotency key the real Field App uses), so they neither see nor care about a
+/// neighbour's rows, and a truncate-between-tests reset would have to preserve the
+/// migration-seeded roles, organisation nodes and reference data that the application needs to
+/// start at all. Infrastructure.Tests, whose assertions *are* whole-table counts, takes the
+/// stricter fresh-database-per-test route instead — see PostgresContainerFixture there.
 /// </summary>
-public class CustomWebApplicationFactory : WebApplicationFactory<Program>
+public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
-    public readonly string DatabaseName = Guid.NewGuid().ToString();
+    /// <summary>
+    /// The same tag AppHost's .RunAsContainer() Postgres resource pins for local dev — see
+    /// PostgresContainerFixture in DotGlasses.Infrastructure.Tests for why it is pinned rather
+    /// than floating on :latest. The two assemblies can't share a constant (a test project
+    /// referencing another test project would drag its tests along with it), so this is a
+    /// deliberate second copy: if the AppHost tag moves, grep for it and change both.
+    /// </summary>
+    private const string PostgresImage = "postgres:18.3";
+
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder(PostgresImage)
+        .WithDatabase("dotglasses_web_tests")
+        .Build();
+
+    private string ConnectionString => _postgres.GetConnectionString();
+
+    public async Task InitializeAsync()
+    {
+        await _postgres.StartAsync();
+
+        // Applied here rather than relying on Program.cs's development-only migrate-on-boot, so
+        // the schema exists no matter which environment the test host resolves to.
+        var options = new DbContextOptionsBuilder<DotGlassesDbContext>().UseNpgsql(ConnectionString).Options;
+        await using var context = new DotGlassesDbContext(options, new NullHttpContextAccessor());
+        await context.Database.MigrateAsync();
+
+        NpgsqlConnection.ClearAllPools();
+    }
+
+    async Task IAsyncLifetime.DisposeAsync()
+    {
+        await base.DisposeAsync();
+        await _postgres.DisposeAsync();
+    }
 
     protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
     {
+        // UseSetting, not ConfigureAppConfiguration, for the connection string alone: Aspire's
+        // AddNpgsqlDbContext reads it eagerly while Program.cs is still executing, whereas a
+        // ConfigureAppConfiguration source is merged in only just before Build() — late enough
+        // for the lazily-bound Jwt options below, far too late for this. UseSetting lands in
+        // host configuration, which is in place before any application code runs.
+        builder.UseSetting("ConnectionStrings:dotglassesdb", ConnectionString);
+
         builder.ConfigureAppConfiguration((_, config) =>
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:dotglassesdb"] = "Host=localhost;Database=unused-overridden-below",
                 ["Jwt:Key"] = "test-signing-key-not-for-production-use-only-1234567890",
                 ["Jwt:Issuer"] = "DotGlasses.Web.Tests",
                 ["Jwt:Audience"] = "DotGlasses.App.Tests",
                 ["Jwt:AccessTokenLifetimeMinutes"] = "60",
             });
         });
-
-        builder.ConfigureServices(services =>
-        {
-            // Aspire's AddNpgsqlDbContext registers a pooled context via several interdependent
-            // descriptors (DbContextOptions<T>, IDbContextPool<T>, IScopedDbContextLease<T>, T
-            // itself) — removing only DbContextOptions<T> leaves the rest dangling and pointed
-            // at nothing, so strip every descriptor that mentions DotGlassesDbContext at all.
-            var toRemove = services
-                .Where(d => d.ServiceType == typeof(DotGlassesDbContext)
-                    || (d.ServiceType.IsGenericType && d.ServiceType.GetGenericArguments().Contains(typeof(DotGlassesDbContext))))
-                .ToList();
-            foreach (var descriptor in toRemove)
-            {
-                services.Remove(descriptor);
-            }
-
-            services.AddDbContext<DotGlassesDbContext>(options => options.UseInMemoryDatabase(DatabaseName));
-
-            // InMemory has no migrations, so it never applies the AspNetRoles HasData seed
-            // (RoleSeedConfiguration) the way a real Postgres migration would. Program.cs's
-            // DevUserSeeder hosted service assigns the dev admin user to the Admin role and
-            // starts before any hook we could register here would run, so the roles need to
-            // exist before the host starts — EnsureCreated() is InMemory's equivalent of
-            // "apply schema + seed data", done eagerly against a scoped snapshot of the
-            // services built so far rather than waiting for the full host.
-            using var seedScope = services.BuildServiceProvider().CreateScope();
-            seedScope.ServiceProvider.GetRequiredService<DotGlassesDbContext>().Database.EnsureCreated();
-        });
     }
+
+    /// <summary>
+    /// The migration DbContext is built outside the host, before any request exists, so there
+    /// is no HttpContext to hand it — and none is needed: the global query filters this would
+    /// feed are irrelevant to schema migration.
+    /// </summary>
+    private sealed class NullHttpContextAccessor : IHttpContextAccessor
+    {
+        public HttpContext? HttpContext { get; set; }
+    }
+}
+
+/// <summary>
+/// Shared by every API test class, so the container and the host are started once per assembly
+/// rather than once per class.
+/// </summary>
+[CollectionDefinition(Name)]
+public class WebApiCollection : ICollectionFixture<CustomWebApplicationFactory>
+{
+    public const string Name = "WebApi";
 }
