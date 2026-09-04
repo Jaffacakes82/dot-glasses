@@ -17,6 +17,11 @@
     and the retailer/retail-point grouping toggle are Day 2 features.
 </p>
 
+@if (!ViewData.ModelState.IsValid)
+{
+    <div class="alert alert-danger" style="border-radius:var(--radius-md); margin-bottom:var(--space-4);" asp-validation-summary="All"></div>
+}
+
 <div style="display:flex; justify-content:space-between; align-items:center; gap:var(--space-2); margin-bottom:var(--space-4); flex-wrap:wrap;">
     <div style="display:flex; gap:var(--space-2); flex-wrap:wrap;">
         <a class="@(Model.Status is null ? "dg-btn dg-btn-primary" : "dg-btn dg-btn-ghost")" style="padding:8px 20px; font-size:13px;" asp-action="Index">All</a>
