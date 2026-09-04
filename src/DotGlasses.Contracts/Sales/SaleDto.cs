@@ -26,6 +26,8 @@ public class SaleDto
     public decimal? CustomCylinderRight { get; set; }
     public decimal? CustomAxisRight { get; set; }
     public decimal? CustomAddPowerRight { get; set; }
+    public Guid? LensTypeRefId { get; set; }
+    public string? LensTypeOtherText { get; set; }
     public bool OrderFromDotGlasses { get; set; }
     public decimal? PupilDistanceMm { get; set; }
     public int? PresetPupilDistanceBucket { get; set; }
