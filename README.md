@@ -42,8 +42,8 @@ DotGlasses.sln
                                   Bicep for Azure Container Apps deployment.
   /tests
     DotGlasses.Application.Tests    — xUnit
-    DotGlasses.Infrastructure.Tests — xUnit, EF Core InMemory provider
-    DotGlasses.Web.Tests             — xUnit, WebApplicationFactory
+    DotGlasses.Infrastructure.Tests — xUnit, real Postgres via Testcontainers
+    DotGlasses.Web.Tests             — xUnit, WebApplicationFactory over Testcontainers
   /infra                        — Bicep output from azd/Aspire (generated, not hand-authored —
                                     regenerate with `azd infra gen --force`, don't hand-edit)
 ```
@@ -99,10 +99,12 @@ dotnet test DotGlasses.sln
 ```
 
 `DotGlasses.Infrastructure.Tests` includes the security-critical hierarchy-scoping query filter
-tests (root/leaf/sibling-prefix edge cases) and the audit interceptor tests, both against EF
-Core InMemory. `DotGlasses.Web.Tests` uses `WebApplicationFactory` with the same InMemory
-provider swapped in for Postgres, and exercises the RBAC policy example end-to-end (401 with no
-token, 403 for an authenticated-but-under-privileged role, 201 for Admin).
+tests (root/leaf/sibling-prefix edge cases), the audit interceptor tests and a transaction
+rollback test, all against a real Postgres container. `DotGlasses.Web.Tests` uses
+`WebApplicationFactory` pointed at its own Postgres container, and exercises the RBAC policy
+example end-to-end (401 with no token, 403 for an authenticated-but-under-privileged role, 201
+for Admin). **Docker must be running** — see the Docker Desktop note in `CLAUDE.md`'s pitfalls if
+a run hangs with no output.
 
 ## Exercising offline sync locally
 
