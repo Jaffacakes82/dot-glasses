@@ -49,16 +49,16 @@ public interface IReferenceDataAdminService
     Task<IReadOnlyList<CoatingExclusionAdminItem>> ListCoatingExclusionsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Both ids must reference active Coating items and be distinct. Throws
-    /// InvalidOperationException (surfaced as a validation error, not a 500) if either check
-    /// fails, the pairing already exists, or an exclusion already exists between the same two
-    /// coatings (either direction) — a pairing can never contradict an exclusion, see
+    /// DomainRuleViolationException (surfaced as a validation error, not a 500 — ADR-0003) if
+    /// either check fails, the pairing already exists, or an exclusion already exists between the
+    /// same two coatings (either direction) — a pairing can never contradict an exclusion, see
     /// ADR-0001.</summary>
     Task AddCoatingPairingAsync(Guid triggerCoatingRefId, Guid pairedCoatingRefId, CancellationToken cancellationToken = default);
 
     Task RemoveCoatingPairingAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>Both ids must reference active Coating items and be distinct. Throws
-    /// InvalidOperationException if either check fails, the exclusion already exists (either
+    /// DomainRuleViolationException if either check fails, the exclusion already exists (either
     /// order), or a pairing already exists between the same two coatings (either direction).</summary>
     Task AddCoatingExclusionAsync(Guid coatingRefIdA, Guid coatingRefIdB, CancellationToken cancellationToken = default);
 
