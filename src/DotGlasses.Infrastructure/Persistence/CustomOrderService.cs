@@ -67,9 +67,19 @@ public class CustomOrderService(DotGlassesDbContext dbContext) : ICustomOrderSer
         return visible.Select(ToRow).OrderByDescending(r => r.CreatedAtUtc).ToList();
     }
 
+    /// <summary>Every rejection here is an InvalidOperationException carrying user-facing copy,
+    /// including the "no such order" case — the scoped Sales query silently returns nothing for a
+    /// sale outside the caller's subtree, and FirstAsync's own "sequence contains no elements" is
+    /// not a sentence to show an admin. CustomOrdersController surfaces all of them inline, the
+    /// same way OrganisationsController/ReferenceDataController already do.</summary>
     public async Task AdvanceStatusAsync(Guid saleId, CancellationToken cancellationToken = default)
     {
-        var sale = await dbContext.Sales.FirstAsync(x => x.Id == saleId, cancellationToken);
+        var sale = await dbContext.Sales.FirstOrDefaultAsync(x => x.Id == saleId, cancellationToken);
+        if (sale is null)
+        {
+            throw new InvalidOperationException("This custom order is no longer available.");
+        }
+
         if (sale.FulfilmentStatus is not { } current)
         {
             throw new InvalidOperationException("This Sale is not a custom order routed to fulfilment.");

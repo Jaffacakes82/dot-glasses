@@ -1,4 +1,3 @@
-using DotGlasses.Domain.Entities;
 using DotGlasses.Domain.Enums;
 
 namespace DotGlasses.Application.Reporting;
@@ -12,8 +11,6 @@ namespace DotGlasses.Application.Reporting;
 /// </summary>
 public interface IUnscopedReportQueryService
 {
-    Task<IReadOnlyList<WidgetExample>> GetAllWidgetExamplesUnscopedAsync(CancellationToken cancellationToken = default);
-
     /// <summary>Every org node's Id + HierarchyPath, ignoring the hierarchy-scoping filter.
     /// Needed by anything that must look "upward" from the caller (e.g.
     /// PresetCatalogueQueryService resolving which ancestor orgs a catalogue is assigned to) —

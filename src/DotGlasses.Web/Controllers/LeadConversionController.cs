@@ -126,11 +126,25 @@ public class LeadConversionController(
         ChildrensFrame = lensCarriedOver ? lead.ChildrensFrame : form.ChildrensFrame,
         FrameColourRefId = form.FrameColourRefId ?? Guid.Empty,
         FrameColourOtherText = form.FrameColourOtherText,
-        FrameCoverage = form.FrameCoverage,
+        // Not asked on either write path (2026-09-04) — the Field App has never rendered a control
+        // for it either, so both paths now record the same FullFrame default. The column and the
+        // DTO field stay, so existing records read back unchanged.
+        FrameCoverage = FrameCoverage.FullFrame,
         CoatingRefIds = form.CoatingRefIds,
         HardCaseSold = form.HardCaseSold,
         HardCaseColourRefId = form.HardCaseSold ? form.HardCaseColourRefId : null,
         HardCaseOtherColourText = form.HardCaseSold ? form.HardCaseOtherColourText : null,
+        ReferredOrTreated = form.ReferredOrTreated,
+        // The remaining four are only meaningful when ReferredOrTreated is true, and
+        // CreateSaleRequestValidator rejects the request outright if any of them is non-empty when
+        // it's false — blanked here so an admin who ticks the box, fills the detail in, then
+        // unticks it doesn't submit a request that can only fail. Same suppression the
+        // TreatedInFacility branch applies to ReferralLocationFreeText, which the validator
+        // requires to be empty when treatment happened in the facility.
+        ReferralReasonRefId = form.ReferredOrTreated ? form.ReferralReasonRefId : null,
+        ReferralOtherText = form.ReferredOrTreated ? form.ReferralOtherText : null,
+        TreatedInFacility = form.ReferredOrTreated && form.TreatedInFacility,
+        ReferralLocationFreeText = form.ReferredOrTreated && !form.TreatedInFacility ? form.ReferralLocationFreeText : null,
     };
 
     private async Task<LeadConversionViewModel> BuildViewModelAsync(LeadDto lead, LeadConversionFormModel form, CancellationToken cancellationToken)
@@ -149,6 +163,7 @@ public class LeadConversionController(
             FrameColours = referenceData.Where(x => x.Category == ReferenceDataCategory.FrameColour).OrderBy(x => x.SortOrder).ToList(),
             Coatings = referenceData.Where(x => x.Category == ReferenceDataCategory.Coating).OrderBy(x => x.SortOrder).ToList(),
             HardCaseColours = referenceData.Where(x => x.Category == ReferenceDataCategory.HardCaseColour).OrderBy(x => x.SortOrder).ToList(),
+            ReferralReasons = referenceData.Where(x => x.Category == ReferenceDataCategory.ReferralReason).OrderBy(x => x.SortOrder).ToList(),
             LensTypes = referenceData.Where(x => x.Category == ReferenceDataCategory.LensType).OrderBy(x => x.SortOrder).ToList(),
             Form = form,
         };
