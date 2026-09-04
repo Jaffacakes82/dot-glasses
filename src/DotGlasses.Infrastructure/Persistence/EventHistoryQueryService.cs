@@ -147,17 +147,19 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
         }).ToList();
     }
 
-    private IQueryable<Test> FilterReferrals(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive)
+    private IQueryable<ReferralSourceRow> FilterReferrals(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive)
     {
         // Merged across all three entities (2026-09-03 — "referred or treated" is no longer
-        // Test-only). Each Select projects to the same anonymous shape so Concat translates to a
-        // single SQL UNION ALL — ordering/paging happens once, after the union, not per-entity.
+        // Test-only). Each Select projects to the same ReferralSourceRow shape so Concat
+        // translates to a single SQL UNION ALL — ordering/paging happens once, after the union,
+        // not per-entity. A named record (not an anonymous type) is required here so
+        // FilterReferrals/MapReferralsAsync have a concrete type to share as their signature.
         var testRows = dbContext.Tests.Where(t => t.ReferredOrTreated)
-            .Select(t => new { Source = "Test", t.HierarchyPath, t.ReferralReasonRefId, t.ReferralOtherText, t.TreatedInFacility, t.CreatedAtUtc });
+            .Select(t => new ReferralSourceRow("Test", t.HierarchyPath, t.ReferralReasonRefId, t.ReferralOtherText, t.TreatedInFacility, t.CreatedAtUtc));
         var leadRows = dbContext.Leads.Where(l => l.ReferredOrTreated)
-            .Select(l => new { Source = "Lead", l.HierarchyPath, l.ReferralReasonRefId, l.ReferralOtherText, l.TreatedInFacility, l.CreatedAtUtc });
+            .Select(l => new ReferralSourceRow("Lead", l.HierarchyPath, l.ReferralReasonRefId, l.ReferralOtherText, l.TreatedInFacility, l.CreatedAtUtc));
         var saleRows = dbContext.Sales.Where(s => s.ReferredOrTreated)
-            .Select(s => new { Source = "Sale", s.HierarchyPath, s.ReferralReasonRefId, s.ReferralOtherText, s.TreatedInFacility, s.CreatedAtUtc });
+            .Select(s => new ReferralSourceRow("Sale", s.HierarchyPath, s.ReferralReasonRefId, s.ReferralOtherText, s.TreatedInFacility, s.CreatedAtUtc));
 
         var query = testRows.Concat(leadRows).Concat(saleRows);
         if (fromUtc is { } from) query = query.Where(x => x.CreatedAtUtc >= from);
@@ -165,7 +167,7 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
         return query;
     }
 
-    private async Task<List<ReferralEventRow>> MapReferralsAsync(List<Test> referrals, CancellationToken cancellationToken)
+    private async Task<List<ReferralEventRow>> MapReferralsAsync(List<ReferralSourceRow> referrals, CancellationToken cancellationToken)
     {
         var orgLookup = await BuildOrgLookupAsync(cancellationToken);
         var refData = await BuildReferenceDataLookupAsync(cancellationToken);
@@ -260,4 +262,8 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
             return item.IsOtherOption && !string.IsNullOrWhiteSpace(otherText) ? otherText : item.Label;
         }
     }
+
+    /// <summary>Common projected shape for the Test/Lead/Sale union behind FilterReferrals — see
+    /// its doc comment for why this needs to be a named record rather than an anonymous type.</summary>
+    private sealed record ReferralSourceRow(string Source, string HierarchyPath, Guid? ReferralReasonRefId, string? ReferralOtherText, bool TreatedInFacility, DateTimeOffset CreatedAtUtc);
 }
