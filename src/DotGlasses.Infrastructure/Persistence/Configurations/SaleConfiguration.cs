@@ -15,6 +15,8 @@ public class SaleConfiguration : IEntityTypeConfiguration<Sale>
         builder.Property(x => x.OccupationOtherText).HasMaxLength(200);
         builder.Property(x => x.FrameColourOtherText).HasMaxLength(200);
         builder.Property(x => x.HardCaseOtherColourText).HasMaxLength(200);
+        builder.Property(x => x.ReferralOtherText).HasMaxLength(200);
+        builder.Property(x => x.ReferralLocationFreeText).HasMaxLength(500);
         builder.Property(x => x.LensTypeOtherText).HasMaxLength(200);
         builder.Property(x => x.CreatedBy).HasMaxLength(256);
         builder.Property(x => x.ModifiedBy).HasMaxLength(256);

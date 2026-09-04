@@ -26,11 +26,25 @@ public class Test : IAuditable, ISoftDeletable, IHierarchyScoped
 
     public TestOutcome Outcome { get; set; }
 
-    /// <summary>FK to ReferenceDataItem (Category = ReferralReason). Required, alongside
-    /// ReferralOtherText/ReferralLocationFreeText, iff Outcome == Referred.</summary>
+    /// <summary>"Referred or treated" — an orthogonal flag independent of Outcome (2026-09-03;
+    /// previously implied by Outcome == the now-retired TestOutcome.Referred). Explicit rather
+    /// than inferred from ReferralReasonRefId != null.</summary>
+    public bool ReferredOrTreated { get; set; }
+
+    /// <summary>FK to ReferenceDataItem (Category = ReferralReason). Required whenever
+    /// ReferredOrTreated is true, regardless of TreatedInFacility.</summary>
     public Guid? ReferralReasonRefId { get; set; }
     public string? ReferralOtherText { get; set; }
+
+    /// <summary>Required when ReferredOrTreated is true and TreatedInFacility is false; must be
+    /// empty when TreatedInFacility is true (treated in-house has no external location) or when
+    /// ReferredOrTreated is false.</summary>
     public string? ReferralLocationFreeText { get; set; }
+
+    /// <summary>Some facilities have their own general doctors/eye professionals who can treat
+    /// in-house rather than referring out — checking this hides ReferralLocationFreeText (the
+    /// reason stays required either way).</summary>
+    public bool TreatedInFacility { get; set; }
 
     /// <summary>Which lens(es) this person needs, recorded whenever Outcome == NeedsGlasses —
     /// regardless of whether contact details are also captured (see ticket "show lens-needed

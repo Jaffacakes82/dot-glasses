@@ -30,6 +30,14 @@ public class CreateSaleRequest
 
     public bool ConsentGiven { get; set; }
 
+    /// <summary>"Referred or treated" — independently captured at creation time, same shape on
+    /// Test/Lead/Sale. Not gated on any particular outcome/result.</summary>
+    public bool ReferredOrTreated { get; set; }
+    public Guid? ReferralReasonRefId { get; set; }
+    public string? ReferralOtherText { get; set; }
+    public string? ReferralLocationFreeText { get; set; }
+    public bool TreatedInFacility { get; set; }
+
     public LensRangeType LensRangeType { get; set; }
 
     public Guid? PresetCatalogueId { get; set; }
