@@ -118,6 +118,8 @@ public class LeadConversionController(
         CustomCylinderRight = lensCarriedOver ? lead.CustomCylinderRight : form.CustomCylinderRight,
         CustomAxisRight = lensCarriedOver ? lead.CustomAxisRight : form.CustomAxisRight,
         CustomAddPowerRight = lensCarriedOver ? lead.CustomAddPowerRight : form.CustomAddPowerRight,
+        LensTypeRefId = lensCarriedOver ? lead.LensTypeRefId : form.LensTypeRefId,
+        LensTypeOtherText = lensCarriedOver ? lead.LensTypeOtherText : form.LensTypeOtherText,
         OrderFromDotGlasses = form.OrderFromDotGlasses,
         PupilDistanceMm = lensCarriedOver ? lead.PupilDistanceMm : form.PupilDistanceMm,
         PresetPupilDistanceBucket = lensCarriedOver ? lead.PresetPupilDistanceBucket : form.PresetPupilDistanceBucket,
@@ -142,16 +144,17 @@ public class LeadConversionController(
             CustomerFullName = lead.CustomerFullName,
             CustomerPhoneNumber = lead.CustomerPhoneNumber,
             LensCarriedOver = lead.LensRangeType is not null,
-            LensSummary = BuildLensSummary(lead, catalogues),
+            LensSummary = BuildLensSummary(lead, catalogues, referenceData),
             AvailableCatalogues = catalogues,
             FrameColours = referenceData.Where(x => x.Category == ReferenceDataCategory.FrameColour).OrderBy(x => x.SortOrder).ToList(),
             Coatings = referenceData.Where(x => x.Category == ReferenceDataCategory.Coating).OrderBy(x => x.SortOrder).ToList(),
             HardCaseColours = referenceData.Where(x => x.Category == ReferenceDataCategory.HardCaseColour).OrderBy(x => x.SortOrder).ToList(),
+            LensTypes = referenceData.Where(x => x.Category == ReferenceDataCategory.LensType).OrderBy(x => x.SortOrder).ToList(),
             Form = form,
         };
     }
 
-    private static string? BuildLensSummary(LeadDto lead, IReadOnlyList<PresetCatalogueDto> catalogues)
+    private static string? BuildLensSummary(LeadDto lead, IReadOnlyList<PresetCatalogueDto> catalogues, IReadOnlyList<ReferenceDataItemDto> referenceData)
     {
         switch (lead.LensRangeType)
         {
@@ -161,9 +164,11 @@ public class LeadConversionController(
                 var right = catalogue?.LensOptions.FirstOrDefault(o => o.Id == lead.LensOptionRightId)?.Label ?? "—";
                 return $"{catalogue?.Name ?? "Preset range"} — Left: {left}, Right: {right}";
             case LensRangeType.Custom:
+                var lensType = referenceData.FirstOrDefault(x => x.Id == lead.LensTypeRefId);
+                var lensTypeSummary = lensType is null ? null : $"; Lens type {(lensType.IsOtherOption ? lead.LensTypeOtherText : lensType.Label)}";
                 return $"Custom — OD (right) Sphere {lead.CustomSphereRight} / Cyl {lead.CustomCylinderRight} / Axis {lead.CustomAxisRight} / Add {lead.CustomAddPowerRight}; "
                     + $"OS (left) Sphere {lead.CustomSphereLeft} / Cyl {lead.CustomCylinderLeft} / Axis {lead.CustomAxisLeft} / Add {lead.CustomAddPowerLeft}; "
-                    + $"PD {lead.PupilDistanceMm}mm";
+                    + $"PD {(lead.PupilDistanceMm is { } pd ? $"{pd}mm" : "not recorded")}{lensTypeSummary}";
             default:
                 return null;
         }

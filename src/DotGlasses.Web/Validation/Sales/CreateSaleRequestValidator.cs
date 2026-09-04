@@ -22,6 +22,8 @@ public class CreateSaleRequestValidator : AbstractValidator<CreateSaleRequest>
         RuleFor(x => x.OccupationOtherText).MaximumLength(200);
         RuleFor(x => x.FrameColourOtherText).MaximumLength(200);
         RuleFor(x => x.HardCaseOtherColourText).MaximumLength(200);
+        RuleFor(x => x.ReferralOtherText).MaximumLength(200);
+        RuleFor(x => x.ReferralLocationFreeText).MaximumLength(500);
         RuleFor(x => x.OrderFromDotGlasses)
             .Equal(false)
             .When(x => x.LensRangeType != ContractLensRangeType.Custom)
@@ -30,6 +32,7 @@ public class CreateSaleRequestValidator : AbstractValidator<CreateSaleRequest>
         RuleFor(x => x).CustomAsync(async (request, context, cancellationToken) =>
         {
             await ValidateOccupationAsync(request, context, referenceData, cancellationToken);
+            await ValidateReferralAsync(request, context, referenceData, cancellationToken);
             await ValidateLensRangeAsync(request, context, referenceData, cancellationToken);
             await ValidateFrameColourAsync(request, context, referenceData, cancellationToken);
             await ValidateHardCaseAsync(request, context, referenceData, cancellationToken);
@@ -59,12 +62,60 @@ public class CreateSaleRequestValidator : AbstractValidator<CreateSaleRequest>
         }
     }
 
+    /// <summary>"Referred or treated" — mirrors CreateTestRequestValidator's ValidateReferralAsync
+    /// exactly (see that file's doc comment); Test/Lead/Sale share the same five-field shape.</summary>
+    private static async Task ValidateReferralAsync(
+        CreateSaleRequest request, ValidationContext<CreateSaleRequest> context,
+        IReferenceDataLookupService referenceData, CancellationToken cancellationToken)
+    {
+        if (!request.ReferredOrTreated)
+        {
+            if (request.ReferralReasonRefId is not null || request.ReferralOtherText is not null
+                || request.ReferralLocationFreeText is not null || request.TreatedInFacility)
+            {
+                context.AddFailure(nameof(request.ReferredOrTreated), "Referral/treatment fields must be empty unless ReferredOrTreated is true.");
+            }
+
+            return;
+        }
+
+        if (request.ReferralReasonRefId is not { } referralReasonRefId)
+        {
+            context.AddFailure(nameof(request.ReferralReasonRefId), "ReferralReasonRefId is required when ReferredOrTreated is true.");
+        }
+        else
+        {
+            var lookup = await referenceData.LookupAsync(referralReasonRefId, ReferenceDataCategory.ReferralReason, cancellationToken);
+            if (lookup is not { IsActive: true })
+            {
+                context.AddFailure(nameof(request.ReferralReasonRefId), "ReferralReasonRefId must reference an existing, active ReferralReason reference-data item.");
+            }
+            else if (lookup.IsOtherOption && string.IsNullOrWhiteSpace(request.ReferralOtherText))
+            {
+                context.AddFailure(nameof(request.ReferralOtherText), "ReferralOtherText is required when ReferralReason is \"Other\".");
+            }
+        }
+
+        if (request.TreatedInFacility)
+        {
+            if (!string.IsNullOrWhiteSpace(request.ReferralLocationFreeText))
+            {
+                context.AddFailure(nameof(request.ReferralLocationFreeText), "ReferralLocationFreeText must be empty when TreatedInFacility is true.");
+            }
+        }
+        else if (string.IsNullOrWhiteSpace(request.ReferralLocationFreeText))
+        {
+            context.AddFailure(nameof(request.ReferralLocationFreeText), "ReferralLocationFreeText is required when ReferredOrTreated is true and TreatedInFacility is false.");
+        }
+    }
+
     private static async Task ValidateLensRangeAsync(
         CreateSaleRequest request, ValidationContext<CreateSaleRequest> context,
         IReferenceDataLookupService referenceData, CancellationToken cancellationToken)
     {
         var customFieldsSet = request.CustomSphereLeft is not null || request.CustomCylinderLeft is not null || request.CustomAxisLeft is not null || request.CustomAddPowerLeft is not null
-            || request.CustomSphereRight is not null || request.CustomCylinderRight is not null || request.CustomAxisRight is not null || request.CustomAddPowerRight is not null;
+            || request.CustomSphereRight is not null || request.CustomCylinderRight is not null || request.CustomAxisRight is not null || request.CustomAddPowerRight is not null
+            || request.LensTypeRefId is not null || request.LensTypeOtherText is not null;
         var presetFieldsSet = request.PresetCatalogueId is not null || request.LensOptionLeftId is not null || request.LensOptionRightId is not null;
 
         if (request.LensRangeType is ContractLensRangeType.SixLensSet or ContractLensRangeType.NineLensSet)
@@ -126,6 +177,7 @@ public class CreateSaleRequestValidator : AbstractValidator<CreateSaleRequest>
             ValidateCustomPower(request.CustomAddPowerRight, nameof(request.CustomAddPowerRight), 0m, 3m, 0.25m, context);
             ValidateCustomAxis(request.CustomAxisLeft, nameof(request.CustomAxisLeft), context);
             ValidateCustomAxis(request.CustomAxisRight, nameof(request.CustomAxisRight), context);
+            await ValidateLensTypeAsync(request, context, referenceData, cancellationToken);
 
             if (request.PresetPupilDistanceBucket is not null)
             {
@@ -191,6 +243,41 @@ public class CreateSaleRequestValidator : AbstractValidator<CreateSaleRequest>
                     return;
                 }
             }
+        }
+    }
+
+    /// <summary>Asked only once either eye carries two distinct powers (a base sphere plus an add
+    /// power) — required in that case, must stay empty otherwise (enforced via customFieldsSet
+    /// above, same as every other Custom-only field).</summary>
+    private static async Task ValidateLensTypeAsync(
+        CreateSaleRequest request, ValidationContext<CreateSaleRequest> context,
+        IReferenceDataLookupService referenceData, CancellationToken cancellationToken)
+    {
+        var hasTwoPowers = request.CustomAddPowerLeft is not null || request.CustomAddPowerRight is not null;
+        if (!hasTwoPowers)
+        {
+            if (request.LensTypeRefId is not null || request.LensTypeOtherText is not null)
+            {
+                context.AddFailure(nameof(request.LensTypeRefId), "LensTypeRefId/LensTypeOtherText must be empty unless an add power is set.");
+            }
+
+            return;
+        }
+
+        if (request.LensTypeRefId is not { } lensTypeRefId)
+        {
+            context.AddFailure(nameof(request.LensTypeRefId), "LensTypeRefId is required when an add power is set (two distinct powers on that eye).");
+            return;
+        }
+
+        var lookup = await referenceData.LookupAsync(lensTypeRefId, ReferenceDataCategory.LensType, cancellationToken);
+        if (lookup is not { IsActive: true })
+        {
+            context.AddFailure(nameof(request.LensTypeRefId), "LensTypeRefId must reference an existing, active LensType reference-data item.");
+        }
+        else if (lookup.IsOtherOption && string.IsNullOrWhiteSpace(request.LensTypeOtherText))
+        {
+            context.AddFailure(nameof(request.LensTypeOtherText), "LensTypeOtherText is required when LensType is \"Other\".");
         }
     }
 

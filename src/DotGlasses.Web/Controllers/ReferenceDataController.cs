@@ -27,6 +27,7 @@ public class ReferenceDataController(
         (ReferenceDataCategory.HardCaseColour, "Hard case colors", "DGI-editable · shown when a Sale includes a hard case", false),
         (ReferenceDataCategory.Occupation, "Occupations", "DGI-editable · optional occupation field on Test, Lead and Sale", false),
         (ReferenceDataCategory.LensStrength, "Lens strengths", "DGI-editable · curated power labels used to build Preset Catalogues — see Preset Catalogues for per-strength coating availability", false),
+        (ReferenceDataCategory.LensType, "Lens types", "DGI-editable · asked on a custom lens carrying two distinct powers", false),
     ];
 
     public async Task<IActionResult> Index(CancellationToken cancellationToken) =>

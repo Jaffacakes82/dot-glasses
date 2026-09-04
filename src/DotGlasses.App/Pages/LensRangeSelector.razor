@@ -2,6 +2,7 @@
 @using DotGlasses.App.Validation
 @using DotGlasses.Contracts.Common
 @using DotGlasses.Contracts.PresetCatalogues
+@using DotGlasses.Contracts.ReferenceData
 
 <div class="dg-field">
     <label>Lens range</label>
@@ -98,7 +99,7 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         <div class="dg-field" style="flex:1;"><label>Axis — left</label><input type="number" min="0" max="180" step="1" @bind="Model.CustomAxisLeft" /><FieldError Errors="Errors" For="CustomAxisLeft" /></div>
         <div class="dg-field" style="flex:1;">
             <label>Add power — left</label>
-            <select value="@Model.CustomAddPowerLeft" @onchange="e => Model.CustomAddPowerLeft = ParseDecimal(e.Value)">
+            <select value="@Model.CustomAddPowerLeft" @onchange="e => OnAddPowerChanged(left: true, ParseDecimal(e.Value))">
                 <option value="">Select...</option>
                 @foreach (var v in AddPowerSteps)
                 {
@@ -132,7 +133,7 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         <div class="dg-field" style="flex:1;"><label>Axis — right</label><input type="number" min="0" max="180" step="1" @bind="Model.CustomAxisRight" /><FieldError Errors="Errors" For="CustomAxisRight" /></div>
         <div class="dg-field" style="flex:1;">
             <label>Add power — right</label>
-            <select value="@Model.CustomAddPowerRight" @onchange="e => Model.CustomAddPowerRight = ParseDecimal(e.Value)">
+            <select value="@Model.CustomAddPowerRight" @onchange="e => OnAddPowerChanged(left: false, ParseDecimal(e.Value))">
                 <option value="">Select...</option>
                 @foreach (var v in AddPowerSteps)
                 {
@@ -141,6 +142,13 @@ else if (Model.LensRangeType == LensRangeType.Custom)
             </select>
         </div>
     </div>
+    @if (Model.CustomAddPowerLeft is not null || Model.CustomAddPowerRight is not null)
+    {
+        <ReferenceDataDropdown Label="Lens type" Items="LensTypes"
+                                SelectedId="Model.LensTypeRefId" SelectedIdChanged="v => Model.LensTypeRefId = v"
+                                OtherText="Model.LensTypeOtherText" OtherTextChanged="v => Model.LensTypeOtherText = v"
+                                Errors="Errors" Field="LensTypeRefId" OtherField="LensTypeOtherText" />
+    }
     <div class="dg-field">
         <label>Pupil distance (mm, 54–74)</label>
         <select value="@Model.PupilDistanceMm" @onchange="e => Model.PupilDistanceMm = ParseDecimal(e.Value)">
@@ -161,6 +169,10 @@ else if (Model.LensRangeType == LensRangeType.Custom)
 @code {
     [Parameter, EditorRequired] public LensRangeSelection Model { get; set; } = null!;
     [Parameter, EditorRequired] public IReadOnlyList<PresetCatalogueDto> Catalogues { get; set; } = [];
+
+    /// <summary>Only offered once either eye's Custom prescription carries an add power (two
+    /// distinct powers on that eye) — see the conditional dropdown below.</summary>
+    [Parameter] public IReadOnlyList<ReferenceDataItemDto> LensTypes { get; set; } = [];
 
     /// <summary>A Lead can carry no product preference at all; a Sale must always have one.</summary>
     [Parameter] public bool AllowNoPreference { get; set; }
@@ -226,6 +238,8 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         Model.CustomCylinderRight = null;
         Model.CustomAxisRight = null;
         Model.CustomAddPowerRight = null;
+        Model.LensTypeRefId = null;
+        Model.LensTypeOtherText = null;
         Model.PupilDistanceMm = null;
         Model.PresetPupilDistanceBucket = null;
 
@@ -268,6 +282,28 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         if (Model.PresetPupilDistanceBucket > MaxPresetPdBucket)
         {
             Model.PresetPupilDistanceBucket = null;
+        }
+    }
+
+    /// <summary>Clears the now-hidden LensType pick the moment neither eye carries an add power
+    /// any more — the dropdown itself disappears immediately (see the @if above), so a stale
+    /// value the technician can no longer see or change must not linger to fail validation on
+    /// submit.</summary>
+    private void OnAddPowerChanged(bool left, decimal? value)
+    {
+        if (left)
+        {
+            Model.CustomAddPowerLeft = value;
+        }
+        else
+        {
+            Model.CustomAddPowerRight = value;
+        }
+
+        if (Model.CustomAddPowerLeft is null && Model.CustomAddPowerRight is null)
+        {
+            Model.LensTypeRefId = null;
+            Model.LensTypeOtherText = null;
         }
     }
 
