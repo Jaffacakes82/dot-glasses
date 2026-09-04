@@ -37,6 +37,7 @@
     {
         <a class="dg-btn dg-btn-ghost" style="padding:8px 16px; font-size:13px;" asp-action="Index" asp-route-tab="@Model.ActiveTab" asp-route-search="@Model.SearchQuery">Clear dates</a>
     }
+    <a class="dg-btn dg-btn-ghost" style="padding:8px 16px; font-size:13px; margin-left:auto;" asp-action="Export" asp-route-tab="@Model.ActiveTab" asp-route-search="@Model.SearchQuery" asp-route-fromDate="@Model.FromDate?.ToString("yyyy-MM-dd")" asp-route-toDate="@Model.ToDate?.ToString("yyyy-MM-dd")">Export CSV</a>
 </form>
 
 <div class="dg-card">
