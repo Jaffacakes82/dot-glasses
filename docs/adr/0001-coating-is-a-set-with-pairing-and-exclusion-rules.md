@@ -1,5 +1,13 @@
 # Coating is a set, not a single value, with pairing and exclusion rules between coatings
 
+> **Scope correction (2026-09-04).** As written below, this ADR says "a Sale/Lead's lens" carries
+> a set. That is too broad: the set model applies to the **Sale only**. A `Test` or `Lead` records
+> a single **Coating preference** — an intention captured before any lens exists — which seeds the
+> Sale's Coating set on conversion. The code always matched this narrower reading
+> (`CreateLeadRequest`/`CreateTestRequest` carry a single `CoatingPreferenceRefId`); the ADR and
+> `CONTEXT.md` overstated it. Pairing and exclusion rules still apply universally wherever a set
+> exists. See `CONTEXT.md` for the two terms.
+
 A Sale/Lead's lens previously carried a single `CoatingRefId`. 2026-08-10 stakeholder feedback
 requires combinable coatings (e.g. Blue Block + Photochromic together) plus rules governing which
 combinations are allowed: **coating pairing** (selecting one coating auto-adds another,

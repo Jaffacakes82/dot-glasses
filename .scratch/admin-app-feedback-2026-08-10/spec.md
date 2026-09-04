@@ -22,7 +22,7 @@ renumbered `01`–`22` in dependency order and now live as one file per ticket u
 the original triage numbers for historical traceability; the mapping to each ticket's new number
 is in brackets.
 
-## Active issues — `ready-for-agent` (22) → published as tickets 01–22
+## Active issues — `ready-for-agent` (20) → published as tickets 01–22
 
 01. [→ 01] Colour contrast — dark green background
 03. [→ 02] Field App: back-button navigation
@@ -40,8 +40,6 @@ is in brackets.
 14. [→ 14] Custom lens: ask lens type when two powers are present (blocked by ticket 13)
 15. [→ 15] Custom lens: spherical/cylindrical range incomplete (should be +10 to -10)
 16. [→ 16] Custom lens: coating option missing entirely
-17. [→ 17] Settings toolkit: eye disease chart + tele-optometrist link, admin-controlled
-18. [→ 18] Documents should open in-app, not in a browser
 21. [→ 19] Admin Portal: data export (event history, organisations, custom orders)
 23. [→ 20] Admin Portal: where users manage their own login/account settings
 28. [→ 21] Custom orders: retailer → retail point → customer grouping/hierarchy
@@ -50,7 +48,7 @@ is in brackets.
 Ticket 14 is blocked by ticket 13 (needs the Lens Type category to exist). Otherwise no
 cross-dependencies among this list.
 
-## Closed issues (11)
+## Closed issues (13)
 
 Kept as a log, not individual files — each entry is the one-line reason it closed. Full grilling
 transcripts/settled designs for the two that went through a real session (24, 30) are in this
@@ -68,7 +66,11 @@ from there if either needs to be re-raised.
   lens-range design.
 - **29** RBAC role clarification — `Manager` removal stands, not wanted back currently.
 
-**`wontfix` — grilled or reprioritised, not carried forward (5):**
+**`wontfix` — grilled or reprioritised, not carried forward (7):**
+- **17** (ticket 17) Settings toolkit: eye disease chart + tele-optometrist link — closed
+  2026-09-04, not carried into the MVP handover scope.
+- **18** (ticket 18) Documents should open in-app, not in a browser — closed 2026-09-04, not
+  carried into the MVP handover scope.
 - **19** Admin Portal mobile view — effort check found no real mobile-responsive groundwork
   exists today; not the quick win the reporter was open to.
 - **24** 2FA — fully grilled and decision-complete (Admin Portal only, TOTP-only, mandatory,

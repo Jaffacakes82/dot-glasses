@@ -9,8 +9,14 @@ for things that need follow-up *action*, not a full inventory of every absent bu
 notes why it's open (blocked on the user, deliberately deferred, or a known accepted risk) so it
 doesn't need re-investigating from scratch.
 
-All 8 phases of the 2026-08-09 roadmap are shipped (see `git log`/PR history) — nothing below is
-"next up," it's the residue.
+**Current state of play (2026-09-04).** All 8 phases of the 2026-08-09 roadmap are shipped, and the
+2026-08-10 admin/app feedback round is closed — 20 of its 22 tickets delivered, the last two dropped
+as out of MVP-handover scope. Nothing below is "next up," it's the residue.
+
+What *is* next up lives in the tracker, not here: `.scratch/architecture-hardening-2026-09-04/`
+holds a spec and 17 tickets covering the pre-handover architecture work (shared consultation rules,
+reference-data snapshot, domain rejection seam, hierarchy path type, and the test coverage those
+depend on). Its decisions are recorded in ADRs 0002–0004.
 
 ---
 
@@ -47,12 +53,16 @@ machine" rule.
   admin-pasted URL (Frame colours only). The blob storage *infrastructure* to build a real upload
   against already exists (`AppHost`'s `reference-data-images` container, RBAC-wired to Web's
   identity) — building the actual upload UI/API is separate, unstarted application-layer work.
+- **No frame-coverage question anywhere.** `Sale.FrameCoverage` is kept on the record but is not
+  editable from any screen — the Field App's dropdown was removed at the reviewer's explicit
+  request (commit `3fdf9be`, it was reading as "you're only selling eye frames"), and the Admin
+  Portal's Lead→Sale form drops its own copy to match, so the two write paths stop disagreeing
+  about whether a technician gets asked. Every Sale is therefore `FullFrame`. The column stays
+  because removing it is a migration against real data for no benefit; if the question ever comes
+  back, it comes back in both places at once.
 - **No customer-facing surface.** `Customer` is internal-only — matched by exact name+phone within
   an outlet, never listed, searched, edited, or merged. A phone number typed with and without a
   country code silently becomes two customer records.
-- **No standalone export**, from any screen. When it's built, `ConsentGiven` **must** be included
-  wherever lead/customer data leaves the system — a binding requirement agreed alongside the
-  original decision to deprioritise export, not optional follow-up.
 - **No Admin-Portal-side consultation form.** Recording a Test/Lead/Sale from scratch is
   Field-App-only; the Admin Portal's only write path onto Test/Lead/Sale is the narrower Lead→Sale
   conversion screen (Phase 4).
@@ -82,6 +92,12 @@ machine" rule.
   increment with no locking — a small race window exists under concurrent org creation. Accepted
   for an infrequent, admin-only action; would need a real sequence/lock if org creation ever became
   high-throughput.
+- **The Field App's leads client swallows every exception and logs nothing.** All three of its
+  lookups — the worklist, the Lead prefill, and the "convert this instead?" match probe — catch
+  broadly and return null or an empty list. Failing soft is right for the offline case, but it means
+  a deserialisation bug, an expired token and a flat battery are indistinguishable, to the technician
+  and to us. Surfaced by the 2026-09-04 architecture review and deliberately not ticketed for the
+  handover programme; the honest fix is to log the failure and distinguish offline from broken.
 - **No correction path for Tests/Leads/Sales, anywhere, for anyone — including admins.** They stay
   create-once atomic events by design. A mistyped phone number or wrong frame colour is permanent.
   This is a deliberate product constraint, not an oversight; don't build an edit path without
@@ -95,8 +111,10 @@ machine" rule.
   Catalogues' coating-availability grid. The Field App correctly shows "no coatings configured"
   rather than an empty dropdown — this is expected admin follow-up work, not a bug.
 - **`FrameColour`'s seeded "Other" row** is an assumption made while seeding reference data, not
-  explicitly confirmed against real DGI usage — the original call named exactly 6 fixed colours.
-  Worth confirming the next time the Reference Data screen is reviewed with DGI.
+  explicitly confirmed against real DGI usage — the original call named exactly 6 fixed colours. The
+  reporter revisited this list on 2026-09-03 (ticket 11 — supplied a product image per colour, and
+  renamed two of them) and left "Other" in place without comment, which is weak evidence rather than
+  confirmation. Still worth an explicit yes/no next time the Reference Data screen is reviewed.
 - **`ReferenceDataCategory.LensStrength` exists only as a curated label list.** `PresetCatalogue`/
   `LensOption` build from it as "which items, in what order" — nothing deeper (e.g. a catalogue
   picking N strengths with a per-strength coating override baked into the catalogue itself, rather
