@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using DotGlasses.Application.ReferenceData;
+using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Entities;
 using DotGlasses.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -135,7 +136,7 @@ public partial class ReferenceDataAdminService(DotGlassesDbContext dbContext) : 
     {
         if (triggerCoatingRefId == pairedCoatingRefId)
         {
-            throw new InvalidOperationException("A coating can't pair with itself.");
+            throw new DomainRuleViolationException("A coating can't pair with itself.");
         }
 
         await EnsureActiveCoatingAsync(triggerCoatingRefId, cancellationToken);
@@ -143,12 +144,12 @@ public partial class ReferenceDataAdminService(DotGlassesDbContext dbContext) : 
 
         if (await dbContext.CoatingPairings.AnyAsync(p => p.TriggerCoatingRefId == triggerCoatingRefId && p.PairedCoatingRefId == pairedCoatingRefId, cancellationToken))
         {
-            throw new InvalidOperationException("This pairing already exists.");
+            throw new DomainRuleViolationException("This pairing already exists.");
         }
 
         if (await HasExclusionAsync(triggerCoatingRefId, pairedCoatingRefId, cancellationToken))
         {
-            throw new InvalidOperationException("Can't add this pairing — an exclusion already exists between these two coatings.");
+            throw new DomainRuleViolationException("Can't add this pairing — an exclusion already exists between these two coatings.");
         }
 
         dbContext.CoatingPairings.Add(new CoatingPairing
@@ -172,7 +173,7 @@ public partial class ReferenceDataAdminService(DotGlassesDbContext dbContext) : 
     {
         if (coatingRefIdA == coatingRefIdB)
         {
-            throw new InvalidOperationException("A coating can't exclude itself.");
+            throw new DomainRuleViolationException("A coating can't exclude itself.");
         }
 
         await EnsureActiveCoatingAsync(coatingRefIdA, cancellationToken);
@@ -181,7 +182,7 @@ public partial class ReferenceDataAdminService(DotGlassesDbContext dbContext) : 
         var (lower, higher) = CoatingExclusion.Canonicalize(coatingRefIdA, coatingRefIdB);
         if (await dbContext.CoatingExclusions.AnyAsync(e => e.CoatingRefIdA == lower && e.CoatingRefIdB == higher, cancellationToken))
         {
-            throw new InvalidOperationException("This exclusion already exists.");
+            throw new DomainRuleViolationException("This exclusion already exists.");
         }
 
         var hasPairing = await dbContext.CoatingPairings.AnyAsync(
@@ -190,7 +191,7 @@ public partial class ReferenceDataAdminService(DotGlassesDbContext dbContext) : 
             cancellationToken);
         if (hasPairing)
         {
-            throw new InvalidOperationException("Can't add this exclusion — a pairing already exists between these two coatings.");
+            throw new DomainRuleViolationException("Can't add this exclusion — a pairing already exists between these two coatings.");
         }
 
         dbContext.CoatingExclusions.Add(new CoatingExclusion
@@ -216,7 +217,7 @@ public partial class ReferenceDataAdminService(DotGlassesDbContext dbContext) : 
             .AnyAsync(x => x.Id == coatingRefId && x.Category == ReferenceDataCategory.Coating && x.IsActive, cancellationToken);
         if (!isActive)
         {
-            throw new InvalidOperationException("Both coatings must reference an existing, active Coating reference-data item.");
+            throw new DomainRuleViolationException("Both coatings must reference an existing, active Coating reference-data item.");
         }
     }
 

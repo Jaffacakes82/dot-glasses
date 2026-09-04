@@ -97,14 +97,10 @@ public class AuthController(
             return ValidationProblem(validation.ToModelStateDictionary());
         }
 
-        try
-        {
-            await userOrgAssignmentService.SwitchActiveOrgAsync(userId, request.OrgNodeId, cancellationToken);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
-        }
+        // A rejection here ("not one of this user's assigned locations") is a
+        // DomainRuleViolationException, turned into a 400 ValidationProblemDetails by
+        // DomainRuleViolationFilter — same shape the validator failure above returns (ADR-0003).
+        await userOrgAssignmentService.SwitchActiveOrgAsync(userId, request.OrgNodeId, cancellationToken);
 
         var user = await userManager.FindByIdAsync(userId.ToString()) ?? throw new InvalidOperationException("User not found.");
         var principal = await claimsPrincipalFactory.CreateAsync(user);

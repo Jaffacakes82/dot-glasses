@@ -1,6 +1,7 @@
 using DotGlasses.Application.Common;
 using DotGlasses.Application.Organisations;
 using DotGlasses.Application.Reporting;
+using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Entities;
 using DotGlasses.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -46,7 +47,7 @@ public class OrganisationAdminService(DotGlassesDbContext dbContext, IUnscopedRe
 
         if (!IsValidChildLevel(parent.Level, level))
         {
-            throw new InvalidOperationException($"{level} is not a valid child level under a {parent.Level} node.");
+            throw new DomainRuleViolationException($"{level} is not a valid child level under a {parent.Level} node.");
         }
 
         // New path segments are small ever-increasing integers assigned in creation order across
@@ -114,7 +115,7 @@ public class OrganisationAdminService(DotGlassesDbContext dbContext, IUnscopedRe
             var hasActiveChildren = await dbContext.OrganisationNodes.AnyAsync(x => x.ParentId == id, cancellationToken);
             if (hasActiveChildren)
             {
-                throw new InvalidOperationException("Deactivate this node's child orgs first — an org with active children can't be deactivated.");
+                throw new DomainRuleViolationException("Deactivate this node's child orgs first — an org with active children can't be deactivated.");
             }
 
             // Remove() on an ISoftDeletable entity is turned into a soft-delete by

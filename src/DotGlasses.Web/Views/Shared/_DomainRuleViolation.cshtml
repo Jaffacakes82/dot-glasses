@@ -1,0 +1,12 @@
+@using DotGlasses.Web.Filters
+@*
+    Renders a business-rule rejection (ADR-0003) inline on whichever screen the POST came from.
+    DomainRuleViolationFilter redirects back here with the service's own copy in TempData, so a
+    screen surfaces the message without its controller catching anything — and a new screen gets
+    it for free. Deliberately rendered from _Layout rather than per-view, for the same reason the
+    filter is global: a screen must not be able to forget.
+*@
+@if (TempData[DomainRuleViolationFilter.TempDataKey] is string message)
+{
+    <div class="alert alert-danger" style="border-radius:var(--radius-md); margin-bottom:var(--space-4);">@message</div>
+}

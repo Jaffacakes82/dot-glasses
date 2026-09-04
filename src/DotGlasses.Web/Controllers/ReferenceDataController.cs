@@ -96,23 +96,14 @@ public class ReferenceDataController(
     }
 
     /// <summary>See ADR-0001. AddCoatingPairingAsync/AddCoatingExclusionAsync throw
-    /// InvalidOperationException for every validation failure (self-pairing, retired/wrong-
-    /// category coating, duplicate rule, or a rule contradicting the other kind) — caught and
-    /// surfaced the same way OrganisationsController's SetActive/UnassignUser do.</summary>
+    /// DomainRuleViolationException for every validation failure (self-pairing, retired/wrong-
+    /// category coating, duplicate rule, or a rule contradicting the other kind) — surfaced on
+    /// this screen by DomainRuleViolationFilter, not caught here (ADR-0003).</summary>
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> AddCoatingPairing(Guid triggerCoatingRefId, Guid pairedCoatingRefId, CancellationToken cancellationToken)
     {
-        try
-        {
-            await referenceDataAdminService.AddCoatingPairingAsync(triggerCoatingRefId, pairedCoatingRefId, cancellationToken);
-        }
-        catch (InvalidOperationException ex)
-        {
-            ModelState.AddModelError(string.Empty, ex.Message);
-            return View(nameof(Index), await BuildViewModelAsync(cancellationToken));
-        }
-
+        await referenceDataAdminService.AddCoatingPairingAsync(triggerCoatingRefId, pairedCoatingRefId, cancellationToken);
         return RedirectToAction(nameof(Index));
     }
 
@@ -128,16 +119,7 @@ public class ReferenceDataController(
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> AddCoatingExclusion(Guid coatingRefIdA, Guid coatingRefIdB, CancellationToken cancellationToken)
     {
-        try
-        {
-            await referenceDataAdminService.AddCoatingExclusionAsync(coatingRefIdA, coatingRefIdB, cancellationToken);
-        }
-        catch (InvalidOperationException ex)
-        {
-            ModelState.AddModelError(string.Empty, ex.Message);
-            return View(nameof(Index), await BuildViewModelAsync(cancellationToken));
-        }
-
+        await referenceDataAdminService.AddCoatingExclusionAsync(coatingRefIdA, coatingRefIdB, cancellationToken);
         return RedirectToAction(nameof(Index));
     }
 
