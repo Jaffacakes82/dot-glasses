@@ -47,6 +47,8 @@ public class LeadConversionFormModel
     public decimal? CustomCylinderRight { get; set; }
     public decimal? CustomAxisRight { get; set; }
     public decimal? CustomAddPowerRight { get; set; }
+    public Guid? LensTypeRefId { get; set; }
+    public string? LensTypeOtherText { get; set; }
     public decimal? PupilDistanceMm { get; set; }
 }
 
@@ -65,5 +67,6 @@ public class LeadConversionViewModel
     public required IReadOnlyList<ReferenceDataItemDto> FrameColours { get; init; }
     public required IReadOnlyList<ReferenceDataItemDto> Coatings { get; init; }
     public required IReadOnlyList<ReferenceDataItemDto> HardCaseColours { get; init; }
+    public required IReadOnlyList<ReferenceDataItemDto> LensTypes { get; init; }
     public required LeadConversionFormModel Form { get; init; }
 }

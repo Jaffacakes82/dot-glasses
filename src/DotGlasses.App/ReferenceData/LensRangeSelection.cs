@@ -24,6 +24,11 @@ public class LensRangeSelection
     public decimal? CustomAxisRight { get; set; }
     public decimal? CustomAddPowerRight { get; set; }
 
+    /// <summary>Required once either add power is set (two distinct powers on that eye) — see
+    /// LensRangeSelector.</summary>
+    public Guid? LensTypeRefId { get; set; }
+    public string? LensTypeOtherText { get; set; }
+
     /// <summary>The real inter-pupillary distance in mm — Custom range only.</summary>
     public decimal? PupilDistanceMm { get; set; }
 

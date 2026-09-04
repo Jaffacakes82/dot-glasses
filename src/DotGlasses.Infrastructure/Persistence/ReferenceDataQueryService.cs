@@ -48,6 +48,7 @@ public class ReferenceDataQueryService(DotGlassesDbContext dbContext) : IReferen
         DomainCategory.FrameColour => ContractCategory.FrameColour,
         DomainCategory.HardCaseColour => ContractCategory.HardCaseColour,
         DomainCategory.LensStrength => ContractCategory.LensStrength,
+        DomainCategory.LensType => ContractCategory.LensType,
         _ => throw new ArgumentOutOfRangeException(nameof(category), category, null),
     };
 }

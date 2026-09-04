@@ -96,4 +96,45 @@ public class AccountController(SignInManager<ApplicationUser> signInManager) : C
         TempData["Info"] = "Password set — you can now log in.";
         return RedirectToAction(nameof(Login));
     }
+
+    /// <summary>Self-service account settings — reachable by any authenticated user regardless of
+    /// role, unlike User Directory's admin-only "manage other users" screens (see CLAUDE.md's RBAC
+    /// table: this page carries no policy beyond plain [Authorize], same as Dashboard/Organisations/
+    /// Event History).</summary>
+    [HttpGet]
+    [Authorize]
+    public IActionResult Settings() => View(new ChangePasswordViewModel());
+
+    [HttpPost]
+    [Authorize]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ChangePassword(ChangePasswordViewModel model)
+    {
+        if (!ModelState.IsValid)
+        {
+            return View(nameof(Settings), model);
+        }
+
+        var user = await signInManager.UserManager.GetUserAsync(User);
+        if (user is null)
+        {
+            return RedirectToAction(nameof(Login));
+        }
+
+        var result = await signInManager.UserManager.ChangePasswordAsync(user, model.CurrentPassword, model.NewPassword);
+        if (!result.Succeeded)
+        {
+            model.Error = string.Join(" ", result.Errors.Select(e => e.Description));
+            return View(nameof(Settings), model);
+        }
+
+        // ChangePasswordAsync doesn't refresh the auth cookie's security stamp on its own —
+        // without this, the technician stays signed in on this device (expected) but any *other*
+        // active session for the same account keeps working on the old password until it expires,
+        // rather than being invalidated immediately.
+        await signInManager.RefreshSignInAsync(user);
+
+        TempData["Info"] = "Password changed.";
+        return RedirectToAction(nameof(Settings));
+    }
 }

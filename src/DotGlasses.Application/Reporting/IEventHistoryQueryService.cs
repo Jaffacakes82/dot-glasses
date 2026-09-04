@@ -19,9 +19,24 @@ public interface IEventHistoryQueryService
     /// subquery on Customer, not an in-memory filter after the page is loaded).</summary>
     Task<PagedResult<LeadEventRow>> ListLeadsAsync(string? searchByName, DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, int page, int pageSize, CancellationToken cancellationToken = default);
 
-    /// <summary>Test rows where Outcome == Referred — a filtered view of the same data
-    /// ListTestsAsync shows unfiltered, not a separate entity.</summary>
+    /// <summary>Test/Lead/Sale rows where ReferredOrTreated is true (2026-09-03 — "referred or
+    /// treated" is an orthogonal flag on all three, no longer tied to Test.Outcome) — a filtered,
+    /// merged view of the same underlying data ListTestsAsync/ListLeadsAsync/ListSalesAsync show
+    /// unfiltered, not a separate entity. The same real-world referral may legitimately appear
+    /// more than once if it was (re)recorded at more than one stage of a converting journey.</summary>
     Task<PagedResult<ReferralEventRow>> ListReferralsAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, int page, int pageSize, CancellationToken cancellationToken = default);
+
+    /// <summary>Export variants of the four List* methods above — same filter parameters, same
+    /// scoping and ordering, just unpaged (every matching row, not one page of them). Exists so
+    /// the CSV export drives off the exact same filtered query the on-screen list uses, not a
+    /// second, divergent query path that could silently drift out of sync with it.</summary>
+    Task<IReadOnlyList<SaleOrTestEventRow>> ExportSalesAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<SaleOrTestEventRow>> ExportTestsAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<LeadEventRow>> ExportLeadsAsync(string? searchByName, DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<ReferralEventRow>> ExportReferralsAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Name/ConsentGiven are null for a Test row — Tests stay deliberately anonymous (no
@@ -32,7 +47,9 @@ public record SaleOrTestEventRow(string Type, bool Custom, string? Name, string 
 /// row needs its own Lead Id to link to the conversion form, and ConvertedFlag to know whether
 /// to show "Convert to sale" or an already-converted state.</summary>
 public record LeadEventRow(Guid Id, string Name, string PhoneMasked, string Outlet, string Reason, DateTimeOffset CreatedAtUtc, bool ConsentGiven, bool ConvertedFlag);
-public record ReferralEventRow(string Outlet, string Country, string Reason, DateTimeOffset CreatedAtUtc);
+/// <summary>Source is "Test"/"Lead"/"Sale" — which entity this referral/treatment was recorded
+/// against, since the same real-world event may be logged at more than one stage.</summary>
+public record ReferralEventRow(string Source, string Outlet, string Country, string Reason, bool TreatedInFacility, DateTimeOffset CreatedAtUtc);
 
 /// <summary>Page is 1-based. TotalPages is 0 when TotalCount is 0 (an empty tab shows no pager,
 /// not a single empty page).</summary>
