@@ -308,18 +308,26 @@ carries no customer reference of any kind (the unused `CustomerId` field was rem
 genuinely anonymous records, not just displayed without a name.
 
 **Leads tab** — columns: name, masked phone, outlet, reason not purchased, **Consent**, a
-**convert-to-sale action** (linking to the same admin conversion flow described in §4.5's Lead
-conversion capability — shows "Converted" once done, otherwise a "Convert to sale" link), relative
-"Logged" time ("just now", "N minutes/hours/days ago", falling back to an absolute date beyond a
-week). Phone masking keeps the first 4 and last 3 characters and replaces the middle with a fixed
-4-character redaction; numbers of 7 characters or fewer are shown unmasked, and a missing number
-shows "—". Includes a search box filtering on customer full name, applied at the database level
+**convert-to-sale action** (shows "Converted" once done, otherwise a "Convert to sale" link
+opening the admin conversion form described below), relative "Logged" time ("just now", "N
+minutes/hours/days ago", falling back to an absolute date beyond a week). Phone masking keeps the
+first 4 and last 3 characters and replaces the middle with a fixed 4-character redaction; numbers
+of 7 characters or fewer are shown unmasked, and a missing number shows "—". Includes a search box filtering on customer full name, applied at the database level
 *before* paging so page numbers stay meaningful. The match is **case-insensitive** (`ILIKE`).
 
 **Referrals tab** — columns: outlet, country, reason, absolute time, preceded by a note that these
 are tracked for government reporting. This is a filtered view of the same Tests data
 (outcome = *Referred*), not a separate record type — a referred test correctly appears in both
 tabs.
+
+The **admin conversion form** (`/Leads/Convert/{id}`) asks for the Sale fields a Lead has no
+equivalent for — coating, frame colour, hard case, "order from DOT Glasses", and the lens range
+where the Lead captured no preference — plus **referred or treated**, with a referral reason, its
+"Other" free text, a treated-in-facility flag and a referral location, following exactly the same
+conditional rules as every other capture path (2026-09-04). Frame coverage is **not** asked here,
+matching the Field App's Sale form; the sale records the Full frame default. Every field is
+rendered unconditionally with its condition stated in the label — the rules are enforced
+server-side and reported as a validation summary on submit, not by live show/hide.
 
 Reference-data labels (referral reason, reason not purchased) resolve against **all** reference
 items including retired ones, so a historical event referencing a since-retired option still
@@ -478,6 +486,10 @@ showing sphere and, where non-zero, `cyl` and `add`), **Status** badge, and the 
 forward-only: **Submitted → In Lab → Ready for Pickup → Fulfilled**. Status is set to *Submitted*
 automatically at the moment the sale is created. Once Fulfilled the button disappears, and the
 service refuses any further advance. There is no way to set an arbitrary status.
+
+A refused advance — the order was already Fulfilled (a colleague got there first, a double click,
+a browser resubmit), it isn't a custom order, or it isn't visible to the caller — comes back as a
+sentence in a red banner above the queue, not an error page (2026-09-04).
 
 Empty state: "No custom orders yet" (or a filtered variant when a status pill with no matches is
 selected).
@@ -688,10 +700,13 @@ Then, for every sale:
   The colour shown comes from a hard-coded six-entry hex table matched by name substring, falling
   back to grey; the admin-entered image URL is not used here. Selecting the "Other" swatch reveals
   a "please specify" text field. Required server-side.
-- **Frame coverage** — select: Full frame / Eye-frame rims only.
 - **Hard case sold** — a checkbox; ticking it reveals a **Hard case colour** reference dropdown
   with Other free-text. Server-enforced both ways: colour required when sold, and both colour
   fields must be empty when not.
+
+**Frame coverage is never asked** — not here and not on the admin conversion form (§4.4). The
+column and the request field remain, and every Sale records the Full frame default; existing
+records read back unchanged.
 
 A coating is **always required** on a Sale. For a preset range it must be one the admin has ticked
 as available for the chosen *left eye* lens's strength; for Custom, any active coating is
