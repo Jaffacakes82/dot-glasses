@@ -1,5 +1,6 @@
 using DotGlasses.Domain.Entities;
 using DotGlasses.Infrastructure.Persistence;
+using DotGlasses.Infrastructure.Tests.Postgres;
 using DotGlasses.Infrastructure.Tests.TestDoubles;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,20 +11,21 @@ namespace DotGlasses.Infrastructure.Tests.Persistence;
 /// filter (brief 3.2a) — these tests exercise root/leaf/sibling-prefix edge cases directly
 /// against the filter, and prove the filter is re-evaluated per DbContext instance (i.e. two
 /// contexts built with different "current user" claims see different rows from the same data).
+/// Run against real Postgres: the prefix match is translated to SQL, and the SQL engine's own
+/// string semantics are the thing under test — the InMemory provider evaluated it in C# and so
+/// could not have caught a translation-level regression.
 /// </summary>
-public class HierarchyQueryFilterTests
+[Collection(PostgresCollection.Name)]
+public class HierarchyQueryFilterTests(PostgresContainerFixture postgres)
 {
-    private static DotGlassesDbContext CreateContext(string databaseName, bool isAuthenticated = true, string hierarchyPathPrefix = "")
-    {
-        var options = new DbContextOptionsBuilder<DotGlassesDbContext>()
-            .UseInMemoryDatabase(databaseName)
-            .Options;
-        return new DotGlassesDbContext(options, FakeHttpContextAccessor.Create(isAuthenticated, hierarchyPathPrefix));
-    }
+    private static DotGlassesDbContext CreateContext(string connectionString, bool isAuthenticated = true, string hierarchyPathPrefix = "") =>
+        PostgresContainerFixture.CreateContext(connectionString, FakeHttpContextAccessor.Create(isAuthenticated, hierarchyPathPrefix));
 
-    private static async Task SeedAsync(string databaseName)
+    private async Task<string> SeededDatabaseAsync()
     {
-        await using var seedContext = CreateContext(databaseName);
+        var connectionString = await postgres.CreateDatabaseAsync();
+
+        await using var seedContext = CreateContext(connectionString);
 
         seedContext.WidgetExamples.AddRange(
             new WidgetExample { Id = Guid.NewGuid(), Name = "Root", HierarchyPath = "/1/" },
@@ -35,15 +37,16 @@ public class HierarchyQueryFilterTests
             new WidgetExample { Id = Guid.NewGuid(), Name = "Sibling", HierarchyPath = "/1/40/" });
 
         await seedContext.SaveChangesAsync();
+
+        return connectionString;
     }
 
     [Fact]
     public async Task RootPrefix_ReturnsEveryDescendantIncludingSelf()
     {
-        var dbName = Guid.NewGuid().ToString();
-        await SeedAsync(dbName);
+        var connectionString = await SeededDatabaseAsync();
 
-        await using var context = CreateContext(dbName, hierarchyPathPrefix: "/1/");
+        await using var context = CreateContext(connectionString, hierarchyPathPrefix: "/1/");
 
         var names = await context.WidgetExamples.Select(w => w.Name).ToListAsync();
 
@@ -53,10 +56,9 @@ public class HierarchyQueryFilterTests
     [Fact]
     public async Task LeafPrefix_ReturnsOnlyThatLeaf()
     {
-        var dbName = Guid.NewGuid().ToString();
-        await SeedAsync(dbName);
+        var connectionString = await SeededDatabaseAsync();
 
-        await using var context = CreateContext(dbName, hierarchyPathPrefix: "/1/4/12/");
+        await using var context = CreateContext(connectionString, hierarchyPathPrefix: "/1/4/12/");
 
         var names = await context.WidgetExamples.Select(w => w.Name).ToListAsync();
 
@@ -66,10 +68,9 @@ public class HierarchyQueryFilterTests
     [Fact]
     public async Task SiblingPathSharingStringPrefix_IsExcluded()
     {
-        var dbName = Guid.NewGuid().ToString();
-        await SeedAsync(dbName);
+        var connectionString = await SeededDatabaseAsync();
 
-        await using var context = CreateContext(dbName, hierarchyPathPrefix: "/1/4/");
+        await using var context = CreateContext(connectionString, hierarchyPathPrefix: "/1/4/");
 
         var names = await context.WidgetExamples.Select(w => w.Name).ToListAsync();
 
@@ -80,10 +81,9 @@ public class HierarchyQueryFilterTests
     [Fact]
     public async Task Unauthenticated_SeesNothing_RegardlessOfPrefix()
     {
-        var dbName = Guid.NewGuid().ToString();
-        await SeedAsync(dbName);
+        var connectionString = await SeededDatabaseAsync();
 
-        await using var context = CreateContext(dbName, isAuthenticated: false, hierarchyPathPrefix: "/1/");
+        await using var context = CreateContext(connectionString, isAuthenticated: false, hierarchyPathPrefix: "/1/");
 
         var names = await context.WidgetExamples.ToListAsync();
 
@@ -99,11 +99,10 @@ public class HierarchyQueryFilterTests
         // query filter expression previously broke exactly this case — different concurrently
         // alive instances would bleed each other's rows — so this is a regression test for that,
         // not just a demonstration.
-        var dbName = Guid.NewGuid().ToString();
-        await SeedAsync(dbName);
+        var connectionString = await SeededDatabaseAsync();
 
-        await using var leafScoped = CreateContext(dbName, hierarchyPathPrefix: "/1/4/12/");
-        await using var rootScoped = CreateContext(dbName, hierarchyPathPrefix: "/1/");
+        await using var leafScoped = CreateContext(connectionString, hierarchyPathPrefix: "/1/4/12/");
+        await using var rootScoped = CreateContext(connectionString, hierarchyPathPrefix: "/1/");
 
         var leafCount = (await leafScoped.WidgetExamples.ToListAsync()).Count;
         var rootCount = (await rootScoped.WidgetExamples.ToListAsync()).Count;
