@@ -109,6 +109,75 @@
                 </details>
             }
 
+            @if (list.Category == DotGlasses.Domain.Enums.ReferenceDataCategory.Coating)
+            {
+                <div style="margin-bottom:var(--space-3); padding-top:var(--space-2); border-top:1px solid var(--border-default);">
+                    <p class="dg-stat-label" style="margin-bottom:4px;">Pairings (selecting the first auto-adds the second)</p>
+                    @if (!list.CoatingPairings.Any())
+                    {
+                        <span style="font-size:12px; color:#999;">None yet.</span>
+                    }
+                    @foreach (var pairing in list.CoatingPairings)
+                    {
+                        <div style="display:flex; align-items:center; gap:6px; font-size:13px; margin-bottom:2px;">
+                            <span>@pairing.TriggerCoatingLabel &rarr; @pairing.PairedCoatingLabel</span>
+                            <form asp-action="RemoveCoatingPairing" method="post" style="display:inline;">
+                                <input type="hidden" name="id" value="@pairing.Id" />
+                                <button type="submit" aria-label="Remove pairing" style="border:none; background:none; cursor:pointer; padding:0; color:#888; font-size:12px; line-height:1;">&times;</button>
+                            </form>
+                        </div>
+                    }
+                    <form asp-action="AddCoatingPairing" method="post" style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
+                        <select class="form-select" name="triggerCoatingRefId" style="font-size:12px; width:auto;">
+                            @foreach (var option in list.ActiveOptions)
+                            {
+                                <option value="@option.Id">@option.Label</option>
+                            }
+                        </select>
+                        <span style="align-self:center; font-size:12px;">&rarr;</span>
+                        <select class="form-select" name="pairedCoatingRefId" style="font-size:12px; width:auto;">
+                            @foreach (var option in list.ActiveOptions)
+                            {
+                                <option value="@option.Id">@option.Label</option>
+                            }
+                        </select>
+                        <button class="dg-btn dg-btn-ghost" style="padding:4px 12px; font-size:12px;" type="submit">Add pairing</button>
+                    </form>
+
+                    <p class="dg-stat-label" style="margin:10px 0 4px;">Exclusions (can never be selected together)</p>
+                    @if (!list.CoatingExclusions.Any())
+                    {
+                        <span style="font-size:12px; color:#999;">None yet.</span>
+                    }
+                    @foreach (var exclusion in list.CoatingExclusions)
+                    {
+                        <div style="display:flex; align-items:center; gap:6px; font-size:13px; margin-bottom:2px;">
+                            <span>@exclusion.LabelA &#8856; @exclusion.LabelB</span>
+                            <form asp-action="RemoveCoatingExclusion" method="post" style="display:inline;">
+                                <input type="hidden" name="id" value="@exclusion.Id" />
+                                <button type="submit" aria-label="Remove exclusion" style="border:none; background:none; cursor:pointer; padding:0; color:#888; font-size:12px; line-height:1;">&times;</button>
+                            </form>
+                        </div>
+                    }
+                    <form asp-action="AddCoatingExclusion" method="post" style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
+                        <select class="form-select" name="coatingRefIdA" style="font-size:12px; width:auto;">
+                            @foreach (var option in list.ActiveOptions)
+                            {
+                                <option value="@option.Id">@option.Label</option>
+                            }
+                        </select>
+                        <span style="align-self:center; font-size:12px;">&#8856;</span>
+                        <select class="form-select" name="coatingRefIdB" style="font-size:12px; width:auto;">
+                            @foreach (var option in list.ActiveOptions)
+                            {
+                                <option value="@option.Id">@option.Label</option>
+                            }
+                        </select>
+                        <button class="dg-btn dg-btn-ghost" style="padding:4px 12px; font-size:12px;" type="submit">Add exclusion</button>
+                    </form>
+                </div>
+            }
+
             <form asp-action="Create" method="post">
                 <input type="hidden" name="Category" value="@((int)list.Category)" />
                 <div style="display:flex; gap:var(--space-2); margin-bottom:6px;">

@@ -32,4 +32,10 @@ public interface IReferenceDataClient
     IReadOnlyList<ReferenceDataItemDto> GetByCategory(ReferenceDataCategory category);
 
     IReadOnlyList<PresetCatalogueDto> Catalogues { get; }
+
+    /// <summary>Coating pairing/exclusion rules (see ADR-0001) — cached the same way as the rest
+    /// of reference data, for the same offline reasons.</summary>
+    IReadOnlyList<CoatingPairingDto> CoatingPairings { get; }
+
+    IReadOnlyList<CoatingExclusionDto> CoatingExclusions { get; }
 }

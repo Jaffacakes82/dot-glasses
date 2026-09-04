@@ -107,6 +107,132 @@ public partial class ReferenceDataAdminService(DotGlassesDbContext dbContext) : 
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<CoatingPairingAdminItem>> ListCoatingPairingsAsync(CancellationToken cancellationToken = default)
+    {
+        var pairings = await dbContext.CoatingPairings.ToListAsync(cancellationToken);
+        var labels = await GetCoatingLabelsAsync(cancellationToken);
+
+        return pairings
+            .Select(p => new CoatingPairingAdminItem(p.Id, p.TriggerCoatingRefId, Label(labels, p.TriggerCoatingRefId), p.PairedCoatingRefId, Label(labels, p.PairedCoatingRefId)))
+            .OrderBy(p => p.TriggerCoatingLabel, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(p => p.PairedCoatingLabel, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    public async Task<IReadOnlyList<CoatingExclusionAdminItem>> ListCoatingExclusionsAsync(CancellationToken cancellationToken = default)
+    {
+        var exclusions = await dbContext.CoatingExclusions.ToListAsync(cancellationToken);
+        var labels = await GetCoatingLabelsAsync(cancellationToken);
+
+        return exclusions
+            .Select(e => new CoatingExclusionAdminItem(e.Id, e.CoatingRefIdA, Label(labels, e.CoatingRefIdA), e.CoatingRefIdB, Label(labels, e.CoatingRefIdB)))
+            .OrderBy(e => e.LabelA, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(e => e.LabelB, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    public async Task AddCoatingPairingAsync(Guid triggerCoatingRefId, Guid pairedCoatingRefId, CancellationToken cancellationToken = default)
+    {
+        if (triggerCoatingRefId == pairedCoatingRefId)
+        {
+            throw new InvalidOperationException("A coating can't pair with itself.");
+        }
+
+        await EnsureActiveCoatingAsync(triggerCoatingRefId, cancellationToken);
+        await EnsureActiveCoatingAsync(pairedCoatingRefId, cancellationToken);
+
+        if (await dbContext.CoatingPairings.AnyAsync(p => p.TriggerCoatingRefId == triggerCoatingRefId && p.PairedCoatingRefId == pairedCoatingRefId, cancellationToken))
+        {
+            throw new InvalidOperationException("This pairing already exists.");
+        }
+
+        if (await HasExclusionAsync(triggerCoatingRefId, pairedCoatingRefId, cancellationToken))
+        {
+            throw new InvalidOperationException("Can't add this pairing — an exclusion already exists between these two coatings.");
+        }
+
+        dbContext.CoatingPairings.Add(new CoatingPairing
+        {
+            Id = Guid.NewGuid(),
+            TriggerCoatingRefId = triggerCoatingRefId,
+            PairedCoatingRefId = pairedCoatingRefId,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+        });
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task RemoveCoatingPairingAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var entity = await dbContext.CoatingPairings.FirstAsync(x => x.Id == id, cancellationToken);
+        dbContext.CoatingPairings.Remove(entity);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task AddCoatingExclusionAsync(Guid coatingRefIdA, Guid coatingRefIdB, CancellationToken cancellationToken = default)
+    {
+        if (coatingRefIdA == coatingRefIdB)
+        {
+            throw new InvalidOperationException("A coating can't exclude itself.");
+        }
+
+        await EnsureActiveCoatingAsync(coatingRefIdA, cancellationToken);
+        await EnsureActiveCoatingAsync(coatingRefIdB, cancellationToken);
+
+        var (lower, higher) = CoatingExclusion.Canonicalize(coatingRefIdA, coatingRefIdB);
+        if (await dbContext.CoatingExclusions.AnyAsync(e => e.CoatingRefIdA == lower && e.CoatingRefIdB == higher, cancellationToken))
+        {
+            throw new InvalidOperationException("This exclusion already exists.");
+        }
+
+        var hasPairing = await dbContext.CoatingPairings.AnyAsync(
+            p => (p.TriggerCoatingRefId == coatingRefIdA && p.PairedCoatingRefId == coatingRefIdB)
+                || (p.TriggerCoatingRefId == coatingRefIdB && p.PairedCoatingRefId == coatingRefIdA),
+            cancellationToken);
+        if (hasPairing)
+        {
+            throw new InvalidOperationException("Can't add this exclusion — a pairing already exists between these two coatings.");
+        }
+
+        dbContext.CoatingExclusions.Add(new CoatingExclusion
+        {
+            Id = Guid.NewGuid(),
+            CoatingRefIdA = lower,
+            CoatingRefIdB = higher,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+        });
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task RemoveCoatingExclusionAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var entity = await dbContext.CoatingExclusions.FirstAsync(x => x.Id == id, cancellationToken);
+        dbContext.CoatingExclusions.Remove(entity);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task EnsureActiveCoatingAsync(Guid coatingRefId, CancellationToken cancellationToken)
+    {
+        var isActive = await dbContext.ReferenceDataItems
+            .AnyAsync(x => x.Id == coatingRefId && x.Category == ReferenceDataCategory.Coating && x.IsActive, cancellationToken);
+        if (!isActive)
+        {
+            throw new InvalidOperationException("Both coatings must reference an existing, active Coating reference-data item.");
+        }
+    }
+
+    private async Task<bool> HasExclusionAsync(Guid coatingRefIdA, Guid coatingRefIdB, CancellationToken cancellationToken)
+    {
+        var (lower, higher) = CoatingExclusion.Canonicalize(coatingRefIdA, coatingRefIdB);
+        return await dbContext.CoatingExclusions.AnyAsync(e => e.CoatingRefIdA == lower && e.CoatingRefIdB == higher, cancellationToken);
+    }
+
+    private async Task<IReadOnlyDictionary<Guid, string>> GetCoatingLabelsAsync(CancellationToken cancellationToken) =>
+        await dbContext.ReferenceDataItems
+            .Where(x => x.Category == ReferenceDataCategory.Coating)
+            .ToDictionaryAsync(x => x.Id, x => x.Label, cancellationToken);
+
+    private static string Label(IReadOnlyDictionary<Guid, string> labels, Guid id) => labels.GetValueOrDefault(id, "(retired coating)");
+
     private static ReferenceDataAdminItem ToAdminItem(ReferenceDataItem entity) =>
         new(entity.Id, entity.Category, entity.Code, entity.Label, entity.SortOrder, entity.IsActive, entity.IsOtherOption, entity.ImageUrl);
 
