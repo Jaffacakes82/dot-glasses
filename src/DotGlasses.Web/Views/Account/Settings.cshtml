@@ -1,0 +1,46 @@
+@model DotGlasses.Web.Models.ChangePasswordViewModel
+@{
+    ViewData["Title"] = "Account Settings";
+}
+
+@await Html.PartialAsync("_PageHeader", new DotGlasses.Web.Models.PageHeaderViewModel
+{
+    Crumb = "Account",
+    Title = "Account Settings",
+})
+
+<div class="dg-card" style="max-width:420px;">
+    <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin-top:0; font-size:15px;">Change password</h3>
+
+    @if (TempData["Info"] is string info)
+    {
+        <div class="alert alert-success" style="border-radius:var(--radius-md);">@info</div>
+    }
+    @if (!string.IsNullOrEmpty(Model.Error))
+    {
+        <div class="alert alert-danger" style="border-radius:var(--radius-md);">@Model.Error</div>
+    }
+
+    <form asp-controller="Account" asp-action="ChangePassword" method="post">
+        <div class="dg-auth-field">
+            <label asp-for="CurrentPassword">Current password</label>
+            <input asp-for="CurrentPassword" autocomplete="current-password" />
+            <span asp-validation-for="CurrentPassword" class="text-danger" style="font-size:13px;"></span>
+        </div>
+        <div class="dg-auth-field">
+            <label asp-for="NewPassword">New password</label>
+            <input asp-for="NewPassword" autocomplete="new-password" />
+            <span asp-validation-for="NewPassword" class="text-danger" style="font-size:13px;"></span>
+        </div>
+        <div class="dg-auth-field">
+            <label asp-for="ConfirmPassword">Confirm new password</label>
+            <input asp-for="ConfirmPassword" autocomplete="new-password" />
+            <span asp-validation-for="ConfirmPassword" class="text-danger" style="font-size:13px;"></span>
+        </div>
+        <button type="submit" class="dg-btn dg-btn-primary" style="margin-top:var(--space-2);">Change password</button>
+    </form>
+</div>
+
+@section Scripts {
+    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
+}

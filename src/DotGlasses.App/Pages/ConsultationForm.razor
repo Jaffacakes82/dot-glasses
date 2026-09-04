@@ -141,6 +141,17 @@
                                             SelectedId="_occupationRefId" SelectedIdChanged="v => _occupationRefId = v"
                                             OtherText="_occupationOtherText" OtherTextChanged="v => _occupationOtherText = v"
                                             Errors="_errors" Field="OccupationRefId" OtherField="OccupationOtherText" />
+
+                    <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues" Coatings="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
+                                       LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
+                                       AllowNoPreference="true" Errors="_errors" CoatingField="CoatingPreferenceRefId" RangeTypeChanged="StateHasChanged" />
+                    @if (_lensRange.LensRangeType is not (LensRangeType.SixLensSet or LensRangeType.NineLensSet))
+                    {
+                        <ReferenceDataDropdown Label="Coating preference (optional)" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
+                                                SelectedId="_coatingPreferenceRefId" SelectedIdChanged="v => _coatingPreferenceRefId = v"
+                                                Errors="_errors" Field="CoatingPreferenceRefId" />
+                    }
+
                     <div class="dg-field">
                         <label>Did the customer share contact details?</label>
                         <div style="display:flex; gap:8px;">
@@ -188,6 +199,7 @@
                 @if (IsSale)
                 {
                     <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues" Coatings="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
+                                       LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
                                        AllowNoPreference="false" Errors="_errors" CoatingField="CoatingRefId" RangeTypeChanged="StateHasChanged" />
 
                     @if (_lensRange.LensRangeType == LensRangeType.Custom)
@@ -201,13 +213,6 @@
                     }
 
                     @RenderFrameSwatches()
-                    <div class="dg-field">
-                        <label>Frame coverage</label>
-                        <select @bind="_frameCoverage">
-                            <option value="FullFrame">Full frame</option>
-                            <option value="EyeFrameRimsOnly">Eye-frame rims only</option>
-                        </select>
-                    </div>
 
                     <div class="dg-field">
                         <label style="display:flex; align-items:center; justify-content:space-between; gap:8px;">Did this person buy a hard case? (click for yes)<input type="checkbox" @bind="_hardCaseSold" style="width:auto; flex:none;" /></label>
@@ -228,6 +233,7 @@
                                             Errors="_errors" Field="ReasonNotPurchasedRefId" OtherField="ReasonNotPurchasedOtherText" />
 
                     <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues" Coatings="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
+                                       LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
                                        AllowNoPreference="true" Errors="_errors" CoatingField="CoatingPreferenceRefId" RangeTypeChanged="StateHasChanged" />
 
                     @if (_lensRange.LensRangeType is not (LensRangeType.SixLensSet or LensRangeType.NineLensSet))
@@ -270,12 +276,6 @@
     private bool IsTest => Type.Equals("test", StringComparison.OrdinalIgnoreCase);
     private bool IsSale => Type.Equals("sale", StringComparison.OrdinalIgnoreCase);
 
-    private readonly (string Name, string Hex)[] FrameColorSwatches =
-    [
-        ("Black", "#000000"), ("Blue", "#233A5E"), ("Blue-Black", "#1B2A44"),
-        ("Brown-Black", "#3B2A20"), ("Purple", "#5B2A6E"), ("Purple-Black", "#3A2140"),
-    ];
-
     private int? _age;
     private Gender _gender = Gender.Female;
     private Guid? _occupationRefId;
@@ -312,6 +312,9 @@
     // Lead-only
     private Guid? _reasonNotPurchasedRefId;
     private string? _reasonNotPurchasedOtherText;
+
+    // Custom-range coating preference — shared between Test (NeedsGlasses) and Lead, both of
+    // which treat coating as optional (unlike Sale, which requires it).
     private Guid? _coatingPreferenceRefId;
 
     // Sale-only
@@ -335,7 +338,7 @@
     private static readonly string[] LensFields =
         ["LensRangeType", "PresetCatalogueId", "LensOptionLeftId", "LensOptionRightId", "CustomSphereLeft", "CustomSphereRight",
          "CustomCylinderLeft", "CustomCylinderRight", "CustomAxisLeft", "CustomAxisRight", "CustomAddPowerLeft", "CustomAddPowerRight",
-         "PupilDistanceMm", "PresetPupilDistanceBucket"];
+         "LensTypeRefId", "LensTypeOtherText", "PupilDistanceMm", "PresetPupilDistanceBucket"];
 
     private static readonly string[] LeadFields =
         [.. TestFields, .. LensFields, "FullName", "PhoneNumber", "ReasonNotPurchasedRefId", "ReasonNotPurchasedOtherText", "CoatingPreferenceRefId"];
@@ -344,7 +347,7 @@
         [.. TestFields, .. LensFields, "FullName", "PhoneNumber", "CoatingRefId", "FrameColourRefId", "FrameColourOtherText",
          "HardCaseColourRefId", "HardCaseOtherColourText"];
 
-    private string[] KnownFields => IsTest ? TestFields : IsSale ? SaleFields : LeadFields;
+    private string[] KnownFields => IsTest ? [.. TestFields, .. LensFields] : IsSale ? SaleFields : LeadFields;
 
     protected override async Task OnInitializedAsync()
     {
@@ -675,6 +678,13 @@
     /// consultation types (mirrors CreateTestRequestValidator.ValidateReferralAsync server-side).</summary>
     private void ValidateReferral()
     {
+        if (_testOutcome == TestOutcome.NeedsGlasses)
+        {
+            // A Test may carry no product preference at all; only validate the range if one is
+            // chosen — same reasoning as Lead.
+            ValidateLensRange(bucketRequired: false);
+        }
+
         if (!_referredOrTreated)
         {
             return;
@@ -802,7 +812,24 @@
                 _errors.AddIf(_lensRange.CustomSphereRight is null, "CustomSphereRight", "Choose the right sphere.");
                 ValidateAxis(_lensRange.CustomAxisLeft, "CustomAxisLeft");
                 ValidateAxis(_lensRange.CustomAxisRight, "CustomAxisRight");
-                _errors.AddIf(_lensRange.PupilDistanceMm is null, "PupilDistanceMm", "Choose a pupil distance.");
+
+                // Two distinct powers on an eye (a base sphere plus an add power) need a lens
+                // type — bifocal, progressive, or other.
+                if (_lensRange.CustomAddPowerLeft is not null || _lensRange.CustomAddPowerRight is not null)
+                {
+                    if (_lensRange.LensTypeRefId is null)
+                    {
+                        _errors.Add("LensTypeRefId", "Choose a lens type.");
+                    }
+                    else
+                    {
+                        ValidateOtherText(ReferenceDataCategory.LensType, _lensRange.LensTypeRefId, _lensRange.LensTypeOtherText, "LensTypeOtherText", "a lens type");
+                    }
+                }
+
+                // Optional on a Lead (often no time to measure during a busy event/day) — still
+                // required on a Sale, where the eventual order needs it.
+                _errors.AddIf(IsSale && _lensRange.PupilDistanceMm is null, "PupilDistanceMm", "Choose a pupil distance.");
                 break;
         }
     }
@@ -854,6 +881,26 @@
             ReferralOtherText = _referredOrTreated ? _referralOtherText : null,
             ReferralLocationFreeText = _referredOrTreated && !_treatedInFacility ? _referralLocationFreeText : null,
             TreatedInFacility = _referredOrTreated && _treatedInFacility,
+            LensRangeType = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.LensRangeType : null,
+            PresetCatalogueId = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.PresetCatalogueId : null,
+            LensOptionLeftId = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.LensOptionLeftId : null,
+            LensOptionRightId = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.LensOptionRightId : null,
+            CustomSphereLeft = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomSphereLeft : null,
+            CustomCylinderLeft = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomCylinderLeft : null,
+            CustomAxisLeft = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomAxisLeft : null,
+            CustomAddPowerLeft = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomAddPowerLeft : null,
+            CustomSphereRight = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomSphereRight : null,
+            CustomCylinderRight = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomCylinderRight : null,
+            CustomAxisRight = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomAxisRight : null,
+            CustomAddPowerRight = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomAddPowerRight : null,
+            LensTypeRefId = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.LensTypeRefId : null,
+            LensTypeOtherText = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.LensTypeOtherText : null,
+            PupilDistanceMm = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.PupilDistanceMm : null,
+            PresetPupilDistanceBucket = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.PresetPupilDistanceBucket : null,
+            ChildrensFrame = _testOutcome == TestOutcome.NeedsGlasses && _lensRange.ChildrensFrame,
+            CoatingPreferenceRefId = _testOutcome == TestOutcome.NeedsGlasses
+                ? (_lensRange.LensRangeType is LensRangeType.SixLensSet or LensRangeType.NineLensSet ? _lensRange.CoatingRefId : _coatingPreferenceRefId)
+                : null,
         };
 
         return await SubmitAsync(request.Id, "Test", "api/v1/tests", request) ? request.Id : null;
@@ -891,6 +938,8 @@
             CustomCylinderRight = _lensRange.CustomCylinderRight,
             CustomAxisRight = _lensRange.CustomAxisRight,
             CustomAddPowerRight = _lensRange.CustomAddPowerRight,
+            LensTypeRefId = _lensRange.LensTypeRefId,
+            LensTypeOtherText = _lensRange.LensTypeOtherText,
             PupilDistanceMm = _lensRange.PupilDistanceMm,
             PresetPupilDistanceBucket = _lensRange.PresetPupilDistanceBucket,
             ChildrensFrame = _lensRange.ChildrensFrame,
@@ -935,6 +984,8 @@
             CustomCylinderRight = _lensRange.CustomCylinderRight,
             CustomAxisRight = _lensRange.CustomAxisRight,
             CustomAddPowerRight = _lensRange.CustomAddPowerRight,
+            LensTypeRefId = _lensRange.LensTypeRefId,
+            LensTypeOtherText = _lensRange.LensTypeOtherText,
             OrderFromDotGlasses = _lensRange.LensRangeType == LensRangeType.Custom && _orderFromDotGlasses,
             PupilDistanceMm = _lensRange.PupilDistanceMm,
             PresetPupilDistanceBucket = _lensRange.PresetPupilDistanceBucket,
@@ -1007,15 +1058,27 @@
 
     private RenderFragment RenderFrameSwatches() => @<div class="dg-field">
         <label>Frame colour</label>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+        <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-start;">
             @{
                 var frameColours = ReferenceDataClient.GetByCategory(ReferenceDataCategory.FrameColour);
             }
             @foreach (var colour in frameColours.OrderBy(c => c.SortOrder))
             {
-                var hex = FrameColorSwatches.FirstOrDefault(s => colour.Label.Contains(s.Name, StringComparison.OrdinalIgnoreCase)).Hex ?? "#888888";
+                var selected = _frameColourRefId == colour.Id;
                 <button type="button" title="@colour.Label" @onclick="() => _frameColourRefId = colour.Id"
-                        style="width:32px; height:32px; border-radius:50%; background:@hex; cursor:pointer; border: @(_frameColourRefId == colour.Id ? "3px solid var(--dot-orange)" : "1px solid var(--border-default)");"></button>
+                        style="display:flex; flex-direction:column; align-items:center; gap:4px; width:64px; padding:4px; background:none; cursor:pointer;
+                               border-radius:var(--radius-md); border: @(selected ? "2px solid var(--dot-orange)" : "1px solid var(--border-default)");">
+                    @if (colour.ImageUrl is { } imageUrl)
+                    {
+                        <img src="@imageUrl" alt="@colour.Label" style="width:48px; height:48px; object-fit:contain;"
+                             onerror="this.style.visibility='hidden'" />
+                    }
+                    else
+                    {
+                        <div style="width:48px; height:48px; border-radius:50%; background:#eee; display:flex; align-items:center; justify-content:center; font-size:10px; color:#888;">?</div>
+                    }
+                    <span style="font-size:10px; text-align:center; line-height:1.2;">@colour.Label</span>
+                </button>
             }
         </div>
         <FieldError Errors="_errors" For="FrameColourRefId" />

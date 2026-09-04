@@ -53,6 +53,11 @@ public class CreateSaleRequest
     public decimal? CustomAxisRight { get; set; }
     public decimal? CustomAddPowerRight { get; set; }
 
+    /// <summary>Required when either add power is set (two distinct powers on that eye) — see
+    /// CreateSaleRequestValidator.</summary>
+    public Guid? LensTypeRefId { get; set; }
+    public string? LensTypeOtherText { get; set; }
+
     /// <summary>Only meaningful when LensRangeType == Custom — routes to fulfilment.</summary>
     public bool OrderFromDotGlasses { get; set; }
 

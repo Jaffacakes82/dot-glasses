@@ -141,7 +141,8 @@ public class CreateLeadRequestValidator : AbstractValidator<CreateLeadRequest>
     {
         var presetFieldsSet = request.PresetCatalogueId is not null || request.LensOptionLeftId is not null || request.LensOptionRightId is not null;
         var customFieldsSet = request.CustomSphereLeft is not null || request.CustomCylinderLeft is not null || request.CustomAxisLeft is not null || request.CustomAddPowerLeft is not null
-            || request.CustomSphereRight is not null || request.CustomCylinderRight is not null || request.CustomAxisRight is not null || request.CustomAddPowerRight is not null;
+            || request.CustomSphereRight is not null || request.CustomCylinderRight is not null || request.CustomAxisRight is not null || request.CustomAddPowerRight is not null
+            || request.LensTypeRefId is not null || request.LensTypeOtherText is not null;
 
         switch (request.LensRangeType)
         {
@@ -213,22 +214,63 @@ public class CreateLeadRequestValidator : AbstractValidator<CreateLeadRequest>
                 ValidateCustomPower(request.CustomAddPowerRight, nameof(request.CustomAddPowerRight), 0m, 3m, 0.25m, context);
                 ValidateCustomAxis(request.CustomAxisLeft, nameof(request.CustomAxisLeft), context);
                 ValidateCustomAxis(request.CustomAxisRight, nameof(request.CustomAxisRight), context);
+                await ValidateLensTypeAsync(request, context, referenceData, cancellationToken);
 
                 if (request.PresetPupilDistanceBucket is not null)
                 {
                     context.AddFailure(nameof(request.PresetPupilDistanceBucket), "PresetPupilDistanceBucket must be empty for a Custom LensRangeType — use PupilDistanceMm instead.");
                 }
 
-                if (request.PupilDistanceMm is not { } pdCustom || pdCustom < 54 || pdCustom > 74)
+                // Optional on a Lead — often no time to measure it during a busy event/day; still
+                // required on a Sale (CreateSaleRequestValidator), where the eventual order needs it.
+                if (request.PupilDistanceMm is { } pdCustom)
                 {
-                    context.AddFailure(nameof(request.PupilDistanceMm), "PupilDistanceMm is required and must be within the standard 54-74mm range for a Custom LensRangeType (manual override outside this range is a Day 2 feature).");
-                }
-                else if (pdCustom != Math.Truncate(pdCustom))
-                {
-                    context.AddFailure(nameof(request.PupilDistanceMm), "PupilDistanceMm must be a whole millimetre value.");
+                    if (pdCustom < 54 || pdCustom > 74)
+                    {
+                        context.AddFailure(nameof(request.PupilDistanceMm), "PupilDistanceMm must be within the standard 54-74mm range for a Custom LensRangeType (manual override outside this range is a Day 2 feature).");
+                    }
+                    else if (pdCustom != Math.Truncate(pdCustom))
+                    {
+                        context.AddFailure(nameof(request.PupilDistanceMm), "PupilDistanceMm must be a whole millimetre value.");
+                    }
                 }
 
                 break;
+        }
+    }
+
+    /// <summary>Asked only once either eye carries two distinct powers (a base sphere plus an add
+    /// power) — required in that case, must stay empty otherwise (enforced via customFieldsSet
+    /// above, same as every other Custom-only field).</summary>
+    private static async Task ValidateLensTypeAsync(
+        CreateLeadRequest request, ValidationContext<CreateLeadRequest> context,
+        IReferenceDataLookupService referenceData, CancellationToken cancellationToken)
+    {
+        var hasTwoPowers = request.CustomAddPowerLeft is not null || request.CustomAddPowerRight is not null;
+        if (!hasTwoPowers)
+        {
+            if (request.LensTypeRefId is not null || request.LensTypeOtherText is not null)
+            {
+                context.AddFailure(nameof(request.LensTypeRefId), "LensTypeRefId/LensTypeOtherText must be empty unless an add power is set.");
+            }
+
+            return;
+        }
+
+        if (request.LensTypeRefId is not { } lensTypeRefId)
+        {
+            context.AddFailure(nameof(request.LensTypeRefId), "LensTypeRefId is required when an add power is set (two distinct powers on that eye).");
+            return;
+        }
+
+        var lookup = await referenceData.LookupAsync(lensTypeRefId, ReferenceDataCategory.LensType, cancellationToken);
+        if (lookup is not { IsActive: true })
+        {
+            context.AddFailure(nameof(request.LensTypeRefId), "LensTypeRefId must reference an existing, active LensType reference-data item.");
+        }
+        else if (lookup.IsOtherOption && string.IsNullOrWhiteSpace(request.LensTypeOtherText))
+        {
+            context.AddFailure(nameof(request.LensTypeOtherText), "LensTypeOtherText is required when LensType is \"Other\".");
         }
     }
 
