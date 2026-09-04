@@ -71,6 +71,11 @@ public class Lead : IAuditable, ISoftDeletable, IHierarchyScoped
     public decimal? CustomAxisRight { get; set; }
     public decimal? CustomAddPowerRight { get; set; }
 
+    /// <summary>FK to ReferenceDataItem (Category = LensType) — asked when a Custom lens carries
+    /// two distinct powers (an add power alongside its base sphere) on either eye.</summary>
+    public Guid? LensTypeRefId { get; set; }
+    public string? LensTypeOtherText { get; set; }
+
     /// <summary>The real inter-pupillary distance in mm — meaningful only for Custom range (see
     /// PresetPupilDistanceBucket for the preset-range equivalent).</summary>
     public decimal? PupilDistanceMm { get; set; }

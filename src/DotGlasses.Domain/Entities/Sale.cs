@@ -69,6 +69,11 @@ public class Sale : IAuditable, ISoftDeletable, IHierarchyScoped
     public decimal? CustomAxisRight { get; set; }
     public decimal? CustomAddPowerRight { get; set; }
 
+    /// <summary>FK to ReferenceDataItem (Category = LensType) — asked when a Custom lens carries
+    /// two distinct powers (an add power alongside its base sphere) on either eye.</summary>
+    public Guid? LensTypeRefId { get; set; }
+    public string? LensTypeOtherText { get; set; }
+
     /// <summary>Only meaningful when LensRangeType == Custom — routes the record to fulfilment
     /// (needs manufacturing + delivery) rather than logging it as stock already on hand.</summary>
     public bool OrderFromDotGlasses { get; set; }

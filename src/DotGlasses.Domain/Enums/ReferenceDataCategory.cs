@@ -20,4 +20,8 @@ public enum ReferenceDataCategory
     /// their own typed SphericalPower/IsBifocal/AddPower fields per row; see CLAUDE.md's [OPEN]
     /// items for rewiring that to build from this list instead.</summary>
     LensStrength = 6,
+
+    /// <summary>Bifocal/Progressive/Other — asked on a custom lens when it carries two distinct
+    /// powers (see the "ask lens type when two powers are present" agent brief).</summary>
+    LensType = 7,
 }

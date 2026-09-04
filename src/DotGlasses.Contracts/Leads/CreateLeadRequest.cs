@@ -53,6 +53,11 @@ public class CreateLeadRequest
     public decimal? CustomAxisRight { get; set; }
     public decimal? CustomAddPowerRight { get; set; }
 
+    /// <summary>Required when either add power is set (two distinct powers on that eye) — see
+    /// CreateLeadRequestValidator.</summary>
+    public Guid? LensTypeRefId { get; set; }
+    public string? LensTypeOtherText { get; set; }
+
     /// <summary>The real inter-pupillary distance in mm — required for Custom range only.</summary>
     public decimal? PupilDistanceMm { get; set; }
 

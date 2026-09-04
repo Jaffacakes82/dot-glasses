@@ -3,6 +3,7 @@ using System;
 using DotGlasses.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace DotGlasses.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(DotGlassesDbContext))]
-    partial class DotGlassesDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260903173207_AddLensFieldsToTest")]
+    partial class AddLensFieldsToTest
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -203,20 +206,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("ReasonNotPurchasedRefId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("ReferralLocationFreeText")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<string>("ReferralOtherText")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<Guid?>("ReferralReasonRefId")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("ReferredOrTreated")
-                        .HasColumnType("boolean");
-
                     b.Property<Guid?>("SaleId")
                         .HasColumnType("uuid");
 
@@ -225,9 +214,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid>("TechnicianUserId")
                         .HasColumnType("uuid");
-
-                    b.Property<bool>("TreatedInFacility")
-                        .HasColumnType("boolean");
 
                     b.HasKey("Id");
 
@@ -1635,28 +1621,11 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                         .HasPrecision(4, 1)
                         .HasColumnType("numeric(4,1)");
 
-                    b.Property<string>("ReferralLocationFreeText")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<string>("ReferralOtherText")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<Guid?>("ReferralReasonRefId")
-                        .HasColumnType("uuid");
-
-                    b.Property<bool>("ReferredOrTreated")
-                        .HasColumnType("boolean");
-
                     b.Property<Guid?>("SourceLeadId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("TechnicianUserId")
                         .HasColumnType("uuid");
-
-                    b.Property<bool>("TreatedInFacility")
-                        .HasColumnType("boolean");
 
                     b.HasKey("Id");
 
@@ -1797,14 +1766,8 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("ReferralReasonRefId")
                         .HasColumnType("uuid");
 
-                    b.Property<bool>("ReferredOrTreated")
-                        .HasColumnType("boolean");
-
                     b.Property<Guid>("TechnicianUserId")
                         .HasColumnType("uuid");
-
-                    b.Property<bool>("TreatedInFacility")
-                        .HasColumnType("boolean");
 
                     b.HasKey("Id");
 
