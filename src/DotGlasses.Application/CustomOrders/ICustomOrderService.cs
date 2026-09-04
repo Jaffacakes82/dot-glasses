@@ -27,7 +27,10 @@ public interface ICustomOrderService
     Task<IReadOnlyList<CustomOrderRow>> ExportAsync(FulfilmentStatus? status, CancellationToken cancellationToken = default);
 
     /// <summary>Linear, forward-only: Submitted -> InLab -> ReadyForPickup -> Fulfilled. Throws
-    /// if the Sale isn't a custom order (FulfilmentStatus is null) or is already Fulfilled.</summary>
+    /// InvalidOperationException carrying user-facing copy if the Sale isn't visible to the caller,
+    /// isn't a custom order (FulfilmentStatus is null), or is already Fulfilled — the last is the
+    /// live case, since a shared fulfilment queue means a colleague, a double click or a browser
+    /// resubmit can all advance the same order twice.</summary>
     Task AdvanceStatusAsync(Guid saleId, CancellationToken cancellationToken = default);
 }
 
