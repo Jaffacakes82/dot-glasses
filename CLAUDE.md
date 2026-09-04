@@ -56,6 +56,17 @@ are the record of *how* things got built; don't restate that here.
   `OrganisationNode` only returns the caller's own subtree, so it silently can't see the caller's
   own ancestors. This has bitten two different reporting services independently; treat it as a
   standing gotcha, not a one-off (see Common pitfalls below).
+- **A materialized path is `HierarchyPath` (`Domain/Common`) in application code, a `string` in the
+  database.** The type owns the trailing-slash invariant and names the two containment directions
+  so they can't be swapped: `IsSelfOrDescendantOf` (scoping — "which rows can this viewer see")
+  and `IsSelfOrAncestorOf` (ancestor resolution — "which country/retailer sits over this row").
+  `OrgTreeLookup` (`Application/Reporting`) is where **Retailer** — the nearest `Intermediate`-level
+  ancestor, per `CONTEXT.md`, with "no Retailer" reported honestly rather than substituting the
+  country — and the missing-name fallbacks are defined; resolve outlet/Retailer/country through it
+  rather than re-deriving a prefix match. Persistence deliberately stays `string`: the
+  reflection-built global filter in `DotGlassesDbContext` operates on the raw column and must not
+  be "tidied" onto the value type — read `docs/adr/0004` before trying. `Contracts` and `App` never
+  see the type (`Contracts` may not reference `Domain`; paths are stamped server-side from claims).
 
 ## Domain model (current shape)
 
