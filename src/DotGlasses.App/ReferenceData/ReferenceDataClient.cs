@@ -34,6 +34,10 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
 
     public IReadOnlyList<PresetCatalogueDto> Catalogues { get; private set; } = [];
 
+    public IReadOnlyList<CoatingPairingDto> CoatingPairings { get; private set; } = [];
+
+    public IReadOnlyList<CoatingExclusionDto> CoatingExclusions { get; private set; } = [];
+
     public async Task EnsureLoadedAsync()
     {
         if (IsLoaded)
@@ -55,9 +59,12 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
             {
                 var items = await httpClient.GetFromJsonAsync<List<ReferenceDataItemDto>>("api/v1/reference-data");
                 var catalogues = await httpClient.GetFromJsonAsync<List<PresetCatalogueDto>>("api/v1/preset-catalogues");
+                var coatingRules = await httpClient.GetFromJsonAsync<CoatingRulesDto>("api/v1/reference-data/coating-rules");
 
                 _items = items ?? [];
                 Catalogues = catalogues ?? [];
+                CoatingPairings = coatingRules?.Pairings ?? [];
+                CoatingExclusions = coatingRules?.Exclusions ?? [];
                 LoadError = null;
                 IsFromCache = false;
                 CachedAtUtc = null;
@@ -88,7 +95,7 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
 
     private async Task WriteCacheAsync()
     {
-        var payload = new CachedPayload(DateTimeOffset.UtcNow, _items, Catalogues.ToList());
+        var payload = new CachedPayload(DateTimeOffset.UtcNow, _items, Catalogues.ToList(), CoatingPairings.ToList(), CoatingExclusions.ToList());
         try
         {
             await jsRuntime.InvokeVoidAsync("dotGlassesIdb.kvSet", StorageKey, JsonSerializer.Serialize(payload, JsonOptions));
@@ -118,6 +125,8 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
 
             _items = payload.Items;
             Catalogues = payload.Catalogues;
+            CoatingPairings = payload.CoatingPairings;
+            CoatingExclusions = payload.CoatingExclusions;
             IsFromCache = true;
             CachedAtUtc = payload.CachedAtUtc;
             LoadError = null;
@@ -133,8 +142,17 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
     public IReadOnlyList<ReferenceDataItemDto> GetByCategory(ReferenceDataCategory category) =>
         _items.Where(x => x.Category == category).ToList();
 
+    /// <summary>CoatingPairings/CoatingExclusions default to an empty list so a cache payload
+    /// written before those fields existed still deserializes safely (missing JSON properties
+    /// fall back to the constructor's default parameter value).</summary>
     private sealed record CachedPayload(
         DateTimeOffset CachedAtUtc,
         List<ReferenceDataItemDto> Items,
-        List<PresetCatalogueDto> Catalogues);
+        List<PresetCatalogueDto> Catalogues,
+        List<CoatingPairingDto> CoatingPairings = null!,
+        List<CoatingExclusionDto> CoatingExclusions = null!)
+    {
+        public List<CoatingPairingDto> CoatingPairings { get; init; } = CoatingPairings ?? [];
+        public List<CoatingExclusionDto> CoatingExclusions { get; init; } = CoatingExclusions ?? [];
+    }
 }

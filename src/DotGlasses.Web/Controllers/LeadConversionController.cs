@@ -52,7 +52,7 @@ public class LeadConversionController(
             return RedirectToAction("Index", "EventHistory", new { tab = "leads" });
         }
 
-        var form = new LeadConversionFormModel { ConsentGiven = lead.ConsentGiven, CoatingRefId = lead.CoatingPreferenceRefId };
+        var form = new LeadConversionFormModel { ConsentGiven = lead.ConsentGiven, CoatingRefIds = lead.CoatingPreferenceRefId is { } coatingRefId ? [coatingRefId] : [] };
         return View(await BuildViewModelAsync(lead, form, cancellationToken));
     }
 
@@ -127,7 +127,7 @@ public class LeadConversionController(
         FrameColourRefId = form.FrameColourRefId ?? Guid.Empty,
         FrameColourOtherText = form.FrameColourOtherText,
         FrameCoverage = form.FrameCoverage,
-        CoatingRefId = form.CoatingRefId,
+        CoatingRefIds = form.CoatingRefIds,
         HardCaseSold = form.HardCaseSold,
         HardCaseColourRefId = form.HardCaseSold ? form.HardCaseColourRefId : null,
         HardCaseOtherColourText = form.HardCaseSold ? form.HardCaseOtherColourText : null,

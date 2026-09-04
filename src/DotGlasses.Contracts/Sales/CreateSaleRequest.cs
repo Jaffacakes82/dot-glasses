@@ -7,11 +7,13 @@ namespace DotGlasses.Contracts.Sales;
 /// TechnicianUserId (server-derived, see TestsController). No CustomerId — server finds-or-
 /// creates a Customer from FullName+PhoneNumber, same as Lead.
 ///
-/// CoatingRefId is required for every LensRangeType now (2026-08-05 — previously ignored for
-/// preset ranges, server-derived from a single forced coating per lens; see LensOption's doc
-/// comment for why that was replaced). For Custom, any active Coating item is valid; for a
-/// preset range, it must be one of the coatings configured as available for the chosen left-eye
-/// LensOption's lens strength — see SaleService/CreateSaleRequestValidator.
+/// CoatingRefIds requires at least one entry for every LensRangeType (2026-08-05 — previously
+/// ignored for preset ranges, server-derived from a single forced coating per lens; see
+/// LensOption's doc comment for why that was replaced; 2026-09-03 — became a set rather than a
+/// single value, see ADR-0001). For Custom, any active Coating item is valid; for a preset range,
+/// every entry must be one of the coatings configured as available for the chosen left-eye
+/// LensOption's lens strength — see SaleService/CreateSaleRequestValidator. Coating pairing/
+/// exclusion rules (also ADR-0001) apply to the set regardless of LensRangeType.
 /// </summary>
 public class CreateSaleRequest
 {
@@ -74,8 +76,8 @@ public class CreateSaleRequest
     public string? FrameColourOtherText { get; set; }
     public FrameCoverage FrameCoverage { get; set; }
 
-    /// <summary>Required for every LensRangeType now — see class summary.</summary>
-    public Guid? CoatingRefId { get; set; }
+    /// <summary>At least one entry required for every LensRangeType — see class summary.</summary>
+    public List<Guid> CoatingRefIds { get; set; } = [];
 
     public bool HardCaseSold { get; set; }
     public Guid? HardCaseColourRefId { get; set; }
