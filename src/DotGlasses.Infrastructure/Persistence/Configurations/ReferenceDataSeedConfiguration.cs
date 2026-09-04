@@ -53,7 +53,7 @@ public class ReferenceDataSeedConfiguration : IEntityTypeConfiguration<Reference
         var items = new List<ReferenceDataItem>();
         var sort = 0;
 
-        void Add(Guid id, ReferenceDataCategory category, string code, string label, bool isOther = false)
+        void Add(Guid id, ReferenceDataCategory category, string code, string label, bool isOther = false, string? imageUrl = null)
         {
             items.Add(new ReferenceDataItem
             {
@@ -64,6 +64,7 @@ public class ReferenceDataSeedConfiguration : IEntityTypeConfiguration<Reference
                 SortOrder = sort++,
                 IsActive = true,
                 IsOtherOption = isOther,
+                ImageUrl = imageUrl,
                 CreatedAtUtc = now,
             });
         }
@@ -113,13 +114,24 @@ public class ReferenceDataSeedConfiguration : IEntityTypeConfiguration<Reference
         Add(new("b0000000-0000-0000-0000-000000000027"), ReferenceDataCategory.Coating, "sunglasses", "Sunglasses");
 
         // FrameColour ← the 6 colours named on the call, matching the e-commerce site, + Other.
+        // 2026-09-03: image icons added (ticket 11) — matched 1:1 onto these six rows by the
+        // reporter. "Purple"/"Purple-Black" renamed to "Pink"/"Pink Black" in the same pass — the
+        // reporter's own supplied image filenames and labelling call these "Pink"/"Pink Black";
+        // nothing was actually misrendering, the internal label just didn't match the e-commerce
+        // site's name for the same colour.
         sort = 0;
-        Add(new("b0000000-0000-0000-0000-000000000028"), ReferenceDataCategory.FrameColour, "black", "Black");
-        Add(new("b0000000-0000-0000-0000-000000000029"), ReferenceDataCategory.FrameColour, "blue", "Blue");
-        Add(new("b0000000-0000-0000-0000-000000000035"), ReferenceDataCategory.FrameColour, "blue_black", "Blue-Black");
-        Add(new("b0000000-0000-0000-0000-000000000036"), ReferenceDataCategory.FrameColour, "brown_black", "Brown-Black");
-        Add(new("b0000000-0000-0000-0000-000000000037"), ReferenceDataCategory.FrameColour, "purple", "Purple");
-        Add(new("b0000000-0000-0000-0000-000000000038"), ReferenceDataCategory.FrameColour, "purple_black", "Purple-Black");
+        Add(new("b0000000-0000-0000-0000-000000000028"), ReferenceDataCategory.FrameColour, "black", "Black",
+            imageUrl: "https://dotglasses.org/dot-glasses-ecommerce/assets/images/products/68e780b5efa4a_Black_white.png");
+        Add(new("b0000000-0000-0000-0000-000000000029"), ReferenceDataCategory.FrameColour, "blue", "Blue",
+            imageUrl: "https://dotglasses.org/dot-glasses-ecommerce/assets/images/products/68e780b5efd97_Blue_white_1.png");
+        Add(new("b0000000-0000-0000-0000-000000000035"), ReferenceDataCategory.FrameColour, "blue_black", "Blue-Black",
+            imageUrl: "https://dotglasses.org/dot-glasses-ecommerce/assets/images/products/68e7927c5ea8c_Blue_white.png");
+        Add(new("b0000000-0000-0000-0000-000000000036"), ReferenceDataCategory.FrameColour, "brown_black", "Brown-Black",
+            imageUrl: "https://dotglasses.org/dot-glasses-ecommerce/assets/images/products/68e7927c5ee4e_Brown_white.png");
+        Add(new("b0000000-0000-0000-0000-000000000037"), ReferenceDataCategory.FrameColour, "pink", "Pink",
+            imageUrl: "https://dotglasses.org/dot-glasses-ecommerce/assets/images/products/68e780b5ef6b9_Purple_white.png");
+        Add(new("b0000000-0000-0000-0000-000000000038"), ReferenceDataCategory.FrameColour, "pink_black", "Pink Black",
+            imageUrl: "https://dotglasses.org/dot-glasses-ecommerce/assets/images/products/68e7914719e10_Purple_white_1.png");
         Add(new("b0000000-0000-0000-0000-000000000039"), ReferenceDataCategory.FrameColour, "other", "Other", isOther: true);
 
         // HardCaseColour ← Orange/Green/Other (decision 5.1) — NOT Kobo's stale Blue/Pink/Purple/Black.
@@ -151,6 +163,13 @@ public class ReferenceDataSeedConfiguration : IEntityTypeConfiguration<Reference
         Add(LensStrengthBifocal250Id, ReferenceDataCategory.LensStrength, "bifocal_0_00_2_50", "+0.00 / +2.50 (Bifocal)");
         Add(LensStrengthBifocal200Id, ReferenceDataCategory.LensStrength, "bifocal_0_00_2_00", "+0.00 / +2.00 (Bifocal)");
         Add(LensStrengthBifocal125Id, ReferenceDataCategory.LensStrength, "bifocal_0_00_1_25", "+0.00 / +1.25 (Bifocal)");
+
+        // LensType ← Bifocal/Progressive/Other, asked on a custom lens carrying two distinct
+        // powers (2026-09-03 triage — see CLAUDE.md's Reference Data category list).
+        sort = 0;
+        Add(new("b0000000-0000-0000-0000-000000000059"), ReferenceDataCategory.LensType, "bifocal", "Bifocal");
+        Add(new("b0000000-0000-0000-0000-000000000060"), ReferenceDataCategory.LensType, "progressive", "Progressive");
+        Add(new("b0000000-0000-0000-0000-000000000061"), ReferenceDataCategory.LensType, "other", "Other", isOther: true);
 
         builder.HasData(items);
     }

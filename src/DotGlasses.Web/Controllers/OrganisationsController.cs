@@ -2,6 +2,7 @@ using DotGlasses.Application.Organisations;
 using DotGlasses.Application.Users;
 using DotGlasses.Domain.Enums;
 using DotGlasses.Web.Authorization;
+using DotGlasses.Web.Export;
 using DotGlasses.Web.Models;
 using FluentValidation;
 using FluentValidation.AspNetCore;
@@ -20,6 +21,18 @@ public class OrganisationsController(
 {
     public async Task<IActionResult> Index(Guid? selectedId, CancellationToken cancellationToken) =>
         View(await BuildViewModelAsync(selectedId, cancellationToken));
+
+    /// <summary>Drives off the same ListAsync used to build the tree — already hierarchy-scoped
+    /// to the caller's own subtree, no separate query path.</summary>
+    public async Task<IActionResult> Export(CancellationToken cancellationToken)
+    {
+        var nodes = await organisationAdminService.ListAsync(cancellationToken);
+        var csv = CsvExport.Build(
+            ["Name", "Level", "Kind", "HierarchyPath", "IsTrainingOrg"],
+            nodes.Select(n => (IReadOnlyList<string?>)[n.Name, n.Level.ToString(), n.Kind, n.HierarchyPath, n.IsTrainingOrg.ToString()]));
+
+        return File(csv, "text/csv", $"organisations-{DateTime.UtcNow:yyyyMMddHHmmss}.csv");
+    }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
