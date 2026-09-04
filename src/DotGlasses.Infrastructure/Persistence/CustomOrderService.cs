@@ -13,15 +13,32 @@ public class CustomOrderService(DotGlassesDbContext dbContext) : ICustomOrderSer
 {
     public async Task<PagedResult<CustomOrderRow>> ListAsync(DomainFulfilmentStatus? status, int page, int pageSize, CancellationToken cancellationToken = default)
     {
+        var query = FilterOrders(status);
+        var totalCount = await query.CountAsync(cancellationToken);
+        var sales = await query.OrderByDescending(x => x.CreatedAtUtc).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+        var items = await MapOrdersAsync(sales, cancellationToken);
+        return new PagedResult<CustomOrderRow>(items, totalCount, page, pageSize);
+    }
+
+    public async Task<IReadOnlyList<CustomOrderRow>> ExportAsync(DomainFulfilmentStatus? status, CancellationToken cancellationToken = default)
+    {
+        var sales = await FilterOrders(status).OrderByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
+        return await MapOrdersAsync(sales, cancellationToken);
+    }
+
+    private IQueryable<Sale> FilterOrders(DomainFulfilmentStatus? status)
+    {
         var query = dbContext.Sales.Where(x => x.FulfilmentStatus != null);
         if (status is { } value)
         {
             query = query.Where(x => x.FulfilmentStatus == value);
         }
 
-        var totalCount = await query.CountAsync(cancellationToken);
-        var sales = await query.OrderByDescending(x => x.CreatedAtUtc).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+        return query;
+    }
 
+    private async Task<List<CustomOrderRow>> MapOrdersAsync(List<Sale> sales, CancellationToken cancellationToken)
+    {
         var customerIds = sales.Select(s => s.CustomerId).Distinct().ToList();
         var customers = await dbContext.Customers
             .Where(c => customerIds.Contains(c.Id))
@@ -30,16 +47,15 @@ public class CustomOrderService(DotGlassesDbContext dbContext) : ICustomOrderSer
         var orgByPath = (await dbContext.OrganisationNodes.ToListAsync(cancellationToken))
             .ToDictionary(n => n.HierarchyPath);
 
-        var items = sales.Select(s => new CustomOrderRow(
+        return sales.Select(s => new CustomOrderRow(
             s.Id,
             customers.TryGetValue(s.CustomerId, out var customer) ? customer.FullName : "—",
             orgByPath.TryGetValue(s.HierarchyPath, out var org) ? org.Name : "Unknown outlet",
             FormatPrescription(s),
             s.FulfilmentStatus!.Value,
-            s.CreatedAtUtc))
+            s.CreatedAtUtc,
+            s.ConsentGiven))
             .ToList();
-
-        return new PagedResult<CustomOrderRow>(items, totalCount, page, pageSize);
     }
 
     public async Task AdvanceStatusAsync(Guid saleId, CancellationToken cancellationToken = default)

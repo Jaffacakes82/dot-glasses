@@ -19,6 +19,10 @@
     everything below it.
 </p>
 
+<div style="display:flex; justify-content:flex-end; margin-bottom:var(--space-4);">
+    <a class="dg-btn dg-btn-ghost" style="padding:8px 20px; font-size:13px;" asp-action="Export">Export CSV</a>
+</div>
+
 @if (!ViewData.ModelState.IsValid)
 {
     <div class="alert alert-danger" style="border-radius:var(--radius-md); margin-bottom:var(--space-4);" asp-validation-summary="All"></div>
