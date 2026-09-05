@@ -62,6 +62,26 @@ are the record of *how* things got built; don't restate that here.
   — that's what EF throws for `FirstAsync` on an empty sequence, and it is deliberately left to
   surface as a 500: keeping the two types distinct is what makes a rejection recognisable at any
   catch site. Don't reach for a `Result` type; ADR-0003 rejected it with reasoning.
+- **A multi-write Identity operation is made atomic with a real transaction, never a compensating
+  "delete what I just made" path.** `UserManager`/`RoleManager` call `SaveChanges` internally on
+  every operation, so batching them needs two things that happen to hold here: `ApplicationUser`
+  lives in `DotGlassesDbContext` (it *is* the `IdentityDbContext`), and
+  `AddEntityFrameworkStores<DotGlassesDbContext>` hands `UserStore` the same scoped instance the
+  service holds — so an explicit transaction opened on that context covers Identity's writes and
+  the service's own alike. Two things to get right: **check every `IdentityResult`** (Identity
+  reports refusals as a return value, so an unchecked step is one the transaction commits over —
+  that's how an invited user used to end up with no role), and **open the transaction through
+  `Database.CreateExecutionStrategy().ExecuteAsync(...)`, not `BeginTransactionAsync` directly**.
+  Aspire's `AddNpgsqlDbContext` enables connection retries by default
+  (`NpgsqlEntityFrameworkCorePostgreSQLSettings.DisableRetry` is `false`) and a retrying strategy
+  refuses a user-initiated transaction — a direct `BeginTransactionAsync` passes every test (the
+  harness builds a plain `UseNpgsql` context with no retry strategy) and throws in staging and
+  production. Because the strategy replays the whole delegate, build everything the attempt needs
+  *inside* it and `ChangeTracker.Clear()` at the top: EF does not revert entity states on
+  rollback. `UserAdminService.InviteAsync` is the worked example, pinned by
+  `InviteAtomicityTests`. Anything a user-visible operation *emits* (an email, a set-password
+  link) is produced **after** the commit — a live invite link for an account the rollback removed
+  is worse than the failure it came from.
 - Deliberately **not** using `AddFluentValidationAutoValidation()` — it runs FluentValidation
   synchronously inside ASP.NET's model-binding pipeline, which can't invoke the async rules
   several validators need for DB-backed checks (throws

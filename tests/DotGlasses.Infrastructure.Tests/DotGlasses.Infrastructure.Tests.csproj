@@ -24,6 +24,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- InviteAtomicityTests stands up the same Identity registration Program.cs uses
+         (AddIdentityCore + AddEntityFrameworkStores<DotGlassesDbContext> +
+         AddDefaultTokenProviders) so UserManager and the org-assignment writes genuinely share
+         one DbContext. AddDefaultTokenProviders and the data-protection provider that mints the
+         set-password token both live in the ASP.NET Core shared framework, not in the Identity
+         package DotGlasses.Infrastructure already brings in. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\DotGlasses.Infrastructure\DotGlasses.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\DotGlasses.Domain\DotGlasses.Domain.csproj" />
     <ProjectReference Include="..\..\src\DotGlasses.Application\DotGlasses.Application.csproj" />
