@@ -12,11 +12,11 @@ deliberately keeps the plain string column and the global query filter is not ch
 **Status:** ready-for-agent
 **Category:** refactor
 
-- [ ] A value type represents a hierarchy path and rejects one that does not satisfy the invariant
-- [ ] Ancestor and descendant containment are separate, named operations that cannot be confused
-- [ ] A path is not treated as a descendant of a prefix it merely shares leading characters with
-- [ ] The lookup module resolves outlet name, Retailer and country from a path
-- [ ] Retailer is the nearest `Intermediate`-level ancestor, per the glossary; a retail point with none is reported as having none
-- [ ] Missing-name fallbacks are defined once rather than copied per call site
-- [ ] The type and the lookup module are tested directly, with no database
-- [ ] The global query filter and the persisted column shape are unchanged
+- [x] A value type represents a hierarchy path and rejects one that does not satisfy the invariant
+- [x] Ancestor and descendant containment are separate, named operations that cannot be confused
+- [x] A path is not treated as a descendant of a prefix it merely shares leading characters with
+- [x] The lookup module resolves outlet name, Retailer and country from a path
+- [x] Retailer is the nearest `Intermediate`-level ancestor, per the glossary; a retail point with none is reported as having none
+- [x] Missing-name fallbacks are defined once rather than copied per call site
+- [x] The type and the lookup module are tested directly, with no database
+- [x] The global query filter and the persisted column shape are unchanged

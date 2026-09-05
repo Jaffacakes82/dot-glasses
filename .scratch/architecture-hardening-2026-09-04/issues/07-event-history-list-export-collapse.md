@@ -10,9 +10,9 @@ same query unpaged rather than a second one that happens to agree.
 **Status:** ready-for-agent
 **Category:** refactor
 
-- [ ] The query interface exposes four methods, one per screen tab, with paging optional
-- [ ] Export and on-screen list for a given tab are provably the same query
-- [ ] An unrecognised tab is handled the same way by the screen and by the export
-- [ ] Filtering, searching, ordering and hierarchy scoping are unchanged for every tab
-- [ ] A user still cannot export rows they could not see on screen
-- [ ] Tests cover each tab's filters against real SQL, including case-insensitive name search
+- [x] The query interface exposes four methods, one per screen tab, with paging optional
+- [x] Export and on-screen list for a given tab are provably the same query
+- [x] An unrecognised tab is handled the same way by the screen and by the export
+- [x] Filtering, searching, ordering and hierarchy scoping are unchanged for every tab
+- [x] A user still cannot export rows they could not see on screen
+- [x] Tests cover each tab's filters against real SQL, including case-insensitive name search

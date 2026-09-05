@@ -11,10 +11,10 @@ conversion is refused, with a message, and nothing is written.
 **Status:** ready-for-agent
 **Category:** bug
 
-- [ ] Creating a Lead that names a source Test the caller cannot see is refused, and no Lead is created
-- [ ] Creating a Sale that names a source Lead the caller cannot see is refused, and no Sale is created
-- [ ] The refusal is reported as a business-rule rejection, reaching the caller as a validation failure
-- [ ] A conversion whose source is visible behaves exactly as before
-- [ ] The characterisation test written in ticket 03 to document the old silent behaviour is inverted
-- [ ] Both conversions still commit the new record and the source record's back-link in one transaction
-- [ ] Atomicity is asserted against a real database, not assumed
+- [x] Creating a Lead that names a source Test the caller cannot see is refused, and no Lead is created
+- [x] Creating a Sale that names a source Lead the caller cannot see is refused, and no Sale is created
+- [x] The refusal is reported as a business-rule rejection, reaching the caller as a validation failure
+- [x] A conversion whose source is visible behaves exactly as before
+- [x] The characterisation test written in ticket 03 to document the old silent behaviour is inverted
+- [x] Both conversions still commit the new record and the source record's back-link in one transaction
+- [x] Atomicity is asserted against a real database, not assumed

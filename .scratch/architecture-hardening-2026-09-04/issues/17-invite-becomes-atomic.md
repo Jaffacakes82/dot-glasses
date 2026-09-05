@@ -10,9 +10,9 @@ both — a state the User Directory then has to render and an admin has to unpic
 **Status:** ready-for-agent
 **Category:** bug
 
-- [ ] Creating the account, assigning the role and assigning the org locations commit together or not at all
-- [ ] A failure at any step leaves no partially-created user behind
-- [ ] A failure is reported as a business-rule rejection with a usable message, not a raw identity error
-- [ ] The invitation email and password-reset link are still produced on success, and not on failure
-- [ ] Rollback is asserted against a real database
-- [ ] Inviting a user successfully behaves exactly as before
+- [x] Creating the account, assigning the role and assigning the org locations commit together or not at all
+- [x] A failure at any step leaves no partially-created user behind
+- [x] A failure is reported as a business-rule rejection with a usable message, not a raw identity error
+- [x] The invitation email and password-reset link are still produced on success, and not on failure
+- [x] Rollback is asserted against a real database
+- [x] Inviting a user successfully behaves exactly as before
