@@ -1,6 +1,7 @@
 using DotGlasses.Application.ReferenceData;
 using DotGlasses.Application.VisionTests;
 using DotGlasses.Contracts.Leads;
+using DotGlasses.Rules;
 using FluentValidation;
 using ContractLensRangeType = DotGlasses.Contracts.Common.LensRangeType;
 using ReferenceDataCategory = DotGlasses.Domain.Enums.ReferenceDataCategory;
@@ -10,7 +11,7 @@ namespace DotGlasses.Web.Validation.Leads;
 /// <summary>Lives in Web, not Contracts — see CreateTestRequestValidator's doc comment for why.</summary>
 public class CreateLeadRequestValidator : AbstractValidator<CreateLeadRequest>
 {
-    public CreateLeadRequestValidator(IReferenceDataLookupService referenceData, IVisionTestRepository testRepository)
+    public CreateLeadRequestValidator(IReferenceDataLookupService referenceData, IReferenceDataSnapshotProvider snapshots, IVisionTestRepository testRepository)
     {
         RuleFor(x => x.Id).NotEmpty();
         RuleFor(x => x.FullName).NotEmpty().MaximumLength(200);
@@ -24,99 +25,19 @@ public class CreateLeadRequestValidator : AbstractValidator<CreateLeadRequest>
 
         RuleFor(x => x).CustomAsync(async (request, context, cancellationToken) =>
         {
-            await ValidateOccupationAsync(request, context, referenceData, cancellationToken);
-            await ValidateReferralAsync(request, context, referenceData, cancellationToken);
-            await ValidateReasonNotPurchasedAsync(request, context, referenceData, cancellationToken);
+            // Occupation, "referred or treated" and reason-not-purchased now live in
+            // DotGlasses.Rules (ticket 09), which the Field App checks against too; the Coating
+            // preference stays here until ticket 11 and lens range until ticket 10.
+            var snapshot = await snapshots.GetAsync(cancellationToken);
+            foreach (var failure in ConsultationRules.Check(request, snapshot).Failures)
+            {
+                context.AddFailure(failure.Key, failure.Message);
+            }
+
             await ValidateCoatingPreferenceAsync(request, context, referenceData, cancellationToken);
             await ValidateLensRangeAsync(request, context, referenceData, cancellationToken);
             await ValidateSourceTestAsync(request, context, testRepository, cancellationToken);
         });
-    }
-
-    private static async Task ValidateOccupationAsync(
-        CreateLeadRequest request, ValidationContext<CreateLeadRequest> context,
-        IReferenceDataLookupService referenceData, CancellationToken cancellationToken)
-    {
-        if (request.OccupationRefId is not { } occupationRefId)
-        {
-            return;
-        }
-
-        var lookup = await referenceData.LookupAsync(occupationRefId, ReferenceDataCategory.Occupation, cancellationToken);
-        if (lookup is not { IsActive: true })
-        {
-            context.AddFailure(nameof(request.OccupationRefId), "OccupationRefId must reference an existing, active Occupation reference-data item.");
-            return;
-        }
-
-        if (lookup.IsOtherOption && string.IsNullOrWhiteSpace(request.OccupationOtherText))
-        {
-            context.AddFailure(nameof(request.OccupationOtherText), "OccupationOtherText is required when Occupation is \"Other\".");
-        }
-    }
-
-    /// <summary>"Referred or treated" — mirrors CreateTestRequestValidator's ValidateReferralAsync
-    /// exactly (see that file's doc comment); Test/Lead/Sale share the same five-field shape.</summary>
-    private static async Task ValidateReferralAsync(
-        CreateLeadRequest request, ValidationContext<CreateLeadRequest> context,
-        IReferenceDataLookupService referenceData, CancellationToken cancellationToken)
-    {
-        if (!request.ReferredOrTreated)
-        {
-            if (request.ReferralReasonRefId is not null || request.ReferralOtherText is not null
-                || request.ReferralLocationFreeText is not null || request.TreatedInFacility)
-            {
-                context.AddFailure(nameof(request.ReferredOrTreated), "Referral/treatment fields must be empty unless ReferredOrTreated is true.");
-            }
-
-            return;
-        }
-
-        if (request.ReferralReasonRefId is not { } referralReasonRefId)
-        {
-            context.AddFailure(nameof(request.ReferralReasonRefId), "ReferralReasonRefId is required when ReferredOrTreated is true.");
-        }
-        else
-        {
-            var lookup = await referenceData.LookupAsync(referralReasonRefId, ReferenceDataCategory.ReferralReason, cancellationToken);
-            if (lookup is not { IsActive: true })
-            {
-                context.AddFailure(nameof(request.ReferralReasonRefId), "ReferralReasonRefId must reference an existing, active ReferralReason reference-data item.");
-            }
-            else if (lookup.IsOtherOption && string.IsNullOrWhiteSpace(request.ReferralOtherText))
-            {
-                context.AddFailure(nameof(request.ReferralOtherText), "ReferralOtherText is required when ReferralReason is \"Other\".");
-            }
-        }
-
-        if (request.TreatedInFacility)
-        {
-            if (!string.IsNullOrWhiteSpace(request.ReferralLocationFreeText))
-            {
-                context.AddFailure(nameof(request.ReferralLocationFreeText), "ReferralLocationFreeText must be empty when TreatedInFacility is true.");
-            }
-        }
-        else if (string.IsNullOrWhiteSpace(request.ReferralLocationFreeText))
-        {
-            context.AddFailure(nameof(request.ReferralLocationFreeText), "ReferralLocationFreeText is required when ReferredOrTreated is true and TreatedInFacility is false.");
-        }
-    }
-
-    private static async Task ValidateReasonNotPurchasedAsync(
-        CreateLeadRequest request, ValidationContext<CreateLeadRequest> context,
-        IReferenceDataLookupService referenceData, CancellationToken cancellationToken)
-    {
-        var lookup = await referenceData.LookupAsync(request.ReasonNotPurchasedRefId, ReferenceDataCategory.ReasonNotPurchased, cancellationToken);
-        if (lookup is not { IsActive: true })
-        {
-            context.AddFailure(nameof(request.ReasonNotPurchasedRefId), "ReasonNotPurchasedRefId must reference an existing, active ReasonNotPurchased reference-data item.");
-            return;
-        }
-
-        if (lookup.IsOtherOption && string.IsNullOrWhiteSpace(request.ReasonNotPurchasedOtherText))
-        {
-            context.AddFailure(nameof(request.ReasonNotPurchasedOtherText), "ReasonNotPurchasedOtherText is required when ReasonNotPurchased is \"Other\".");
-        }
     }
 
     private static async Task ValidateCoatingPreferenceAsync(

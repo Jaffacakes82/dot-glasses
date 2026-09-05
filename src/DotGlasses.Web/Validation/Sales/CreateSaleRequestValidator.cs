@@ -1,6 +1,7 @@
 using DotGlasses.Application.Leads;
 using DotGlasses.Application.ReferenceData;
 using DotGlasses.Contracts.Sales;
+using DotGlasses.Rules;
 using FluentValidation;
 using ContractLensRangeType = DotGlasses.Contracts.Common.LensRangeType;
 using ReferenceDataCategory = DotGlasses.Domain.Enums.ReferenceDataCategory;
@@ -10,7 +11,7 @@ namespace DotGlasses.Web.Validation.Sales;
 /// <summary>Lives in Web, not Contracts — see CreateTestRequestValidator's doc comment for why.</summary>
 public class CreateSaleRequestValidator : AbstractValidator<CreateSaleRequest>
 {
-    public CreateSaleRequestValidator(IReferenceDataLookupService referenceData, ILeadRepository leadRepository)
+    public CreateSaleRequestValidator(IReferenceDataLookupService referenceData, IReferenceDataSnapshotProvider snapshots, ILeadRepository leadRepository)
     {
         RuleFor(x => x.Id).NotEmpty();
         RuleFor(x => x.FullName).NotEmpty().MaximumLength(200);
@@ -31,82 +32,22 @@ public class CreateSaleRequestValidator : AbstractValidator<CreateSaleRequest>
 
         RuleFor(x => x).CustomAsync(async (request, context, cancellationToken) =>
         {
-            await ValidateOccupationAsync(request, context, referenceData, cancellationToken);
-            await ValidateReferralAsync(request, context, referenceData, cancellationToken);
+            // Occupation, "referred or treated", frame colour and hard case now live in
+            // DotGlasses.Rules (ticket 09), which the Field App checks against too; lens range and
+            // the Coating set stay here until tickets 10 and 11. Frame/hard-case failures are now
+            // raised ahead of the lens-range ones rather than after them — the module answers all
+            // four of its topics in one call — which changes nothing a caller can act on: the keys
+            // are disjoint, so no message moves between fields, and both the Field App's error bag
+            // and ValidationProblemDetails are keyed by field, not ordered.
+            var snapshot = await snapshots.GetAsync(cancellationToken);
+            foreach (var failure in ConsultationRules.Check(request, snapshot).Failures)
+            {
+                context.AddFailure(failure.Key, failure.Message);
+            }
+
             await ValidateLensRangeAsync(request, context, referenceData, cancellationToken);
-            await ValidateFrameColourAsync(request, context, referenceData, cancellationToken);
-            await ValidateHardCaseAsync(request, context, referenceData, cancellationToken);
             await ValidateSourceLeadAsync(request, context, leadRepository, cancellationToken);
         });
-    }
-
-    private static async Task ValidateOccupationAsync(
-        CreateSaleRequest request, ValidationContext<CreateSaleRequest> context,
-        IReferenceDataLookupService referenceData, CancellationToken cancellationToken)
-    {
-        if (request.OccupationRefId is not { } occupationRefId)
-        {
-            return;
-        }
-
-        var lookup = await referenceData.LookupAsync(occupationRefId, ReferenceDataCategory.Occupation, cancellationToken);
-        if (lookup is not { IsActive: true })
-        {
-            context.AddFailure(nameof(request.OccupationRefId), "OccupationRefId must reference an existing, active Occupation reference-data item.");
-            return;
-        }
-
-        if (lookup.IsOtherOption && string.IsNullOrWhiteSpace(request.OccupationOtherText))
-        {
-            context.AddFailure(nameof(request.OccupationOtherText), "OccupationOtherText is required when Occupation is \"Other\".");
-        }
-    }
-
-    /// <summary>"Referred or treated" — mirrors CreateTestRequestValidator's ValidateReferralAsync
-    /// exactly (see that file's doc comment); Test/Lead/Sale share the same five-field shape.</summary>
-    private static async Task ValidateReferralAsync(
-        CreateSaleRequest request, ValidationContext<CreateSaleRequest> context,
-        IReferenceDataLookupService referenceData, CancellationToken cancellationToken)
-    {
-        if (!request.ReferredOrTreated)
-        {
-            if (request.ReferralReasonRefId is not null || request.ReferralOtherText is not null
-                || request.ReferralLocationFreeText is not null || request.TreatedInFacility)
-            {
-                context.AddFailure(nameof(request.ReferredOrTreated), "Referral/treatment fields must be empty unless ReferredOrTreated is true.");
-            }
-
-            return;
-        }
-
-        if (request.ReferralReasonRefId is not { } referralReasonRefId)
-        {
-            context.AddFailure(nameof(request.ReferralReasonRefId), "ReferralReasonRefId is required when ReferredOrTreated is true.");
-        }
-        else
-        {
-            var lookup = await referenceData.LookupAsync(referralReasonRefId, ReferenceDataCategory.ReferralReason, cancellationToken);
-            if (lookup is not { IsActive: true })
-            {
-                context.AddFailure(nameof(request.ReferralReasonRefId), "ReferralReasonRefId must reference an existing, active ReferralReason reference-data item.");
-            }
-            else if (lookup.IsOtherOption && string.IsNullOrWhiteSpace(request.ReferralOtherText))
-            {
-                context.AddFailure(nameof(request.ReferralOtherText), "ReferralOtherText is required when ReferralReason is \"Other\".");
-            }
-        }
-
-        if (request.TreatedInFacility)
-        {
-            if (!string.IsNullOrWhiteSpace(request.ReferralLocationFreeText))
-            {
-                context.AddFailure(nameof(request.ReferralLocationFreeText), "ReferralLocationFreeText must be empty when TreatedInFacility is true.");
-            }
-        }
-        else if (string.IsNullOrWhiteSpace(request.ReferralLocationFreeText))
-        {
-            context.AddFailure(nameof(request.ReferralLocationFreeText), "ReferralLocationFreeText is required when ReferredOrTreated is true and TreatedInFacility is false.");
-        }
     }
 
     private static async Task ValidateLensRangeAsync(
@@ -306,56 +247,6 @@ public class CreateSaleRequestValidator : AbstractValidator<CreateSaleRequest>
         if (v < 0 || v > 180 || v != Math.Truncate(v))
         {
             context.AddFailure(propertyName, $"{propertyName} must be a whole number of degrees between 0 and 180.");
-        }
-    }
-
-    private static async Task ValidateFrameColourAsync(
-        CreateSaleRequest request, ValidationContext<CreateSaleRequest> context,
-        IReferenceDataLookupService referenceData, CancellationToken cancellationToken)
-    {
-        var lookup = await referenceData.LookupAsync(request.FrameColourRefId, ReferenceDataCategory.FrameColour, cancellationToken);
-        if (lookup is not { IsActive: true })
-        {
-            context.AddFailure(nameof(request.FrameColourRefId), "FrameColourRefId must reference an existing, active FrameColour reference-data item.");
-            return;
-        }
-
-        if (lookup.IsOtherOption && string.IsNullOrWhiteSpace(request.FrameColourOtherText))
-        {
-            context.AddFailure(nameof(request.FrameColourOtherText), "FrameColourOtherText is required when FrameColour is \"Other\".");
-        }
-    }
-
-    private static async Task ValidateHardCaseAsync(
-        CreateSaleRequest request, ValidationContext<CreateSaleRequest> context,
-        IReferenceDataLookupService referenceData, CancellationToken cancellationToken)
-    {
-        if (!request.HardCaseSold)
-        {
-            if (request.HardCaseColourRefId is not null || request.HardCaseOtherColourText is not null)
-            {
-                context.AddFailure(nameof(request.HardCaseSold), "HardCaseColourRefId/HardCaseOtherColourText must be empty when HardCaseSold is false.");
-            }
-
-            return;
-        }
-
-        if (request.HardCaseColourRefId is not { } hardCaseColourRefId)
-        {
-            context.AddFailure(nameof(request.HardCaseColourRefId), "HardCaseColourRefId is required when HardCaseSold is true.");
-            return;
-        }
-
-        var lookup = await referenceData.LookupAsync(hardCaseColourRefId, ReferenceDataCategory.HardCaseColour, cancellationToken);
-        if (lookup is not { IsActive: true })
-        {
-            context.AddFailure(nameof(request.HardCaseColourRefId), "HardCaseColourRefId must reference an existing, active HardCaseColour reference-data item.");
-            return;
-        }
-
-        if (lookup.IsOtherOption && string.IsNullOrWhiteSpace(request.HardCaseOtherColourText))
-        {
-            context.AddFailure(nameof(request.HardCaseOtherColourText), "HardCaseOtherColourText is required when HardCaseColour is \"Other\".");
         }
     }
 
