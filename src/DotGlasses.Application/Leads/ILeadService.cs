@@ -19,7 +19,9 @@ public interface ILeadService
 
     /// <summary>Idempotent upsert keyed on <see cref="CreateLeadRequest.Id"/>. If
     /// <see cref="CreateLeadRequest.SourceTestId"/> is set, atomically sets that Test's
-    /// ConvertedToLeadId in the same transaction. hierarchyPath/technicianUserId come from the
-    /// authenticated caller, not the request body.</summary>
+    /// ConvertedToLeadId in the same transaction; throws DomainRuleViolationException, having
+    /// written nothing, when that Test can't be read under the caller's hierarchy scope.
+    /// hierarchyPath/technicianUserId come from the authenticated caller, not the request
+    /// body.</summary>
     Task<LeadDto> CreateAsync(CreateLeadRequest request, Guid technicianUserId, string hierarchyPath, CancellationToken cancellationToken = default);
 }

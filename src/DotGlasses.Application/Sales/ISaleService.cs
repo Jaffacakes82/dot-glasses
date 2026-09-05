@@ -9,7 +9,9 @@ public interface ISaleService
 
     /// <summary>Idempotent upsert keyed on <see cref="CreateSaleRequest.Id"/>. If
     /// <see cref="CreateSaleRequest.SourceLeadId"/> is set, atomically sets that Lead's
-    /// ConvertedFlag/SaleId in the same transaction. CoatingRefIds is persisted as-is (validated
+    /// ConvertedFlag/SaleId in the same transaction; throws DomainRuleViolationException, having
+    /// written nothing, when that Lead can't be read under the caller's hierarchy scope.
+    /// CoatingRefIds is persisted as-is (validated
     /// by CreateSaleRequestValidator, not re-derived here) — see ADR-0001. hierarchyPath/
     /// technicianUserId come from the authenticated caller, not the request body.</summary>
     Task<SaleDto> CreateAsync(CreateSaleRequest request, Guid technicianUserId, string hierarchyPath, CancellationToken cancellationToken = default);
