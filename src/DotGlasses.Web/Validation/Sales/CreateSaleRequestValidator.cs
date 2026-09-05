@@ -32,108 +32,51 @@ public class CreateSaleRequestValidator : AbstractValidator<CreateSaleRequest>
 
         RuleFor(x => x).CustomAsync(async (request, context, cancellationToken) =>
         {
-            // Occupation, "referred or treated", frame colour and hard case now live in
-            // DotGlasses.Rules (ticket 09), which the Field App checks against too; lens range and
-            // the Coating set stay here until tickets 10 and 11. Frame/hard-case failures are now
-            // raised ahead of the lens-range ones rather than after them — the module answers all
-            // four of its topics in one call — which changes nothing a caller can act on: the keys
-            // are disjoint, so no message moves between fields, and both the Field App's error bag
-            // and ValidationProblemDetails are keyed by field, not ordered.
+            // Occupation, "referred or treated", frame colour and hard case (ticket 09) and now the
+            // whole lens range (ticket 10) live in DotGlasses.Rules, which the Field App checks
+            // against too; only the Coating set stays here, until ticket 11.
+            //
+            // Failure order is unchanged by this batch: the Coating set was already the last thing
+            // each lens branch checked, so raising it after every lens-range failure is where it
+            // landed before too.
             var snapshot = await snapshots.GetAsync(cancellationToken);
             foreach (var failure in ConsultationRules.Check(request, snapshot).Failures)
             {
                 context.AddFailure(failure.Key, failure.Message);
             }
 
-            await ValidateLensRangeAsync(request, context, referenceData, cancellationToken);
+            await ValidateCoatingSetAsync(request, context, referenceData, cancellationToken);
             await ValidateSourceLeadAsync(request, context, leadRepository, cancellationToken);
         });
     }
 
-    private static async Task ValidateLensRangeAsync(
+    /// <summary>
+    /// Ticket 11's remit, left in place deliberately, and the reason ticket 11 was blocked on this
+    /// one: which Coatings are allowed depends on the lens branch. A preset range narrows them to
+    /// those configured for the left lens option's strength; a Custom prescription accepts any
+    /// active Coating. Re-deriving the branch here is the price of splitting the topic across two
+    /// tickets — ticket 11 folds it into the shared module and the duplication goes away with it.
+    ///
+    /// The preset arm also re-tests all three preset ids, because ConsultationRules.PresetBranch
+    /// short-circuits without them and this check has to stay silent in exactly the same cases:
+    /// there is no left lens option to scope by, and reporting "choose at least one coating" at a
+    /// technician who has not yet picked a lens would be noise on top of the real failure. A
+    /// LensRangeType outside the enum reaches neither arm, exactly as before — RuleFor.IsInEnum
+    /// above is what reports that.
+    /// </summary>
+    private static async Task ValidateCoatingSetAsync(
         CreateSaleRequest request, ValidationContext<CreateSaleRequest> context,
         IReferenceDataLookupService referenceData, CancellationToken cancellationToken)
     {
-        var customFieldsSet = request.CustomSphereLeft is not null || request.CustomCylinderLeft is not null || request.CustomAxisLeft is not null || request.CustomAddPowerLeft is not null
-            || request.CustomSphereRight is not null || request.CustomCylinderRight is not null || request.CustomAxisRight is not null || request.CustomAddPowerRight is not null
-            || request.LensTypeRefId is not null || request.LensTypeOtherText is not null;
-        var presetFieldsSet = request.PresetCatalogueId is not null || request.LensOptionLeftId is not null || request.LensOptionRightId is not null;
-
         if (request.LensRangeType is ContractLensRangeType.SixLensSet or ContractLensRangeType.NineLensSet)
         {
-            if (customFieldsSet)
+            if (request.PresetCatalogueId is not null && request.LensOptionRightId is not null && request.LensOptionLeftId is { } leftId)
             {
-                context.AddFailure(nameof(request.LensRangeType), "Custom prescription fields must be empty for a preset LensRangeType.");
+                await ValidateCoatingsAsync(request, context, referenceData, restrictToLensOptionId: leftId, cancellationToken);
             }
-
-            if (request.PresetCatalogueId is not { } catalogueId || request.LensOptionLeftId is not { } leftId || request.LensOptionRightId is not { } rightId)
-            {
-                context.AddFailure(nameof(request.PresetCatalogueId), "PresetCatalogueId, LensOptionLeftId and LensOptionRightId are all required for a preset LensRangeType.");
-                return;
-            }
-
-            if (!await referenceData.LensOptionBelongsToCatalogueAsync(leftId, catalogueId, cancellationToken))
-            {
-                context.AddFailure(nameof(request.LensOptionLeftId), "LensOptionLeftId must belong to PresetCatalogueId.");
-            }
-
-            if (!await referenceData.LensOptionBelongsToCatalogueAsync(rightId, catalogueId, cancellationToken))
-            {
-                context.AddFailure(nameof(request.LensOptionRightId), "LensOptionRightId must belong to PresetCatalogueId.");
-            }
-
-            if (request.PupilDistanceMm is not null)
-            {
-                context.AddFailure(nameof(request.PupilDistanceMm), "PupilDistanceMm must be empty for a preset LensRangeType — use PresetPupilDistanceBucket instead.");
-            }
-
-            var maxPdBucket = request.ChildrensFrame ? 2 : 4;
-            if (request.PresetPupilDistanceBucket is not { } pdBucket || pdBucket < 0 || pdBucket > maxPdBucket)
-            {
-                context.AddFailure(nameof(request.PresetPupilDistanceBucket), $"PresetPupilDistanceBucket is required and must be between 0 and {maxPdBucket} for a preset LensRangeType{(request.ChildrensFrame ? " (0-2 for a children's frame)" : "")}.");
-            }
-
-            await ValidateCoatingsAsync(request, context, referenceData, leftId, cancellationToken);
-
-            return;
         }
-
-        if (request.LensRangeType == ContractLensRangeType.Custom)
+        else if (request.LensRangeType == ContractLensRangeType.Custom)
         {
-            if (presetFieldsSet)
-            {
-                context.AddFailure(nameof(request.LensRangeType), "Preset fields must be empty for a Custom LensRangeType.");
-            }
-
-            if (request.CustomSphereLeft is null || request.CustomSphereRight is null)
-            {
-                context.AddFailure(nameof(request.LensRangeType), "CustomSphereLeft and CustomSphereRight are required for a Custom LensRangeType.");
-            }
-
-            ValidateCustomPower(request.CustomSphereLeft, nameof(request.CustomSphereLeft), -10m, 10m, 0.25m, context);
-            ValidateCustomPower(request.CustomSphereRight, nameof(request.CustomSphereRight), -10m, 10m, 0.25m, context);
-            ValidateCustomPower(request.CustomCylinderLeft, nameof(request.CustomCylinderLeft), -10m, 10m, 0.25m, context);
-            ValidateCustomPower(request.CustomCylinderRight, nameof(request.CustomCylinderRight), -10m, 10m, 0.25m, context);
-            ValidateCustomPower(request.CustomAddPowerLeft, nameof(request.CustomAddPowerLeft), 0m, 3m, 0.25m, context);
-            ValidateCustomPower(request.CustomAddPowerRight, nameof(request.CustomAddPowerRight), 0m, 3m, 0.25m, context);
-            ValidateCustomAxis(request.CustomAxisLeft, nameof(request.CustomAxisLeft), context);
-            ValidateCustomAxis(request.CustomAxisRight, nameof(request.CustomAxisRight), context);
-            await ValidateLensTypeAsync(request, context, referenceData, cancellationToken);
-
-            if (request.PresetPupilDistanceBucket is not null)
-            {
-                context.AddFailure(nameof(request.PresetPupilDistanceBucket), "PresetPupilDistanceBucket must be empty for a Custom LensRangeType — use PupilDistanceMm instead.");
-            }
-
-            if (request.PupilDistanceMm is not { } pd || pd < 54 || pd > 74)
-            {
-                context.AddFailure(nameof(request.PupilDistanceMm), "PupilDistanceMm is required and must be within the standard 54-74mm range for a Custom LensRangeType (manual override outside this range is a Day 2 feature).");
-            }
-            else if (pd != Math.Truncate(pd))
-            {
-                context.AddFailure(nameof(request.PupilDistanceMm), "PupilDistanceMm must be a whole millimetre value.");
-            }
-
             await ValidateCoatingsAsync(request, context, referenceData, restrictToLensOptionId: null, cancellationToken);
         }
     }
@@ -184,69 +127,6 @@ public class CreateSaleRequestValidator : AbstractValidator<CreateSaleRequest>
                     return;
                 }
             }
-        }
-    }
-
-    /// <summary>Asked only once either eye carries two distinct powers (a base sphere plus an add
-    /// power) — required in that case, must stay empty otherwise (enforced via customFieldsSet
-    /// above, same as every other Custom-only field).</summary>
-    private static async Task ValidateLensTypeAsync(
-        CreateSaleRequest request, ValidationContext<CreateSaleRequest> context,
-        IReferenceDataLookupService referenceData, CancellationToken cancellationToken)
-    {
-        var hasTwoPowers = request.CustomAddPowerLeft is not null || request.CustomAddPowerRight is not null;
-        if (!hasTwoPowers)
-        {
-            if (request.LensTypeRefId is not null || request.LensTypeOtherText is not null)
-            {
-                context.AddFailure(nameof(request.LensTypeRefId), "LensTypeRefId/LensTypeOtherText must be empty unless an add power is set.");
-            }
-
-            return;
-        }
-
-        if (request.LensTypeRefId is not { } lensTypeRefId)
-        {
-            context.AddFailure(nameof(request.LensTypeRefId), "LensTypeRefId is required when an add power is set (two distinct powers on that eye).");
-            return;
-        }
-
-        var lookup = await referenceData.LookupAsync(lensTypeRefId, ReferenceDataCategory.LensType, cancellationToken);
-        if (lookup is not { IsActive: true })
-        {
-            context.AddFailure(nameof(request.LensTypeRefId), "LensTypeRefId must reference an existing, active LensType reference-data item.");
-        }
-        else if (lookup.IsOtherOption && string.IsNullOrWhiteSpace(request.LensTypeOtherText))
-        {
-            context.AddFailure(nameof(request.LensTypeOtherText), "LensTypeOtherText is required when LensType is \"Other\".");
-        }
-    }
-
-    /// <summary>Sphere/Cylinder/Add-power are physical lens-grinding constraints, not admin-curated
-    /// reference data — validated in code against the user's exact spec, not a lookup table.</summary>
-    private static void ValidateCustomPower(decimal? value, string propertyName, decimal min, decimal max, decimal step, ValidationContext<CreateSaleRequest> context)
-    {
-        if (value is not { } v)
-        {
-            return;
-        }
-
-        if (v < min || v > max || (v - min) % step != 0)
-        {
-            context.AddFailure(propertyName, $"{propertyName} must be between {min} and {max} in {step} increments.");
-        }
-    }
-
-    private static void ValidateCustomAxis(decimal? value, string propertyName, ValidationContext<CreateSaleRequest> context)
-    {
-        if (value is not { } v)
-        {
-            return;
-        }
-
-        if (v < 0 || v > 180 || v != Math.Truncate(v))
-        {
-            context.AddFailure(propertyName, $"{propertyName} must be a whole number of degrees between 0 and 180.");
         }
     }
 
