@@ -12,7 +12,7 @@ namespace DotGlasses.Contracts.Sales;
 /// LensOption's doc comment for why that was replaced; 2026-09-03 — became a set rather than a
 /// single value, see ADR-0001). For Custom, any active Coating item is valid; for a preset range,
 /// every entry must be one of the coatings configured as available for the chosen left-eye
-/// LensOption's lens strength — see SaleService/CreateSaleRequestValidator. Coating pairing/
+/// LensOption's lens strength — see SaleService/ConsultationRules. Coating pairing/
 /// exclusion rules (also ADR-0001) apply to the set regardless of LensRangeType.
 /// </summary>
 public class CreateSaleRequest
@@ -56,7 +56,7 @@ public class CreateSaleRequest
     public decimal? CustomAddPowerRight { get; set; }
 
     /// <summary>Required when either add power is set (two distinct powers on that eye) — see
-    /// CreateSaleRequestValidator.</summary>
+    /// ConsultationRules.</summary>
     public Guid? LensTypeRefId { get; set; }
     public string? LensTypeOtherText { get; set; }
 

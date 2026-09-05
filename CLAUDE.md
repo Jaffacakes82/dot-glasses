@@ -27,6 +27,19 @@ are the record of *how* things got built; don't restate that here.
   correct under both fillings. Rule failure keys are request-DTO property names and that is
   load-bearing — `FormErrors`, `ValidationProblemDetails` and `LeadConversionController`'s
   `Form.{PropertyName}` remap all key off it. See ADR-0002.
+- **There is no consultation request validator.** `ConsultationRules.Check` holds *every* rule for
+  a `Test`/`Lead`/`Sale` create — including the scalar ones (`NotEmpty`, length caps, `IsInEnum`,
+  the age range), whose messages are FluentValidation's generated copy reproduced verbatim because
+  clients already receive them. The three create endpoints call the module directly: load the
+  snapshot once, `Check`, `ToModelStateDictionary()`, `ValidationProblem`. Don't reintroduce a
+  validator for these three DTOs, and don't reword a scalar message without treating it as the
+  client-visible change it is.
+  **Two exceptions can never live in `Rules`** and sit on the controllers instead: a Lead's
+  `SourceTestId` and a Sale's `SourceLeadId` resolve a specific hierarchy-scoped row, which is I/O.
+  They must stay on the controller producing a *field-keyed* failure — `LeadService`/`SaleService`
+  guard the same thing but throw `DomainRuleViolationException`, which the filter keys on `""`, a
+  different response shape the Field App can't render against a control. `ConversionSourceScopingApiTests`
+  pins that; the service guard is defence in depth, not a replacement.
 - **`ReferenceDataSnapshot` is the single `Guid`→label resolver server-side**, fallback `"—"`.
   Don't add a local `ToDictionary(x => x.Id, x => x.Label)` beside it — that's the pattern it
   replaced (seven implementations, four different fallback strings). It is registered scoped and
@@ -62,11 +75,16 @@ are the record of *how* things got built; don't restate that here.
   — that's what EF throws for `FirstAsync` on an empty sequence, and it is deliberately left to
   surface as a 500: keeping the two types distinct is what makes a rejection recognisable at any
   catch site. Don't reach for a `Result` type; ADR-0003 rejected it with reasoning.
-- Deliberately **not** using `AddFluentValidationAutoValidation()` — it runs FluentValidation
-  synchronously inside ASP.NET's model-binding pipeline, which can't invoke the async rules
-  several validators need for DB-backed checks (throws
-  `AsyncValidatorInvokedSynchronouslyException`). Every controller calls
-  `IValidator<T>.ValidateAsync` explicitly instead.
+- FluentValidation still backs the **ten remaining validators** (Organisations, Preset Catalogues,
+  Reference Data, User Directory) and is deliberately **not** wired up via
+  `AddFluentValidationAutoValidation()` — that runs FluentValidation synchronously inside ASP.NET's
+  model-binding pipeline, which can't invoke the async rules several of them need for DB-backed
+  checks (throws `AsyncValidatorInvokedSynchronouslyException`). Every controller holding an
+  `IValidator<T>` calls `ValidateAsync` explicitly instead. Two of those validators
+  (`AddLensOptionRequestValidator`, `SetCoatingAvailabilityRequestValidator`) use
+  `IReferenceDataLookupService` rather than the memoized snapshot on purpose: they run inside a
+  *write* to the reference-data library, which is exactly where the per-request snapshot must not
+  be used.
 
 ## Data scoping vs RBAC — do not conflate
 

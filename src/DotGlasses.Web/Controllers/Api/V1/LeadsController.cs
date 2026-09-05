@@ -1,12 +1,15 @@
 using Asp.Versioning;
 using DotGlasses.Application.Common;
 using DotGlasses.Application.Leads;
+using DotGlasses.Application.ReferenceData;
+using DotGlasses.Application.VisionTests;
 using DotGlasses.Contracts.Leads;
-using FluentValidation;
+using DotGlasses.Rules;
 using DotGlasses.Web.Validation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace DotGlasses.Web.Controllers.Api.V1;
 
@@ -16,8 +19,9 @@ namespace DotGlasses.Web.Controllers.Api.V1;
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public class LeadsController(
     ILeadService leadService,
+    IVisionTestService testService,
     ICurrentUserContext currentUser,
-    IValidator<CreateLeadRequest> createValidator) : ControllerBase
+    IReferenceDataSnapshotProvider snapshots) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<LeadDto>>> List(CancellationToken cancellationToken) =>
@@ -67,13 +71,52 @@ public class LeadsController(
             return Problem("The authenticated user has no org assignment and cannot record a lead.", statusCode: StatusCodes.Status400BadRequest);
         }
 
-        var validation = await createValidator.ValidateAsync(request, cancellationToken);
-        if (!validation.IsValid)
+        // One reference-data read for the whole request, then every rule answered in memory —
+        // ADR-0002. The provider is scoped and memoized, so this is the request's only load.
+        var snapshot = await snapshots.GetAsync(cancellationToken);
+        var modelState = ConsultationRules.Check(request, snapshot).ToModelStateDictionary();
+        await AddSourceTestFailureAsync(request, modelState, cancellationToken);
+
+        if (!modelState.IsValid)
         {
-            return ValidationProblem(validation.ToModelStateDictionary());
+            return ValidationProblem(modelState);
         }
 
         var dto = await leadService.CreateAsync(request, technicianUserId, currentUser.HierarchyPathPrefix, cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = dto.Id, version = "1.0" }, dto);
+    }
+
+    /// <summary>
+    /// The one consultation rule that can never live in DotGlasses.Rules: it resolves a specific
+    /// hierarchy-scoped row rather than answering from the reference-data snapshot, so the module's
+    /// synchronous snapshot-only signature deliberately has no room for it (see ConsultationRules'
+    /// doc comment). It sits here rather than being left to LeadService's own refusal because the
+    /// two produce different response shapes: the service throws DomainRuleViolationException,
+    /// which DomainRuleViolationFilter renders keyed on "", while the Field App needs the failure
+    /// against the control that produced it. The service's guard stays as defence in depth — it is
+    /// what makes a half-completed conversion impossible — and this is the net in front of it.
+    /// ConversionSourceScopingApiTests pins that ordering.
+    ///
+    /// An out-of-scope Test is indistinguishable from one that never existed, deliberately: the
+    /// lookup goes through the same hierarchy-scoped read the service uses, so a caller learns
+    /// nothing about records outside their own subtree.
+    /// </summary>
+    private async Task AddSourceTestFailureAsync(
+        CreateLeadRequest request, ModelStateDictionary modelState, CancellationToken cancellationToken)
+    {
+        if (request.SourceTestId is not { } sourceTestId)
+        {
+            return;
+        }
+
+        var test = await testService.GetByIdAsync(sourceTestId, cancellationToken);
+        if (test is null)
+        {
+            modelState.AddModelError(nameof(request.SourceTestId), "SourceTestId must reference an existing Test.");
+        }
+        else if (test.ConvertedToLeadId is not null)
+        {
+            modelState.AddModelError(nameof(request.SourceTestId), "This Test has already been converted into a Lead.");
+        }
     }
 }

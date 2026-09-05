@@ -1,12 +1,15 @@
 using Asp.Versioning;
 using DotGlasses.Application.Common;
+using DotGlasses.Application.Leads;
+using DotGlasses.Application.ReferenceData;
 using DotGlasses.Application.Sales;
 using DotGlasses.Contracts.Sales;
-using FluentValidation;
+using DotGlasses.Rules;
 using DotGlasses.Web.Validation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace DotGlasses.Web.Controllers.Api.V1;
 
@@ -16,8 +19,9 @@ namespace DotGlasses.Web.Controllers.Api.V1;
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public class SalesController(
     ISaleService saleService,
+    ILeadService leadService,
     ICurrentUserContext currentUser,
-    IValidator<CreateSaleRequest> createValidator) : ControllerBase
+    IReferenceDataSnapshotProvider snapshots) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<SaleDto>>> List(CancellationToken cancellationToken) =>
@@ -43,13 +47,40 @@ public class SalesController(
             return Problem("The authenticated user has no org assignment and cannot record a sale.", statusCode: StatusCodes.Status400BadRequest);
         }
 
-        var validation = await createValidator.ValidateAsync(request, cancellationToken);
-        if (!validation.IsValid)
+        // One reference-data read for the whole request, then every rule answered in memory —
+        // ADR-0002. A preset-range Sale used to cost 7 + 3n + n(n-1)/2 sequential lookups; the
+        // provider is scoped and memoized, so this is the request's only load.
+        var snapshot = await snapshots.GetAsync(cancellationToken);
+        var modelState = ConsultationRules.Check(request, snapshot).ToModelStateDictionary();
+        await AddSourceLeadFailureAsync(request, modelState, cancellationToken);
+
+        if (!modelState.IsValid)
         {
-            return ValidationProblem(validation.ToModelStateDictionary());
+            return ValidationProblem(modelState);
         }
 
         var dto = await saleService.CreateAsync(request, technicianUserId, currentUser.HierarchyPathPrefix, cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = dto.Id, version = "1.0" }, dto);
+    }
+
+    /// <summary>The Sale's half of the source check — see LeadsController.AddSourceTestFailureAsync
+    /// for why it lives on the controller rather than in DotGlasses.Rules or SaleService.</summary>
+    private async Task AddSourceLeadFailureAsync(
+        CreateSaleRequest request, ModelStateDictionary modelState, CancellationToken cancellationToken)
+    {
+        if (request.SourceLeadId is not { } sourceLeadId)
+        {
+            return;
+        }
+
+        var lead = await leadService.GetByIdAsync(sourceLeadId, cancellationToken);
+        if (lead is null)
+        {
+            modelState.AddModelError(nameof(request.SourceLeadId), "SourceLeadId must reference an existing Lead.");
+        }
+        else if (lead.SaleId is not null)
+        {
+            modelState.AddModelError(nameof(request.SourceLeadId), "This Lead has already been converted into a Sale.");
+        }
     }
 }

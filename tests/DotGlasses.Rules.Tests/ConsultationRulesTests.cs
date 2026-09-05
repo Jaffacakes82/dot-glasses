@@ -1665,6 +1665,189 @@ public class ConsultationRulesTests
         Assert.Null(typeof(CreateLeadRequest).GetProperty("CoatingRefIds"));
     }
 
+    // --- Scalars --------------------------------------------------------------------------
+    //
+    // These pin FluentValidation's generated copy character-for-character. The three validators
+    // that used to produce it were deleted in ticket 12, so nothing but these assertions now
+    // stands between a client and a silently reworded message — and the Field App renders these
+    // strings verbatim against the control that produced them. Each expected string below was
+    // captured from the real validators before they were deleted, not written from memory.
+
+    [Fact]
+    public void AnIdThatWasNeverFilledIn_IsRejectedInFluentValidationsWording()
+    {
+        var request = ValidTest();
+        request.Id = Guid.Empty;
+
+        var result = ConsultationRules.Check(request, Snapshot());
+
+        Assert.Equal(new RuleFailure("Id", "'Id' must not be empty."), Assert.Single(result.Failures));
+    }
+
+    [Fact]
+    public void AnOverLongFreeTextField_ReportsBothThePermittedAndTheActualLength()
+    {
+        // The spaced display name and the trailing "You entered ..." clause are FluentValidation's,
+        // and the 201 is interpolated from the value rather than fixed.
+        var request = ValidTest();
+        request.OccupationOtherText = new string('a', 201);
+        request.ReferralLocationFreeText = new string('b', 501);
+        request.ReferredOrTreated = true;
+        request.ReferralReasonRefId = ActiveReferralReason;
+
+        var result = ConsultationRules.Check(request, Snapshot());
+
+        Assert.Contains(
+            new RuleFailure("OccupationOtherText", "The length of 'Occupation Other Text' must be 200 characters or fewer. You entered 201 characters."),
+            result.Failures);
+        Assert.Contains(
+            new RuleFailure("ReferralLocationFreeText", "The length of 'Referral Location Free Text' must be 500 characters or fewer. You entered 501 characters."),
+            result.Failures);
+    }
+
+    [Fact]
+    public void AFreeTextFieldExactlyAtItsCap_IsAccepted()
+    {
+        // The cap is inclusive, and null/empty are a different question this rule never asks.
+        var request = ValidTest();
+        request.OccupationOtherText = new string('a', 200);
+
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void AnEnumValueOutsideItsEnum_QuotesTheNumberBack()
+    {
+        // That number is the only clue to what the client actually sent, which is why the message
+        // repeats it rather than just naming the field.
+        var request = ValidTest();
+        request.Gender = (Gender)99;
+
+        var result = ConsultationRules.Check(request, Snapshot());
+
+        Assert.Equal(
+            new RuleFailure("Gender", "'Gender' has a range of values which does not include '99'."),
+            Assert.Single(result.Failures));
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(121)]
+    public void AnImplausibleAge_IsRejectedAndQuotedBack(int ageYears)
+    {
+        var request = ValidTest();
+        request.AgeYears = ageYears;
+
+        var result = ConsultationRules.Check(request, Snapshot());
+
+        Assert.Equal(
+            new RuleFailure("AgeYears", $"'Age Years' must be between 0 and 120. You entered {ageYears}."),
+            Assert.Single(result.Failures));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(120)]
+    public void AnAgeThatIsAbsentOrOnTheBoundary_IsAccepted(int? ageYears)
+    {
+        // Absent is valid on all three requests — an age is optional — and both ends are inclusive.
+        var request = ValidTest();
+        request.AgeYears = ageYears;
+
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ALeadWithNoUsableCustomerName_IsRejected(string fullName)
+    {
+        // Whitespace counts as empty, matching the FluentValidation rule this replaced: a customer
+        // named " " is not a named customer.
+        var request = ValidLead();
+        request.FullName = fullName;
+
+        var result = ConsultationRules.Check(request, Snapshot());
+
+        Assert.Equal(
+            new RuleFailure("FullName", "'Full Name' must not be empty."),
+            Assert.Single(result.Failures));
+    }
+
+    [Fact]
+    public void ASalesOrderFlaggedForDotGlassesOnAPresetRange_IsRejected()
+    {
+        // The one scalar carrying hand-written copy rather than FluentValidation's: "must be equal
+        // to False" says nothing a technician could act on.
+        var request = ValidSale();
+        request.OrderFromDotGlasses = true;
+
+        var result = ConsultationRules.Check(request, Snapshot());
+
+        Assert.Equal(
+            new RuleFailure("OrderFromDotGlasses", "OrderFromDotGlasses is only meaningful when LensRangeType is Custom."),
+            Assert.Single(result.Failures));
+    }
+
+    [Fact]
+    public void ASalesOrderFlaggedForDotGlassesOnACustomPrescription_IsAccepted()
+    {
+        var request = CustomSale();
+        request.OrderFromDotGlasses = true;
+
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void OnlyATestCapsItsLensTypeOtherText_AndOnlyASaleRangeChecksItsLensRangeType()
+    {
+        // Two pieces of pre-existing drift, preserved rather than tidied when the scalars moved
+        // here (ticket 12). A Test length-caps LensTypeOtherText and a Lead never has; a Sale
+        // range-checks LensRangeType and a Lead never has, though it carries the same enum. Pinned
+        // so that harmonising either becomes a deliberate decision rather than an accident.
+        var test = CustomTest();
+        test.CustomAddPowerLeft = 1.00m;
+        test.LensTypeRefId = ActiveLensType;
+        test.LensTypeOtherText = new string('a', 201);
+
+        var lead = CustomLead();
+        lead.CustomAddPowerLeft = 1.00m;
+        lead.LensTypeRefId = ActiveLensType;
+        lead.LensTypeOtherText = new string('a', 201);
+
+        Assert.Equal(
+            new RuleFailure("LensTypeOtherText", "The length of 'Lens Type Other Text' must be 200 characters or fewer. You entered 201 characters."),
+            Assert.Single(ConsultationRules.Check(test, Snapshot()).Failures));
+        Assert.True(ConsultationRules.Check(lead, Snapshot()).IsValid);
+
+        var outOfEnumLead = ValidLead();
+        outOfEnumLead.LensRangeType = (LensRangeType)99;
+        var outOfEnumSale = ValidSale();
+        outOfEnumSale.LensRangeType = (LensRangeType)99;
+
+        Assert.True(ConsultationRules.Check(outOfEnumLead, Snapshot()).IsValid);
+        Assert.Contains(
+            new RuleFailure("LensRangeType", "'Lens Range Type' has a range of values which does not include '99'."),
+            ConsultationRules.Check(outOfEnumSale, Snapshot()).Failures);
+    }
+
+    [Fact]
+    public void ScalarFailures_AreReportedAheadOfTheReferenceDataTopics()
+    {
+        // Declaration order on the deleted validators put the RuleFor chain before the module call,
+        // so a request failing both reported its scalars first. Clients group by key rather than
+        // reading the list in order, but LeadConversionController replays the sequence into
+        // ModelState, so it stays worth pinning.
+        var request = ValidSale();
+        request.Id = Guid.Empty;
+        request.FrameColourRefId = RetiredFrameColour;
+
+        var result = ConsultationRules.Check(request, Snapshot());
+
+        Assert.Equal(["Id", "FrameColourRefId"], result.Failures.Select(f => f.Key));
+    }
+
     // --- Composition ----------------------------------------------------------------------
 
     [Fact]
