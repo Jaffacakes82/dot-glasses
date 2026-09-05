@@ -12,12 +12,12 @@ the chosen lens option.
 **Status:** ready-for-agent
 **Category:** refactor
 
-- [ ] A Sale requires at least one Coating in its set, on both the preset and custom branches
-- [ ] Duplicate entries in a Coating set are rejected
-- [ ] Every entry must reference an active Coating
-- [ ] On a preset range, every entry must be configured as available for the chosen lens strength
-- [ ] A lens with no configured coatings is reported against the lens, not the Coating set
-- [ ] No two entries in a set may exclude one another, checked symmetrically
-- [ ] A Coating preference on a Test or Lead is validated as a single optional value
-- [ ] Exclusion and availability rules are covered by tests at the shared module's interface
-- [ ] Externally observable validation behaviour is identical to before
+- [x] A Sale requires at least one Coating in its set, on both the preset and custom branches
+- [x] Duplicate entries in a Coating set are rejected
+- [x] Every entry must reference an active Coating
+- [x] On a preset range, every entry must be configured as available for the chosen lens strength
+- [x] A lens with no configured coatings is reported against the lens, not the Coating set
+- [x] No two entries in a set may exclude one another, checked symmetrically
+- [x] A Coating preference on a Test or Lead is validated as a single optional value
+- [x] Exclusion and availability rules are covered by tests at the shared module's interface
+- [x] Externally observable validation behaviour is identical to before

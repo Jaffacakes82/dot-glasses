@@ -15,12 +15,12 @@ Agreed as a trade, with the cost being that the client stays on its own copy unt
 **Status:** ready-for-agent
 **Category:** refactor
 
-- [ ] The consultation form's own rule implementations are deleted and replaced by calls to the shared module
-- [ ] The snapshot the form passes in is built from the already-cached reference data, and works with no connectivity
-- [ ] Every rule the server enforces is enforced on the device before a record is queued
-- [ ] Free-text length limits, power increments and the pupil-distance range are now caught client-side
-- [ ] Client and server messages for the same rule are identical
-- [ ] A failure is rendered against the control that produced it, for every field the form renders
-- [ ] The known-field list no longer omits a key the form has a control for
-- [ ] A record that would be refused by the server can no longer be queued while online or offline
-- [ ] Manually verified in the running app, offline and online — there is no automated test for this wiring by agreed scope
+- [x] The consultation form's own rule implementations are deleted and replaced by calls to the shared module
+- [x] The snapshot the form passes in is built from the already-cached reference data, and works with no connectivity
+- [x] Every rule the server enforces is enforced on the device before a record is queued
+- [x] Free-text length limits, power increments and the pupil-distance range are now caught client-side
+- [x] Client and server messages for the same rule are identical
+- [x] A failure is rendered against the control that produced it, for every field the form renders
+- [x] The known-field list no longer omits a key the form has a control for
+- [x] A record that would be refused by the server can no longer be queued while online or offline
+- [x] Manually verified in the running app, offline and online — there is no automated test for this wiring by agreed scope

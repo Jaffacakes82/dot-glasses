@@ -9,10 +9,10 @@ it sits above the coverage bar while reporting sits below it.
 **Status:** ready-for-agent
 **Category:** chore
 
-- [ ] Reference-data management is allowed only for an Admin at the top of the org hierarchy
-- [ ] Preset catalogue management is allowed only for an Admin at Country level or above
-- [ ] The Custom Orders screen and its advance action are allowed only at Country level or above, for any role
-- [ ] An organisation write action is denied when the target org sits outside the caller's own subtree
-- [ ] A user-directory write action is denied when the target user sits outside the caller's own subtree
-- [ ] A denied policy check reaches the access-denied page rather than a bare not-found
-- [ ] Each test exercises a caller both inside and outside the target's subtree
+- [x] Reference-data management is allowed only for an Admin at the top of the org hierarchy
+- [x] Preset catalogue management is allowed only for an Admin at Country level or above
+- [x] The Custom Orders screen and its advance action are allowed only at Country level or above, for any role
+- [x] An organisation write action is denied when the target org sits outside the caller's own subtree
+- [x] A user-directory write action is denied when the target user sits outside the caller's own subtree
+- [x] A denied policy check reaches the access-denied page rather than a bare not-found
+- [x] Each test exercises a caller both inside and outside the target's subtree

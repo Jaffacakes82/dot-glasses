@@ -4,9 +4,13 @@ using FluentValidation;
 
 namespace DotGlasses.Web.Validation.ReferenceData;
 
-/// <summary>Lives in Web, not Contracts — same reasoning as CreateTestRequestValidator: needs a
-/// DB-backed check (is there already an active "Other" item in this category) that can't be
-/// co-located with a Contracts DTO. This request isn't Contracts-shaped anyway; it's MVC-only.</summary>
+/// <summary>Lives in Web, not Contracts — it needs a DB-backed check (is there already an active
+/// "Other" item in this category) that can't be co-located with a Contracts DTO, because Contracts
+/// may not reference Application. This request isn't Contracts-shaped anyway; it's MVC-only.
+///
+/// It is also one of the async rules ADR-0002 keeps FluentValidation around for: it writes to the
+/// reference-data library, so it must not read the memoized per-request snapshot the consultation
+/// rules use.</summary>
 public class CreateReferenceDataItemRequestValidator : AbstractValidator<CreateReferenceDataItemRequest>
 {
     public CreateReferenceDataItemRequestValidator(IReferenceDataAdminService referenceDataAdminService)

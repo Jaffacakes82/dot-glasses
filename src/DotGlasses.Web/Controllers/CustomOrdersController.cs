@@ -12,17 +12,8 @@ namespace DotGlasses.Web.Controllers;
 [Authorize(Policy = AuthorizationPolicies.CustomOrdersView)]
 public class CustomOrdersController(ICustomOrderService customOrderService) : Controller
 {
-    public async Task<IActionResult> Index(FulfilmentStatus? status, CancellationToken cancellationToken = default)
-    {
-        var grouped = await customOrderService.ListGroupedAsync(status, cancellationToken);
-
-        return View(new CustomOrdersViewModel
-        {
-            Retailers = grouped.Retailers.Select(ToWebModel).ToList(),
-            Status = status,
-            TotalCount = grouped.TotalCount,
-        });
-    }
+    public async Task<IActionResult> Index(FulfilmentStatus? status, CancellationToken cancellationToken = default) =>
+        View(await BuildViewModelAsync(status, cancellationToken));
 
     /// <summary>Drives off ExportAsync — same status filter and scoping as Index's
     /// ListGroupedAsync, just unpaged and flat rather than grouped — reuses the class-level
@@ -44,8 +35,25 @@ public class CustomOrdersController(ICustomOrderService customOrderService) : Co
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> AdvanceStatus(Guid saleId, CancellationToken cancellationToken)
     {
+        // Already-Fulfilled (a colleague got there first, a double click, a browser resubmit),
+        // not-a-custom-order and out-of-scope all leave the service as DomainRuleViolationException
+        // and are rendered inline by DomainRuleViolationFilter — no catch here, deliberately
+        // (ADR-0003: a controller that catches one is the pattern the filter exists to remove).
         await customOrderService.AdvanceStatusAsync(saleId, cancellationToken);
+
         return RedirectToAction(nameof(Index));
+    }
+
+    private async Task<CustomOrdersViewModel> BuildViewModelAsync(FulfilmentStatus? status, CancellationToken cancellationToken)
+    {
+        var grouped = await customOrderService.ListGroupedAsync(status, cancellationToken);
+
+        return new CustomOrdersViewModel
+        {
+            Retailers = grouped.Retailers.Select(ToWebModel).ToList(),
+            Status = status,
+            TotalCount = grouped.TotalCount,
+        };
     }
 
     private static RetailerGroup ToWebModel(RetailerOrderGroup g) =>

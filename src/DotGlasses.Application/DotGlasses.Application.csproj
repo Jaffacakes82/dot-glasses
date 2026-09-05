@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\DotGlasses.Domain\DotGlasses.Domain.csproj" />
     <ProjectReference Include="..\DotGlasses.Contracts\DotGlasses.Contracts.csproj" />
+    <ProjectReference Include="..\DotGlasses.Rules\DotGlasses.Rules.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -142,6 +142,8 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
     public IReadOnlyList<ReferenceDataItemDto> GetByCategory(ReferenceDataCategory category) =>
         _items.Where(x => x.Category == category).ToList();
 
+    public IReadOnlyList<ReferenceDataItemDto> AllItems => _items;
+
     /// <summary>CoatingPairings/CoatingExclusions default to an empty list so a cache payload
     /// written before those fields existed still deserializes safely (missing JSON properties
     /// fall back to the constructor's default parameter value).</summary>

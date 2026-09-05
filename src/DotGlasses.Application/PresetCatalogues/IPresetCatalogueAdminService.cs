@@ -52,8 +52,9 @@ public interface IPresetCatalogueAdminService
     Task UnassignCatalogueFromOrgAsync(Guid catalogueId, Guid orgNodeId, CancellationToken cancellationToken = default);
 
     /// <summary>The set of Coating reference-data Ids currently configured as available for a
-    /// given LensStrength reference-data item — the many-to-many backing
-    /// IsCoatingAvailableForLensOptionAsync's validator check.</summary>
+    /// given LensStrength reference-data item — the many-to-many that reaches the consultation
+    /// rules as LensOptionSnapshot.AvailableCoatingIds, behind
+    /// ReferenceDataSnapshot.IsCoatingAvailableForLensOption.</summary>
     Task<IReadOnlyList<Guid>> ListAvailableCoatingsAsync(Guid lensStrengthRefId, CancellationToken cancellationToken = default);
 
     /// <summary>No-op if already available.</summary>

@@ -3,27 +3,28 @@ using DotGlasses.Domain.Enums;
 namespace DotGlasses.Application.ReferenceData;
 
 /// <summary>
-/// Backs FluentValidation's reference-data checks (category correctness, "Other" free-text
-/// requirement, LensOption/PresetCatalogue consistency) without validators needing
-/// DotGlassesDbContext directly — Web must never reference Infrastructure except in Program.cs
-/// (see CLAUDE.md's Architecture rules).
+/// A single reference-data row, looked up without the caller needing DotGlassesDbContext directly
+/// — Web must never reference Infrastructure except in Program.cs (see CLAUDE.md's Architecture
+/// rules).
+///
+/// Shrinking, not growing: ReferenceDataSnapshot answers all of this from a single read, and each
+/// migration batch moved another question onto it. LensOptionBelongsToCatalogueAsync left with
+/// ticket 10; IsCoatingAvailableForLensOptionAsync and AreCoatingsExcludedAsync left with
+/// ticket 11, whose Coating rules were their only callers.
+///
+/// <b>The interface itself was expected to go with them and did not.</b> Its two remaining callers
+/// are Admin Portal validators — AddLensOptionRequestValidator and
+/// SetCoatingAvailabilityRequestValidator, on the Preset Catalogues screen — and they are a
+/// genuinely different case from a consultation rule: both run inside a <em>write</em> to the
+/// reference-data library, where the per-request memoized snapshot is the one thing that must not
+/// be consulted (it may predate the write; see ADR-0002 and CLAUDE.md). A direct row read is
+/// correct there, so this survives as an Admin-Portal-write concern rather than a validation one.
+/// Don't add a method here for a consultation rule — add it to the snapshot.
 /// </summary>
 public interface IReferenceDataLookupService
 {
     /// <summary>Null if no ReferenceDataItem with this Id exists in this Category.</summary>
     Task<ReferenceDataLookupResult?> LookupAsync(Guid id, ReferenceDataCategory category, CancellationToken cancellationToken = default);
-
-    Task<bool> LensOptionBelongsToCatalogueAsync(Guid lensOptionId, Guid presetCatalogueId, CancellationToken cancellationToken = default);
-
-    /// <summary>True if coatingRefId is configured as available for the LensStrength the given
-    /// LensOption references (LensStrengthCoatingOption) — replaces the old single forced
-    /// CoatingId (2026-08-05 rework, see LensOption's own doc comment). False (not an exception)
-    /// if the LensOption doesn't exist, or the strength has no coatings configured yet.</summary>
-    Task<bool> IsCoatingAvailableForLensOptionAsync(Guid lensOptionId, Guid coatingRefId, CancellationToken cancellationToken = default);
-
-    /// <summary>True if coatingRefIdA/coatingRefIdB can never both be present in the same
-    /// Coating set (symmetric — checks both orderings) — see ADR-0001.</summary>
-    Task<bool> AreCoatingsExcludedAsync(Guid coatingRefIdA, Guid coatingRefIdB, CancellationToken cancellationToken = default);
 }
 
 public record ReferenceDataLookupResult(bool IsActive, bool IsOtherOption);

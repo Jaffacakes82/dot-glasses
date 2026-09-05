@@ -2,7 +2,6 @@ using DotGlasses.Contracts.Common;
 using DotGlasses.Contracts.Leads;
 using DotGlasses.Contracts.PresetCatalogues;
 using DotGlasses.Contracts.ReferenceData;
-using DotGlasses.Contracts.Sales;
 
 namespace DotGlasses.Web.Models;
 
@@ -20,16 +19,28 @@ public class LeadConversionFormModel
     /// <summary>At least one required — see CreateSaleRequest.CoatingRefIds/ADR-0001. No live
     /// pairing-auto-add or exclusion-blocking in this admin form (Day-2 nicety for this
     /// occasional manual-entry path); the exclusion rule is still enforced server-side via the
-    /// same CreateSaleRequestValidator the Field App posts through, surfaced as a validation
+    /// same ConsultationRules module the Field App posts through, surfaced as a validation
     /// error on submit like every other field here.</summary>
     public List<Guid> CoatingRefIds { get; set; } = [];
     public Guid? FrameColourRefId { get; set; }
     public string? FrameColourOtherText { get; set; }
-    public FrameCoverage FrameCoverage { get; set; } = FrameCoverage.FullFrame;
     public bool HardCaseSold { get; set; }
     public Guid? HardCaseColourRefId { get; set; }
     public string? HardCaseOtherColourText { get; set; }
     public bool OrderFromDotGlasses { get; set; }
+
+    /// <summary>"Referred or treated" — asked here exactly as it is on every other capture path
+    /// (Test/Lead/Sale are separate create-once events, so nothing carries forward from the source
+    /// Lead's own answer and the admin answers fresh). ReferralReasonRefId is required whenever
+    /// ReferredOrTreated is true; ReferralOtherText only when that reason is the "Other" option;
+    /// ReferralLocationFreeText is required when TreatedInFacility is false and must be empty when
+    /// it's true. The other four must stay empty when ReferredOrTreated is false — see
+    /// ConsultationRules' Referral rule, which is what actually enforces this.</summary>
+    public bool ReferredOrTreated { get; set; }
+    public Guid? ReferralReasonRefId { get; set; }
+    public string? ReferralOtherText { get; set; }
+    public bool TreatedInFacility { get; set; }
+    public string? ReferralLocationFreeText { get; set; }
 
     // Only rendered/used when the source Lead captured no lens/prescription preference at all
     // (Lead.LensRangeType is null) — otherwise the Lead's own values carry over unchanged.
@@ -67,6 +78,7 @@ public class LeadConversionViewModel
     public required IReadOnlyList<ReferenceDataItemDto> FrameColours { get; init; }
     public required IReadOnlyList<ReferenceDataItemDto> Coatings { get; init; }
     public required IReadOnlyList<ReferenceDataItemDto> HardCaseColours { get; init; }
+    public required IReadOnlyList<ReferenceDataItemDto> ReferralReasons { get; init; }
     public required IReadOnlyList<ReferenceDataItemDto> LensTypes { get; init; }
     public required LeadConversionFormModel Form { get; init; }
 }

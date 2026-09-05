@@ -9,6 +9,9 @@
 @using DotGlasses.Contracts.Sales
 @using DotGlasses.Contracts.Sync
 @using DotGlasses.Contracts.Tests
+@using DotGlasses.Rules
+@using DotGlasses.Rules.ReferenceData
+@using DotGlasses.Rules.Sales
 @inject NavigationManager Navigation
 @inject IReferenceDataClient ReferenceDataClient
 @inject ILeadsClient LeadsClient
@@ -109,7 +112,7 @@
             {
                 <ReferenceDataDropdown Label="Reason for referral/treatment" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.ReferralReason)"
                                         SelectedId="_referralReasonRefId" SelectedIdChanged="v => _referralReasonRefId = v"
-                                        OtherText="_referralOtherText" OtherTextChanged="v => _referralOtherText = v"
+                                        OtherText="@_referralOtherText" OtherTextChanged="v => _referralOtherText = v"
                                         Errors="_errors" Field="ReferralReasonRefId" OtherField="ReferralOtherText" />
                 <div class="dg-field">
                     <label><input type="checkbox" @bind="_treatedInFacility" style="width:auto; margin-right:8px;" />Treated in facility</label>
@@ -139,7 +142,7 @@
                 {
                     <ReferenceDataDropdown Label="Occupation (optional)" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Occupation)"
                                             SelectedId="_occupationRefId" SelectedIdChanged="v => _occupationRefId = v"
-                                            OtherText="_occupationOtherText" OtherTextChanged="v => _occupationOtherText = v"
+                                            OtherText="@_occupationOtherText" OtherTextChanged="v => _occupationOtherText = v"
                                             Errors="_errors" Field="OccupationRefId" OtherField="OccupationOtherText" />
 
                     <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues"
@@ -180,7 +183,7 @@
                 {
                     <ReferenceDataDropdown Label="Occupation (optional)" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Occupation)"
                                             SelectedId="_occupationRefId" SelectedIdChanged="v => _occupationRefId = v"
-                                            OtherText="_occupationOtherText" OtherTextChanged="v => _occupationOtherText = v"
+                                            OtherText="@_occupationOtherText" OtherTextChanged="v => _occupationOtherText = v"
                                             Errors="_errors" Field="OccupationRefId" OtherField="OccupationOtherText" />
                 }
             }
@@ -198,7 +201,7 @@
                 </div>
                 <ReferenceDataDropdown Label="Occupation (optional)" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Occupation)"
                                         SelectedId="_occupationRefId" SelectedIdChanged="v => _occupationRefId = v"
-                                        OtherText="_occupationOtherText" OtherTextChanged="v => _occupationOtherText = v"
+                                        OtherText="@_occupationOtherText" OtherTextChanged="v => _occupationOtherText = v"
                                         Errors="_errors" Field="OccupationRefId" OtherField="OccupationOtherText" />
                 <div class="dg-field">
                     <label><input type="checkbox" @bind="_consentGiven" style="width:auto; margin-right:8px;" />Customer consents to be contacted by Dot Glasses for follow-ups/marketing</label>
@@ -239,7 +242,7 @@
                     {
                         <ReferenceDataDropdown Label="Hard case colour" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.HardCaseColour)"
                                                 SelectedId="_hardCaseColourRefId" SelectedIdChanged="v => _hardCaseColourRefId = v"
-                                                OtherText="_hardCaseOtherColourText" OtherTextChanged="v => _hardCaseOtherColourText = v"
+                                                OtherText="@_hardCaseOtherColourText" OtherTextChanged="v => _hardCaseOtherColourText = v"
                                                 Errors="_errors" Field="HardCaseColourRefId" OtherField="HardCaseOtherColourText" />
                     }
                 }
@@ -247,7 +250,7 @@
                 {
                     <ReferenceDataDropdown Label="Reason not purchased" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.ReasonNotPurchased)"
                                             SelectedId="_reasonNotPurchasedRefId" SelectedIdChanged="v => _reasonNotPurchasedRefId = v"
-                                            OtherText="_reasonNotPurchasedOtherText" OtherTextChanged="v => _reasonNotPurchasedOtherText = v"
+                                            OtherText="@_reasonNotPurchasedOtherText" OtherTextChanged="v => _reasonNotPurchasedOtherText = v"
                                             Errors="_errors" Field="ReasonNotPurchasedRefId" OtherField="ReasonNotPurchasedOtherText" />
 
                     <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues"
@@ -368,11 +371,23 @@
     private static readonly string[] LeadFields =
         [.. TestFields, .. LensFields, "FullName", "PhoneNumber", "ReasonNotPurchasedRefId", "ReasonNotPurchasedOtherText", "CoatingPreferenceRefId"];
 
+    // HardCaseSold and OrderFromDotGlasses each own a checkbox on this form, so a failure keyed to
+    // either belongs against that checkbox rather than in the summary band. Both rules are
+    // unreachable today only because BuildSaleRequest defensively nulls their dependent fields —
+    // exactly the hand-coordination this ticket removes elsewhere, so don't rely on it here.
+    // FrameCoverage and Id are deliberately absent: neither has a control (frame coverage is
+    // pinned to FullFrame, Id is a generated key), so their failures are genuinely unattributable.
     private static readonly string[] SaleFields =
         [.. TestFields, .. LensFields, "FullName", "PhoneNumber", "CoatingRefIds", "FrameColourRefId", "FrameColourOtherText",
-         "HardCaseColourRefId", "HardCaseOtherColourText"];
+         "HardCaseSold", "HardCaseColourRefId", "HardCaseOtherColourText", "OrderFromDotGlasses"];
 
     private string[] KnownFields => IsTest ? [.. TestFields, .. LensFields] : IsSale ? SaleFields : LeadFields;
+
+    /// <summary>Rebuilt per check rather than cached at init: the technician can Retry a
+    /// reference-data fetch mid-form, and a snapshot pinned at OnInitializedAsync would then be
+    /// answering from data the dropdowns no longer show. It is an in-memory projection over lists
+    /// this device already holds — no I/O, and Validate() runs only on a save.</summary>
+    private ReferenceDataSnapshot Snapshot => ReferenceDataClient.ToSnapshot();
 
     protected override async Task OnInitializedAsync()
     {
@@ -415,18 +430,24 @@
             return;
         }
 
-        _name = lead.CustomerFullName;
-        _phone = lead.CustomerPhoneNumber ?? string.Empty;
-        _age = lead.AgeYears;
-        _gender = lead.Gender;
-        _occupationRefId = lead.OccupationRefId;
-        _occupationOtherText = lead.OccupationOtherText;
-        _consentGiven = lead.ConsentGiven;
-        _coatingRefIds = lead.CoatingPreferenceRefId is { } coatingRefId ? [coatingRefId] : [];
-        ApplyLensRange(lead.LensRangeType, lead.PresetCatalogueId, lead.LensOptionLeftId, lead.LensOptionRightId,
-            lead.CustomSphereLeft, lead.CustomCylinderLeft, lead.CustomAxisLeft, lead.CustomAddPowerLeft,
-            lead.CustomSphereRight, lead.CustomCylinderRight, lead.CustomAxisRight, lead.CustomAddPowerRight,
-            lead.PupilDistanceMm, lead.PresetPupilDistanceBucket, lead.ChildrensFrame);
+        // What a Lead contributes is SaleAssembly.Seed's to decide, shared with the Admin Portal's
+        // conversion screen. Applied into the controls rather than over the request, which is what
+        // keeps the technician's edits — and the automatic conversion-match path, where the Lead is
+        // only found after the form is filled in — working; see Seed.
+        var seeded = SaleAssembly.Seed(lead);
+
+        _name = seeded.FullName;
+        _phone = seeded.PhoneNumber ?? string.Empty;
+        _age = seeded.AgeYears;
+        _gender = seeded.Gender;
+        _occupationRefId = seeded.OccupationRefId;
+        _occupationOtherText = seeded.OccupationOtherText;
+        _consentGiven = seeded.ConsentGiven;
+        _coatingRefIds = seeded.CoatingRefIds;
+        ApplyLensRange(seeded.LensRangeType, seeded.PresetCatalogueId, seeded.LensOptionLeftId, seeded.LensOptionRightId,
+            seeded.CustomSphereLeft, seeded.CustomCylinderLeft, seeded.CustomAxisLeft, seeded.CustomAddPowerLeft,
+            seeded.CustomSphereRight, seeded.CustomCylinderRight, seeded.CustomAxisRight, seeded.CustomAddPowerRight,
+            seeded.PupilDistanceMm, seeded.PresetPupilDistanceBucket, seeded.ChildrensFrame);
     }
 
     /// <summary>
@@ -681,217 +702,179 @@
     }
 
     // --- Validation ------------------------------------------------------------------------
-    //
-    // Mirrors the server's FluentValidation rules closely enough that a well-formed record never
-    // reaches the outbox. The server remains the authority — anything that slips through (a
-    // reference item retired between caching and submitting, say) comes back as a rejection and
-    // is rendered against the same field keys.
 
+    /// <summary>
+    /// The whole pre-submit check: build the request this form would send, and hand it to the
+    /// shared module — the same call the create endpoint makes (ADR-0002). The device and the
+    /// server are no longer two implementations kept in step by hand, they are one, so a message
+    /// shown here is character-for-character the one the server would have produced.
+    ///
+    /// It runs against the snapshot built from this device's own cached reference data, so it
+    /// answers identically with no connectivity — which is the point: a technician offline for
+    /// hours must not discover at sync time that a batch of records is bad.
+    /// </summary>
     private bool Validate()
     {
         _errors.Clear();
         _errors.Unattributed.Clear();
         _summaryMessage = null;
 
-        _errors.AddIf(_age is < 0 or > 120, "AgeYears", "Age must be between 0 and 120.");
-        ValidateOtherText(ReferenceDataCategory.Occupation, _occupationRefId, _occupationOtherText, "OccupationOtherText", "an occupation");
-        ValidateReferral();
+        var result = IsTest
+            ? ConsultationRules.Check(BuildTestRequest(), Snapshot)
+            : IsSale
+                ? ConsultationRules.Check(BuildSaleRequest(), Snapshot)
+                : ConsultationRules.Check(BuildLeadRequest(), Snapshot);
 
-        if (IsSale)
-        {
-            ValidateSale();
-        }
-        else if (!IsTest)
-        {
-            ValidateLead();
-        }
+        _errors.AddRuleFailures(result, KnownFields);
 
-        if (_errors.Any)
+        if (_errors.Any || _errors.Unattributed.Count > 0)
         {
             _summaryMessage = "Please fix the highlighted fields before saving.";
         }
 
-        return !_errors.Any;
+        return !_errors.Any && _errors.Unattributed.Count == 0;
     }
 
-    /// <summary>"Referred or treated" — unconditional on outcome/result, shared across all three
-    /// consultation types (mirrors CreateTestRequestValidator.ValidateReferralAsync server-side).</summary>
-    private void ValidateReferral()
+    // --- Request assembly ---------------------------------------------------------------------
+    //
+    // Built once here and used twice: Validate() checks the request that would actually be sent,
+    // and the save path below queues it. Keeping assembly in one place per type is what makes
+    // "validated" and "queued" the same object rather than two hand-matched projections of the
+    // same fields — the drift this ticket exists to remove would otherwise just move here.
+    //
+    // All three save paths go through the Build* method Validate() checked, so "would the server
+    // refuse this" and "what gets queued" are the same object rather than two hand-matched
+    // projections. The Sale's assembly lives in the shared SaleAssembly the Admin Portal also
+    // builds through; Test and Lead have only the one write path each, so theirs stay here.
+
+    /// <summary>A fresh idempotency key per save attempt, or the failed record's own when
+    /// correcting one — the server's upsert keys on it. Never Guid.Empty, which is why the
+    /// module's NotEmpty(Id) can't fire from this form.</summary>
+    private Guid NewRecordId() => FixOutboxId ?? Guid.NewGuid();
+
+    private CreateTestRequest BuildTestRequest()
     {
-        if (_testOutcome == TestOutcome.NeedsGlasses)
-        {
-            // A Test may carry no product preference at all; only validate the range if one is
-            // chosen — same reasoning as Lead.
-            ValidateLensRange(bucketRequired: false);
-        }
+        // A Test that needs no glasses records no product preference at all — every lens field
+        // must be empty, which the module checks explicitly (LensRangeType null branch).
+        var needsGlasses = _testOutcome == TestOutcome.NeedsGlasses;
 
-        if (!_referredOrTreated)
+        return new CreateTestRequest
         {
-            return;
-        }
-
-        if (_referralReasonRefId is null)
-        {
-            _errors.Add("ReferralReasonRefId", "Choose a reason for the referral/treatment.");
-        }
-        else
-        {
-            ValidateOtherText(ReferenceDataCategory.ReferralReason, _referralReasonRefId, _referralOtherText, "ReferralOtherText", "a referral reason");
-        }
-
-        if (!_treatedInFacility)
-        {
-            _errors.AddIf(string.IsNullOrWhiteSpace(_referralLocationFreeText), "ReferralLocationFreeText",
-                "Enter where the customer is being referred to.");
-        }
+            Id = NewRecordId(),
+            AgeYears = _age,
+            Gender = _gender,
+            OccupationRefId = _occupationRefId,
+            OccupationOtherText = _occupationOtherText,
+            Outcome = _testOutcome,
+            ReferredOrTreated = _referredOrTreated,
+            ReferralReasonRefId = _referredOrTreated ? _referralReasonRefId : null,
+            ReferralOtherText = _referredOrTreated ? _referralOtherText : null,
+            ReferralLocationFreeText = _referredOrTreated && !_treatedInFacility ? _referralLocationFreeText : null,
+            TreatedInFacility = _referredOrTreated && _treatedInFacility,
+            LensRangeType = needsGlasses ? _lensRange.LensRangeType : null,
+            PresetCatalogueId = needsGlasses ? _lensRange.PresetCatalogueId : null,
+            LensOptionLeftId = needsGlasses ? _lensRange.LensOptionLeftId : null,
+            LensOptionRightId = needsGlasses ? _lensRange.LensOptionRightId : null,
+            CustomSphereLeft = needsGlasses ? _lensRange.CustomSphereLeft : null,
+            CustomCylinderLeft = needsGlasses ? _lensRange.CustomCylinderLeft : null,
+            CustomAxisLeft = needsGlasses ? _lensRange.CustomAxisLeft : null,
+            CustomAddPowerLeft = needsGlasses ? _lensRange.CustomAddPowerLeft : null,
+            CustomSphereRight = needsGlasses ? _lensRange.CustomSphereRight : null,
+            CustomCylinderRight = needsGlasses ? _lensRange.CustomCylinderRight : null,
+            CustomAxisRight = needsGlasses ? _lensRange.CustomAxisRight : null,
+            CustomAddPowerRight = needsGlasses ? _lensRange.CustomAddPowerRight : null,
+            LensTypeRefId = needsGlasses ? _lensRange.LensTypeRefId : null,
+            LensTypeOtherText = needsGlasses ? _lensRange.LensTypeOtherText : null,
+            PupilDistanceMm = needsGlasses ? _lensRange.PupilDistanceMm : null,
+            PresetPupilDistanceBucket = needsGlasses ? _lensRange.PresetPupilDistanceBucket : null,
+            ChildrensFrame = needsGlasses && _lensRange.ChildrensFrame,
+            CoatingPreferenceRefId = needsGlasses ? _coatingPreferenceRefId : null,
+        };
     }
 
-    private void ValidateLead()
+    private CreateLeadRequest BuildLeadRequest() => new()
     {
-        _errors.AddIf(string.IsNullOrWhiteSpace(_name), "FullName", "Enter the customer's full name.");
-        _errors.AddIf(string.IsNullOrWhiteSpace(_phone), "PhoneNumber", "Enter a phone number — a lead can't be followed up without one.");
+        Id = NewRecordId(),
+        SourceTestId = SourceTestId,
+        FullName = _name,
+        PhoneNumber = _phone,
+        AgeYears = _age,
+        Gender = _gender,
+        OccupationRefId = _occupationRefId,
+        OccupationOtherText = _occupationOtherText,
+        ConsentGiven = _consentGiven,
+        ReferredOrTreated = _referredOrTreated,
+        ReferralReasonRefId = _referredOrTreated ? _referralReasonRefId : null,
+        ReferralOtherText = _referredOrTreated ? _referralOtherText : null,
+        ReferralLocationFreeText = _referredOrTreated && !_treatedInFacility ? _referralLocationFreeText : null,
+        TreatedInFacility = _referredOrTreated && _treatedInFacility,
+        ReasonNotPurchasedRefId = _reasonNotPurchasedRefId ?? Guid.Empty,
+        ReasonNotPurchasedOtherText = _reasonNotPurchasedOtherText,
+        LensRangeType = _lensRange.LensRangeType,
+        PresetCatalogueId = _lensRange.PresetCatalogueId,
+        LensOptionLeftId = _lensRange.LensOptionLeftId,
+        LensOptionRightId = _lensRange.LensOptionRightId,
+        CustomSphereLeft = _lensRange.CustomSphereLeft,
+        CustomCylinderLeft = _lensRange.CustomCylinderLeft,
+        CustomAxisLeft = _lensRange.CustomAxisLeft,
+        CustomAddPowerLeft = _lensRange.CustomAddPowerLeft,
+        CustomSphereRight = _lensRange.CustomSphereRight,
+        CustomCylinderRight = _lensRange.CustomCylinderRight,
+        CustomAxisRight = _lensRange.CustomAxisRight,
+        CustomAddPowerRight = _lensRange.CustomAddPowerRight,
+        LensTypeRefId = _lensRange.LensTypeRefId,
+        LensTypeOtherText = _lensRange.LensTypeOtherText,
+        PupilDistanceMm = _lensRange.PupilDistanceMm,
+        PresetPupilDistanceBucket = _lensRange.PresetPupilDistanceBucket,
+        ChildrensFrame = _lensRange.ChildrensFrame,
+        CoatingPreferenceRefId = _coatingPreferenceRefId,
+    };
 
-        if (_reasonNotPurchasedRefId is null)
-        {
-            _errors.Add("ReasonNotPurchasedRefId", "Choose why the customer didn't purchase.");
-        }
-        else
-        {
-            ValidateOtherText(ReferenceDataCategory.ReasonNotPurchased, _reasonNotPurchasedRefId, _reasonNotPurchasedOtherText,
-                "ReasonNotPurchasedOtherText", "a reason");
-        }
+    /// <summary>
+    /// This form's answers, handed to the shared builder — the same one the Admin Portal's
+    /// conversion screen assembles through, so a field added to CreateSaleRequest cannot reach one
+    /// write path and miss the other. The conditional blanking (referral, hard case) and the
+    /// absence encodings live in SaleAssembly.Build; what stays here is only what is genuinely this
+    /// form's own — which controls it is currently rendering.
+    ///
+    /// SourceLeadId is passed rather than re-seeded from the Lead: on the conversion-match path it
+    /// is only set at submit time, after these answers were typed, and re-applying the Lead then
+    /// would overwrite them (see SaleAssembly.Seed).
+    /// </summary>
+    private CreateSaleRequest BuildSaleRequest() => SaleAssembly.Build(NewRecordId(), SourceLeadId, BuildSaleAnswers());
 
-        // A Lead may carry no product preference at all; only validate the range if one is chosen.
-        ValidateLensRange(bucketRequired: false);
-    }
-
-    private void ValidateSale()
+    private SaleAnswers BuildSaleAnswers() => new SaleAnswers
     {
-        _errors.AddIf(string.IsNullOrWhiteSpace(_name), "FullName", "Enter the customer's full name.");
-
-        if (_lensRange.LensRangeType is null)
-        {
-            _errors.Add("LensRangeType", "Choose a lens range.");
-        }
-        else
-        {
-            ValidateLensRange(bucketRequired: true);
-        }
-
-        if (_lensRange.LensRangeType == LensRangeType.Custom && _coatingRefIds.Count == 0)
-        {
-            _errors.Add("CoatingRefIds", "Choose at least one coating.");
-        }
-
-        if (_frameColourRefId is null)
-        {
-            _errors.Add("FrameColourRefId", "Choose a frame colour.");
-        }
-        else
-        {
-            ValidateOtherText(ReferenceDataCategory.FrameColour, _frameColourRefId, _frameColourOtherText, "FrameColourOtherText", "a frame colour");
-        }
-
-        if (_hardCaseSold)
-        {
-            if (_hardCaseColourRefId is null)
-            {
-                _errors.Add("HardCaseColourRefId", "Choose a hard case colour.");
-            }
-            else
-            {
-                ValidateOtherText(ReferenceDataCategory.HardCaseColour, _hardCaseColourRefId, _hardCaseOtherColourText,
-                    "HardCaseOtherColourText", "a hard case colour");
-            }
-        }
-    }
-
-    private void ValidateLensRange(bool bucketRequired)
-    {
-        switch (_lensRange.LensRangeType)
-        {
-            case LensRangeType.SixLensSet or LensRangeType.NineLensSet:
-                if (_lensRange.PresetCatalogueId is null)
-                {
-                    _errors.Add("LensRangeType", "This preset isn't assigned to your retail point — choose another range.");
-                    return;
-                }
-
-                _errors.AddIf(_lensRange.LensOptionLeftId is null, "LensOptionLeftId", "Choose the left lens power.");
-                _errors.AddIf(_lensRange.LensOptionRightId is null, "LensOptionRightId", "Choose the right lens power.");
-
-                var maxBucket = _lensRange.ChildrensFrame ? 2 : 4;
-                if (bucketRequired && _lensRange.PresetPupilDistanceBucket is null)
-                {
-                    _errors.Add("PresetPupilDistanceBucket", "Choose a pupil distance.");
-                }
-                else if (_lensRange.PresetPupilDistanceBucket is { } bucket && (bucket < 0 || bucket > maxBucket))
-                {
-                    _errors.Add("PresetPupilDistanceBucket", $"Pupil distance must be between 0 and {maxBucket}.");
-                }
-
-                // Only a Sale must carry a coating; a Lead's is an optional preference. The
-                // picker is only rendered once a left lens is chosen and that lens has coatings
-                // configured, so "no coatings configured" is reported against the lens itself.
-                if (IsSale && _lensRange.LensOptionLeftId is not null && _coatingRefIds.Count == 0)
-                {
-                    var available = AvailableCoatingIdsForSelectedPreset;
-
-                    _errors.Add(available.Count == 0 ? "LensOptionLeftId" : "CoatingRefIds",
-                        available.Count == 0
-                            ? "This lens has no coatings configured yet, so it can't be sold on a preset range."
-                            : "Choose at least one coating.");
-                }
-
-                break;
-
-            case LensRangeType.Custom:
-                _errors.AddIf(_lensRange.CustomSphereLeft is null, "CustomSphereLeft", "Choose the left sphere.");
-                _errors.AddIf(_lensRange.CustomSphereRight is null, "CustomSphereRight", "Choose the right sphere.");
-                ValidateAxis(_lensRange.CustomAxisLeft, "CustomAxisLeft");
-                ValidateAxis(_lensRange.CustomAxisRight, "CustomAxisRight");
-
-                // Two distinct powers on an eye (a base sphere plus an add power) need a lens
-                // type — bifocal, progressive, or other.
-                if (_lensRange.CustomAddPowerLeft is not null || _lensRange.CustomAddPowerRight is not null)
-                {
-                    if (_lensRange.LensTypeRefId is null)
-                    {
-                        _errors.Add("LensTypeRefId", "Choose a lens type.");
-                    }
-                    else
-                    {
-                        ValidateOtherText(ReferenceDataCategory.LensType, _lensRange.LensTypeRefId, _lensRange.LensTypeOtherText, "LensTypeOtherText", "a lens type");
-                    }
-                }
-
-                // Optional on a Lead (often no time to measure during a busy event/day) — still
-                // required on a Sale, where the eventual order needs it.
-                _errors.AddIf(IsSale && _lensRange.PupilDistanceMm is null, "PupilDistanceMm", "Choose a pupil distance.");
-                break;
-        }
-    }
-
-    private void ValidateAxis(decimal? value, string field)
-    {
-        if (value is { } axis && (axis < 0 || axis > 180 || axis != Math.Truncate(axis)))
-        {
-            _errors.Add(field, "Axis must be a whole number of degrees between 0 and 180.");
-        }
-    }
-
-    /// <summary>The "Other" rows in each reference list reveal a free-text box that the server
-    /// requires — this enforces the same rule before the record is queued.</summary>
-    private void ValidateOtherText(ReferenceDataCategory category, Guid? selectedId, string? otherText, string field, string noun)
-    {
-        if (selectedId is not { } id)
-        {
-            return;
-        }
-
-        var isOther = ReferenceDataClient.GetByCategory(category).FirstOrDefault(i => i.Id == id)?.IsOtherOption == true;
-        _errors.AddIf(isOther && string.IsNullOrWhiteSpace(otherText), field, $"Please specify {noun}.");
-    }
+        FullName = _name,
+        PhoneNumber = _phone,
+        AgeYears = _age,
+        Gender = _gender,
+        OccupationRefId = _occupationRefId,
+        OccupationOtherText = _occupationOtherText,
+        ConsentGiven = _consentGiven,
+        ReferredOrTreated = _referredOrTreated,
+        ReferralReasonRefId = _referralReasonRefId,
+        ReferralOtherText = _referralOtherText,
+        ReferralLocationFreeText = _referralLocationFreeText,
+        TreatedInFacility = _treatedInFacility,
+        // Suppressed here, not in the builder: this form hides the checkbox outside a Custom range,
+        // so a value left over from an earlier Custom selection would otherwise become an error
+        // against a control the technician can no longer see or clear. The Admin Portal renders it
+        // unconditionally and needs the opposite — see SaleAnswers.OrderFromDotGlasses.
+        OrderFromDotGlasses = _lensRange.LensRangeType == LensRangeType.Custom && _orderFromDotGlasses,
+        FrameColourRefId = _frameColourRefId,
+        FrameColourOtherText = _frameColourOtherText,
+        FrameCoverage = _frameCoverage,
+        CoatingRefIds = _coatingRefIds,
+        HardCaseSold = _hardCaseSold,
+        HardCaseColourRefId = _hardCaseColourRefId,
+        HardCaseOtherColourText = _hardCaseOtherColourText,
+    }.WithLens(
+        _lensRange.LensRangeType, _lensRange.PresetCatalogueId, _lensRange.LensOptionLeftId, _lensRange.LensOptionRightId,
+        _lensRange.CustomSphereLeft, _lensRange.CustomCylinderLeft, _lensRange.CustomAxisLeft, _lensRange.CustomAddPowerLeft,
+        _lensRange.CustomSphereRight, _lensRange.CustomCylinderRight, _lensRange.CustomAxisRight, _lensRange.CustomAddPowerRight,
+        _lensRange.LensTypeRefId, _lensRange.LensTypeOtherText,
+        _lensRange.PupilDistanceMm, _lensRange.PresetPupilDistanceBucket, _lensRange.ChildrensFrame);
 
     // --- Saving ----------------------------------------------------------------------------
 
@@ -906,81 +889,14 @@
 
     private async Task<Guid?> SaveTestCoreAsync()
     {
-        var request = new CreateTestRequest
-        {
-            Id = FixOutboxId ?? Guid.NewGuid(),
-            AgeYears = _age,
-            Gender = _gender,
-            OccupationRefId = _occupationRefId,
-            OccupationOtherText = _occupationOtherText,
-            Outcome = _testOutcome,
-            ReferredOrTreated = _referredOrTreated,
-            ReferralReasonRefId = _referredOrTreated ? _referralReasonRefId : null,
-            ReferralOtherText = _referredOrTreated ? _referralOtherText : null,
-            ReferralLocationFreeText = _referredOrTreated && !_treatedInFacility ? _referralLocationFreeText : null,
-            TreatedInFacility = _referredOrTreated && _treatedInFacility,
-            LensRangeType = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.LensRangeType : null,
-            PresetCatalogueId = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.PresetCatalogueId : null,
-            LensOptionLeftId = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.LensOptionLeftId : null,
-            LensOptionRightId = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.LensOptionRightId : null,
-            CustomSphereLeft = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomSphereLeft : null,
-            CustomCylinderLeft = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomCylinderLeft : null,
-            CustomAxisLeft = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomAxisLeft : null,
-            CustomAddPowerLeft = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomAddPowerLeft : null,
-            CustomSphereRight = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomSphereRight : null,
-            CustomCylinderRight = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomCylinderRight : null,
-            CustomAxisRight = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomAxisRight : null,
-            CustomAddPowerRight = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomAddPowerRight : null,
-            LensTypeRefId = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.LensTypeRefId : null,
-            LensTypeOtherText = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.LensTypeOtherText : null,
-            PupilDistanceMm = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.PupilDistanceMm : null,
-            PresetPupilDistanceBucket = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.PresetPupilDistanceBucket : null,
-            ChildrensFrame = _testOutcome == TestOutcome.NeedsGlasses && _lensRange.ChildrensFrame,
-            CoatingPreferenceRefId = _testOutcome == TestOutcome.NeedsGlasses ? _coatingPreferenceRefId : null,
-        };
+        var request = BuildTestRequest();
 
         return await SubmitAsync(request.Id, "Test", "api/v1/tests", request) ? request.Id : null;
     }
 
     private async Task SaveLeadAsync()
     {
-        var request = new CreateLeadRequest
-        {
-            Id = FixOutboxId ?? Guid.NewGuid(),
-            SourceTestId = SourceTestId,
-            FullName = _name,
-            PhoneNumber = _phone,
-            AgeYears = _age,
-            Gender = _gender,
-            OccupationRefId = _occupationRefId,
-            OccupationOtherText = _occupationOtherText,
-            ConsentGiven = _consentGiven,
-            ReferredOrTreated = _referredOrTreated,
-            ReferralReasonRefId = _referredOrTreated ? _referralReasonRefId : null,
-            ReferralOtherText = _referredOrTreated ? _referralOtherText : null,
-            ReferralLocationFreeText = _referredOrTreated && !_treatedInFacility ? _referralLocationFreeText : null,
-            TreatedInFacility = _referredOrTreated && _treatedInFacility,
-            ReasonNotPurchasedRefId = _reasonNotPurchasedRefId ?? Guid.Empty,
-            ReasonNotPurchasedOtherText = _reasonNotPurchasedOtherText,
-            LensRangeType = _lensRange.LensRangeType,
-            PresetCatalogueId = _lensRange.PresetCatalogueId,
-            LensOptionLeftId = _lensRange.LensOptionLeftId,
-            LensOptionRightId = _lensRange.LensOptionRightId,
-            CustomSphereLeft = _lensRange.CustomSphereLeft,
-            CustomCylinderLeft = _lensRange.CustomCylinderLeft,
-            CustomAxisLeft = _lensRange.CustomAxisLeft,
-            CustomAddPowerLeft = _lensRange.CustomAddPowerLeft,
-            CustomSphereRight = _lensRange.CustomSphereRight,
-            CustomCylinderRight = _lensRange.CustomCylinderRight,
-            CustomAxisRight = _lensRange.CustomAxisRight,
-            CustomAddPowerRight = _lensRange.CustomAddPowerRight,
-            LensTypeRefId = _lensRange.LensTypeRefId,
-            LensTypeOtherText = _lensRange.LensTypeOtherText,
-            PupilDistanceMm = _lensRange.PupilDistanceMm,
-            PresetPupilDistanceBucket = _lensRange.PresetPupilDistanceBucket,
-            ChildrensFrame = _lensRange.ChildrensFrame,
-            CoatingPreferenceRefId = _coatingPreferenceRefId,
-        };
+        var request = BuildLeadRequest();
 
         if (await SubmitAsync(request.Id, "Lead", "api/v1/leads", request))
         {
@@ -990,48 +906,9 @@
 
     private async Task SaveSaleAsync()
     {
-        var request = new CreateSaleRequest
-        {
-            Id = FixOutboxId ?? Guid.NewGuid(),
-            SourceLeadId = SourceLeadId,
-            FullName = _name,
-            PhoneNumber = string.IsNullOrWhiteSpace(_phone) ? null : _phone,
-            AgeYears = _age,
-            Gender = _gender,
-            OccupationRefId = _occupationRefId,
-            OccupationOtherText = _occupationOtherText,
-            ConsentGiven = _consentGiven,
-            ReferredOrTreated = _referredOrTreated,
-            ReferralReasonRefId = _referredOrTreated ? _referralReasonRefId : null,
-            ReferralOtherText = _referredOrTreated ? _referralOtherText : null,
-            ReferralLocationFreeText = _referredOrTreated && !_treatedInFacility ? _referralLocationFreeText : null,
-            TreatedInFacility = _referredOrTreated && _treatedInFacility,
-            LensRangeType = _lensRange.LensRangeType ?? LensRangeType.Custom,
-            PresetCatalogueId = _lensRange.PresetCatalogueId,
-            LensOptionLeftId = _lensRange.LensOptionLeftId,
-            LensOptionRightId = _lensRange.LensOptionRightId,
-            CustomSphereLeft = _lensRange.CustomSphereLeft,
-            CustomCylinderLeft = _lensRange.CustomCylinderLeft,
-            CustomAxisLeft = _lensRange.CustomAxisLeft,
-            CustomAddPowerLeft = _lensRange.CustomAddPowerLeft,
-            CustomSphereRight = _lensRange.CustomSphereRight,
-            CustomCylinderRight = _lensRange.CustomCylinderRight,
-            CustomAxisRight = _lensRange.CustomAxisRight,
-            CustomAddPowerRight = _lensRange.CustomAddPowerRight,
-            LensTypeRefId = _lensRange.LensTypeRefId,
-            LensTypeOtherText = _lensRange.LensTypeOtherText,
-            OrderFromDotGlasses = _lensRange.LensRangeType == LensRangeType.Custom && _orderFromDotGlasses,
-            PupilDistanceMm = _lensRange.PupilDistanceMm,
-            PresetPupilDistanceBucket = _lensRange.PresetPupilDistanceBucket,
-            ChildrensFrame = _lensRange.ChildrensFrame,
-            FrameColourRefId = _frameColourRefId ?? Guid.Empty,
-            FrameColourOtherText = _frameColourOtherText,
-            FrameCoverage = _frameCoverage,
-            CoatingRefIds = _coatingRefIds,
-            HardCaseSold = _hardCaseSold,
-            HardCaseColourRefId = _hardCaseSold ? _hardCaseColourRefId : null,
-            HardCaseOtherColourText = _hardCaseSold ? _hardCaseOtherColourText : null,
-        };
+        // The same assembly Validate() checked, not a second hand-matched copy of it — what the
+        // pre-submit check passed is exactly what gets queued.
+        var request = BuildSaleRequest();
 
         if (await SubmitAsync(request.Id, "Sale", "api/v1/sales", request))
         {

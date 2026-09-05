@@ -12,10 +12,10 @@ from the conversion form, so it is uniformly not asked on either write path.
 **Status:** ready-for-agent
 **Category:** bug
 
-- [ ] Advancing an already-fulfilled custom order shows an inline message, not a server error page
-- [ ] Advancing a custom order that is not visible to the caller fails gracefully, without surfacing a raw persistence error
-- [ ] The Lead→Sale conversion form captures "referred or treated", a referral reason, referral "Other" text, treated-in-facility, and a referral location
-- [ ] The referral fields on that form follow the same conditional rules as every other capture path
-- [ ] A Sale created by conversion persists the referral answers given
-- [ ] The frame-coverage control is removed from the conversion form; the value on the record is unchanged
-- [ ] The unused unscoped widget-example query is removed from the reporting interface and its implementation
+- [x] Advancing an already-fulfilled custom order shows an inline message, not a server error page
+- [x] Advancing a custom order that is not visible to the caller fails gracefully, without surfacing a raw persistence error
+- [x] The Lead→Sale conversion form captures "referred or treated", a referral reason, referral "Other" text, treated-in-facility, and a referral location
+- [x] The referral fields on that form follow the same conditional rules as every other capture path
+- [x] A Sale created by conversion persists the referral answers given
+- [x] The frame-coverage control is removed from the conversion form; the value on the record is unchanged
+- [x] The unused unscoped widget-example query is removed from the reporting interface and its implementation
