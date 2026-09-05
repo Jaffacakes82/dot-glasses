@@ -18,20 +18,16 @@ namespace DotGlasses.Rules;
 /// migration batches change. Test through <see cref="Check(CreateSaleRequest, ReferenceDataSnapshot)"/>
 /// and its siblings — see the spec's Testing Decisions.
 ///
-/// <b>Partially migrated.</b> Ticket 09 moved occupation, "referred or treated", frame colour,
-/// hard case and reason-not-purchased here; ticket 10 has now moved the lens range — both
-/// branches, the axis and power constraints, the lens-type requirement and pupil distance. Only
-/// the Coating set/preference (ticket 11) is still enforced solely by DotGlasses.Web.Validation's
-/// three FluentValidation validators, which call this for the topics above and keep the rest.
-/// Until ticket 12 those validators remain the complete server-side check — <b>a caller that runs
-/// this alone is not yet running every consultation rule</b>.
+/// <b>Migration complete.</b> Ticket 09 moved occupation, "referred or treated", frame colour,
+/// hard case and reason-not-purchased here; ticket 10 moved the lens range — both branches, the
+/// axis and power constraints, the lens-type requirement and pupil distance; ticket 11 has now
+/// moved the last topic, the Sale's <b>Coating set</b> and the Test/Lead's <b>Coating
+/// preference</b>. Every consultation rule that can be answered from the reference-data snapshot
+/// now lives here, so the two rules named below really are the whole remainder.
 ///
-/// The Coating rules are the deliberate remainder rather than an oversight: coating availability
-/// is scoped by the chosen lens option, so ticket 11 has to land on top of the lens branch this
-/// batch established. Each validator therefore still re-derives "which branch am I in, and did it
-/// get all three preset ids" purely to decide whether the coating check is narrowed to the left
-/// lens option or not — see their ValidateCoatingAvailabilityForPresetLensAsync/
-/// ValidateCoatingSetAsync.
+/// DotGlasses.Web.Validation's three FluentValidation validators still wrap this until ticket 12
+/// retires them, keeping their scalar RuleFor chains (length, enum and range checks the snapshot
+/// has no opinion on) and the two repository-backed checks below.
 ///
 /// <b>Two consultation rules can never live here</b>, and the synchronous snapshot-only signature
 /// is what keeps that honest: CreateLeadRequestValidator.ValidateSourceTestAsync and
@@ -52,7 +48,11 @@ public static class ConsultationRules
                     request.CustomSphereRight, request.CustomCylinderRight, request.CustomAxisRight, request.CustomAddPowerRight,
                     request.LensTypeRefId, request.LensTypeOtherText,
                     request.PupilDistanceMm, request.PresetPupilDistanceBucket, request.ChildrensFrame,
-                    pupilDistanceRequired: false, presetBucketMessageNamesTheBranch: false, snapshot)));
+                    pupilDistanceRequired: false, presetBucketMessageNamesTheBranch: false, snapshot))
+                .Concat(CoatingPreference(
+                    request.CoatingPreferenceRefId,
+                    request.LensRangeType, request.PresetCatalogueId, request.LensOptionLeftId, request.LensOptionRightId,
+                    availabilityBeforeActiveItem: true, snapshot)));
 
     public static RuleResult Check(CreateLeadRequest request, ReferenceDataSnapshot snapshot) =>
         RuleResult.From(
@@ -65,7 +65,11 @@ public static class ConsultationRules
                     request.CustomSphereRight, request.CustomCylinderRight, request.CustomAxisRight, request.CustomAddPowerRight,
                     request.LensTypeRefId, request.LensTypeOtherText,
                     request.PupilDistanceMm, request.PresetPupilDistanceBucket, request.ChildrensFrame,
-                    pupilDistanceRequired: false, presetBucketMessageNamesTheBranch: true, snapshot)));
+                    pupilDistanceRequired: false, presetBucketMessageNamesTheBranch: true, snapshot))
+                .Concat(CoatingPreference(
+                    request.CoatingPreferenceRefId,
+                    request.LensRangeType, request.PresetCatalogueId, request.LensOptionLeftId, request.LensOptionRightId,
+                    availabilityBeforeActiveItem: false, snapshot)));
 
     public static RuleResult Check(CreateSaleRequest request, ReferenceDataSnapshot snapshot) =>
         RuleResult.From(
@@ -81,7 +85,11 @@ public static class ConsultationRules
                     request.CustomSphereRight, request.CustomCylinderRight, request.CustomAxisRight, request.CustomAddPowerRight,
                     request.LensTypeRefId, request.LensTypeOtherText,
                     request.PupilDistanceMm, request.PresetPupilDistanceBucket, request.ChildrensFrame,
-                    pupilDistanceRequired: true, presetBucketMessageNamesTheBranch: true, snapshot)));
+                    pupilDistanceRequired: true, presetBucketMessageNamesTheBranch: true, snapshot))
+                .Concat(CoatingSet(
+                    request.CoatingRefIds,
+                    request.LensRangeType, request.PresetCatalogueId, request.LensOptionLeftId, request.LensOptionRightId,
+                    snapshot)));
 
     /// <summary>Optional on all three: no occupation recorded is a valid consultation.</summary>
     private static IEnumerable<RuleFailure> Occupation(Guid? occupationRefId, string? occupationOtherText, ReferenceDataSnapshot snapshot) =>
@@ -257,9 +265,9 @@ public static class ConsultationRules
     ///
     /// The missing-ids check reports once and stops: without all three ids there is nothing to
     /// check the options against, so continuing would report "must belong to PresetCatalogueId"
-    /// about an id the technician never supplied. That short-circuit is also why the Coating
-    /// availability check left behind in each validator re-tests the same three ids — it needs the
-    /// left lens option, and it must stay silent in exactly the cases this stops in.
+    /// about an id the technician never supplied. That short-circuit is also why
+    /// <see cref="CoatingSet"/> and <see cref="CoatingPreference"/> re-test the same three ids —
+    /// they need the left lens option, and must stay silent in exactly the cases this stops in.
     /// </summary>
     private static IEnumerable<RuleFailure> PresetBranch(
         Guid? presetCatalogueId, Guid? lensOptionLeftId, Guid? lensOptionRightId, bool customFieldsSet,
@@ -438,6 +446,165 @@ public static class ConsultationRules
     }
 
     /// <summary>
+    /// The Coatings on a <b>Sale</b>'s lens — a set, per <c>CONTEXT.md</c> and ADR-0001, because
+    /// one lens can carry more than one at once. Which Coatings are allowed depends on the lens
+    /// branch: a preset range narrows them to those configured as available for the left lens
+    /// option's strength, while a Custom prescription accepts any active Coating. Pairing and
+    /// exclusion rules apply universally to both.
+    ///
+    /// The preset arm re-tests all three preset ids because <see cref="PresetBranch"/>
+    /// short-circuits without them, and this rule has to stay silent in exactly the same cases:
+    /// there is no left lens option to scope by, and telling a technician who has not yet picked a
+    /// lens to choose a coating would be noise on top of the real failure. A LensRangeType outside
+    /// the enum reaches neither arm and so says nothing here — the validators' RuleFor.IsInEnum is
+    /// what reports that.
+    ///
+    /// <b>A lens whose strength has no Coatings configured at all is reported against the lens</b>,
+    /// not the set (ticket 11). <see cref="ReferenceDataSnapshot.IsCoatingAvailableForLensOption"/>
+    /// returns false rather than throwing in that case, so it used to surface as "every coating
+    /// must be configured as available for the chosen lens option" against CoatingRefIds — advice
+    /// no choice of coating can satisfy, because none is available. It is a common state rather
+    /// than an edge case (12 of the 16 seeded LensStrength items ship with none; see
+    /// <c>docs/open-issues.md</c>), and the Field App's own pre-submit check already keys it to
+    /// LensOptionLeftId with this same sentence. The server now agrees with it.
+    /// </summary>
+    private static IEnumerable<RuleFailure> CoatingSet(
+        IReadOnlyList<Guid> coatingRefIds,
+        LensRangeType? lensRangeType,
+        Guid? presetCatalogueId, Guid? lensOptionLeftId, Guid? lensOptionRightId,
+        ReferenceDataSnapshot snapshot)
+    {
+        switch (lensRangeType)
+        {
+            case LensRangeType.SixLensSet or LensRangeType.NineLensSet:
+                if (presetCatalogueId is null || lensOptionRightId is null || lensOptionLeftId is not { } leftId)
+                {
+                    return [];
+                }
+
+                // Asked ahead of the set itself: when the lens offers nothing, the one thing worth
+                // saying is about the lens, and "choose at least one coating" would send the
+                // technician to a picker with no options in it. A left lens id that resolves to
+                // nothing at all is a different failure and PresetBranch has already reported it,
+                // so this stays out of its way and lets the per-coating check below speak.
+                if (snapshot.FindLensOption(leftId) is { AvailableCoatingIds.Count: 0 })
+                {
+                    return [new RuleFailure(LensOptionLeftIdKey, "This lens has no coatings configured yet, so it can't be sold on a preset range.")];
+                }
+
+                return Coatings(coatingRefIds, restrictToLensOptionId: leftId, snapshot);
+
+            case LensRangeType.Custom:
+                return Coatings(coatingRefIds, restrictToLensOptionId: null, snapshot);
+
+            default:
+                return [];
+        }
+    }
+
+    /// <summary>
+    /// The set itself, once the branch has settled what "available" means.
+    /// <paramref name="restrictToLensOptionId"/> narrows to the Coatings configured for that lens
+    /// option's strength (preset); null accepts any active Coating (Custom).
+    ///
+    /// One failure at a time, deliberately: each check returns rather than accumulating, so a set
+    /// that is both duplicated and mutually excluding reports the duplicate first and the
+    /// exclusion only once that is fixed. Every message here reports against CoatingRefIds, so
+    /// accumulating them would stack several sentences on one control.
+    /// </summary>
+    private static IEnumerable<RuleFailure> Coatings(
+        IReadOnlyList<Guid> coatingRefIds, Guid? restrictToLensOptionId, ReferenceDataSnapshot snapshot)
+    {
+        if (coatingRefIds.Count == 0)
+        {
+            return [new RuleFailure(CoatingRefIdsKey, "Choose at least one coating.")];
+        }
+
+        if (coatingRefIds.Distinct().Count() != coatingRefIds.Count)
+        {
+            return [new RuleFailure(CoatingRefIdsKey, "CoatingRefIds must not contain duplicates.")];
+        }
+
+        foreach (var coatingRefId in coatingRefIds)
+        {
+            if (!snapshot.IsActiveItem(coatingRefId, ReferenceDataCategory.Coating))
+            {
+                return [new RuleFailure(CoatingRefIdsKey, "CoatingRefIds must only reference existing, active Coating reference-data items.")];
+            }
+
+            if (restrictToLensOptionId is { } lensOptionId && !snapshot.IsCoatingAvailableForLensOption(lensOptionId, coatingRefId))
+            {
+                return [new RuleFailure(CoatingRefIdsKey, "Every coating must be configured as available for the chosen lens option (see Reference Data > Lens Strength).")];
+            }
+        }
+
+        // Every unordered pair, because exclusion is symmetric per CONTEXT.md — AreCoatingsExcluded
+        // canonicalizes the pair, so checking (i, j) also answers (j, i) and the inner loop can
+        // start past i rather than re-asking the same question backwards.
+        for (var i = 0; i < coatingRefIds.Count; i++)
+        {
+            for (var j = i + 1; j < coatingRefIds.Count; j++)
+            {
+                if (snapshot.AreCoatingsExcluded(coatingRefIds[i], coatingRefIds[j]))
+                {
+                    return [new RuleFailure(CoatingRefIdsKey, "This coating combination isn't allowed — two of the selected coatings exclude each other.")];
+                }
+            }
+        }
+
+        return [];
+    }
+
+    /// <summary>
+    /// The single Coating a customer expressed interest in on a <b>Test</b> or <b>Lead</b> — a
+    /// <b>Coating preference</b>, not a Coating set, and the distinction is the whole rule here.
+    /// Per ADR-0001's scope correction a Test or Lead never carries a set: this is one optional
+    /// value, recorded before any lens exists, which seeds the Sale's set on conversion. Nothing
+    /// below asks about duplicates, pairing or exclusion, because a single value can't violate any
+    /// of them.
+    ///
+    /// Optional for every LensRangeType, the unset one included — a preference can be recorded
+    /// before a lens has been chosen. Availability is still scoped by the left lens option where a
+    /// preset range names one, with the same three-id short-circuit
+    /// <see cref="CoatingSet"/> uses, and stays keyed to CoatingPreferenceRefId: the
+    /// no-coatings-configured case is reported against the lens on a Sale's set only, where
+    /// choosing a coating is mandatory and so genuinely unsatisfiable.
+    ///
+    /// <paramref name="availabilityBeforeActiveItem"/> is <em>not</em> a rule — it is pre-existing
+    /// ordering drift, preserved deliberately in the same spirit as
+    /// <see cref="LensRange"/>'s presetBucketMessageNamesTheBranch. Both failures report against
+    /// CoatingPreferenceRefId and a request can trip both at once, so which comes first is
+    /// observable; a Test has always reported availability first and a Lead the active-item check
+    /// first. Harmonise it as its own decision if it is ever worth making.
+    /// </summary>
+    private static IEnumerable<RuleFailure> CoatingPreference(
+        Guid? coatingPreferenceRefId,
+        LensRangeType? lensRangeType,
+        Guid? presetCatalogueId, Guid? lensOptionLeftId, Guid? lensOptionRightId,
+        bool availabilityBeforeActiveItem, ReferenceDataSnapshot snapshot)
+    {
+        if (coatingPreferenceRefId is not { } coatingRefId)
+        {
+            return [];
+        }
+
+        var unavailableForTheChosenLens = lensRangeType is LensRangeType.SixLensSet or LensRangeType.NineLensSet
+            && presetCatalogueId is not null && lensOptionRightId is not null
+            && lensOptionLeftId is { } leftId
+            && !snapshot.IsCoatingAvailableForLensOption(leftId, coatingRefId);
+
+        IEnumerable<RuleFailure> availability = unavailableForTheChosenLens
+            ? [new RuleFailure(CoatingPreferenceRefIdKey, "CoatingPreferenceRefId is not configured as available for the chosen lens option (see Reference Data > Lens Strength).")]
+            : [];
+
+        IEnumerable<RuleFailure> activeItem = snapshot.IsActiveItem(coatingRefId, ReferenceDataCategory.Coating)
+            ? []
+            : [new RuleFailure(CoatingPreferenceRefIdKey, "CoatingPreferenceRefId must reference an existing, active Coating reference-data item.")];
+
+        return availabilityBeforeActiveItem ? availability.Concat(activeItem) : activeItem.Concat(availability);
+    }
+
+    /// <summary>
     /// One dropdown answer, checked the one way every dropdown answer is checked: the id must
     /// resolve to an item that exists, is active, and sits in the expected category — a Guid that
     /// resolves to a Frame colour is not an answer to "which Occupation is this" — and an item
@@ -493,4 +660,11 @@ public static class ConsultationRules
     private const string LensTypeOtherTextKey = nameof(CreateTestRequest.LensTypeOtherText);
     private const string PupilDistanceMmKey = nameof(CreateTestRequest.PupilDistanceMm);
     private const string PresetPupilDistanceBucketKey = nameof(CreateTestRequest.PresetPupilDistanceBucket);
+
+    // The Coating keys are the one place the two shapes part company, so they read off the request
+    // that actually carries each: CoatingPreferenceRefId is spelled the same on a Test and a Lead
+    // and read off CreateTestRequest with the rest, while CoatingRefIds exists only on a Sale — a
+    // Test or Lead has no set to name (ADR-0001's scope correction).
+    private const string CoatingPreferenceRefIdKey = nameof(CreateTestRequest.CoatingPreferenceRefId);
+    private const string CoatingRefIdsKey = nameof(CreateSaleRequest.CoatingRefIds);
 }
