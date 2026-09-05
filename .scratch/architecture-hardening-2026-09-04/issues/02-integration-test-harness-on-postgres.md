@@ -10,9 +10,9 @@ tickets testable.
 **Status:** ready-for-agent
 **Category:** chore
 
-- [ ] Infrastructure and Web integration tests execute against a containerised Postgres
-- [ ] The existing hierarchy query-filter and audit-interceptor tests pass unchanged against it
-- [ ] The existing widget API tests pass unchanged against it
-- [ ] A test can open a transaction and assert rollback behaviour
-- [ ] Pure Application-layer tests remain free of any database or container dependency
-- [ ] The suite runs in CI without additional manual setup
+- [x] Infrastructure and Web integration tests execute against a containerised Postgres
+- [x] The existing hierarchy query-filter and audit-interceptor tests pass unchanged against it
+- [x] The existing widget API tests pass unchanged against it
+- [x] A test can open a transaction and assert rollback behaviour
+- [x] Pure Application-layer tests remain free of any database or container dependency
+- [x] The suite runs in CI without additional manual setup

@@ -10,9 +10,9 @@ glossary definition whenever a retail point sits directly under a Country.
 **Status:** ready-for-agent
 **Category:** bug
 
-- [ ] Custom Orders groups by the glossary's Retailer definition
-- [ ] A retail point whose nearest ancestor is a Country is reported as having no Retailer, on every screen that shows one
-- [ ] Dashboard and Custom Orders report the same Retailer for the same retail point
-- [ ] The two duplicated private org-lookup implementations are gone
-- [ ] Outlet and country names still resolve correctly for a caller scoped below the level being resolved
-- [ ] Existing reporting output is otherwise unchanged
+- [x] Custom Orders groups by the glossary's Retailer definition
+- [x] A retail point whose nearest ancestor is a Country is reported as having no Retailer, on every screen that shows one
+- [x] Dashboard and Custom Orders report the same Retailer for the same retail point
+- [x] The two duplicated private org-lookup implementations are gone
+- [x] Outlet and country names still resolve correctly for a caller scoped below the level being resolved
+- [x] Existing reporting output is otherwise unchanged

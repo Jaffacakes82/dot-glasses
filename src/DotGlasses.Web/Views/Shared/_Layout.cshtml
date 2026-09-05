@@ -99,6 +99,7 @@
                 </div>
             </aside>
             <main class="dg-content" role="main">
+                <partial name="_DomainRuleViolation" />
                 @RenderBody()
             </main>
         </div>
@@ -106,6 +107,7 @@
     else
     {
         <main role="main">
+            <partial name="_DomainRuleViolation" />
             @RenderBody()
         </main>
     }

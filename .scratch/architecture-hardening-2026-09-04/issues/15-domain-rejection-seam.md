@@ -11,11 +11,11 @@ and rejected.
 **Status:** ready-for-agent
 **Category:** refactor
 
-- [ ] A dedicated exception type represents a business-rule rejection
-- [ ] A single filter turns one into a validation response, for both the API and the server-rendered screens
-- [ ] Every service that rejects for a business reason throws that type instead of the general-purpose one
-- [ ] A missing or out-of-scope row is distinguishable from a business-rule rejection at every catch site
-- [ ] The per-controller catch blocks that existed only to do this by hand are removed
-- [ ] No screen action can produce a server error page for a condition its service has a message for
-- [ ] Messages remain user-facing copy, unchanged in wording
-- [ ] Covered by tests at the API for at least one rejection per service
+- [x] A dedicated exception type represents a business-rule rejection
+- [x] A single filter turns one into a validation response, for both the API and the server-rendered screens
+- [x] Every service that rejects for a business reason throws that type instead of the general-purpose one
+- [x] A missing or out-of-scope row is distinguishable from a business-rule rejection at every catch site
+- [x] The per-controller catch blocks that existed only to do this by hand are removed
+- [x] No screen action can produce a server error page for a condition its service has a message for
+- [x] Messages remain user-facing copy, unchanged in wording
+- [x] Covered by tests at the API for at least one rejection per service

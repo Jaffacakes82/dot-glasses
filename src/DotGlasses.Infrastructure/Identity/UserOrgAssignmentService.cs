@@ -1,5 +1,6 @@
 using DotGlasses.Application.Reporting;
 using DotGlasses.Application.Users;
+using DotGlasses.Domain.Common;
 using DotGlasses.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -39,7 +40,7 @@ public class UserOrgAssignmentService(
             .AnyAsync(a => a.UserId == userId && a.OrgNodeId == targetOrgNodeId, cancellationToken);
         if (!isAssigned)
         {
-            throw new InvalidOperationException("The target org is not one of this user's assigned locations.");
+            throw new DomainRuleViolationException("The target org is not one of this user's assigned locations.");
         }
 
         // Unscoped for the same reason as ListAssignedOrgsAsync — the target org may sit outside

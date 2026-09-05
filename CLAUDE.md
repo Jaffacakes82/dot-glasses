@@ -8,21 +8,79 @@ are the record of *how* things got built; don't restate that here.
 
 ## Architecture rules
 
-- Clean Architecture, dependency direction: `Web`/`App` → `Application`/`Contracts`;
-  `Application` → `Domain`; `Infrastructure` → `Domain`/`Application` (implements its
-  interfaces). Nothing references `Infrastructure` except `Web`'s `Program.cs` (composition
-  root) and `AppHost` (orchestration).
-- **`DotGlasses.App` may only ever reference `DotGlasses.Contracts`.** If a change seems to
-  need `App` to reference anything else, that's a signal the type belongs in `Contracts`
-  instead — flag it, don't add the reference.
+- Clean Architecture, dependency direction: `Web`/`App` → `Application`/`Contracts`/`Rules`;
+  `Application` → `Domain`/`Rules`; `Rules` → `Contracts`; `Infrastructure` →
+  `Domain`/`Application` (implements its interfaces). Nothing references `Infrastructure` except
+  `Web`'s `Program.cs` (composition root) and `AppHost` (orchestration). `Rules` sits below
+  `Application` rather than beside it because the snapshot `Application` hands to the rules is
+  defined there — see the two `Rules` bullets below for what that buys and what it costs.
+- **`DotGlasses.App` may reference `DotGlasses.Contracts` and `DotGlasses.Rules`, and nothing
+  else.** If a change seems to need `App` to reference anything further, that's a signal the type
+  belongs in `Contracts` (a wire shape) or `Rules` (a rule the device and the server must agree
+  on) instead — flag it, don't add the reference.
+- **`DotGlasses.Rules` may only ever reference `DotGlasses.Contracts`** — no `Domain`, no
+  `Application`, no `Infrastructure`, no EF Core, no ASP.NET. `App` is a Blazor WASM app, so
+  anything `Rules` drags in ships to the device; the reference rule above is only worth what this
+  one enforces. It holds the consultation rules (pure functions over a request DTO plus a
+  reference-data snapshot) and `ReferenceDataSnapshot`, and it is deliberately free of I/O: two
+  adapters outside it do the loading — `ReferenceDataSnapshotProvider` (Infrastructure, from the
+  database, retired items included) and `ReferenceDataSnapshotAdapter` (App, from the
+  IndexedDB-cached API response, active items only). Rules ask "present **and** active", which is
+  correct under both fillings. Rule failure keys are request-DTO property names and that is
+  load-bearing — `FormErrors`, `ValidationProblemDetails` and `LeadConversionController`'s
+  `Form.{PropertyName}` remap all key off it. See ADR-0002.
+- **There is no consultation request validator.** `ConsultationRules.Check` holds *every* rule for
+  a `Test`/`Lead`/`Sale` create — including the scalar ones (`NotEmpty`, length caps, `IsInEnum`,
+  the age range), whose messages are FluentValidation's generated copy reproduced verbatim because
+  clients already receive them. The three create endpoints call the module directly: load the
+  snapshot once, `Check`, `ToModelStateDictionary()`, `ValidationProblem`. Don't reintroduce a
+  validator for these three DTOs, and don't reword a scalar message without treating it as the
+  client-visible change it is.
+  **Two exceptions can never live in `Rules`** and sit on the controllers instead: a Lead's
+  `SourceTestId` and a Sale's `SourceLeadId` resolve a specific hierarchy-scoped row, which is I/O.
+  They must stay on the controller producing a *field-keyed* failure — `LeadService`/`SaleService`
+  guard the same thing but throw `DomainRuleViolationException`, which the filter keys on `""`, a
+  different response shape the Field App can't render against a control. `ConversionSourceScopingApiTests`
+  pins that; the service guard is defence in depth, not a replacement.
+- **A Sale creation request is assembled by `SaleAssembly` (`Rules/Sales`), never by hand.** Both
+  write paths — the Field App's `ConsultationForm.razor` and the Admin Portal's
+  `LeadConversionController` — go through it, because assembling it twice is how the referral
+  answers reached one path and not the other. It splits in two, and the split is load-bearing:
+  `Seed(LeadDto)` is the **carry-over rule** (what a converted Lead contributes — identity, the
+  lens block when `CarriesLens`, and the Sale's **Coating set** seeded from the Lead's single
+  **Coating preference**; *not* frame/hard case, which are point-of-sale decisions, and *not* the
+  referral answers, which every capture path asks fresh), and `Build(id, sourceLeadId, answers)`
+  assembles the request. `Seed` is a **seed, not an override**: the Admin Portal seeds at build
+  time, the Field App seeds at *load* time into its controls. Applying a Lead over already-gathered
+  answers would discard the technician's edits and, on the Field App's conversion-match path (where
+  the Lead is found only *after* the form is filled in), overwrite everything just typed.
+  Attribution stays out of it — `TechnicianUserId`/`HierarchyPath` are not on the DTO and must not
+  be added; `LeadConversionController` passes the *Lead's* own values to `ISaleService.CreateAsync`
+  as separate arguments. `SaleAssemblyTests` walks `CreateSaleRequest` by reflection and fails
+  unless every property is either carried from `SaleAnswers` or listed in `DeliberatelyNotCarried`
+  with a reason — so **adding a field to `CreateSaleRequest` means adding it to `SaleAnswers` and
+  `Build` too**. One thing deliberately stays with each form rather than moving into the builder:
+  the "Custom range only" gate on `OrderFromDotGlasses`. The Field App hides that checkbox outside
+  a Custom range and so must suppress a stale value (or it becomes an error against a control the
+  technician can't see), while the Admin Portal renders it unconditionally and wants
+  `ConsultationRules` to say so. Don't "unify" it.
+- **`ReferenceDataSnapshot` is the single `Guid`→label resolver server-side**, fallback `"—"`.
+  Don't add a local `ToDictionary(x => x.Id, x => x.Label)` beside it — that's the pattern it
+  replaced (seven implementations, four different fallback strings). It is registered scoped and
+  memoized per request; it is deliberately **not** cached across requests (Container Apps scales
+  to multiple replicas, so an in-memory cache would go stale per-replica on an admin edit — see
+  ADR-0002). A service that writes reference data and then re-reads it in the *same* request must
+  not use the memoized snapshot; today every Admin Portal write redirects instead.
 - **`Contracts` must not reference `Domain` or `Application`** — it's a pure wire-shape layer, not
   because of a project reference someone forgot to add but because `App` referencing `Contracts`
   must not transitively pull in `Domain`/`Application`. DTOs that need an enum define their own
   copy in `Contracts` (e.g. `Contracts.Common.Gender` next to `Domain.Enums.Gender`) rather than
-  referencing the Domain one; map between them in the Application layer. Validators that need a
-  DB-backed check (e.g. "does this Guid reference an active reference-data item") can't be
-  co-located with their DTO in `Contracts` for the same reason — they live in
-  `DotGlasses.Web.Validation.*` instead, referencing `Application` interfaces directly.
+  referencing the Domain one; map between them in the Application layer. A check that needs
+  reference data (e.g. "does this Guid reference an active reference-data item") can't be
+  co-located with its DTO in `Contracts` for the same reason. For a *consultation* request that
+  check now lives in `DotGlasses.Rules`, answered from the snapshot rather than the database — see
+  the `Rules` bullet above. The Admin Portal's own validators live in `DotGlasses.Web.Validation.*`
+  and reference `Application` interfaces directly.
 - No MediatR. Plain application services with interfaces in `Application`, implementations
   alongside — no repository interface for entities only ever queried directly off `DbContext`
   (e.g. `EventHistoryQueryService`, `DashboardQueryService`, `CustomOrderService`,
@@ -30,11 +88,49 @@ are the record of *how* things got built; don't restate that here.
   repository interface exists only where a service genuinely needs `Add`/`Update`/`GetById`
   (`IVisionTestRepository`/`ILeadRepository`/`ISaleRepository`, `ICustomerRepository`).
 - Controller-based Web API (not Minimal APIs), versioned from `v1`, Swagger-visible (dev only).
-- Deliberately **not** using `AddFluentValidationAutoValidation()` — it runs FluentValidation
-  synchronously inside ASP.NET's model-binding pipeline, which can't invoke the async rules
-  several validators need for DB-backed checks (throws
-  `AsyncValidatorInvokedSynchronouslyException`). Every controller calls
-  `IValidator<T>.ValidateAsync` explicitly instead.
+- **A business-rule rejection throws `DomainRuleViolationException`** (`Domain/Common`, the only
+  layer `Application`, `Infrastructure` and `Web` can all see — see ADR-0003). Its message is
+  user-facing copy, shown verbatim; never a code. Never catch one in a controller:
+  `DomainRuleViolationFilter`, registered globally in `Program.cs`, is the single place it becomes
+  a response — a 400 `ValidationProblemDetails` (keyed on `""`) for `[ApiController]` actions, and
+  for a server-rendered screen a redirect back to the screen the POST came from with the copy in
+  TempData, rendered by `Views/Shared/_DomainRuleViolation.cshtml` from `_Layout`. A filter can't
+  re-render an arbitrary MVC view (no controller instance on `ExceptionContext`, and each screen
+  builds its view model in its own private helper), so POST-redirect-GET is how every screen is
+  served alike. **`InvalidOperationException` now means only "missing/out-of-scope row or a bug"**
+  — that's what EF throws for `FirstAsync` on an empty sequence, and it is deliberately left to
+  surface as a 500: keeping the two types distinct is what makes a rejection recognisable at any
+  catch site. Don't reach for a `Result` type; ADR-0003 rejected it with reasoning.
+- **A multi-write Identity operation is made atomic with a real transaction, never a compensating
+  "delete what I just made" path.** `UserManager`/`RoleManager` call `SaveChanges` internally on
+  every operation, so batching them needs two things that happen to hold here: `ApplicationUser`
+  lives in `DotGlassesDbContext` (it *is* the `IdentityDbContext`), and
+  `AddEntityFrameworkStores<DotGlassesDbContext>` hands `UserStore` the same scoped instance the
+  service holds — so an explicit transaction opened on that context covers Identity's writes and
+  the service's own alike. Two things to get right: **check every `IdentityResult`** (Identity
+  reports refusals as a return value, so an unchecked step is one the transaction commits over —
+  that's how an invited user used to end up with no role), and **open the transaction through
+  `Database.CreateExecutionStrategy().ExecuteAsync(...)`, not `BeginTransactionAsync` directly**.
+  Aspire's `AddNpgsqlDbContext` enables connection retries by default
+  (`NpgsqlEntityFrameworkCorePostgreSQLSettings.DisableRetry` is `false`) and a retrying strategy
+  refuses a user-initiated transaction — a direct `BeginTransactionAsync` passes every test (the
+  harness builds a plain `UseNpgsql` context with no retry strategy) and throws in staging and
+  production. Because the strategy replays the whole delegate, build everything the attempt needs
+  *inside* it and `ChangeTracker.Clear()` at the top: EF does not revert entity states on
+  rollback. `UserAdminService.InviteAsync` is the worked example, pinned by
+  `InviteAtomicityTests`. Anything a user-visible operation *emits* (an email, a set-password
+  link) is produced **after** the commit — a live invite link for an account the rollback removed
+  is worse than the failure it came from.
+- FluentValidation still backs the **ten remaining validators** (Organisations, Preset Catalogues,
+  Reference Data, User Directory) and is deliberately **not** wired up via
+  `AddFluentValidationAutoValidation()` — that runs FluentValidation synchronously inside ASP.NET's
+  model-binding pipeline, which can't invoke the async rules several of them need for DB-backed
+  checks (throws `AsyncValidatorInvokedSynchronouslyException`). Every controller holding an
+  `IValidator<T>` calls `ValidateAsync` explicitly instead. Two of those validators
+  (`AddLensOptionRequestValidator`, `SetCoatingAvailabilityRequestValidator`) use
+  `IReferenceDataLookupService` rather than the memoized snapshot on purpose: they run inside a
+  *write* to the reference-data library, which is exactly where the per-request snapshot must not
+  be used.
 
 ## Data scoping vs RBAC — do not conflate
 
@@ -56,6 +152,17 @@ are the record of *how* things got built; don't restate that here.
   `OrganisationNode` only returns the caller's own subtree, so it silently can't see the caller's
   own ancestors. This has bitten two different reporting services independently; treat it as a
   standing gotcha, not a one-off (see Common pitfalls below).
+- **A materialized path is `HierarchyPath` (`Domain/Common`) in application code, a `string` in the
+  database.** The type owns the trailing-slash invariant and names the two containment directions
+  so they can't be swapped: `IsSelfOrDescendantOf` (scoping — "which rows can this viewer see")
+  and `IsSelfOrAncestorOf` (ancestor resolution — "which country/retailer sits over this row").
+  `OrgTreeLookup` (`Application/Reporting`) is where **Retailer** — the nearest `Intermediate`-level
+  ancestor, per `CONTEXT.md`, with "no Retailer" reported honestly rather than substituting the
+  country — and the missing-name fallbacks are defined; resolve outlet/Retailer/country through it
+  rather than re-deriving a prefix match. Persistence deliberately stays `string`: the
+  reflection-built global filter in `DotGlassesDbContext` operates on the raw column and must not
+  be "tidied" onto the value type — read `docs/adr/0004` before trying. `Contracts` and `App` never
+  see the type (`Contracts` may not reference `Domain`; paths are stamped server-side from claims).
 
 ## Domain model (current shape)
 
@@ -269,8 +376,17 @@ once in this codebase:
 
 ## Testing
 
-xUnit. EF Core InMemory provider is acceptable for now (`Infrastructure.Tests`).
-`WebApplicationFactory` for `Web.Tests` integration tests.
+xUnit. Integration tests run against a **real containerised Postgres** via Testcontainers, not
+the EF Core InMemory provider — InMemory implements no transactions (so atomicity is untestable
+under it) and does not reproduce the SQL string-matching semantics the hierarchy filter depends
+on. `Infrastructure.Tests` shares one container per assembly and applies the real migrations;
+`Web.Tests` points `WebApplicationFactory` at its own container. The two assemblies deliberately
+use different state-isolation strategies (fresh database per test vs a shared one) because the
+Web host bakes its connection string in at build time — each file says so where it matters.
+
+**`Application.Tests` must stay dependency-free** — pure rule and service tests, hand-written
+dictionary-backed fakes, no container, no database. No mocking library is referenced by any
+project, deliberately; don't add one.
 
 ## Running locally
 

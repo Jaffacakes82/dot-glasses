@@ -135,10 +135,6 @@
                 }
             </div>
             <div>
-                <label>Frame coverage</label>
-                <select class="form-select" asp-for="Form.FrameCoverage" asp-items="Html.GetEnumSelectList<DotGlasses.Contracts.Sales.FrameCoverage>()"></select>
-            </div>
-            <div>
                 <label>Frame colour</label>
                 <select class="form-select" asp-for="Form.FrameColourRefId">
                     <option value="">— Choose —</option>
@@ -173,6 +169,41 @@
         </div>
 
         <label style="display:block; margin-top:8px;"><input type="checkbox" asp-for="Form.OrderFromDotGlasses" style="width:auto; margin-right:6px;" />Order this lens from Dot Glasses (Custom range only)</label>
+    </div>
+
+    @* "Referred or treated" — asked here as it is on every other capture path. Every field is
+       rendered unconditionally with its condition spelled out in the label, matching how this
+       form already handles the "Other" text and hard-case fields: no client-side show/hide on
+       this occasional manual-entry path, the rules are enforced server-side by
+       ConsultationRules and come back as a validation summary on submit. *@
+    <div>
+        <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin:0 0 8px; font-size:15px;">Referred or treated</h3>
+
+        <label><input type="checkbox" asp-for="Form.ReferredOrTreated" style="width:auto; margin-right:6px;" />Customer was referred or treated</label>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
+            <div>
+                <label>Referral reason (required if referred or treated)</label>
+                <select class="form-select" asp-for="Form.ReferralReasonRefId">
+                    <option value="">—</option>
+                    @foreach (var reason in Model.ReferralReasons)
+                    {
+                        <option value="@reason.Id">@reason.Label</option>
+                    }
+                </select>
+            </div>
+            <div>
+                <label>Referral reason — "Other" text</label>
+                <input class="form-control" asp-for="Form.ReferralOtherText" />
+            </div>
+        </div>
+
+        <label style="display:block; margin-top:8px;"><input type="checkbox" asp-for="Form.TreatedInFacility" style="width:auto; margin-right:6px;" />Treated in this facility (rather than referred elsewhere)</label>
+
+        <div style="margin-top:4px;">
+            <label>Referral location (required unless treated in this facility)</label>
+            <input class="form-control" asp-for="Form.ReferralLocationFreeText" />
+        </div>
     </div>
 
     <div style="display:flex; gap:8px; margin-top:var(--space-2);">

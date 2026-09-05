@@ -9,14 +9,28 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.10" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <!-- Referenced directly (not just transitively through Infrastructure) because the test
+         harness builds DbContextOptions with UseNpgsql and talks to the container over raw
+         NpgsqlConnection to mint per-test databases. -->
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.14.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- InviteAtomicityTests stands up the same Identity registration Program.cs uses
+         (AddIdentityCore + AddEntityFrameworkStores<DotGlassesDbContext> +
+         AddDefaultTokenProviders) so UserManager and the org-assignment writes genuinely share
+         one DbContext. AddDefaultTokenProviders and the data-protection provider that mints the
+         set-password token both live in the ASP.NET Core shared framework, not in the Identity
+         package DotGlasses.Infrastructure already brings in. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <ItemGroup>

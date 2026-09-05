@@ -11,10 +11,10 @@ using FluentValidation — several still need async rules, so that standing deci
 **Status:** ready-for-agent
 **Category:** refactor
 
-- [ ] The three consultation request validators no longer exist
-- [ ] Each create endpoint calls the shared module and returns a validation response on failure
-- [ ] Failure keys and messages reaching a client are unchanged
-- [ ] The reference-data snapshot is loaded once per request and passed in
-- [ ] Validating one Sale costs a single reference-data read rather than one per referenced field
-- [ ] FluentValidation remains in use for the other validators, unchanged
-- [ ] An API-level test confirms a rejected create returns the expected field keys
+- [x] The three consultation request validators no longer exist
+- [x] Each create endpoint calls the shared module and returns a validation response on failure
+- [x] Failure keys and messages reaching a client are unchanged
+- [x] The reference-data snapshot is loaded once per request and passed in
+- [x] Validating one Sale costs a single reference-data read rather than one per referenced field
+- [x] FluentValidation remains in use for the other validators, unchanged
+- [x] An API-level test confirms a rejected create returns the expected field keys

@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DotGlasses.Contracts\DotGlasses.Contracts.csproj" />
+    <ProjectReference Include="..\DotGlasses.Rules\DotGlasses.Rules.csproj" />
   </ItemGroup>
 
 </Project>
