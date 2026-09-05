@@ -11,6 +11,7 @@
 @using DotGlasses.Contracts.Tests
 @using DotGlasses.Rules
 @using DotGlasses.Rules.ReferenceData
+@using DotGlasses.Rules.Sales
 @inject NavigationManager Navigation
 @inject IReferenceDataClient ReferenceDataClient
 @inject ILeadsClient LeadsClient
@@ -429,18 +430,24 @@
             return;
         }
 
-        _name = lead.CustomerFullName;
-        _phone = lead.CustomerPhoneNumber ?? string.Empty;
-        _age = lead.AgeYears;
-        _gender = lead.Gender;
-        _occupationRefId = lead.OccupationRefId;
-        _occupationOtherText = lead.OccupationOtherText;
-        _consentGiven = lead.ConsentGiven;
-        _coatingRefIds = lead.CoatingPreferenceRefId is { } coatingRefId ? [coatingRefId] : [];
-        ApplyLensRange(lead.LensRangeType, lead.PresetCatalogueId, lead.LensOptionLeftId, lead.LensOptionRightId,
-            lead.CustomSphereLeft, lead.CustomCylinderLeft, lead.CustomAxisLeft, lead.CustomAddPowerLeft,
-            lead.CustomSphereRight, lead.CustomCylinderRight, lead.CustomAxisRight, lead.CustomAddPowerRight,
-            lead.PupilDistanceMm, lead.PresetPupilDistanceBucket, lead.ChildrensFrame);
+        // What a Lead contributes is SaleAssembly.Seed's to decide, shared with the Admin Portal's
+        // conversion screen. Applied into the controls rather than over the request, which is what
+        // keeps the technician's edits — and the automatic conversion-match path, where the Lead is
+        // only found after the form is filled in — working; see Seed.
+        var seeded = SaleAssembly.Seed(lead);
+
+        _name = seeded.FullName;
+        _phone = seeded.PhoneNumber ?? string.Empty;
+        _age = seeded.AgeYears;
+        _gender = seeded.Gender;
+        _occupationRefId = seeded.OccupationRefId;
+        _occupationOtherText = seeded.OccupationOtherText;
+        _consentGiven = seeded.ConsentGiven;
+        _coatingRefIds = seeded.CoatingRefIds;
+        ApplyLensRange(seeded.LensRangeType, seeded.PresetCatalogueId, seeded.LensOptionLeftId, seeded.LensOptionRightId,
+            seeded.CustomSphereLeft, seeded.CustomCylinderLeft, seeded.CustomAxisLeft, seeded.CustomAddPowerLeft,
+            seeded.CustomSphereRight, seeded.CustomCylinderRight, seeded.CustomAxisRight, seeded.CustomAddPowerRight,
+            seeded.PupilDistanceMm, seeded.PresetPupilDistanceBucket, seeded.ChildrensFrame);
     }
 
     /// <summary>
@@ -734,6 +741,12 @@
     // and the save path below queues it. Keeping assembly in one place per type is what makes
     // "validated" and "queued" the same object rather than two hand-matched projections of the
     // same fields — the drift this ticket exists to remove would otherwise just move here.
+    //
+    // That holds for the Sale only so far: SaveSaleAsync calls BuildSaleRequest, which goes through
+    // the shared SaleAssembly the Admin Portal also assembles through. SaveTestCoreAsync and
+    // SaveLeadAsync still build their own copy of what BuildTestRequest/BuildLeadRequest produce,
+    // so those two are validated and queued as two hand-matched objects — the same drift, one
+    // entity type down. Collapse them the same way when either next needs a field.
 
     /// <summary>A fresh idempotency key per save attempt, or the failed record's own when
     /// correcting one — the server's upsert keys on it. Never Guid.Empty, which is why the
@@ -818,48 +831,51 @@
         CoatingPreferenceRefId = _coatingPreferenceRefId,
     };
 
-    private CreateSaleRequest BuildSaleRequest() => new()
+    /// <summary>
+    /// This form's answers, handed to the shared builder — the same one the Admin Portal's
+    /// conversion screen assembles through, so a field added to CreateSaleRequest cannot reach one
+    /// write path and miss the other. The conditional blanking (referral, hard case) and the
+    /// absence encodings live in SaleAssembly.Build; what stays here is only what is genuinely this
+    /// form's own — which controls it is currently rendering.
+    ///
+    /// SourceLeadId is passed rather than re-seeded from the Lead: on the conversion-match path it
+    /// is only set at submit time, after these answers were typed, and re-applying the Lead then
+    /// would overwrite them (see SaleAssembly.Seed).
+    /// </summary>
+    private CreateSaleRequest BuildSaleRequest() => SaleAssembly.Build(NewRecordId(), SourceLeadId, BuildSaleAnswers());
+
+    private SaleAnswers BuildSaleAnswers() => new SaleAnswers
     {
-        Id = NewRecordId(),
-        SourceLeadId = SourceLeadId,
         FullName = _name,
-        PhoneNumber = string.IsNullOrWhiteSpace(_phone) ? null : _phone,
+        PhoneNumber = _phone,
         AgeYears = _age,
         Gender = _gender,
         OccupationRefId = _occupationRefId,
         OccupationOtherText = _occupationOtherText,
         ConsentGiven = _consentGiven,
         ReferredOrTreated = _referredOrTreated,
-        ReferralReasonRefId = _referredOrTreated ? _referralReasonRefId : null,
-        ReferralOtherText = _referredOrTreated ? _referralOtherText : null,
-        ReferralLocationFreeText = _referredOrTreated && !_treatedInFacility ? _referralLocationFreeText : null,
-        TreatedInFacility = _referredOrTreated && _treatedInFacility,
-        LensRangeType = _lensRange.LensRangeType ?? LensRangeType.Custom,
-        PresetCatalogueId = _lensRange.PresetCatalogueId,
-        LensOptionLeftId = _lensRange.LensOptionLeftId,
-        LensOptionRightId = _lensRange.LensOptionRightId,
-        CustomSphereLeft = _lensRange.CustomSphereLeft,
-        CustomCylinderLeft = _lensRange.CustomCylinderLeft,
-        CustomAxisLeft = _lensRange.CustomAxisLeft,
-        CustomAddPowerLeft = _lensRange.CustomAddPowerLeft,
-        CustomSphereRight = _lensRange.CustomSphereRight,
-        CustomCylinderRight = _lensRange.CustomCylinderRight,
-        CustomAxisRight = _lensRange.CustomAxisRight,
-        CustomAddPowerRight = _lensRange.CustomAddPowerRight,
-        LensTypeRefId = _lensRange.LensTypeRefId,
-        LensTypeOtherText = _lensRange.LensTypeOtherText,
+        ReferralReasonRefId = _referralReasonRefId,
+        ReferralOtherText = _referralOtherText,
+        ReferralLocationFreeText = _referralLocationFreeText,
+        TreatedInFacility = _treatedInFacility,
+        // Suppressed here, not in the builder: this form hides the checkbox outside a Custom range,
+        // so a value left over from an earlier Custom selection would otherwise become an error
+        // against a control the technician can no longer see or clear. The Admin Portal renders it
+        // unconditionally and needs the opposite — see SaleAnswers.OrderFromDotGlasses.
         OrderFromDotGlasses = _lensRange.LensRangeType == LensRangeType.Custom && _orderFromDotGlasses,
-        PupilDistanceMm = _lensRange.PupilDistanceMm,
-        PresetPupilDistanceBucket = _lensRange.PresetPupilDistanceBucket,
-        ChildrensFrame = _lensRange.ChildrensFrame,
-        FrameColourRefId = _frameColourRefId ?? Guid.Empty,
+        FrameColourRefId = _frameColourRefId,
         FrameColourOtherText = _frameColourOtherText,
         FrameCoverage = _frameCoverage,
         CoatingRefIds = _coatingRefIds,
         HardCaseSold = _hardCaseSold,
-        HardCaseColourRefId = _hardCaseSold ? _hardCaseColourRefId : null,
-        HardCaseOtherColourText = _hardCaseSold ? _hardCaseOtherColourText : null,
-    };
+        HardCaseColourRefId = _hardCaseColourRefId,
+        HardCaseOtherColourText = _hardCaseOtherColourText,
+    }.WithLens(
+        _lensRange.LensRangeType, _lensRange.PresetCatalogueId, _lensRange.LensOptionLeftId, _lensRange.LensOptionRightId,
+        _lensRange.CustomSphereLeft, _lensRange.CustomCylinderLeft, _lensRange.CustomAxisLeft, _lensRange.CustomAddPowerLeft,
+        _lensRange.CustomSphereRight, _lensRange.CustomCylinderRight, _lensRange.CustomAxisRight, _lensRange.CustomAddPowerRight,
+        _lensRange.LensTypeRefId, _lensRange.LensTypeOtherText,
+        _lensRange.PupilDistanceMm, _lensRange.PresetPupilDistanceBucket, _lensRange.ChildrensFrame);
 
     // --- Saving ----------------------------------------------------------------------------
 
@@ -958,48 +974,9 @@
 
     private async Task SaveSaleAsync()
     {
-        var request = new CreateSaleRequest
-        {
-            Id = FixOutboxId ?? Guid.NewGuid(),
-            SourceLeadId = SourceLeadId,
-            FullName = _name,
-            PhoneNumber = string.IsNullOrWhiteSpace(_phone) ? null : _phone,
-            AgeYears = _age,
-            Gender = _gender,
-            OccupationRefId = _occupationRefId,
-            OccupationOtherText = _occupationOtherText,
-            ConsentGiven = _consentGiven,
-            ReferredOrTreated = _referredOrTreated,
-            ReferralReasonRefId = _referredOrTreated ? _referralReasonRefId : null,
-            ReferralOtherText = _referredOrTreated ? _referralOtherText : null,
-            ReferralLocationFreeText = _referredOrTreated && !_treatedInFacility ? _referralLocationFreeText : null,
-            TreatedInFacility = _referredOrTreated && _treatedInFacility,
-            LensRangeType = _lensRange.LensRangeType ?? LensRangeType.Custom,
-            PresetCatalogueId = _lensRange.PresetCatalogueId,
-            LensOptionLeftId = _lensRange.LensOptionLeftId,
-            LensOptionRightId = _lensRange.LensOptionRightId,
-            CustomSphereLeft = _lensRange.CustomSphereLeft,
-            CustomCylinderLeft = _lensRange.CustomCylinderLeft,
-            CustomAxisLeft = _lensRange.CustomAxisLeft,
-            CustomAddPowerLeft = _lensRange.CustomAddPowerLeft,
-            CustomSphereRight = _lensRange.CustomSphereRight,
-            CustomCylinderRight = _lensRange.CustomCylinderRight,
-            CustomAxisRight = _lensRange.CustomAxisRight,
-            CustomAddPowerRight = _lensRange.CustomAddPowerRight,
-            LensTypeRefId = _lensRange.LensTypeRefId,
-            LensTypeOtherText = _lensRange.LensTypeOtherText,
-            OrderFromDotGlasses = _lensRange.LensRangeType == LensRangeType.Custom && _orderFromDotGlasses,
-            PupilDistanceMm = _lensRange.PupilDistanceMm,
-            PresetPupilDistanceBucket = _lensRange.PresetPupilDistanceBucket,
-            ChildrensFrame = _lensRange.ChildrensFrame,
-            FrameColourRefId = _frameColourRefId ?? Guid.Empty,
-            FrameColourOtherText = _frameColourOtherText,
-            FrameCoverage = _frameCoverage,
-            CoatingRefIds = _coatingRefIds,
-            HardCaseSold = _hardCaseSold,
-            HardCaseColourRefId = _hardCaseSold ? _hardCaseColourRefId : null,
-            HardCaseOtherColourText = _hardCaseSold ? _hardCaseOtherColourText : null,
-        };
+        // The same assembly Validate() checked, not a second hand-matched copy of it — what the
+        // pre-submit check passed is exactly what gets queued.
+        var request = BuildSaleRequest();
 
         if (await SubmitAsync(request.Id, "Sale", "api/v1/sales", request))
         {
