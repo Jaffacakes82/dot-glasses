@@ -55,7 +55,7 @@ public class CustomOrderAdvanceStatusTests(PostgresContainerFixture postgres)
         var saleId = await SeedSaleAsync(connectionString, FulfilmentStatus.Submitted);
 
         await using var context = CreateContext(connectionString, hierarchyPathPrefix: "/1/");
-        await new CustomOrderService(context).AdvanceStatusAsync(saleId);
+        await new CustomOrderService(context, new UnscopedReportQueryService(context)).AdvanceStatusAsync(saleId);
 
         Assert.Equal(FulfilmentStatus.InLab, (await context.Sales.SingleAsync(x => x.Id == saleId)).FulfilmentStatus);
     }
@@ -68,7 +68,7 @@ public class CustomOrderAdvanceStatusTests(PostgresContainerFixture postgres)
 
         await using var context = CreateContext(connectionString, hierarchyPathPrefix: "/1/");
 
-        var ex = await Assert.ThrowsAsync<DomainRuleViolationException>(() => new CustomOrderService(context).AdvanceStatusAsync(saleId));
+        var ex = await Assert.ThrowsAsync<DomainRuleViolationException>(() => new CustomOrderService(context, new UnscopedReportQueryService(context)).AdvanceStatusAsync(saleId));
         Assert.Equal("This custom order is already Fulfilled.", ex.Message);
     }
 
@@ -80,7 +80,7 @@ public class CustomOrderAdvanceStatusTests(PostgresContainerFixture postgres)
 
         await using var context = CreateContext(connectionString, hierarchyPathPrefix: "/1/4/");
 
-        var ex = await Assert.ThrowsAsync<DomainRuleViolationException>(() => new CustomOrderService(context).AdvanceStatusAsync(saleId));
+        var ex = await Assert.ThrowsAsync<DomainRuleViolationException>(() => new CustomOrderService(context, new UnscopedReportQueryService(context)).AdvanceStatusAsync(saleId));
         Assert.Equal("This custom order is no longer available.", ex.Message);
     }
 
@@ -92,7 +92,7 @@ public class CustomOrderAdvanceStatusTests(PostgresContainerFixture postgres)
 
         await using var context = CreateContext(connectionString, hierarchyPathPrefix: "/1/");
 
-        var ex = await Assert.ThrowsAsync<DomainRuleViolationException>(() => new CustomOrderService(context).AdvanceStatusAsync(saleId));
+        var ex = await Assert.ThrowsAsync<DomainRuleViolationException>(() => new CustomOrderService(context, new UnscopedReportQueryService(context)).AdvanceStatusAsync(saleId));
         Assert.Equal("This Sale is not a custom order routed to fulfilment.", ex.Message);
     }
 }

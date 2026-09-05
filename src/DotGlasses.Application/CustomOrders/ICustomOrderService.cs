@@ -7,9 +7,13 @@ namespace DotGlasses.Application.CustomOrders;
 /// true at creation). Hierarchy scoping is automatic (Sale/Customer/OrganisationNode all
 /// implement IHierarchyScoped), so ListGroupedAsync just needs to query normally — a Country-level
 /// caller only ever sees their own subtree's custom orders, matching
-/// AuthorizationPolicies.CustomOrdersView's page-level gate (Country level+, so a caller here can
-/// never be scoped below the retailer/retail-point nodes it needs to resolve — no
-/// IUnscopedReportQueryService ancestor lookup needed, unlike Event History/Dashboard).</summary>
+/// AuthorizationPolicies.CustomOrdersView's page-level gate.
+///
+/// Which orders are *visible* is that scoping. Naming the Retailer or retail point above one is a
+/// separate question — an ancestor lookup — and so goes through IUnscopedReportQueryService and
+/// OrgTreeLookup exactly as Event History and the Dashboard do. The level a policy happens to
+/// admit is not an answer to the second question (CLAUDE.md, "Data scoping vs RBAC — do not
+/// conflate").</summary>
 public interface ICustomOrderService
 {
     /// <summary>Grouped by retailer -> retail point -> customer name (2026-09-03 — replaces the
@@ -27,10 +31,11 @@ public interface ICustomOrderService
     Task<IReadOnlyList<CustomOrderRow>> ExportAsync(FulfilmentStatus? status, CancellationToken cancellationToken = default);
 
     /// <summary>Linear, forward-only: Submitted -> InLab -> ReadyForPickup -> Fulfilled. Throws
-    /// InvalidOperationException carrying user-facing copy if the Sale isn't visible to the caller,
-    /// isn't a custom order (FulfilmentStatus is null), or is already Fulfilled — the last is the
-    /// live case, since a shared fulfilment queue means a colleague, a double click or a browser
-    /// resubmit can all advance the same order twice.</summary>
+    /// DomainRuleViolationException carrying user-facing copy if the Sale isn't visible to the
+    /// caller, isn't a custom order (FulfilmentStatus is null), or is already Fulfilled — the last
+    /// is the live case, since a shared fulfilment queue means a colleague, a double click or a
+    /// browser resubmit can all advance the same order twice. See the implementation's doc comment
+    /// for why the not-visible case is a rejection rather than a leaked missing row.</summary>
     Task AdvanceStatusAsync(Guid saleId, CancellationToken cancellationToken = default);
 }
 
@@ -40,17 +45,26 @@ public interface ICustomOrderService
 public record CustomOrderRow(Guid SaleId, string CustomerName, string Outlet, string Prescription, FulfilmentStatus Status, DateTimeOffset CreatedAtUtc, bool ConsentGiven);
 
 /// <summary>"Active" = not yet Fulfilled (Submitted/InLab/ReadyForPickup) — see ListGroupedAsync's
-/// doc comment for why this count ignores the current status filter. Grouped by RetailerId, not
-/// name — OrganisationNode names aren't guaranteed unique, so grouping by name alone could merge
-/// two distinct nodes that happen to share a display name. RetailerId is Guid.Empty when no
-/// resolvable parent node exists (falls back to one shared "Unknown retailer" bucket).</summary>
+/// doc comment for why this count ignores the current status filter. One group per Retailer, where
+/// Retailer is CONTEXT.md's definition and no other: the nearest Intermediate-level ancestor of the
+/// order's retail point, resolved by OrgTreeLookup. Grouped by identity, not name —
+/// OrganisationNode names aren't guaranteed unique, so grouping by name alone could merge two
+/// distinct nodes that happen to share a display name.
+///
+/// Two groups carry no Retailer node and so report RetailerId = Guid.Empty. They are still
+/// *separate* groups, told apart by RetailerName: "No retailer" (the retail point hangs directly
+/// off a Country, so it genuinely has none — the screen says so rather than substituting the
+/// country) and "Unknown retailer" (the order's hierarchy path names no node in the tree at all —
+/// a data problem). Before 2026-09-05 a Retailer here was the retail point's immediate parent
+/// node, which reported the country as the retailer in the first case and gave both cases one
+/// shared "Unknown retailer" bucket.</summary>
 public record RetailerOrderGroup(Guid RetailerId, string RetailerName, int ActiveCount, IReadOnlyList<RetailPointOrderGroup> RetailPoints);
 
-/// <summary>RetailPointName is whatever node is the immediate parent of the order's own
-/// RetailPoint node — normally an Intermediate reseller, but could itself be the Country node if
-/// no reseller tier exists between them. Nested multi-level reseller chains collapsing to one
-/// "retailer" tier, and the retailer-vs-retail-point grouping toggle, are both explicitly Day 2
-/// per the ticket. Grouped by RetailPointId for the same reason as RetailerOrderGroup.</summary>
+/// <summary>RetailPointName is the order's own retail point — the node its hierarchy path sits on
+/// exactly, "Unknown outlet" when that path names no node. Nested multi-level reseller chains
+/// collapsing to one "retailer" tier, and the retailer-vs-retail-point grouping toggle, are both
+/// explicitly Day 2 per the ticket. Grouped by RetailPointId for the same reason as
+/// RetailerOrderGroup.</summary>
 public record RetailPointOrderGroup(Guid RetailPointId, string RetailPointName, int ActiveCount, IReadOnlyList<CustomerOrderGroup> Customers);
 
 /// <summary>Grouped by CustomerId, not name — two distinct Customer rows can share a display
