@@ -3,6 +3,7 @@ using DotGlasses.Application.Customers;
 using DotGlasses.Application.VisionTests;
 using DotGlasses.Contracts.Common;
 using DotGlasses.Contracts.Leads;
+using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Entities;
 
 namespace DotGlasses.Application.Leads;
@@ -64,6 +65,10 @@ public class LeadService(
             return ToDto(existing, existingCustomer);
         }
 
+        // Resolved before anything is built, so a refusal leaves nothing half-written — not even
+        // a Customer row.
+        var sourceTest = await ResolveSourceTestAsync(request.SourceTestId, cancellationToken);
+
         var customer = await FindOrCreateCustomerAsync(hierarchyPath, request.FullName, request.PhoneNumber, cancellationToken);
 
         var entity = new Lead
@@ -107,14 +112,10 @@ public class LeadService(
 
         repository.Add(entity);
 
-        if (request.SourceTestId is { } sourceTestId)
+        if (sourceTest is not null)
         {
-            var sourceTest = await testRepository.GetByIdAsync(sourceTestId, cancellationToken);
-            if (sourceTest is not null)
-            {
-                sourceTest.ConvertedToLeadId = entity.Id;
-                testRepository.Update(sourceTest);
-            }
+            sourceTest.ConvertedToLeadId = entity.Id;
+            testRepository.Update(sourceTest);
         }
 
         // Single SaveChangesAsync call: the Lead create and the source Test's ConvertedToLeadId
@@ -122,6 +123,27 @@ public class LeadService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return ToDto(entity, customer);
+    }
+
+    /// <summary>
+    /// The source Test a conversion names, or null when this Lead isn't a conversion at all.
+    ///
+    /// A named-but-unreadable source is a refusal, never a skipped back-link. The repository read
+    /// goes through the global hierarchy filter, so "not found" covers both a Test that doesn't
+    /// exist and one sitting outside the caller's own subtree — and until ticket 16 the miss was
+    /// swallowed, leaving the Lead recorded, the Test still reading as unconverted, and the
+    /// caller told the conversion had worked. Refusing keeps the pair all-or-nothing (ADR-0003).
+    /// </summary>
+    private async Task<Test?> ResolveSourceTestAsync(Guid? sourceTestId, CancellationToken cancellationToken)
+    {
+        if (sourceTestId is not { } id)
+        {
+            return null;
+        }
+
+        return await testRepository.GetByIdAsync(id, cancellationToken)
+            ?? throw new DomainRuleViolationException(
+                "The Test this Lead was converted from isn't available at your location — nothing has been saved.");
     }
 
     /// <summary>Exact name+phone match within the retail point — "don't create a duplicate

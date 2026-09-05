@@ -685,7 +685,10 @@ range is *not* a preset — **Coating preference (optional)**.
 Server rules: full name required (≤ 200), phone required (≤ 32), reason not purchased must be an
 active option with its free text present if Other, age 0–120, and if a `sourceTestId` is carried
 it must reference an existing Test that has **not already been converted** (a second attempt is
-rejected).
+rejected). "Existing" means existing *and visible to the caller* — a Test at another outlet is
+hidden by hierarchy scoping and so is refused exactly like one that was never recorded. Either
+way the conversion is refused outright: a Lead is never recorded against a source it could not
+read.
 
 The customer is matched or created server-side by exact **name + phone within the same outlet** —
 a repeat visitor with identical details reuses their existing customer record rather than creating
@@ -871,7 +874,7 @@ Versioned at `v1`, with Swagger exposed in development only.
 | `GET/POST /api/v1/leads`, `/api/v1/leads/{id}` | JWT | Any authenticated user | As above. |
 | `GET /api/v1/leads/open` | JWT | Any authenticated user | The caller's own outlet's open (unconverted) leads — backs the Field App's `/leads` worklist. |
 | `GET /api/v1/leads/match?fullName=&phoneNumber=` | JWT | Any authenticated user | An open Lead matching the given name+phone, or 204 — backs the Sale form's automatic conversion prompt. |
-| `GET/POST /api/v1/sales`, `/api/v1/sales/{id}` | JWT | Any authenticated user | As above. `SourceLeadId` on create atomically links and marks the source Lead converted; a second attempt against an already-converted Lead is rejected. |
+| `GET/POST /api/v1/sales`, `/api/v1/sales/{id}` | JWT | Any authenticated user | As above. `SourceLeadId` on create atomically links and marks the source Lead converted; a second attempt against an already-converted Lead is rejected, as is one naming a Lead the caller can't see. |
 | `GET /api/v1/reference-data` | JWT | Any authenticated user | All **active** reference items across all categories. Not hierarchy-scoped. |
 | `GET /api/v1/preset-catalogues` | JWT | Any authenticated user | Catalogues assigned at or above the caller's org, with each lens's available coatings and the catalogue's `Kind`. 400 if the caller has no org. |
 | `POST /api/v1/client-logs` | JWT | Any authenticated user | Accepts a batch of client log entries with a correlation ID; writes them to the server log. |
