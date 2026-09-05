@@ -87,7 +87,7 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
 
         return sales.Select(s =>
         {
-            var (outlet, country) = orgLookup.Resolve(s.HierarchyPath);
+            var (outlet, country) = Resolve(orgLookup, s.HierarchyPath);
             return new SaleOrTestEventRow("Sale", s.LensRangeType == LensRangeType.Custom, CustomerName(customers, s.CustomerId), outlet, country, s.CreatedAtUtc, s.ConsentGiven);
         }).ToList();
     }
@@ -108,7 +108,7 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
         var orgLookup = await BuildOrgLookupAsync(cancellationToken);
         return tests.Select(t =>
         {
-            var (outlet, country) = orgLookup.Resolve(t.HierarchyPath);
+            var (outlet, country) = Resolve(orgLookup, t.HierarchyPath);
             return new SaleOrTestEventRow("Test", false, Name: null, outlet, country, t.CreatedAtUtc, ConsentGiven: null);
         }).ToList();
     }
@@ -145,7 +145,7 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
         return leads.Select(l =>
         {
             var customer = customers.GetValueOrDefault(l.CustomerId);
-            var (outlet, _) = orgLookup.Resolve(l.HierarchyPath);
+            var (outlet, _) = Resolve(orgLookup, l.HierarchyPath);
             var reason = referenceData.ResolveLabel(l.ReasonNotPurchasedRefId, l.ReasonNotPurchasedOtherText);
             return new LeadEventRow(l.Id, customer?.FullName ?? "—", MaskPhone(customer?.PhoneNumber), outlet, reason, l.CreatedAtUtc, l.ConsentGiven, l.ConvertedFlag);
         }).ToList();
@@ -178,7 +178,7 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
 
         return referrals.Select(t =>
         {
-            var (outlet, country) = orgLookup.Resolve(t.HierarchyPath);
+            var (outlet, country) = Resolve(orgLookup, t.HierarchyPath);
             var reason = referenceData.ResolveLabel(t.ReferralReasonRefId, t.ReferralOtherText);
             return new ReferralEventRow(t.Source, outlet, country, reason, t.TreatedInFacility, t.CreatedAtUtc);
         }).ToList();
@@ -223,25 +223,18 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
     /// the standard hierarchy filter (it only ever shows a caller their own subtree), so a plain
     /// query silently resolved every outlet's country to "Unknown country" for anyone below
     /// Country level (2026-08-05 fix, caught while building the Dashboard's identical org
-    /// resolution — see CLAUDE.md).</summary>
-    private async Task<OrgLookup> BuildOrgLookupAsync(CancellationToken cancellationToken)
+    /// resolution — see CLAUDE.md). That "identical resolution" is now literally the same code:
+    /// OrgTreeLookup, shared with the Dashboard and Custom Orders (docs/adr/0004).</summary>
+    private async Task<OrgTreeLookup> BuildOrgLookupAsync(CancellationToken cancellationToken)
     {
         var nodes = await unscopedReportQueryService.GetOrganisationNodesUnscopedAsync(cancellationToken);
-        return new OrgLookup(nodes);
+        return new OrgTreeLookup(nodes);
     }
 
-    private sealed class OrgLookup(IReadOnlyList<OrganisationNodeSummary> nodes)
-    {
-        private readonly Dictionary<string, OrganisationNodeSummary> _byPath = nodes.ToDictionary(n => n.HierarchyPath);
-        private readonly IReadOnlyList<OrganisationNodeSummary> _countries = nodes.Where(n => n.Level == OrganisationLevel.Country).ToList();
-
-        public (string Outlet, string Country) Resolve(string hierarchyPath)
-        {
-            var outlet = _byPath.TryGetValue(hierarchyPath, out var node) ? node.Name : "Unknown outlet";
-            var country = _countries.FirstOrDefault(c => hierarchyPath.StartsWith(c.HierarchyPath, StringComparison.Ordinal))?.Name ?? "Unknown country";
-            return (outlet, country);
-        }
-    }
+    /// <summary>Both names every row on this screen needs, in the one call the mapping methods
+    /// already made — Event History shows outlet and country, never a Retailer.</summary>
+    private static (string Outlet, string Country) Resolve(OrgTreeLookup orgLookup, string hierarchyPath) =>
+        (orgLookup.RowOutletName(hierarchyPath), orgLookup.RowCountryName(hierarchyPath));
 
     /// <summary>Common projected shape for the Test/Lead/Sale union behind FilterReferrals — see
     /// its doc comment for why this needs to be a named record rather than an anonymous type.</summary>
