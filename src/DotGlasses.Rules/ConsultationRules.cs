@@ -18,12 +18,20 @@ namespace DotGlasses.Rules;
 /// migration batches change. Test through <see cref="Check(CreateSaleRequest, ReferenceDataSnapshot)"/>
 /// and its siblings — see the spec's Testing Decisions.
 ///
-/// <b>Partially migrated.</b> Ticket 09 has moved occupation, "referred or treated", frame colour,
-/// hard case and reason-not-purchased here; lens range (ticket 10) and the Coating set/preference
-/// (ticket 11) are still enforced only by DotGlasses.Web.Validation's three FluentValidation
-/// validators, which now call this for the topics above and keep the rest. Until ticket 12 those
-/// validators remain the complete server-side check — <b>a caller that runs this alone is not yet
-/// running every consultation rule</b>.
+/// <b>Partially migrated.</b> Ticket 09 moved occupation, "referred or treated", frame colour,
+/// hard case and reason-not-purchased here; ticket 10 has now moved the lens range — both
+/// branches, the axis and power constraints, the lens-type requirement and pupil distance. Only
+/// the Coating set/preference (ticket 11) is still enforced solely by DotGlasses.Web.Validation's
+/// three FluentValidation validators, which call this for the topics above and keep the rest.
+/// Until ticket 12 those validators remain the complete server-side check — <b>a caller that runs
+/// this alone is not yet running every consultation rule</b>.
+///
+/// The Coating rules are the deliberate remainder rather than an oversight: coating availability
+/// is scoped by the chosen lens option, so ticket 11 has to land on top of the lens branch this
+/// batch established. Each validator therefore still re-derives "which branch am I in, and did it
+/// get all three preset ids" purely to decide whether the coating check is narrowed to the left
+/// lens option or not — see their ValidateCoatingAvailabilityForPresetLensAsync/
+/// ValidateCoatingSetAsync.
 ///
 /// <b>Two consultation rules can never live here</b>, and the synchronous snapshot-only signature
 /// is what keeps that honest: CreateLeadRequestValidator.ValidateSourceTestAsync and
@@ -37,20 +45,43 @@ public static class ConsultationRules
     public static RuleResult Check(CreateTestRequest request, ReferenceDataSnapshot snapshot) =>
         RuleResult.From(
             Occupation(request.OccupationRefId, request.OccupationOtherText, snapshot)
-                .Concat(Referral(request.ReferredOrTreated, request.ReferralReasonRefId, request.ReferralOtherText, request.ReferralLocationFreeText, request.TreatedInFacility, snapshot)));
+                .Concat(Referral(request.ReferredOrTreated, request.ReferralReasonRefId, request.ReferralOtherText, request.ReferralLocationFreeText, request.TreatedInFacility, snapshot))
+                .Concat(LensRange(
+                    request.LensRangeType, request.PresetCatalogueId, request.LensOptionLeftId, request.LensOptionRightId,
+                    request.CustomSphereLeft, request.CustomCylinderLeft, request.CustomAxisLeft, request.CustomAddPowerLeft,
+                    request.CustomSphereRight, request.CustomCylinderRight, request.CustomAxisRight, request.CustomAddPowerRight,
+                    request.LensTypeRefId, request.LensTypeOtherText,
+                    request.PupilDistanceMm, request.PresetPupilDistanceBucket, request.ChildrensFrame,
+                    pupilDistanceRequired: false, presetBucketMessageNamesTheBranch: false, snapshot)));
 
     public static RuleResult Check(CreateLeadRequest request, ReferenceDataSnapshot snapshot) =>
         RuleResult.From(
             Occupation(request.OccupationRefId, request.OccupationOtherText, snapshot)
                 .Concat(Referral(request.ReferredOrTreated, request.ReferralReasonRefId, request.ReferralOtherText, request.ReferralLocationFreeText, request.TreatedInFacility, snapshot))
-                .Concat(ReasonNotPurchased(request.ReasonNotPurchasedRefId, request.ReasonNotPurchasedOtherText, snapshot)));
+                .Concat(ReasonNotPurchased(request.ReasonNotPurchasedRefId, request.ReasonNotPurchasedOtherText, snapshot))
+                .Concat(LensRange(
+                    request.LensRangeType, request.PresetCatalogueId, request.LensOptionLeftId, request.LensOptionRightId,
+                    request.CustomSphereLeft, request.CustomCylinderLeft, request.CustomAxisLeft, request.CustomAddPowerLeft,
+                    request.CustomSphereRight, request.CustomCylinderRight, request.CustomAxisRight, request.CustomAddPowerRight,
+                    request.LensTypeRefId, request.LensTypeOtherText,
+                    request.PupilDistanceMm, request.PresetPupilDistanceBucket, request.ChildrensFrame,
+                    pupilDistanceRequired: false, presetBucketMessageNamesTheBranch: true, snapshot)));
 
     public static RuleResult Check(CreateSaleRequest request, ReferenceDataSnapshot snapshot) =>
         RuleResult.From(
             Occupation(request.OccupationRefId, request.OccupationOtherText, snapshot)
                 .Concat(Referral(request.ReferredOrTreated, request.ReferralReasonRefId, request.ReferralOtherText, request.ReferralLocationFreeText, request.TreatedInFacility, snapshot))
                 .Concat(FrameColour(request.FrameColourRefId, request.FrameColourOtherText, snapshot))
-                .Concat(HardCase(request.HardCaseSold, request.HardCaseColourRefId, request.HardCaseOtherColourText, snapshot)));
+                .Concat(HardCase(request.HardCaseSold, request.HardCaseColourRefId, request.HardCaseOtherColourText, snapshot))
+                // LensRangeType is non-nullable on a Sale, so the "not chosen yet" branch below is
+                // unreachable from here — a Sale always names its lens range.
+                .Concat(LensRange(
+                    request.LensRangeType, request.PresetCatalogueId, request.LensOptionLeftId, request.LensOptionRightId,
+                    request.CustomSphereLeft, request.CustomCylinderLeft, request.CustomAxisLeft, request.CustomAddPowerLeft,
+                    request.CustomSphereRight, request.CustomCylinderRight, request.CustomAxisRight, request.CustomAddPowerRight,
+                    request.LensTypeRefId, request.LensTypeOtherText,
+                    request.PupilDistanceMm, request.PresetPupilDistanceBucket, request.ChildrensFrame,
+                    pupilDistanceRequired: true, presetBucketMessageNamesTheBranch: true, snapshot)));
 
     /// <summary>Optional on all three: no occupation recorded is a valid consultation.</summary>
     private static IEnumerable<RuleFailure> Occupation(Guid? occupationRefId, string? occupationOtherText, ReferenceDataSnapshot snapshot) =>
@@ -147,6 +178,266 @@ public static class ConsultationRules
     }
 
     /// <summary>
+    /// Which lenses this consultation calls for. Three mutually exclusive shapes: not chosen yet
+    /// (Test/Lead only — a Sale always names one), a <b>preset</b> range picked off an
+    /// admin-curated catalogue, or a <b>Custom</b> prescription typed out in full. Whichever is
+    /// chosen, the other shape's fields must be empty — that is what stops a half-edited form from
+    /// being stored as a prescription nobody can grind.
+    ///
+    /// Two things genuinely differ between the three requests rather than being copy drift, and
+    /// both are the same underlying rule: <paramref name="pupilDistanceRequired"/> — a Sale needs
+    /// a pupil distance because the order cannot be ground without one, while a Test or Lead is
+    /// often taken at a busy event with no time to measure it, so there it is optional but still
+    /// range-checked if given. It governs both branches' PD field: the preset bucket and the
+    /// Custom millimetre value.
+    ///
+    /// <paramref name="presetBucketMessageNamesTheBranch"/> is <em>not</em> a rule — it is
+    /// pre-existing copy drift, preserved deliberately. The Test's out-of-range bucket message
+    /// stops at the number where the Lead's and Sale's go on to name the branch and the children's
+    /// frame allowance. The rule the three enforce is identical; only the sentence differs, and
+    /// these are user-facing strings shown verbatim, so this batch reproduces them rather than
+    /// quietly harmonising them. Harmonise it as its own decision if it is ever worth making.
+    /// </summary>
+    private static IEnumerable<RuleFailure> LensRange(
+        LensRangeType? lensRangeType,
+        Guid? presetCatalogueId, Guid? lensOptionLeftId, Guid? lensOptionRightId,
+        decimal? customSphereLeft, decimal? customCylinderLeft, decimal? customAxisLeft, decimal? customAddPowerLeft,
+        decimal? customSphereRight, decimal? customCylinderRight, decimal? customAxisRight, decimal? customAddPowerRight,
+        Guid? lensTypeRefId, string? lensTypeOtherText,
+        decimal? pupilDistanceMm, int? presetPupilDistanceBucket, bool childrensFrame,
+        bool pupilDistanceRequired, bool presetBucketMessageNamesTheBranch,
+        ReferenceDataSnapshot snapshot)
+    {
+        var presetFieldsSet = presetCatalogueId is not null || lensOptionLeftId is not null || lensOptionRightId is not null;
+        var customFieldsSet = customSphereLeft is not null || customCylinderLeft is not null || customAxisLeft is not null || customAddPowerLeft is not null
+            || customSphereRight is not null || customCylinderRight is not null || customAxisRight is not null || customAddPowerRight is not null
+            || lensTypeRefId is not null || lensTypeOtherText is not null;
+
+        switch (lensRangeType)
+        {
+            case null:
+                if (presetFieldsSet || customFieldsSet || pupilDistanceMm is not null || presetPupilDistanceBucket is not null)
+                {
+                    yield return new RuleFailure(LensRangeTypeKey, "Preset/custom lens fields must be empty when LensRangeType is not set.");
+                }
+
+                break;
+
+            case LensRangeType.SixLensSet or LensRangeType.NineLensSet:
+                foreach (var failure in PresetBranch(
+                    presetCatalogueId, lensOptionLeftId, lensOptionRightId, customFieldsSet,
+                    pupilDistanceMm, presetPupilDistanceBucket, childrensFrame,
+                    pupilDistanceRequired, presetBucketMessageNamesTheBranch, snapshot))
+                {
+                    yield return failure;
+                }
+
+                break;
+
+            case LensRangeType.Custom:
+                foreach (var failure in CustomBranch(
+                    presetFieldsSet,
+                    customSphereLeft, customCylinderLeft, customAxisLeft, customAddPowerLeft,
+                    customSphereRight, customCylinderRight, customAxisRight, customAddPowerRight,
+                    lensTypeRefId, lensTypeOtherText,
+                    pupilDistanceMm, presetPupilDistanceBucket, pupilDistanceRequired, snapshot))
+                {
+                    yield return failure;
+                }
+
+                break;
+        }
+    }
+
+    /// <summary>
+    /// A range picked off a catalogue. The two lens options and the catalogue have to be
+    /// consistent with each other — an option from a different catalogue is the mistake this
+    /// catches — and the pupil distance is captured as a coarse bucket rather than a millimetre
+    /// reading, its ceiling lowered for a children's frame.
+    ///
+    /// The missing-ids check reports once and stops: without all three ids there is nothing to
+    /// check the options against, so continuing would report "must belong to PresetCatalogueId"
+    /// about an id the technician never supplied. That short-circuit is also why the Coating
+    /// availability check left behind in each validator re-tests the same three ids — it needs the
+    /// left lens option, and it must stay silent in exactly the cases this stops in.
+    /// </summary>
+    private static IEnumerable<RuleFailure> PresetBranch(
+        Guid? presetCatalogueId, Guid? lensOptionLeftId, Guid? lensOptionRightId, bool customFieldsSet,
+        decimal? pupilDistanceMm, int? presetPupilDistanceBucket, bool childrensFrame,
+        bool pupilDistanceRequired, bool bucketMessageNamesTheBranch, ReferenceDataSnapshot snapshot)
+    {
+        if (customFieldsSet)
+        {
+            yield return new RuleFailure(LensRangeTypeKey, "Custom prescription fields must be empty for a preset LensRangeType.");
+        }
+
+        if (presetCatalogueId is not { } catalogueId || lensOptionLeftId is not { } leftId || lensOptionRightId is not { } rightId)
+        {
+            yield return new RuleFailure(PresetCatalogueIdKey, "PresetCatalogueId, LensOptionLeftId and LensOptionRightId are all required for a preset LensRangeType.");
+            yield break;
+        }
+
+        if (!snapshot.LensOptionBelongsToCatalogue(leftId, catalogueId))
+        {
+            yield return new RuleFailure(LensOptionLeftIdKey, "LensOptionLeftId must belong to PresetCatalogueId.");
+        }
+
+        if (!snapshot.LensOptionBelongsToCatalogue(rightId, catalogueId))
+        {
+            yield return new RuleFailure(LensOptionRightIdKey, "LensOptionRightId must belong to PresetCatalogueId.");
+        }
+
+        if (pupilDistanceMm is not null)
+        {
+            yield return new RuleFailure(PupilDistanceMmKey, "PupilDistanceMm must be empty for a preset LensRangeType — use PresetPupilDistanceBucket instead.");
+        }
+
+        var maxBucket = childrensFrame ? 2 : 4;
+        var bucketIsWrong = presetPupilDistanceBucket is { } bucket
+            ? bucket < 0 || bucket > maxBucket
+            : pupilDistanceRequired;
+
+        if (bucketIsWrong)
+        {
+            yield return new RuleFailure(
+                PresetPupilDistanceBucketKey,
+                PresetBucketMessage(maxBucket, childrensFrame, pupilDistanceRequired, bucketMessageNamesTheBranch));
+        }
+    }
+
+    /// <summary>See <see cref="LensRange"/> on why one rule has three sentences.</summary>
+    private static string PresetBucketMessage(int maxBucket, bool childrensFrame, bool required, bool namesTheBranch)
+    {
+        var opening = required
+            ? $"PresetPupilDistanceBucket is required and must be between 0 and {maxBucket}"
+            : $"PresetPupilDistanceBucket must be between 0 and {maxBucket}";
+
+        return namesTheBranch
+            ? $"{opening} for a preset LensRangeType{(childrensFrame ? " (0-2 for a children's frame)" : "")}."
+            : $"{opening}.";
+    }
+
+    /// <summary>
+    /// A prescription typed out in full. Both spheres are required — one eye's prescription is not
+    /// a prescription — while cylinder, axis and add power are each optional but constrained if
+    /// given. Note that the missing-sphere failure reports against LensRangeType rather than the
+    /// sphere fields: the branch as a whole is what is incomplete.
+    /// </summary>
+    private static IEnumerable<RuleFailure> CustomBranch(
+        bool presetFieldsSet,
+        decimal? customSphereLeft, decimal? customCylinderLeft, decimal? customAxisLeft, decimal? customAddPowerLeft,
+        decimal? customSphereRight, decimal? customCylinderRight, decimal? customAxisRight, decimal? customAddPowerRight,
+        Guid? lensTypeRefId, string? lensTypeOtherText,
+        decimal? pupilDistanceMm, int? presetPupilDistanceBucket, bool pupilDistanceRequired,
+        ReferenceDataSnapshot snapshot)
+    {
+        if (presetFieldsSet)
+        {
+            yield return new RuleFailure(LensRangeTypeKey, "Preset fields must be empty for a Custom LensRangeType.");
+        }
+
+        if (customSphereLeft is null || customSphereRight is null)
+        {
+            yield return new RuleFailure(LensRangeTypeKey, "CustomSphereLeft and CustomSphereRight are required for a Custom LensRangeType.");
+        }
+
+        var powers = CustomPower(customSphereLeft, CustomSphereLeftKey, -10m, 10m, 0.25m)
+            .Concat(CustomPower(customSphereRight, CustomSphereRightKey, -10m, 10m, 0.25m))
+            .Concat(CustomPower(customCylinderLeft, CustomCylinderLeftKey, -10m, 10m, 0.25m))
+            .Concat(CustomPower(customCylinderRight, CustomCylinderRightKey, -10m, 10m, 0.25m))
+            .Concat(CustomPower(customAddPowerLeft, CustomAddPowerLeftKey, 0m, 3m, 0.25m))
+            .Concat(CustomPower(customAddPowerRight, CustomAddPowerRightKey, 0m, 3m, 0.25m))
+            .Concat(CustomAxis(customAxisLeft, CustomAxisLeftKey))
+            .Concat(CustomAxis(customAxisRight, CustomAxisRightKey))
+            .Concat(LensType(customAddPowerLeft, customAddPowerRight, lensTypeRefId, lensTypeOtherText, snapshot));
+
+        foreach (var failure in powers)
+        {
+            yield return failure;
+        }
+
+        if (presetPupilDistanceBucket is not null)
+        {
+            yield return new RuleFailure(PresetPupilDistanceBucketKey, "PresetPupilDistanceBucket must be empty for a Custom LensRangeType — use PupilDistanceMm instead.");
+        }
+
+        foreach (var failure in CustomPupilDistance(pupilDistanceMm, pupilDistanceRequired))
+        {
+            yield return failure;
+        }
+    }
+
+    /// <summary>Sphere/Cylinder/Add-power are physical lens-grinding constraints, not
+    /// admin-curated reference data — checked in code against the ground ranges, not a lookup
+    /// table. The increment is the rule most easily got wrong: a value inside the range but off
+    /// the quarter-dioptre step is not grindable, so range and step are one question with one
+    /// message.</summary>
+    private static IEnumerable<RuleFailure> CustomPower(decimal? value, string propertyName, decimal min, decimal max, decimal step) =>
+        value is { } v && (v < min || v > max || (v - min) % step != 0)
+            ? [new RuleFailure(propertyName, $"{propertyName} must be between {min} and {max} in {step} increments.")]
+            : [];
+
+    /// <summary>Axis is a bearing in whole degrees; 180 is in range and 180.5 is not a bearing
+    /// anyone can grind.</summary>
+    private static IEnumerable<RuleFailure> CustomAxis(decimal? value, string propertyName) =>
+        value is { } v && (v < 0 || v > 180 || v != Math.Truncate(v))
+            ? [new RuleFailure(propertyName, $"{propertyName} must be a whole number of degrees between 0 and 180.")]
+            : [];
+
+    /// <summary>Asked exactly once an eye carries two distinct powers — a base sphere plus an add
+    /// power, which is what makes the lens bifocal or progressive and so needs naming. Required in
+    /// that case; both lens-type fields must stay empty otherwise.</summary>
+    private static IEnumerable<RuleFailure> LensType(
+        decimal? customAddPowerLeft, decimal? customAddPowerRight,
+        Guid? lensTypeRefId, string? lensTypeOtherText, ReferenceDataSnapshot snapshot)
+    {
+        var hasTwoPowers = customAddPowerLeft is not null || customAddPowerRight is not null;
+        if (!hasTwoPowers)
+        {
+            return lensTypeRefId is not null || lensTypeOtherText is not null
+                ? [new RuleFailure(LensTypeRefIdKey, "LensTypeRefId/LensTypeOtherText must be empty unless an add power is set.")]
+                : [];
+        }
+
+        if (lensTypeRefId is null)
+        {
+            return [new RuleFailure(LensTypeRefIdKey, "LensTypeRefId is required when an add power is set (two distinct powers on that eye).")];
+        }
+
+        return ChosenItem(
+            lensTypeRefId, lensTypeOtherText, ReferenceDataCategory.LensType, snapshot,
+            LensTypeRefIdKey, "LensTypeRefId must reference an existing, active LensType reference-data item.",
+            LensTypeOtherTextKey, "LensTypeOtherText is required when LensType is \"Other\".");
+    }
+
+    /// <summary>The Custom branch's pupil distance: required on a Sale, optional elsewhere (see
+    /// <see cref="LensRange"/>), and in either case a whole millimetre inside the sellable
+    /// 54-74mm range. Out-of-range and non-whole are separate messages and only ever one at a
+    /// time — a technician correcting 53.5 has one thing to fix, not two.</summary>
+    private static IEnumerable<RuleFailure> CustomPupilDistance(decimal? pupilDistanceMm, bool required)
+    {
+        var rangeMessage = required
+            ? "PupilDistanceMm is required and must be within the standard 54-74mm range for a Custom LensRangeType (manual override outside this range is a Day 2 feature)."
+            : "PupilDistanceMm must be within the standard 54-74mm range for a Custom LensRangeType (manual override outside this range is a Day 2 feature).";
+
+        if (pupilDistanceMm is not { } pd)
+        {
+            if (required)
+            {
+                yield return new RuleFailure(PupilDistanceMmKey, rangeMessage);
+            }
+        }
+        else if (pd < 54 || pd > 74)
+        {
+            yield return new RuleFailure(PupilDistanceMmKey, rangeMessage);
+        }
+        else if (pd != Math.Truncate(pd))
+        {
+            yield return new RuleFailure(PupilDistanceMmKey, "PupilDistanceMm must be a whole millimetre value.");
+        }
+    }
+
+    /// <summary>
     /// One dropdown answer, checked the one way every dropdown answer is checked: the id must
     /// resolve to an item that exists, is active, and sits in the expected category — a Guid that
     /// resolves to a Frame colour is not an answer to "which Occupation is this" — and an item
@@ -181,4 +472,25 @@ public static class ConsultationRules
     private const string ReferralReasonRefIdKey = nameof(CreateTestRequest.ReferralReasonRefId);
     private const string ReferralOtherTextKey = nameof(CreateTestRequest.ReferralOtherText);
     private const string ReferralLocationFreeTextKey = nameof(CreateTestRequest.ReferralLocationFreeText);
+
+    // Same story for the lens range: every field below is spelled identically on all three
+    // requests, so one set of keys serves all three entry points. CreateSaleRequest.LensRangeType
+    // is the one that differs — non-nullable there, nullable on the other two — but that is the
+    // property's type, not its name, so the key still reads off CreateTestRequest with the rest.
+    private const string LensRangeTypeKey = nameof(CreateTestRequest.LensRangeType);
+    private const string PresetCatalogueIdKey = nameof(CreateTestRequest.PresetCatalogueId);
+    private const string LensOptionLeftIdKey = nameof(CreateTestRequest.LensOptionLeftId);
+    private const string LensOptionRightIdKey = nameof(CreateTestRequest.LensOptionRightId);
+    private const string CustomSphereLeftKey = nameof(CreateTestRequest.CustomSphereLeft);
+    private const string CustomSphereRightKey = nameof(CreateTestRequest.CustomSphereRight);
+    private const string CustomCylinderLeftKey = nameof(CreateTestRequest.CustomCylinderLeft);
+    private const string CustomCylinderRightKey = nameof(CreateTestRequest.CustomCylinderRight);
+    private const string CustomAddPowerLeftKey = nameof(CreateTestRequest.CustomAddPowerLeft);
+    private const string CustomAddPowerRightKey = nameof(CreateTestRequest.CustomAddPowerRight);
+    private const string CustomAxisLeftKey = nameof(CreateTestRequest.CustomAxisLeft);
+    private const string CustomAxisRightKey = nameof(CreateTestRequest.CustomAxisRight);
+    private const string LensTypeRefIdKey = nameof(CreateTestRequest.LensTypeRefId);
+    private const string LensTypeOtherTextKey = nameof(CreateTestRequest.LensTypeOtherText);
+    private const string PupilDistanceMmKey = nameof(CreateTestRequest.PupilDistanceMm);
+    private const string PresetPupilDistanceBucketKey = nameof(CreateTestRequest.PresetPupilDistanceBucket);
 }

@@ -3,17 +3,19 @@ using DotGlasses.Domain.Enums;
 namespace DotGlasses.Application.ReferenceData;
 
 /// <summary>
-/// Backs FluentValidation's reference-data checks (category correctness, "Other" free-text
-/// requirement, LensOption/PresetCatalogue consistency) without validators needing
-/// DotGlassesDbContext directly — Web must never reference Infrastructure except in Program.cs
-/// (see CLAUDE.md's Architecture rules).
+/// Backs the Coating checks the three consultation validators still make one row at a time,
+/// without them needing DotGlassesDbContext directly — Web must never reference Infrastructure
+/// except in Program.cs (see CLAUDE.md's Architecture rules).
+///
+/// Shrinking, not growing: ReferenceDataSnapshot answers all of this from a single read, and each
+/// migration batch moves another question onto it. LensOptionBelongsToCatalogueAsync left with
+/// ticket 10 once the lens-range rules stopped asking it here; the three below go with ticket 11's
+/// Coating rules, and the interface with them. Don't add a method here — add it to the snapshot.
 /// </summary>
 public interface IReferenceDataLookupService
 {
     /// <summary>Null if no ReferenceDataItem with this Id exists in this Category.</summary>
     Task<ReferenceDataLookupResult?> LookupAsync(Guid id, ReferenceDataCategory category, CancellationToken cancellationToken = default);
-
-    Task<bool> LensOptionBelongsToCatalogueAsync(Guid lensOptionId, Guid presetCatalogueId, CancellationToken cancellationToken = default);
 
     /// <summary>True if coatingRefId is configured as available for the LensStrength the given
     /// LensOption references (LensStrengthCoatingOption) — replaces the old single forced

@@ -7,15 +7,19 @@ using DotGlasses.Rules.ReferenceData;
 namespace DotGlasses.Rules.Tests;
 
 /// <summary>
-/// The rules moved in ticket 09 — occupation, "referred or treated", reason not purchased, frame
-/// colour and hard case — exercised through <see cref="ConsultationRules"/>'s three entry points,
-/// never through the per-topic functions behind them: those are private precisely so a test can't
-/// pin the composition the remaining migration batches are going to change.
+/// The rules moved in tickets 09 and 10 — occupation, "referred or treated", reason not purchased,
+/// frame colour, hard case, and the whole lens range — exercised through
+/// <see cref="ConsultationRules"/>'s three entry points, never through the per-topic functions
+/// behind them: those are private precisely so a test can't pin the composition the remaining
+/// migration batch is going to change.
 ///
 /// The snapshot is a plain literal in every case. Occupation and referral are checked on the Test
 /// request and only smoke-checked on Lead/Sale, because there is one rule body behind all three
 /// entry points and a third copy of each case would be testing C#'s overload resolution rather
-/// than a rule.
+/// than a rule. The lens range is the exception: it is checked on whichever request actually
+/// carries the variant under test, because there the three genuinely differ — a Sale requires a
+/// pupil distance where a Test and Lead only range-check one that was given, and all three word
+/// the out-of-range bucket message differently.
 /// </summary>
 public class ConsultationRulesTests
 {
@@ -37,6 +41,16 @@ public class ConsultationRulesTests
     private static readonly Guid ActiveHardCaseColour = Guid.Parse("00000000-0000-0000-0000-0000000000e1");
     private static readonly Guid RetiredHardCaseColour = Guid.Parse("00000000-0000-0000-0000-0000000000e2");
     private static readonly Guid OtherHardCaseColour = Guid.Parse("00000000-0000-0000-0000-0000000000e3");
+
+    private static readonly Guid ActiveLensType = Guid.Parse("00000000-0000-0000-0000-00000000001a");
+    private static readonly Guid RetiredLensType = Guid.Parse("00000000-0000-0000-0000-00000000001b");
+    private static readonly Guid OtherLensType = Guid.Parse("00000000-0000-0000-0000-00000000001c");
+
+    private static readonly Guid CatalogueA = Guid.Parse("00000000-0000-0000-0000-000000000f01");
+    private static readonly Guid CatalogueB = Guid.Parse("00000000-0000-0000-0000-000000000f02");
+    private static readonly Guid LensA1 = Guid.Parse("00000000-0000-0000-0000-000000000f11");
+    private static readonly Guid LensA2 = Guid.Parse("00000000-0000-0000-0000-000000000f12");
+    private static readonly Guid LensB1 = Guid.Parse("00000000-0000-0000-0000-000000000f21");
 
     private static readonly Guid NeverExisted = Guid.Parse("00000000-0000-0000-0000-0000000000ff");
 
@@ -63,14 +77,29 @@ public class ConsultationRulesTests
             new ReferenceItemSnapshot(ActiveHardCaseColour, ReferenceDataCategory.HardCaseColour, "Navy", IsActive: true, IsOtherOption: false),
             new ReferenceItemSnapshot(RetiredHardCaseColour, ReferenceDataCategory.HardCaseColour, "Maroon", IsActive: false, IsOtherOption: false),
             new ReferenceItemSnapshot(OtherHardCaseColour, ReferenceDataCategory.HardCaseColour, "Other", IsActive: true, IsOtherOption: true),
+
+            new ReferenceItemSnapshot(ActiveLensType, ReferenceDataCategory.LensType, "Bifocal", IsActive: true, IsOtherOption: false),
+            new ReferenceItemSnapshot(RetiredLensType, ReferenceDataCategory.LensType, "Trifocal", IsActive: false, IsOtherOption: false),
+            new ReferenceItemSnapshot(OtherLensType, ReferenceDataCategory.LensType, "Other", IsActive: true, IsOtherOption: true),
         ],
-        [],
+        [
+            // Two catalogues, so "this lens option belongs to some catalogue, just not that one"
+            // is a case the tests can actually state — it is the mistake the rule exists to catch,
+            // and an id that belongs to nothing would not distinguish the rule from a null check.
+            new PresetCatalogueSnapshot(CatalogueA, "Six lens set", PresetCatalogueKind.SixLensSet, [
+                new LensOptionSnapshot(LensA1, "+1.00", 0, []),
+                new LensOptionSnapshot(LensA2, "+2.50", 1, []),
+            ]),
+            new PresetCatalogueSnapshot(CatalogueB, "Nine lens set", PresetCatalogueKind.NineLensSet, [
+                new LensOptionSnapshot(LensB1, "+3.00", 0, []),
+            ]),
+        ],
         [],
         []);
 
-    /// <summary>A request carrying nothing this batch's rules object to — no occupation, not
-    /// referred. Lens range and Coating preference are untouched here (tickets 10/11), so their
-    /// fields stay null throughout.</summary>
+    /// <summary>A request nothing objects to. On a Test or Lead that means no lens range at all —
+    /// LensRangeType is nullable there and "not chosen yet" is a valid consultation. Coating
+    /// preference stays null throughout (ticket 11).</summary>
     private static CreateTestRequest ValidTest() => new() { Id = Guid.NewGuid() };
 
     private static CreateLeadRequest ValidLead() => new()
@@ -81,12 +110,76 @@ public class ConsultationRulesTests
         ReasonNotPurchasedRefId = ActiveReasonNotPurchased,
     };
 
+    /// <summary>A Sale cannot decline to name a lens range: LensRangeType is non-nullable and its
+    /// default is SixLensSet, so the baseline request has to carry a complete preset range —
+    /// catalogue, both lens options, and the pupil-distance bucket a Sale is required to have.
+    /// Coatings are ticket 11's and the rules module does not look at them yet.</summary>
     private static CreateSaleRequest ValidSale() => new()
     {
         Id = Guid.NewGuid(),
         FullName = "Amina Okoro",
         FrameColourRefId = ActiveFrameColour,
+        LensRangeType = LensRangeType.SixLensSet,
+        PresetCatalogueId = CatalogueA,
+        LensOptionLeftId = LensA1,
+        LensOptionRightId = LensA2,
+        PresetPupilDistanceBucket = 2,
     };
+
+    /// <summary>A Test on a complete preset range. The bucket is left unset: optional on a Test.</summary>
+    private static CreateTestRequest PresetTest() => new()
+    {
+        Id = Guid.NewGuid(),
+        LensRangeType = LensRangeType.SixLensSet,
+        PresetCatalogueId = CatalogueA,
+        LensOptionLeftId = LensA1,
+        LensOptionRightId = LensA2,
+    };
+
+    private static CreateLeadRequest PresetLead()
+    {
+        var request = ValidLead();
+        request.LensRangeType = LensRangeType.SixLensSet;
+        request.PresetCatalogueId = CatalogueA;
+        request.LensOptionLeftId = LensA1;
+        request.LensOptionRightId = LensA2;
+        return request;
+    }
+
+    /// <summary>A Test on a Custom prescription: both spheres, which is the minimum a Custom
+    /// branch accepts. Pupil distance is optional on a Test, so it stays unset.</summary>
+    private static CreateTestRequest CustomTest() => new()
+    {
+        Id = Guid.NewGuid(),
+        LensRangeType = LensRangeType.Custom,
+        CustomSphereLeft = 1.00m,
+        CustomSphereRight = -0.50m,
+    };
+
+    private static CreateLeadRequest CustomLead()
+    {
+        var request = ValidLead();
+        request.LensRangeType = LensRangeType.Custom;
+        request.CustomSphereLeft = 1.00m;
+        request.CustomSphereRight = -0.50m;
+        return request;
+    }
+
+    /// <summary>A Sale on a Custom prescription. Unlike the Test and Lead it must carry a pupil
+    /// distance — the order cannot be ground without one.</summary>
+    private static CreateSaleRequest CustomSale()
+    {
+        var request = ValidSale();
+        request.LensRangeType = LensRangeType.Custom;
+        request.PresetCatalogueId = null;
+        request.LensOptionLeftId = null;
+        request.LensOptionRightId = null;
+        request.PresetPupilDistanceBucket = null;
+        request.CustomSphereLeft = 1.00m;
+        request.CustomSphereRight = -0.50m;
+        request.PupilDistanceMm = 62m;
+        return request;
+    }
 
     private static RuleFailure AssertSingleFailure(RuleResult result)
     {
@@ -656,6 +749,541 @@ public class ConsultationRulesTests
         Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
     }
 
+    // --- Lens range: choosing a branch ----------------------------------------------------
+
+    [Fact]
+    public void LensRange_NotChosenOnATest_IsAccepted()
+    {
+        // Nullable on a Test and a Lead: a consultation may record an outcome and stop there.
+        Assert.True(ConsultationRules.Check(ValidTest(), Snapshot()).IsValid);
+    }
+
+    [Theory]
+    [InlineData("preset")]
+    [InlineData("custom")]
+    [InlineData("pupilDistance")]
+    [InlineData("bucket")]
+    public void LensRange_NotChosenButALensFieldWasFilled_IsRejected(string field)
+    {
+        var request = ValidTest();
+        switch (field)
+        {
+            case "preset": request.PresetCatalogueId = CatalogueA; break;
+            case "custom": request.CustomSphereLeft = 1.00m; break;
+            case "pupilDistance": request.PupilDistanceMm = 62m; break;
+            case "bucket": request.PresetPupilDistanceBucket = 2; break;
+        }
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("LensRangeType", failure.Key);
+        Assert.Equal("Preset/custom lens fields must be empty when LensRangeType is not set.", failure.Message);
+    }
+
+    [Fact]
+    public void LensRange_PresetChosenButACustomFieldWasFilled_IsRejected()
+    {
+        // Fields belonging to the branch not chosen must be empty — a half-edited form must not
+        // reach the database carrying two contradictory prescriptions.
+        var request = PresetTest();
+        request.CustomSphereLeft = 1.00m;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("LensRangeType", failure.Key);
+        Assert.Equal("Custom prescription fields must be empty for a preset LensRangeType.", failure.Message);
+    }
+
+    [Fact]
+    public void LensRange_CustomChosenButAPresetFieldWasFilled_IsRejected()
+    {
+        var request = CustomTest();
+        request.PresetCatalogueId = CatalogueA;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("LensRangeType", failure.Key);
+        Assert.Equal("Preset fields must be empty for a Custom LensRangeType.", failure.Message);
+    }
+
+    // --- Lens range: the preset branch ----------------------------------------------------
+
+    [Fact]
+    public void Preset_CompleteAndConsistent_IsAccepted()
+    {
+        Assert.True(ConsultationRules.Check(PresetTest(), Snapshot()).IsValid);
+        Assert.True(ConsultationRules.Check(PresetLead(), Snapshot()).IsValid);
+        Assert.True(ConsultationRules.Check(ValidSale(), Snapshot()).IsValid);
+    }
+
+    [Theory]
+    [InlineData("catalogue")]
+    [InlineData("left")]
+    [InlineData("right")]
+    public void Preset_MissingOneOfTheThreeIds_ReportsOnceAndStops(string missing)
+    {
+        // Without all three there is nothing to check the options against, so the branch reports
+        // the one thing the technician can act on and stops — continuing would complain that an id
+        // they never supplied does not belong to a catalogue.
+        var request = PresetTest();
+        switch (missing)
+        {
+            case "catalogue": request.PresetCatalogueId = null; break;
+            case "left": request.LensOptionLeftId = null; break;
+            case "right": request.LensOptionRightId = null; break;
+        }
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("PresetCatalogueId", failure.Key);
+        Assert.Equal("PresetCatalogueId, LensOptionLeftId and LensOptionRightId are all required for a preset LensRangeType.", failure.Message);
+    }
+
+    [Fact]
+    public void Preset_MissingIdsStopsBeforeThePupilDistanceChecks()
+    {
+        // The same short-circuit, stated as the thing that actually matters: a Sale with no
+        // catalogue reports the missing ids alone, not that plus a required-bucket message.
+        var request = ValidSale();
+        request.PresetCatalogueId = null;
+        request.PresetPupilDistanceBucket = null;
+
+        Assert.Equal("PresetCatalogueId", AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Key);
+    }
+
+    [Fact]
+    public void Preset_LensOptionFromAnotherCatalogue_IsRejected()
+    {
+        // LensB1 is a real lens option — it just belongs to the other catalogue. That is the
+        // mistake this rule exists to catch, and an id belonging to nothing would not tell the
+        // rule apart from a null check.
+        var request = PresetTest();
+        request.LensOptionLeftId = LensB1;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("LensOptionLeftId", failure.Key);
+        Assert.Equal("LensOptionLeftId must belong to PresetCatalogueId.", failure.Message);
+    }
+
+    [Fact]
+    public void Preset_BothLensOptionsFromAnotherCatalogue_AreReportedSeparately()
+    {
+        var request = PresetTest();
+        request.LensOptionLeftId = LensB1;
+        request.LensOptionRightId = LensB1;
+
+        var result = ConsultationRules.Check(request, Snapshot());
+
+        Assert.Equal(["LensOptionLeftId", "LensOptionRightId"], result.Failures.Select(f => f.Key));
+        Assert.Equal("LensOptionRightId must belong to PresetCatalogueId.", result.Failures[1].Message);
+    }
+
+    [Fact]
+    public void Preset_LensOptionThatNeverExisted_IsRejected()
+    {
+        var request = PresetTest();
+        request.LensOptionRightId = NeverExisted;
+
+        Assert.Equal("LensOptionRightId", AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Key);
+    }
+
+    [Fact]
+    public void Preset_MillimetrePupilDistance_IsRejected()
+    {
+        // A preset range records the pupil distance as a coarse bucket; a millimetre reading here
+        // means the technician filled the wrong control.
+        var request = PresetTest();
+        request.PupilDistanceMm = 62m;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("PupilDistanceMm", failure.Key);
+        Assert.Equal("PupilDistanceMm must be empty for a preset LensRangeType — use PresetPupilDistanceBucket instead.", failure.Message);
+    }
+
+    [Theory]
+    [InlineData(0, false, true)]
+    [InlineData(4, false, true)]   // top of the adult range
+    [InlineData(5, false, false)]  // one past it
+    [InlineData(-1, false, false)]
+    [InlineData(2, true, true)]    // top of the children's range
+    [InlineData(3, true, false)]   // in range for an adult frame, out of it for a child's
+    public void Preset_PupilDistanceBucketBoundaries(int bucket, bool childrensFrame, bool accepted)
+    {
+        var request = PresetTest();
+        request.PresetPupilDistanceBucket = bucket;
+        request.ChildrensFrame = childrensFrame;
+
+        var result = ConsultationRules.Check(request, Snapshot());
+
+        Assert.Equal(accepted, result.IsValid);
+        if (!accepted)
+        {
+            Assert.Equal("PresetPupilDistanceBucket", Assert.Single(result.Failures).Key);
+        }
+    }
+
+    [Fact]
+    public void Preset_PupilDistanceBucketOmitted_IsAcceptedOnATestAndLeadButNotOnASale()
+    {
+        // The one rule that genuinely differs by request type: a Sale's order cannot be ground
+        // without a pupil distance, while a Test or Lead is often taken at a busy event with no
+        // time to measure one.
+        var test = PresetTest();
+        var lead = PresetLead();
+        var sale = ValidSale();
+        sale.PresetPupilDistanceBucket = null;
+
+        Assert.True(ConsultationRules.Check(test, Snapshot()).IsValid);
+        Assert.True(ConsultationRules.Check(lead, Snapshot()).IsValid);
+        Assert.Equal("PresetPupilDistanceBucket", AssertSingleFailure(ConsultationRules.Check(sale, Snapshot())).Key);
+    }
+
+    [Fact]
+    public void Preset_OutOfRangeBucketKeepsEachRequestTypesOwnWording()
+    {
+        // Pre-existing copy drift, pinned rather than harmonised: the rule is identical on all
+        // three, only the sentence differs. A test is the only thing stopping a future tidy-up
+        // from silently rewording copy a technician reads.
+        var test = PresetTest();
+        test.PresetPupilDistanceBucket = 9;
+        var lead = PresetLead();
+        lead.PresetPupilDistanceBucket = 9;
+        var sale = ValidSale();
+        sale.PresetPupilDistanceBucket = 9;
+
+        Assert.Equal(
+            "PresetPupilDistanceBucket must be between 0 and 4.",
+            AssertSingleFailure(ConsultationRules.Check(test, Snapshot())).Message);
+        Assert.Equal(
+            "PresetPupilDistanceBucket must be between 0 and 4 for a preset LensRangeType.",
+            AssertSingleFailure(ConsultationRules.Check(lead, Snapshot())).Message);
+        Assert.Equal(
+            "PresetPupilDistanceBucket is required and must be between 0 and 4 for a preset LensRangeType.",
+            AssertSingleFailure(ConsultationRules.Check(sale, Snapshot())).Message);
+    }
+
+    [Fact]
+    public void Preset_ChildrensFrameNamesItsLowerCeilingInTheMessage()
+    {
+        var lead = PresetLead();
+        lead.ChildrensFrame = true;
+        lead.PresetPupilDistanceBucket = 3;
+        var sale = ValidSale();
+        sale.ChildrensFrame = true;
+        sale.PresetPupilDistanceBucket = null;
+
+        Assert.Equal(
+            "PresetPupilDistanceBucket must be between 0 and 2 for a preset LensRangeType (0-2 for a children's frame).",
+            AssertSingleFailure(ConsultationRules.Check(lead, Snapshot())).Message);
+        Assert.Equal(
+            "PresetPupilDistanceBucket is required and must be between 0 and 2 for a preset LensRangeType (0-2 for a children's frame).",
+            AssertSingleFailure(ConsultationRules.Check(sale, Snapshot())).Message);
+    }
+
+    // --- Lens range: the Custom branch ----------------------------------------------------
+
+    [Fact]
+    public void Custom_BothSpheres_IsAccepted()
+    {
+        Assert.True(ConsultationRules.Check(CustomTest(), Snapshot()).IsValid);
+        Assert.True(ConsultationRules.Check(CustomLead(), Snapshot()).IsValid);
+        Assert.True(ConsultationRules.Check(CustomSale(), Snapshot()).IsValid);
+    }
+
+    [Theory]
+    [InlineData("left")]
+    [InlineData("right")]
+    public void Custom_MissingASphere_IsRejected(string missing)
+    {
+        // One eye's prescription is not a prescription. Note the failure reports against
+        // LensRangeType rather than the sphere field: the branch as a whole is incomplete.
+        var request = CustomTest();
+        if (missing == "left")
+        {
+            request.CustomSphereLeft = null;
+        }
+        else
+        {
+            request.CustomSphereRight = null;
+        }
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("LensRangeType", failure.Key);
+        Assert.Equal("CustomSphereLeft and CustomSphereRight are required for a Custom LensRangeType.", failure.Message);
+    }
+
+    [Theory]
+    [InlineData(-10, true)]      // bottom of the ground range
+    [InlineData(10, true)]       // top of it
+    [InlineData(0.25, true)]
+    [InlineData(-10.25, false)]  // on the quarter-dioptre step, but below the range
+    [InlineData(10.25, false)]   // on the step, above the range
+    [InlineData(0.30, false)]    // inside the range, off the step — the increment rule alone
+    [InlineData(2.1, false)]
+    public void Custom_SpherePowerBoundariesAndIncrement(decimal sphere, bool accepted)
+    {
+        // Range and increment are one question with one message: a power inside the range but off
+        // the quarter-dioptre step is no more grindable than one outside it.
+        var request = CustomTest();
+        request.CustomSphereLeft = sphere;
+
+        var result = ConsultationRules.Check(request, Snapshot());
+
+        Assert.Equal(accepted, result.IsValid);
+        if (!accepted)
+        {
+            Assert.Equal("CustomSphereLeft", Assert.Single(result.Failures).Key);
+        }
+    }
+
+    [Fact]
+    public void Custom_OffStepPowerNamesTheRangeAndTheStep()
+    {
+        var request = CustomTest();
+        request.CustomSphereLeft = 0.30m;
+
+        Assert.Equal(
+            "CustomSphereLeft must be between -10 and 10 in 0.25 increments.",
+            AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Message);
+    }
+
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(3, true)]      // top of the add-power range, narrower than a sphere's
+    [InlineData(3.25, false)]
+    [InlineData(-0.25, false)]
+    [InlineData(0.1, false)]   // off the step
+    public void Custom_AddPowerHasItsOwnNarrowerRange(decimal addPower, bool accepted)
+    {
+        // A lens type is set alongside, because an add power is exactly what makes one required —
+        // this case is about the power's range, not that requirement.
+        var request = CustomTest();
+        request.CustomAddPowerLeft = addPower;
+        request.LensTypeRefId = ActiveLensType;
+
+        var result = ConsultationRules.Check(request, Snapshot());
+
+        Assert.Equal(accepted, result.IsValid);
+        if (!accepted)
+        {
+            var failure = Assert.Single(result.Failures);
+            Assert.Equal("CustomAddPowerLeft", failure.Key);
+            Assert.Equal("CustomAddPowerLeft must be between 0 and 3 in 0.25 increments.", failure.Message);
+        }
+    }
+
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(180, true)]   // a bearing of 180 degrees is in range
+    [InlineData(181, false)]
+    [InlineData(-1, false)]
+    [InlineData(90.5, false)] // whole degrees only
+    public void Custom_AxisBoundaries(decimal axis, bool accepted)
+    {
+        var request = CustomTest();
+        request.CustomAxisLeft = axis;
+
+        var result = ConsultationRules.Check(request, Snapshot());
+
+        Assert.Equal(accepted, result.IsValid);
+        if (!accepted)
+        {
+            var failure = Assert.Single(result.Failures);
+            Assert.Equal("CustomAxisLeft", failure.Key);
+            Assert.Equal("CustomAxisLeft must be a whole number of degrees between 0 and 180.", failure.Message);
+        }
+    }
+
+    [Fact]
+    public void Custom_BothEyesPowersAreCheckedIndependently()
+    {
+        var request = CustomTest();
+        request.CustomSphereLeft = 0.30m;
+        request.CustomCylinderRight = -20m;
+        request.CustomAxisRight = 200m;
+
+        var result = ConsultationRules.Check(request, Snapshot());
+
+        Assert.Equal(["CustomSphereLeft", "CustomCylinderRight", "CustomAxisRight"], result.Failures.Select(f => f.Key));
+    }
+
+    // --- Lens range: the lens type ---------------------------------------------------------
+
+    [Fact]
+    public void LensType_RequiredOnceAnEyeCarriesTwoDistinctPowers()
+    {
+        var request = CustomTest();
+        request.CustomAddPowerLeft = 2.00m;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("LensTypeRefId", failure.Key);
+        Assert.Equal("LensTypeRefId is required when an add power is set (two distinct powers on that eye).", failure.Message);
+    }
+
+    [Fact]
+    public void LensType_TheOtherEyesAddPowerTriggersItToo()
+    {
+        var request = CustomTest();
+        request.CustomAddPowerRight = 2.00m;
+
+        Assert.Equal("LensTypeRefId", AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Key);
+    }
+
+    [Theory]
+    [InlineData("refId")]
+    [InlineData("otherText")]
+    public void LensType_SetWithoutAnAddPower_IsRejected(string field)
+    {
+        // Exactly when, not merely if: with a single power there is no bifocal to name, so both
+        // lens-type fields must stay empty.
+        var request = CustomTest();
+        if (field == "refId")
+        {
+            request.LensTypeRefId = ActiveLensType;
+        }
+        else
+        {
+            request.LensTypeOtherText = "Progressive";
+        }
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("LensTypeRefId", failure.Key);
+        Assert.Equal("LensTypeRefId/LensTypeOtherText must be empty unless an add power is set.", failure.Message);
+    }
+
+    [Fact]
+    public void LensType_RetiredItem_IsRejected()
+    {
+        var request = CustomTest();
+        request.CustomAddPowerLeft = 2.00m;
+        request.LensTypeRefId = RetiredLensType;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("LensTypeRefId", failure.Key);
+        Assert.Equal("LensTypeRefId must reference an existing, active LensType reference-data item.", failure.Message);
+    }
+
+    [Fact]
+    public void LensType_ItemFromAnotherCategory_IsRejected()
+    {
+        var request = CustomTest();
+        request.CustomAddPowerLeft = 2.00m;
+        request.LensTypeRefId = ActiveOccupation;
+
+        Assert.Equal("LensTypeRefId", AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Key);
+    }
+
+    [Fact]
+    public void LensType_OtherWithoutFreeText_IsRejected()
+    {
+        var request = CustomTest();
+        request.CustomAddPowerLeft = 2.00m;
+        request.LensTypeRefId = OtherLensType;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("LensTypeOtherText", failure.Key);
+        Assert.Equal("LensTypeOtherText is required when LensType is \"Other\".", failure.Message);
+    }
+
+    [Fact]
+    public void LensType_OtherWithFreeText_IsAccepted()
+    {
+        var request = CustomTest();
+        request.CustomAddPowerLeft = 2.00m;
+        request.LensTypeRefId = OtherLensType;
+        request.LensTypeOtherText = "Progressive";
+
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
+    }
+
+    // --- Lens range: pupil distance on the Custom branch -----------------------------------
+
+    [Fact]
+    public void Custom_PresetBucket_IsRejected()
+    {
+        var request = CustomTest();
+        request.PresetPupilDistanceBucket = 2;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("PresetPupilDistanceBucket", failure.Key);
+        Assert.Equal("PresetPupilDistanceBucket must be empty for a Custom LensRangeType — use PupilDistanceMm instead.", failure.Message);
+    }
+
+    [Theory]
+    [InlineData(54, true)]    // bottom of the sellable range
+    [InlineData(74, true)]    // top of it
+    [InlineData(53, false)]
+    [InlineData(75, false)]
+    [InlineData(60.5, false)] // in range, but not a whole millimetre
+    public void Custom_PupilDistanceBoundaries(decimal pupilDistance, bool accepted)
+    {
+        var request = CustomTest();
+        request.PupilDistanceMm = pupilDistance;
+
+        var result = ConsultationRules.Check(request, Snapshot());
+
+        Assert.Equal(accepted, result.IsValid);
+        if (!accepted)
+        {
+            Assert.Equal("PupilDistanceMm", Assert.Single(result.Failures).Key);
+        }
+    }
+
+    [Fact]
+    public void Custom_OutOfRangeAndNonWholePupilDistanceAreDifferentMessages()
+    {
+        // Only ever one at a time: a technician correcting 53.5 has one thing to fix, not two.
+        var outOfRange = CustomTest();
+        outOfRange.PupilDistanceMm = 53.5m;
+        var nonWhole = CustomTest();
+        nonWhole.PupilDistanceMm = 60.5m;
+
+        Assert.Equal(
+            "PupilDistanceMm must be within the standard 54-74mm range for a Custom LensRangeType (manual override outside this range is a Day 2 feature).",
+            AssertSingleFailure(ConsultationRules.Check(outOfRange, Snapshot())).Message);
+        Assert.Equal(
+            "PupilDistanceMm must be a whole millimetre value.",
+            AssertSingleFailure(ConsultationRules.Check(nonWhole, Snapshot())).Message);
+    }
+
+    [Fact]
+    public void Custom_PupilDistanceOmitted_IsAcceptedOnATestAndLeadButNotOnASale()
+    {
+        var sale = CustomSale();
+        sale.PupilDistanceMm = null;
+
+        Assert.True(ConsultationRules.Check(CustomTest(), Snapshot()).IsValid);
+        Assert.True(ConsultationRules.Check(CustomLead(), Snapshot()).IsValid);
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(sale, Snapshot()));
+
+        Assert.Equal("PupilDistanceMm", failure.Key);
+        Assert.Equal(
+            "PupilDistanceMm is required and must be within the standard 54-74mm range for a Custom LensRangeType (manual override outside this range is a Day 2 feature).",
+            failure.Message);
+    }
+
+    [Fact]
+    public void Custom_OutOfRangePupilDistanceOnASaleSaysItIsRequiredToo()
+    {
+        // The Sale's range message is the required-variant whether the value is missing or merely
+        // out of range — one sentence covers both, exactly as it did before the move.
+        var sale = CustomSale();
+        sale.PupilDistanceMm = 80m;
+
+        Assert.Equal(
+            "PupilDistanceMm is required and must be within the standard 54-74mm range for a Custom LensRangeType (manual override outside this range is a Day 2 feature).",
+            AssertSingleFailure(ConsultationRules.Check(sale, Snapshot())).Message);
+    }
+
     // --- Composition ----------------------------------------------------------------------
 
     [Fact]
@@ -679,12 +1307,16 @@ public class ConsultationRulesTests
     [Fact]
     public void AnEmptySnapshot_RejectsEveryReferenceDataAnswerRatherThanThrowing()
     {
-        // A Field App that has never been online holds nothing; the rules still have to answer.
+        // A Field App that has never been online holds nothing — no reference items and no preset
+        // catalogues — and the rules still have to answer rather than throw. The lens options are
+        // rejected for the same reason the occupation is: nothing in the snapshot carries that id.
         var request = ValidSale();
         request.OccupationRefId = ActiveOccupation;
 
         var result = ConsultationRules.Check(request, ReferenceDataSnapshot.Empty);
 
-        Assert.Equal(["OccupationRefId", "FrameColourRefId"], result.Failures.Select(f => f.Key));
+        Assert.Equal(
+            ["OccupationRefId", "FrameColourRefId", "LensOptionLeftId", "LensOptionRightId"],
+            result.Failures.Select(f => f.Key));
     }
 }
