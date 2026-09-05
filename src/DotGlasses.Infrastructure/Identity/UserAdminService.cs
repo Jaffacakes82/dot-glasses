@@ -97,44 +97,99 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
     public async Task<bool> EmailExistsAsync(string email, CancellationToken cancellationToken = default) =>
         await userManager.FindByEmailAsync(email) is not null;
 
+    /// <summary>
+    /// The account, its role and its org assignments are one unit of work. They used to be three
+    /// independent writes that each committed on their own, so a failure part-way through left a
+    /// user with no role, or no location, or both — a state User Directory then had to render and
+    /// an admin had to unpick by hand.
+    ///
+    /// This is a genuine database transaction, not a compensating "delete the user I just made"
+    /// path, and it only works because Identity and the assignment writes share one DbContext:
+    /// DotGlassesDbContext *is* the IdentityDbContext, and Program.cs's
+    /// AddEntityFrameworkStores&lt;DotGlassesDbContext&gt; hands UserStore the same scoped
+    /// instance this service holds. UserManager calls SaveChanges internally on every operation,
+    /// so enrolling that shared context in an explicit transaction is the only thing that batches
+    /// them. InviteAtomicityTests asserts both halves against real Postgres — that a UserManager
+    /// write really does enrol in a transaction opened here, and that a failure at any of the
+    /// three steps leaves nothing behind.
+    /// </summary>
     public async Task<InviteUserResult> InviteAsync(string email, string fullName, string role, IReadOnlyList<Guid> orgNodeIds, CancellationToken cancellationToken = default)
     {
-        var primaryOrg = await dbContext.OrganisationNodes.FirstAsync(o => o.Id == orgNodeIds[0], cancellationToken);
+        // Routed through the execution strategy rather than calling BeginTransactionAsync
+        // directly: Aspire's AddNpgsqlDbContext turns connection retries on by default
+        // (NpgsqlEntityFrameworkCorePostgreSQLSettings.DisableRetry defaults to false), and a
+        // retrying strategy refuses a user-initiated transaction unless the whole transaction is
+        // the retriable unit. Calling BeginTransactionAsync straight would pass every test here —
+        // the test harness builds a plain UseNpgsql context with no retry strategy — and throw in
+        // staging and production, which is the worst possible place to find out.
+        var strategy = dbContext.Database.CreateExecutionStrategy();
 
-        var user = new ApplicationUser
+        var user = await strategy.ExecuteAsync(async () =>
         {
-            UserName = email,
-            Email = email,
-            EmailConfirmed = false,
-            FullName = fullName,
-            OrgNodeId = primaryOrg.Id,
-            HierarchyPath = primaryOrg.HierarchyPath,
-            OrgLevel = primaryOrg.Level,
-        };
+            // A retried attempt must start from nothing. EF does not revert entity states when a
+            // transaction rolls back, so without this the replay would find the user already
+            // tracked as Unchanged and the assignment rows already "saved" — re-inserting the
+            // account and silently dropping its locations. Everything the attempt needs is
+            // therefore read and built inside this delegate. Safe to clear here: by the time a
+            // POST reaches this service everything else in the request (validation, the scope
+            // check) has only read.
+            dbContext.ChangeTracker.Clear();
 
-        // No password — the account stays in the "Invited" state (PasswordHash is null) until
-        // the user completes the set-password link.
-        var createResult = await userManager.CreateAsync(user);
-        if (!createResult.Succeeded)
-        {
-            throw new DomainRuleViolationException(string.Join("; ", createResult.Errors.Select(e => e.Description)));
-        }
+            var primaryOrg = await dbContext.OrganisationNodes.FirstAsync(o => o.Id == orgNodeIds[0], cancellationToken);
 
-        await userManager.AddToRoleAsync(user, role);
-
-        foreach (var orgNodeId in orgNodeIds)
-        {
-            dbContext.UserOrgAssignments.Add(new UserOrgAssignment
+            var invitee = new ApplicationUser
             {
-                Id = Guid.NewGuid(),
-                UserId = user.Id,
-                OrgNodeId = orgNodeId,
-                CreatedAtUtc = DateTimeOffset.UtcNow,
-            });
-        }
+                UserName = email,
+                Email = email,
+                EmailConfirmed = false,
+                FullName = fullName,
+                OrgNodeId = primaryOrg.Id,
+                HierarchyPath = primaryOrg.HierarchyPath,
+                OrgLevel = primaryOrg.Level,
+            };
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
+            // No password — the account stays in the "Invited" state (PasswordHash is null) until
+            // the user completes the set-password link.
+            var createResult = await userManager.CreateAsync(invitee);
+            if (!createResult.Succeeded)
+            {
+                throw new DomainRuleViolationException(Describe("Couldn't create the account", createResult));
+            }
+
+            // UserManager reports a refusal as an IdentityResult instead of throwing, so an
+            // unchecked result is a failed step the transaction would happily commit over — which
+            // is exactly how an invited user used to end up with no role at all.
+            var roleResult = await userManager.AddToRoleAsync(invitee, role);
+            if (!roleResult.Succeeded)
+            {
+                throw new DomainRuleViolationException(Describe($"Couldn't give the account the {role} role", roleResult));
+            }
+
+            foreach (var orgNodeId in orgNodeIds)
+            {
+                dbContext.UserOrgAssignments.Add(new UserOrgAssignment
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = invitee.Id,
+                    OrgNodeId = orgNodeId,
+                    CreatedAtUtc = DateTimeOffset.UtcNow,
+                });
+            }
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+
+            return invitee;
+        });
+
+        // Deliberately after the commit. UserDirectoryController sends the invitation email off
+        // the back of this return value, so a token minted inside the transaction would be a live
+        // set-password link for an account a rollback then removed — the admin told nothing
+        // happened while the invitee holds a working link. Throwing above returns no result at
+        // all, so no link and no email. Nothing is lost by waiting: the token is a data-protected
+        // payload over the user's security stamp, not a database write.
         var token = await userManager.GeneratePasswordResetTokenAsync(user);
         return new InviteUserResult(user.Id, email, token);
     }
@@ -196,6 +251,13 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
         dbContext.UserOrgAssignments.Remove(entity);
         await dbContext.SaveChangesAsync(cancellationToken);
     }
+
+    /// <summary>Identity's own error descriptions are already English sentences ("Username 'x' is
+    /// already taken."), but on their own they don't say which step of the invite refused —
+    /// prefixing them keeps the copy usable when it lands verbatim in the screen's validation
+    /// summary (see DomainRuleViolationFilter).</summary>
+    private static string Describe(string what, IdentityResult result) =>
+        $"{what}: {string.Join("; ", result.Errors.Select(e => e.Description))}";
 
     private static string ResolveStatus(ApplicationUser user)
     {
