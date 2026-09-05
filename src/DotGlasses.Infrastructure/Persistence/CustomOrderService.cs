@@ -1,4 +1,5 @@
 using DotGlasses.Application.CustomOrders;
+using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Entities;
 using DomainFulfilmentStatus = DotGlasses.Domain.Enums.FulfilmentStatus;
 using Microsoft.EntityFrameworkCore;
@@ -67,22 +68,25 @@ public class CustomOrderService(DotGlassesDbContext dbContext) : ICustomOrderSer
         return visible.Select(ToRow).OrderByDescending(r => r.CreatedAtUtc).ToList();
     }
 
-    /// <summary>Every rejection here is an InvalidOperationException carrying user-facing copy,
-    /// including the "no such order" case — the scoped Sales query silently returns nothing for a
-    /// sale outside the caller's subtree, and FirstAsync's own "sequence contains no elements" is
-    /// not a sentence to show an admin. CustomOrdersController surfaces all of them inline, the
-    /// same way OrganisationsController/ReferenceDataController already do.</summary>
+    /// <summary>Every rejection here is a DomainRuleViolationException carrying user-facing copy,
+    /// surfaced inline by DomainRuleViolationFilter (ADR-0003) — including the "no such order"
+    /// case, which is a deliberate conversion rather than a leaked missing row: the scoped Sales
+    /// query silently returns nothing for a sale outside the caller's subtree, so an out-of-scope
+    /// order and a nonexistent one are indistinguishable here by design, and must stay that way
+    /// or the screen leaks which sales exist elsewhere in the tree. Both get the same sentence.
+    /// The general-purpose InvalidOperationException still means "missing row or bug" everywhere
+    /// it is left in place — see UserOrgAssignmentService for that case.</summary>
     public async Task AdvanceStatusAsync(Guid saleId, CancellationToken cancellationToken = default)
     {
         var sale = await dbContext.Sales.FirstOrDefaultAsync(x => x.Id == saleId, cancellationToken);
         if (sale is null)
         {
-            throw new InvalidOperationException("This custom order is no longer available.");
+            throw new DomainRuleViolationException("This custom order is no longer available.");
         }
 
         if (sale.FulfilmentStatus is not { } current)
         {
-            throw new DotGlasses.Domain.Common.DomainRuleViolationException("This Sale is not a custom order routed to fulfilment.");
+            throw new DomainRuleViolationException("This Sale is not a custom order routed to fulfilment.");
         }
 
         sale.FulfilmentStatus = current switch
@@ -90,7 +94,7 @@ public class CustomOrderService(DotGlassesDbContext dbContext) : ICustomOrderSer
             DomainFulfilmentStatus.Submitted => DomainFulfilmentStatus.InLab,
             DomainFulfilmentStatus.InLab => DomainFulfilmentStatus.ReadyForPickup,
             DomainFulfilmentStatus.ReadyForPickup => DomainFulfilmentStatus.Fulfilled,
-            DomainFulfilmentStatus.Fulfilled => throw new DotGlasses.Domain.Common.DomainRuleViolationException("This custom order is already Fulfilled."),
+            DomainFulfilmentStatus.Fulfilled => throw new DomainRuleViolationException("This custom order is already Fulfilled."),
             _ => throw new ArgumentOutOfRangeException(nameof(current), current, null),
         };
 

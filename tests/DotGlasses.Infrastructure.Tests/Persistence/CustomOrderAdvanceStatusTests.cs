@@ -1,3 +1,4 @@
+using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Entities;
 using DotGlasses.Domain.Enums;
 using DotGlasses.Infrastructure.Persistence;
@@ -67,7 +68,7 @@ public class CustomOrderAdvanceStatusTests(PostgresContainerFixture postgres)
 
         await using var context = CreateContext(connectionString, hierarchyPathPrefix: "/1/");
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => new CustomOrderService(context).AdvanceStatusAsync(saleId));
+        var ex = await Assert.ThrowsAsync<DomainRuleViolationException>(() => new CustomOrderService(context).AdvanceStatusAsync(saleId));
         Assert.Equal("This custom order is already Fulfilled.", ex.Message);
     }
 
@@ -79,7 +80,7 @@ public class CustomOrderAdvanceStatusTests(PostgresContainerFixture postgres)
 
         await using var context = CreateContext(connectionString, hierarchyPathPrefix: "/1/4/");
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => new CustomOrderService(context).AdvanceStatusAsync(saleId));
+        var ex = await Assert.ThrowsAsync<DomainRuleViolationException>(() => new CustomOrderService(context).AdvanceStatusAsync(saleId));
         Assert.Equal("This custom order is no longer available.", ex.Message);
     }
 
@@ -91,7 +92,7 @@ public class CustomOrderAdvanceStatusTests(PostgresContainerFixture postgres)
 
         await using var context = CreateContext(connectionString, hierarchyPathPrefix: "/1/");
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => new CustomOrderService(context).AdvanceStatusAsync(saleId));
+        var ex = await Assert.ThrowsAsync<DomainRuleViolationException>(() => new CustomOrderService(context).AdvanceStatusAsync(saleId));
         Assert.Equal("This Sale is not a custom order routed to fulfilment.", ex.Message);
     }
 }

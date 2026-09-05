@@ -1,5 +1,6 @@
 using DotGlasses.Application.PresetCatalogues;
 using DotGlasses.Application.ReferenceData;
+using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Entities;
 using DotGlasses.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -41,7 +42,7 @@ public class PresetCatalogueAdminService(DotGlassesDbContext dbContext, IReferen
         var owningOrg = await dbContext.OrganisationNodes.FirstAsync(x => x.Id == owningOrgNodeId, cancellationToken);
         if (owningOrg.Level is not (OrganisationLevel.Dgi or OrganisationLevel.Country))
         {
-            throw new DotGlasses.Domain.Common.DomainRuleViolationException("A PresetCatalogue's owning org must be Dgi or Country level.");
+            throw new DomainRuleViolationException("A PresetCatalogue's owning org must be Dgi or Country level.");
         }
 
         var entity = new PresetCatalogue
