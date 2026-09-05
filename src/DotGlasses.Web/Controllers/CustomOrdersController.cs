@@ -35,19 +35,11 @@ public class CustomOrdersController(ICustomOrderService customOrderService) : Co
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> AdvanceStatus(Guid saleId, CancellationToken cancellationToken)
     {
-        try
-        {
-            await customOrderService.AdvanceStatusAsync(saleId, cancellationToken);
-        }
-        catch (InvalidOperationException ex)
-        {
-            // Already-Fulfilled (a colleague got there first, a double click, a browser resubmit),
-            // not-a-custom-order, and out-of-scope all arrive here as user-facing copy — surfaced
-            // the same way OrganisationsController's SetActive/UnassignUser do. Rebuilds the
-            // unfiltered list, matching where the success path redirects to.
-            ModelState.AddModelError(string.Empty, ex.Message);
-            return View(nameof(Index), await BuildViewModelAsync(status: null, cancellationToken));
-        }
+        // Already-Fulfilled (a colleague got there first, a double click, a browser resubmit),
+        // not-a-custom-order and out-of-scope all leave the service as DomainRuleViolationException
+        // and are rendered inline by DomainRuleViolationFilter — no catch here, deliberately
+        // (ADR-0003: a controller that catches one is the pattern the filter exists to remove).
+        await customOrderService.AdvanceStatusAsync(saleId, cancellationToken);
 
         return RedirectToAction(nameof(Index));
     }

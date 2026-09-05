@@ -135,18 +135,43 @@ public class DomainRuleViolationScreenTests(AdminPortalFactory factory) : IClass
         Assert.Contains("This custom order is already Fulfilled.", html);
     }
 
-    /// <summary>The other half of the seam: a missing row is not a business-rule rejection, so it
-    /// keeps its InvalidOperationException and is never dressed up as a message to the user
-    /// (ADR-0003) — "sequence contains no elements" must not reach a screen.</summary>
+    /// <summary>A sale the caller can't see and a sale that doesn't exist are the same fact here —
+    /// the hierarchy filter hides the former, so the service cannot tell them apart and must not
+    /// try, or the screen would leak which sales exist elsewhere in the tree. Both get the one
+    /// sentence CustomOrderService has for it, rather than the generic error page an unhandled
+    /// missing row would produce.</summary>
     [Fact]
-    public async Task CustomOrders_AdvancingAnUnknownSale_IsNotTurnedIntoAUserFacingMessage()
+    public async Task CustomOrders_AdvancingASaleTheCallerCannotSee_ShowsTheSameMessageAsOneThatDoesNotExist()
     {
         var client = factory.CreateAdminClient();
         var token = await AdminPortalFactory.GetAntiforgeryTokenAsync(client, "/CustomOrders");
 
-        var response = await client.PostAsync(
+        var (_, html) = await AdminPortalFactory.PostAndFollowAsync(
+            client,
             "/CustomOrders/AdvanceStatus",
-            AdminPortalFactory.Form(token, ("saleId", Guid.NewGuid().ToString())));
+            AdminPortalFactory.Form(token, ("saleId", Guid.NewGuid().ToString())),
+            referer: "/CustomOrders");
+
+        Assert.Contains("This custom order is no longer available.", html);
+    }
+
+    /// <summary>The other half of the seam: a missing row that no service has copy for keeps its
+    /// InvalidOperationException and is never dressed up as a message to the user (ADR-0003) —
+    /// "sequence contains no elements" must not reach a screen. Un-assigning an unknown user hits
+    /// UserAdminService's bare `?? throw new InvalidOperationException("User not found.")`, which
+    /// is a tampered form or a bug, not a sentence an admin should be shown.</summary>
+    [Fact]
+    public async Task Organisations_UnassigningAnUnknownUser_IsNotTurnedIntoAUserFacingMessage()
+    {
+        var client = factory.CreateAdminClient();
+        var token = await AdminPortalFactory.GetAntiforgeryTokenAsync(client, "/Organisations");
+
+        var response = await client.PostAsync(
+            "/Organisations/UnassignUser",
+            AdminPortalFactory.Form(
+                token,
+                ("orgNodeId", OrganisationSeedConfiguration.KenyaRetailPointId.ToString()),
+                ("userId", Guid.NewGuid().ToString())));
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
     }
