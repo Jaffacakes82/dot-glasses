@@ -2,6 +2,7 @@ using DotGlasses.Application.Common;
 using DotGlasses.Application.Customers;
 using DotGlasses.Application.Leads;
 using DotGlasses.Contracts.Sales;
+using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Entities;
 using DomainFrameCoverage = DotGlasses.Domain.Enums.FrameCoverage;
 using ContractFrameCoverage = DotGlasses.Contracts.Sales.FrameCoverage;
@@ -41,6 +42,10 @@ public class SaleService(
             var existingCoatings = await repository.GetCoatingRefIdsBySaleIdsAsync([existing.Id], cancellationToken);
             return ToDto(existing, existingCoatings.GetValueOrDefault(existing.Id, []));
         }
+
+        // Resolved before anything is built, so a refusal leaves nothing half-written — not even
+        // a Customer row.
+        var sourceLead = await ResolveSourceLeadAsync(request.SourceLeadId, cancellationToken);
 
         var customerId = await FindOrCreateCustomerAsync(hierarchyPath, request.FullName, request.PhoneNumber, cancellationToken);
         var lensRangeType = request.LensRangeType.ToDomain();
@@ -98,15 +103,11 @@ public class SaleService(
             CreatedAtUtc = DateTimeOffset.UtcNow,
         }));
 
-        if (request.SourceLeadId is { } sourceLeadId)
+        if (sourceLead is not null)
         {
-            var sourceLead = await leadRepository.GetByIdAsync(sourceLeadId, cancellationToken);
-            if (sourceLead is not null)
-            {
-                sourceLead.ConvertedFlag = true;
-                sourceLead.SaleId = entity.Id;
-                leadRepository.Update(sourceLead);
-            }
+            sourceLead.ConvertedFlag = true;
+            sourceLead.SaleId = entity.Id;
+            leadRepository.Update(sourceLead);
         }
 
         // Single SaveChangesAsync call: the Sale create and the source Lead's ConvertedFlag/
@@ -114,6 +115,24 @@ public class SaleService(
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return ToDto(entity, request.CoatingRefIds);
+    }
+
+    /// <summary>
+    /// The source Lead a conversion names, or null when this Sale isn't a conversion at all.
+    /// Mirrors LeadService.ResolveSourceTestAsync — a named-but-unreadable source is a refusal,
+    /// never a skipped back-link that would leave the Lead sitting in the open worklist while
+    /// the Sale reads as recorded.
+    /// </summary>
+    private async Task<Lead?> ResolveSourceLeadAsync(Guid? sourceLeadId, CancellationToken cancellationToken)
+    {
+        if (sourceLeadId is not { } id)
+        {
+            return null;
+        }
+
+        return await leadRepository.GetByIdAsync(id, cancellationToken)
+            ?? throw new DomainRuleViolationException(
+                "The Lead this Sale was converted from isn't available at your location — nothing has been saved.");
     }
 
     /// <summary>Exact name+phone match within the retail point — see LeadService's identical helper.</summary>

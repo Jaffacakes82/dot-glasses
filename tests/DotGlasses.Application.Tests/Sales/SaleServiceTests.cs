@@ -2,6 +2,7 @@ using DotGlasses.Application.Sales;
 using DotGlasses.Application.Tests.Fakes;
 using DotGlasses.Contracts.Common;
 using DotGlasses.Contracts.Sales;
+using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Entities;
 using ContractFrameCoverage = DotGlasses.Contracts.Sales.FrameCoverage;
 
@@ -109,26 +110,42 @@ public class SaleServiceTests
     }
 
     [Fact]
-    public async Task ConvertingALeadTheCallerCannotSee_TodaySucceedsSilentlyAndLeavesTheLeadOpen()
+    public async Task ConvertingALeadTheCallerCannotSee_IsRefusedAndWritesNothing()
     {
-        // DOCUMENTS TODAY'S BEHAVIOUR, WHICH IS WRONG. The source Lead is outside the caller's
-        // hierarchy scope, so the repository returns nothing and SaleService quietly skips the
-        // back-link: the Sale is created, the Lead stays open and unconverted, and the caller is
-        // told the conversion worked. Ticket 16 inverts this — the conversion should be refused
-        // rather than half-completing. Pinned as-is so that change shows up as a deliberate
-        // behaviour flip and not as an accident.
-        var sut = CreateSut(out _, out var leads, out _, out var unitOfWork);
+        // The source Lead is outside the caller's hierarchy scope, so the repository returns
+        // nothing. That is a refusal, not a back-link to skip: half-completing would record a
+        // Sale while its source Lead stayed in the open worklist, with the caller told it
+        // worked. Nothing at all is written — no Sale, no coatings, no Customer, no commit.
+        var sut = CreateSut(out var sales, out var leads, out var customers, out var unitOfWork);
         var leadId = Guid.NewGuid();
         leads.Seed(AnOpenLead(leadId));
         leads.HideFromCaller(leadId);
 
-        var sale = await sut.CreateAsync(ARecordedSale(sourceLeadId: leadId), Guid.NewGuid(), RetailPoint);
+        var rejection = await Assert.ThrowsAsync<DomainRuleViolationException>(
+            () => sut.CreateAsync(ARecordedSale(sourceLeadId: leadId), Guid.NewGuid(), RetailPoint));
 
         var sourceLead = leads.Inspect(leadId)!;
-        Assert.Equal(leadId, sale.SourceLeadId);
+        Assert.Contains("isn't available at your location", rejection.Message);
+        Assert.Equal(0, sales.Count);
+        Assert.Empty(sales.StoredCoatings);
+        Assert.Equal(0, customers.Count);
         Assert.False(sourceLead.ConvertedFlag);
         Assert.Null(sourceLead.SaleId);
-        Assert.Equal(1, unitOfWork.SaveCount);
+        Assert.Equal(0, unitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task ConvertingALeadThatDoesNotExistAtAll_IsRefusedTheSameWay()
+    {
+        // "Out of scope" and "never existed" are the same miss through the hierarchy filter, and
+        // both refuse — a Sale must never claim a source it could not read.
+        var sut = CreateSut(out var sales, out _, out _, out var unitOfWork);
+
+        await Assert.ThrowsAsync<DomainRuleViolationException>(
+            () => sut.CreateAsync(ARecordedSale(sourceLeadId: Guid.NewGuid()), Guid.NewGuid(), RetailPoint));
+
+        Assert.Equal(0, sales.Count);
+        Assert.Equal(0, unitOfWork.SaveCount);
     }
 
     [Fact]
