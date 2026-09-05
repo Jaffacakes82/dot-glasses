@@ -13,7 +13,9 @@ namespace DotGlasses.Infrastructure.Persistence;
 /// see their own Country/Intermediate ancestors via the standard hierarchy filter (it only ever
 /// shows a caller their own subtree), so a plain query would silently resolve every
 /// outlet/retailer/country name to "Unknown" for anyone below Country level. Same bug class
-/// PresetCatalogueQueryService hit earlier this session, see CLAUDE.md.</summary>
+/// PresetCatalogueQueryService hit earlier this session, see CLAUDE.md. The resolution itself is
+/// OrgTreeLookup's, shared with Event History and Custom Orders rather than reimplemented here, so
+/// all three screens name the same Retailer for the same retail point (docs/adr/0004).</summary>
 public class DashboardQueryService(DotGlassesDbContext dbContext, IUnscopedReportQueryService unscopedReportQueryService) : IDashboardQueryService
 {
     private const int TopN = 5;
@@ -22,18 +24,18 @@ public class DashboardQueryService(DotGlassesDbContext dbContext, IUnscopedRepor
 
     public async Task<DashboardSnapshot> GetAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, CancellationToken cancellationToken = default)
     {
-        var orgLookup = new OrgLookup(await unscopedReportQueryService.GetOrganisationNodesUnscopedAsync(cancellationToken));
+        var orgLookup = new OrgTreeLookup(await unscopedReportQueryService.GetOrganisationNodesUnscopedAsync(cancellationToken));
 
         var allTests = (await dbContext.Tests.ToListAsync(cancellationToken))
-            .Where(t => !orgLookup.IsUnderTrainingOrg(t.HierarchyPath))
+            .Where(t => !orgLookup.IsRowUnderTrainingOrg(t.HierarchyPath))
             .ToList();
         var tests = allTests.Where(t => InRange(t.CreatedAtUtc, fromUtc, toUtcExclusive)).ToList();
         var allLeads = (await dbContext.Leads.ToListAsync(cancellationToken))
-            .Where(l => !orgLookup.IsUnderTrainingOrg(l.HierarchyPath))
+            .Where(l => !orgLookup.IsRowUnderTrainingOrg(l.HierarchyPath))
             .ToList();
         var leads = allLeads.Where(l => InRange(l.CreatedAtUtc, fromUtc, toUtcExclusive)).ToList();
         var sales = (await dbContext.Sales.ToListAsync(cancellationToken))
-            .Where(s => !orgLookup.IsUnderTrainingOrg(s.HierarchyPath) && InRange(s.CreatedAtUtc, fromUtc, toUtcExclusive))
+            .Where(s => !orgLookup.IsRowUnderTrainingOrg(s.HierarchyPath) && InRange(s.CreatedAtUtc, fromUtc, toUtcExclusive))
             .ToList();
 
         // Built from allLeads (unfiltered), not the date-filtered leads above — whether a Test
@@ -81,9 +83,13 @@ public class DashboardQueryService(DotGlassesDbContext dbContext, IUnscopedRepor
             trend,
             genderMalePercent,
             genderFemalePercent,
-            RankByKey(sales, tests, s => orgLookup.Outlet(s.HierarchyPath), t => orgLookup.Outlet(t.HierarchyPath)),
-            RankByKey(sales, tests, s => orgLookup.Retailer(s.HierarchyPath), t => orgLookup.Retailer(t.HierarchyPath)),
-            RankByKey(sales, tests, s => orgLookup.Country(s.HierarchyPath), t => orgLookup.Country(t.HierarchyPath)),
+            // Ranked by the resolved *name*, so the Retailer rows a retail point contributes to
+            // are the ones OrgTreeLookup names — including the honest "No retailer" bucket for
+            // outlets hanging directly off a Country, which is a different row from the
+            // "Unknown retailer" one meaning "that path is not in the tree" (CONTEXT.md).
+            RankByKey(sales, tests, s => orgLookup.RowOutletName(s.HierarchyPath), t => orgLookup.RowOutletName(t.HierarchyPath)),
+            RankByKey(sales, tests, s => orgLookup.RowRetailerName(s.HierarchyPath), t => orgLookup.RowRetailerName(t.HierarchyPath)),
+            RankByKey(sales, tests, s => orgLookup.RowCountryName(s.HierarchyPath), t => orgLookup.RowCountryName(t.HierarchyPath)),
             RankByKey(sales, tests, s => technicianNames.GetValueOrDefault(s.TechnicianUserId, "—"), t => technicianNames.GetValueOrDefault(t.TechnicianUserId, "—")));
     }
 
@@ -127,30 +133,5 @@ public class DashboardQueryService(DotGlassesDbContext dbContext, IUnscopedRepor
             .OrderByDescending(e => e.Sales)
             .Take(TopN)
             .ToList();
-    }
-
-    private sealed class OrgLookup(IReadOnlyList<OrganisationNodeSummary> nodes)
-    {
-        private readonly Dictionary<string, OrganisationNodeSummary> _byPath = nodes.ToDictionary(n => n.HierarchyPath);
-        private readonly IReadOnlyList<OrganisationNodeSummary> _countries = nodes.Where(n => n.Level == OrganisationLevel.Country).ToList();
-        private readonly IReadOnlyList<OrganisationNodeSummary> _intermediates = nodes.Where(n => n.Level == OrganisationLevel.Intermediate).ToList();
-        private readonly IReadOnlyList<string> _trainingOrgPaths = nodes.Where(n => n.IsTrainingOrg).Select(n => n.HierarchyPath).ToList();
-
-        public bool IsUnderTrainingOrg(string hierarchyPath) =>
-            _trainingOrgPaths.Any(p => hierarchyPath.StartsWith(p, StringComparison.Ordinal));
-
-        public string Outlet(string hierarchyPath) =>
-            _byPath.TryGetValue(hierarchyPath, out var node) ? node.Name : "Unknown outlet";
-
-        public string Country(string hierarchyPath) =>
-            _countries.FirstOrDefault(c => hierarchyPath.StartsWith(c.HierarchyPath, StringComparison.Ordinal))?.Name ?? "Unknown country";
-
-        /// <summary>Nearest Intermediate-level ancestor (the design mockup's "retailer" tier) —
-        /// longest matching path prefix, since an Intermediate can itself sit under another
-        /// Intermediate.</summary>
-        public string Retailer(string hierarchyPath) =>
-            _intermediates.Where(n => hierarchyPath.StartsWith(n.HierarchyPath, StringComparison.Ordinal))
-                .OrderByDescending(n => n.HierarchyPath.Length)
-                .FirstOrDefault()?.Name ?? "Unknown retailer";
     }
 }
