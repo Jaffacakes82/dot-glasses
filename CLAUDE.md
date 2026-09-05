@@ -40,6 +40,28 @@ are the record of *how* things got built; don't restate that here.
   guard the same thing but throw `DomainRuleViolationException`, which the filter keys on `""`, a
   different response shape the Field App can't render against a control. `ConversionSourceScopingApiTests`
   pins that; the service guard is defence in depth, not a replacement.
+- **A Sale creation request is assembled by `SaleAssembly` (`Rules/Sales`), never by hand.** Both
+  write paths — the Field App's `ConsultationForm.razor` and the Admin Portal's
+  `LeadConversionController` — go through it, because assembling it twice is how the referral
+  answers reached one path and not the other. It splits in two, and the split is load-bearing:
+  `Seed(LeadDto)` is the **carry-over rule** (what a converted Lead contributes — identity, the
+  lens block when `CarriesLens`, and the Sale's **Coating set** seeded from the Lead's single
+  **Coating preference**; *not* frame/hard case, which are point-of-sale decisions, and *not* the
+  referral answers, which every capture path asks fresh), and `Build(id, sourceLeadId, answers)`
+  assembles the request. `Seed` is a **seed, not an override**: the Admin Portal seeds at build
+  time, the Field App seeds at *load* time into its controls. Applying a Lead over already-gathered
+  answers would discard the technician's edits and, on the Field App's conversion-match path (where
+  the Lead is found only *after* the form is filled in), overwrite everything just typed.
+  Attribution stays out of it — `TechnicianUserId`/`HierarchyPath` are not on the DTO and must not
+  be added; `LeadConversionController` passes the *Lead's* own values to `ISaleService.CreateAsync`
+  as separate arguments. `SaleAssemblyTests` walks `CreateSaleRequest` by reflection and fails
+  unless every property is either carried from `SaleAnswers` or listed in `DeliberatelyNotCarried`
+  with a reason — so **adding a field to `CreateSaleRequest` means adding it to `SaleAnswers` and
+  `Build` too**. One thing deliberately stays with each form rather than moving into the builder:
+  the "Custom range only" gate on `OrderFromDotGlasses`. The Field App hides that checkbox outside
+  a Custom range and so must suppress a stale value (or it becomes an error against a control the
+  technician can't see), while the Admin Portal renders it unconditionally and wants
+  `ConsultationRules` to say so. Don't "unify" it.
 - **`ReferenceDataSnapshot` is the single `Guid`→label resolver server-side**, fallback `"—"`.
   Don't add a local `ToDictionary(x => x.Id, x => x.Label)` beside it — that's the pattern it
   replaced (seven implementations, four different fallback strings). It is registered scoped and
