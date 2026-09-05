@@ -1,8 +1,9 @@
 using Asp.Versioning;
 using DotGlasses.Application.Common;
+using DotGlasses.Application.ReferenceData;
 using DotGlasses.Application.VisionTests;
 using DotGlasses.Contracts.Tests;
-using FluentValidation;
+using DotGlasses.Rules;
 using DotGlasses.Web.Validation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -17,7 +18,7 @@ namespace DotGlasses.Web.Controllers.Api.V1;
 public class TestsController(
     IVisionTestService testService,
     ICurrentUserContext currentUser,
-    IValidator<CreateTestRequest> createValidator) : ControllerBase
+    IReferenceDataSnapshotProvider snapshots) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<TestDto>>> List(CancellationToken cancellationToken) =>
@@ -43,10 +44,13 @@ public class TestsController(
             return Problem("The authenticated user has no org assignment and cannot record a test.", statusCode: StatusCodes.Status400BadRequest);
         }
 
-        var validation = await createValidator.ValidateAsync(request, cancellationToken);
-        if (!validation.IsValid)
+        // One reference-data read for the whole request, then every rule answered in memory —
+        // ADR-0002. The provider is scoped and memoized, so this is the request's only load.
+        var snapshot = await snapshots.GetAsync(cancellationToken);
+        var rules = ConsultationRules.Check(request, snapshot);
+        if (!rules.IsValid)
         {
-            return ValidationProblem(validation.ToModelStateDictionary());
+            return ValidationProblem(rules.ToModelStateDictionary());
         }
 
         var dto = await testService.CreateAsync(request, technicianUserId, currentUser.HierarchyPathPrefix, cancellationToken);

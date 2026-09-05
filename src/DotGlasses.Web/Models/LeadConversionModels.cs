@@ -19,7 +19,7 @@ public class LeadConversionFormModel
     /// <summary>At least one required — see CreateSaleRequest.CoatingRefIds/ADR-0001. No live
     /// pairing-auto-add or exclusion-blocking in this admin form (Day-2 nicety for this
     /// occasional manual-entry path); the exclusion rule is still enforced server-side via the
-    /// same CreateSaleRequestValidator the Field App posts through, surfaced as a validation
+    /// same ConsultationRules module the Field App posts through, surfaced as a validation
     /// error on submit like every other field here.</summary>
     public List<Guid> CoatingRefIds { get; set; } = [];
     public Guid? FrameColourRefId { get; set; }
@@ -35,7 +35,7 @@ public class LeadConversionFormModel
     /// ReferredOrTreated is true; ReferralOtherText only when that reason is the "Other" option;
     /// ReferralLocationFreeText is required when TreatedInFacility is false and must be empty when
     /// it's true. The other four must stay empty when ReferredOrTreated is false — see
-    /// CreateSaleRequestValidator.ValidateReferralAsync, which is what actually enforces this.</summary>
+    /// ConsultationRules' Referral rule, which is what actually enforces this.</summary>
     public bool ReferredOrTreated { get; set; }
     public Guid? ReferralReasonRefId { get; set; }
     public string? ReferralOtherText { get; set; }
