@@ -20,27 +20,26 @@ namespace DotGlasses.Rules;
 ///
 /// <b>Migration complete.</b> Ticket 09 moved occupation, "referred or treated", frame colour,
 /// hard case and reason-not-purchased here; ticket 10 moved the lens range — both branches, the
-/// axis and power constraints, the lens-type requirement and pupil distance; ticket 11 has now
-/// moved the last topic, the Sale's <b>Coating set</b> and the Test/Lead's <b>Coating
-/// preference</b>. Every consultation rule that can be answered from the reference-data snapshot
-/// now lives here, so the two rules named below really are the whole remainder.
-///
-/// DotGlasses.Web.Validation's three FluentValidation validators still wrap this until ticket 12
-/// retires them, keeping their scalar RuleFor chains (length, enum and range checks the snapshot
-/// has no opinion on) and the two repository-backed checks below.
+/// axis and power constraints, the lens-type requirement and pupil distance; ticket 11 moved the
+/// Sale's <b>Coating set</b> and the Test/Lead's <b>Coating preference</b>; ticket 12 moved the
+/// scalar checks (see <see cref="Scalars(CreateTestRequest)"/>) and deleted the three
+/// FluentValidation validators that used to wrap this. Every consultation rule now lives here, and
+/// the two named below really are the whole remainder.
 ///
 /// <b>Two consultation rules can never live here</b>, and the synchronous snapshot-only signature
-/// is what keeps that honest: CreateLeadRequestValidator.ValidateSourceTestAsync and
-/// CreateSaleRequestValidator.ValidateSourceLeadAsync check a specific Test/Lead row through
-/// IVisionTestRepository/ILeadRepository. That is I/O against hierarchy-scoped data, not a fact
-/// about the reference-data library, so it stays on the server in the controller or service layer.
-/// Don't widen this surface to take a repository or return a Task to accommodate them.
+/// is what keeps that honest: an id naming a source Test (on a Lead) or a source Lead (on a Sale)
+/// has to be looked up as a specific hierarchy-scoped row. That is I/O against scoped data, not a
+/// fact about the reference-data library, so it stays on the server — today in LeadsController and
+/// SalesController, which add the same SourceTestId/SourceLeadId-keyed failure the deleted
+/// validators did. Don't widen this surface to take a repository or return a Task to accommodate
+/// them.
 /// </summary>
 public static class ConsultationRules
 {
     public static RuleResult Check(CreateTestRequest request, ReferenceDataSnapshot snapshot) =>
         RuleResult.From(
-            Occupation(request.OccupationRefId, request.OccupationOtherText, snapshot)
+            Scalars(request)
+                .Concat(Occupation(request.OccupationRefId, request.OccupationOtherText, snapshot))
                 .Concat(Referral(request.ReferredOrTreated, request.ReferralReasonRefId, request.ReferralOtherText, request.ReferralLocationFreeText, request.TreatedInFacility, snapshot))
                 .Concat(LensRange(
                     request.LensRangeType, request.PresetCatalogueId, request.LensOptionLeftId, request.LensOptionRightId,
@@ -56,7 +55,8 @@ public static class ConsultationRules
 
     public static RuleResult Check(CreateLeadRequest request, ReferenceDataSnapshot snapshot) =>
         RuleResult.From(
-            Occupation(request.OccupationRefId, request.OccupationOtherText, snapshot)
+            Scalars(request)
+                .Concat(Occupation(request.OccupationRefId, request.OccupationOtherText, snapshot))
                 .Concat(Referral(request.ReferredOrTreated, request.ReferralReasonRefId, request.ReferralOtherText, request.ReferralLocationFreeText, request.TreatedInFacility, snapshot))
                 .Concat(ReasonNotPurchased(request.ReasonNotPurchasedRefId, request.ReasonNotPurchasedOtherText, snapshot))
                 .Concat(LensRange(
@@ -73,7 +73,8 @@ public static class ConsultationRules
 
     public static RuleResult Check(CreateSaleRequest request, ReferenceDataSnapshot snapshot) =>
         RuleResult.From(
-            Occupation(request.OccupationRefId, request.OccupationOtherText, snapshot)
+            Scalars(request)
+                .Concat(Occupation(request.OccupationRefId, request.OccupationOtherText, snapshot))
                 .Concat(Referral(request.ReferredOrTreated, request.ReferralReasonRefId, request.ReferralOtherText, request.ReferralLocationFreeText, request.TreatedInFacility, snapshot))
                 .Concat(FrameColour(request.FrameColourRefId, request.FrameColourOtherText, snapshot))
                 .Concat(HardCase(request.HardCaseSold, request.HardCaseColourRefId, request.HardCaseOtherColourText, snapshot))
@@ -90,6 +91,108 @@ public static class ConsultationRules
                     request.CoatingRefIds,
                     request.LensRangeType, request.PresetCatalogueId, request.LensOptionLeftId, request.LensOptionRightId,
                     snapshot)));
+
+    /// <summary>
+    /// The checks the reference-data snapshot has no opinion on: an id that was actually filled
+    /// in, a string inside its column's length, an enum value that is one of the enum's members,
+    /// and an age a human could plausibly be. They ran as FluentValidation <c>RuleFor</c> chains on
+    /// the three deleted validators (ticket 12) and moved here for the reason ADR-0002 gives for
+    /// every other topic: the Field App has to be able to answer them offline too, and a rule the
+    /// device cannot check is a rule a technician discovers at sync time.
+    ///
+    /// <b>The messages below are FluentValidation's generated copy, reproduced deliberately and
+    /// verbatim</b> — the spaced display name ("Full Name" for FullName), the interpolated actual
+    /// and permitted lengths, the trailing "You entered ..." clause. They are what clients already
+    /// receive, so reproducing them is what keeps this refactor invisible from outside; they are
+    /// pinned character-for-character by ConsultationRulesTests. They read oddly next to the
+    /// hand-written copy elsewhere in this file, and that is the cost of not changing them.
+    ///
+    /// Which check applies to which request is <em>not</em> uniform, and the gaps are pre-existing
+    /// drift preserved on purpose rather than tidied: only a Test length-caps LensTypeOtherText,
+    /// only a Lead requires PhoneNumber, and only a Sale range-checks its LensRangeType — a Lead
+    /// carries the same nullable enum and has never checked it. Harmonise them as their own
+    /// decision if it is ever worth making.
+    /// </summary>
+    private static IEnumerable<RuleFailure> Scalars(CreateTestRequest request) =>
+        NotEmpty(request.Id, IdKey, "Id")
+            .Concat(InEnum(request.Gender, GenderKey, "Gender"))
+            .Concat(InEnum(request.Outcome, nameof(CreateTestRequest.Outcome), "Outcome"))
+            .Concat(AgeYears(request.AgeYears))
+            .Concat(MaximumLength(request.OccupationOtherText, OccupationOtherTextKey, "Occupation Other Text", 200))
+            .Concat(MaximumLength(request.ReferralOtherText, ReferralOtherTextKey, "Referral Other Text", 200))
+            .Concat(MaximumLength(request.ReferralLocationFreeText, ReferralLocationFreeTextKey, "Referral Location Free Text", 500))
+            .Concat(MaximumLength(request.LensTypeOtherText, LensTypeOtherTextKey, "Lens Type Other Text", 200));
+
+    /// <summary>See <see cref="Scalars(CreateTestRequest)"/>.</summary>
+    private static IEnumerable<RuleFailure> Scalars(CreateLeadRequest request) =>
+        NotEmpty(request.Id, IdKey, "Id")
+            .Concat(NotEmpty(request.FullName, FullNameKey, "Full Name"))
+            .Concat(MaximumLength(request.FullName, FullNameKey, "Full Name", 200))
+            .Concat(NotEmpty(request.PhoneNumber, PhoneNumberKey, "Phone Number"))
+            .Concat(MaximumLength(request.PhoneNumber, PhoneNumberKey, "Phone Number", 32))
+            .Concat(InEnum(request.Gender, GenderKey, "Gender"))
+            .Concat(AgeYears(request.AgeYears))
+            .Concat(MaximumLength(request.OccupationOtherText, OccupationOtherTextKey, "Occupation Other Text", 200))
+            .Concat(MaximumLength(request.ReasonNotPurchasedOtherText, nameof(CreateLeadRequest.ReasonNotPurchasedOtherText), "Reason Not Purchased Other Text", 200))
+            .Concat(MaximumLength(request.ReferralOtherText, ReferralOtherTextKey, "Referral Other Text", 200))
+            .Concat(MaximumLength(request.ReferralLocationFreeText, ReferralLocationFreeTextKey, "Referral Location Free Text", 500));
+
+    /// <summary>See <see cref="Scalars(CreateTestRequest)"/>. OrderFromDotGlasses is the one
+    /// scalar carrying hand-written copy rather than FluentValidation's: it always had a
+    /// WithMessage on it, because "must be equal to False" says nothing a technician can act
+    /// on.</summary>
+    private static IEnumerable<RuleFailure> Scalars(CreateSaleRequest request) =>
+        NotEmpty(request.Id, IdKey, "Id")
+            .Concat(NotEmpty(request.FullName, FullNameKey, "Full Name"))
+            .Concat(MaximumLength(request.FullName, FullNameKey, "Full Name", 200))
+            .Concat(MaximumLength(request.PhoneNumber, PhoneNumberKey, "Phone Number", 32))
+            .Concat(InEnum(request.Gender, GenderKey, "Gender"))
+            .Concat(AgeYears(request.AgeYears))
+            .Concat(InEnum(request.LensRangeType, LensRangeTypeKey, "Lens Range Type"))
+            .Concat(InEnum(request.FrameCoverage, nameof(CreateSaleRequest.FrameCoverage), "Frame Coverage"))
+            .Concat(MaximumLength(request.OccupationOtherText, OccupationOtherTextKey, "Occupation Other Text", 200))
+            .Concat(MaximumLength(request.FrameColourOtherText, nameof(CreateSaleRequest.FrameColourOtherText), "Frame Colour Other Text", 200))
+            .Concat(MaximumLength(request.HardCaseOtherColourText, nameof(CreateSaleRequest.HardCaseOtherColourText), "Hard Case Other Colour Text", 200))
+            .Concat(MaximumLength(request.ReferralOtherText, ReferralOtherTextKey, "Referral Other Text", 200))
+            .Concat(MaximumLength(request.ReferralLocationFreeText, ReferralLocationFreeTextKey, "Referral Location Free Text", 500))
+            .Concat(request.OrderFromDotGlasses && request.LensRangeType != LensRangeType.Custom
+                ? [new RuleFailure(nameof(CreateSaleRequest.OrderFromDotGlasses), "OrderFromDotGlasses is only meaningful when LensRangeType is Custom.")]
+                : []);
+
+    /// <summary>An id the caller actually filled in. Guid.Empty is what a missing id deserialises
+    /// to, so it is indistinguishable from "not sent" and rejected as such.</summary>
+    private static IEnumerable<RuleFailure> NotEmpty(Guid value, string key, string displayName) =>
+        value == Guid.Empty ? [new RuleFailure(key, $"'{displayName}' must not be empty.")] : [];
+
+    /// <summary>Whitespace counts as empty, matching the FluentValidation rule this replaces — a
+    /// customer named " " is not a named customer.</summary>
+    private static IEnumerable<RuleFailure> NotEmpty(string? value, string key, string displayName) =>
+        string.IsNullOrWhiteSpace(value) ? [new RuleFailure(key, $"'{displayName}' must not be empty.")] : [];
+
+    /// <summary>A column-width cap. Null and empty pass — absence is a different question, asked
+    /// by <see cref="NotEmpty(string?, string, string)"/> where it is asked at all — and the limit
+    /// itself is inclusive.</summary>
+    private static IEnumerable<RuleFailure> MaximumLength(string? value, string key, string displayName, int max) =>
+        value is { } text && text.Length > max
+            ? [new RuleFailure(key, $"The length of '{displayName}' must be {max} characters or fewer. You entered {text.Length} characters.")]
+            : [];
+
+    /// <summary>An enum value that is one of the enum's own members. A number outside the set
+    /// arrives whenever a client sends an integer the server's copy of the enum has never heard
+    /// of, and the message quotes it back because that number is the only clue to what was
+    /// sent.</summary>
+    private static IEnumerable<RuleFailure> InEnum<TEnum>(TEnum value, string key, string displayName)
+        where TEnum : struct, Enum =>
+        Enum.IsDefined(value)
+            ? []
+            : [new RuleFailure(key, $"'{displayName}' has a range of values which does not include '{value}'.")];
+
+    /// <summary>Optional on all three requests, range-checked whenever it is given. 120 is a
+    /// plausibility ceiling, not a medical one.</summary>
+    private static IEnumerable<RuleFailure> AgeYears(int? ageYears) =>
+        ageYears is { } age && (age < 0 || age > 120)
+            ? [new RuleFailure(AgeYearsKey, $"'Age Years' must be between 0 and 120. You entered {age}.")]
+            : [];
 
     /// <summary>Optional on all three: no occupation recorded is a valid consultation.</summary>
     private static IEnumerable<RuleFailure> Occupation(Guid? occupationRefId, string? occupationOtherText, ReferenceDataSnapshot snapshot) =>
@@ -627,6 +730,16 @@ public static class ConsultationRules
             ? [new RuleFailure(otherTextKey, otherTextRequiredMessage)]
             : [];
     }
+
+    // Id, Gender and AgeYears are spelled identically on all three requests; FullName and
+    // PhoneNumber on the two that carry a customer (a Test records no name — see
+    // CreateTestRequest). All five read off the request below that carries them, on the same
+    // one-body-one-set-of-keys footing as the topics further down.
+    private const string IdKey = nameof(CreateTestRequest.Id);
+    private const string GenderKey = nameof(CreateTestRequest.Gender);
+    private const string AgeYearsKey = nameof(CreateTestRequest.AgeYears);
+    private const string FullNameKey = nameof(CreateLeadRequest.FullName);
+    private const string PhoneNumberKey = nameof(CreateLeadRequest.PhoneNumber);
 
     // Occupation and referral are captured identically on all three requests, so their keys are
     // read off CreateTestRequest and used for all three — one rule body, one set of keys. C# has

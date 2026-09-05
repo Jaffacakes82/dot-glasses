@@ -54,7 +54,7 @@ public class CreateLeadRequest
     public decimal? CustomAddPowerRight { get; set; }
 
     /// <summary>Required when either add power is set (two distinct powers on that eye) — see
-    /// CreateLeadRequestValidator.</summary>
+    /// ConsultationRules.</summary>
     public Guid? LensTypeRefId { get; set; }
     public string? LensTypeOtherText { get; set; }
 

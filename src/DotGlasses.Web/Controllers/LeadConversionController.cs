@@ -7,9 +7,9 @@ using DotGlasses.Contracts.PresetCatalogues;
 using DotGlasses.Contracts.Leads;
 using DotGlasses.Contracts.ReferenceData;
 using DotGlasses.Contracts.Sales;
+using DotGlasses.Rules;
 using DotGlasses.Rules.ReferenceData;
 using DotGlasses.Web.Models;
-using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -36,8 +36,7 @@ public class LeadConversionController(
     ISaleService saleService,
     IReferenceDataQueryService referenceDataQueryService,
     IReferenceDataSnapshotProvider referenceDataSnapshotProvider,
-    IPresetCatalogueQueryService presetCatalogueQueryService,
-    IValidator<CreateSaleRequest> validator) : Controller
+    IPresetCatalogueQueryService presetCatalogueQueryService) : Controller
 {
     [HttpGet("Leads/Convert/{id:guid}")]
     public async Task<IActionResult> Convert(Guid id, CancellationToken cancellationToken)
@@ -77,15 +76,21 @@ public class LeadConversionController(
         var lensCarriedOver = lead.LensRangeType is not null;
         var request = BuildCreateSaleRequest(lead, form, lensCarriedOver);
 
-        var validation = await validator.ValidateAsync(request, cancellationToken);
-        if (!validation.IsValid)
+        // The same module SalesController checks against, off the same per-request snapshot
+        // BuildViewModelAsync already loads. The source-Lead check the two API endpoints also run
+        // has nothing to do here: it asks whether this Lead is already converted, and the
+        // ConvertedFlag guard above has answered that with friendlier copy — SaleService sets
+        // ConvertedFlag and SaleId together in one transaction, so the two can't disagree.
+        var snapshot = await referenceDataSnapshotProvider.GetAsync(cancellationToken);
+        var rules = ConsultationRules.Check(request, snapshot);
+        if (!rules.IsValid)
         {
-            // Errors come back keyed by CreateSaleRequest's own property names — LeadConversionFormModel
+            // Failures come back keyed by CreateSaleRequest's own property names — LeadConversionFormModel
             // deliberately mirrors those names 1:1 so a straight "Form.{PropertyName}" remap is enough,
             // no per-field translation table needed.
-            foreach (var error in validation.Errors)
+            foreach (var failure in rules.Failures)
             {
-                ModelState.AddModelError($"{nameof(form)}.{error.PropertyName}", error.ErrorMessage);
+                ModelState.AddModelError($"{nameof(form)}.{failure.Key}", failure.Message);
             }
 
             return View(await BuildViewModelAsync(lead, form, cancellationToken));
