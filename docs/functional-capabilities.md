@@ -211,12 +211,16 @@ Main card, **Top performing** — four fixed top-5-by-sales-volume lists (not fi
 clickable), each row showing a name, its sale count and its own conversion % (that key's Sales ÷
 that key's Tests):
 - **Top outlets** — exact hierarchy-path match on the org node.
-- **Top retailers** — the nearest `Intermediate`-level ancestor (longest matching path prefix).
+- **Top retailers** — the **Retailer**: the nearest `Intermediate`-level ancestor.
 - **Top countries** — the `Country`-level ancestor.
 - **Top technicians** — the recording user's full name, falling back to their username.
 
 Unresolvable names appear as "Unknown outlet" / "Unknown retailer" / "Unknown country" rather than
-failing. If all four lists are empty the whole card collapses to "No sales recorded yet."
+failing. Sales at a retail point that sits directly under a Country are ranked under a separate
+**"No retailer"** row — that outlet genuinely has none, and reporting says so rather than
+substituting the country (2026-09-05). "No retailer" and "Unknown retailer" are different rows
+carrying different facts: the first means "there is none", the second "we cannot resolve this
+path". If all four lists are empty the whole card collapses to "No sales recorded yet."
 
 **Organisations flagged `IsTrainingOrg` are excluded from every figure on this page** — the tile
 counts, the conversions, the trend, the gender split and all four rankings. Training exclusion is
@@ -470,17 +474,37 @@ is replaced with a pointer to the Reference Data screen.
 
 ### 4.7 Custom Orders
 
-**Route** `/CustomOrders?status=…&page=…` · **Access** `CustomOrders.View` — **any role**, at DGI
+**Route** `/CustomOrders?status=…` · **Access** `CustomOrders.View` — **any role**, at DGI
 or Country level only. Hidden entirely below that. The same policy gates both viewing and
 advancing status.
 
 The queue lists every Sale with a fulfilment status set — that is, every Sale recorded as a Custom
-prescription with "Order this lens from DOT Glasses" ticked. Newest first, 25 per page, with a
-status-filter pill row (`Submitted` / `In Lab` / `Ready for Pickup` / `Fulfilled`) above the table.
+prescription with "Order this lens from DOT Glasses" ticked. Unpaged (custom-order volume is
+naturally small), with a status-filter pill row (`Submitted` / `In Lab` / `Ready for Pickup` /
+`Fulfilled`) above the list.
 
-Columns: **Customer** (name, or "—"), **Source outlet** (resolved from the sale's hierarchy path,
-or "Unknown outlet"), **Prescription** (a formatted string, `OD <right> / OS <left>`, each eye
-showing sphere and, where non-zero, `cyl` and `add`), **Status** badge, and the advance action.
+Orders are grouped **Retailer → retail point → customer**, each order showing its **Prescription**
+(a formatted string, `OD <right> / OS <left>`, each eye showing sphere and, where non-zero, `cyl`
+and `add`), a **Status** badge, and the advance action. The Retailer and retail-point headings each
+carry an "N active" badge counting *unfulfilled* orders across the caller's whole scoped set,
+regardless of which status pill is selected, so the badge reads as a stable "how much sits here"
+signal rather than shifting with the filter.
+
+**Retailer** here means what it means everywhere else in the product: the nearest
+`Intermediate`-level ancestor of the order's retail point, not that retail point's immediate parent
+(2026-09-05 — the two disagree whenever a retail point hangs directly off a Country, and the old
+resolution headed such a group with the country's name). Three headings are possible where no
+Retailer node resolves, and they are deliberately distinct groups rather than one bucket:
+
+| Heading | Means |
+|---|---|
+| *the retailer's name* | A reseller tier was found at or above the retail point. |
+| **No retailer** | The retail point is known and hangs directly off a Country — it genuinely has none. |
+| **Unknown retailer** | The order's hierarchy path names no org node at all — a data problem. |
+
+A retail point that cannot be resolved likewise appears as **"Unknown outlet"**. Ancestor names are
+resolved against the whole org tree rather than the caller's own subtree, so a caller scoped at a
+retail point still sees their own Retailer named rather than "Unknown".
 
 **Advance status** is a single button labelled with the next state. The flow is linear and
 forward-only: **Submitted → In Lab → Ready for Pickup → Fulfilled**. Status is set to *Submitted*
@@ -904,8 +928,8 @@ but no screen displays them.
 server-side can push to it.
 
 **Search and paging are now present on most list screens** (Event History's Leads tab, User
-Directory, Custom Orders, Preset Catalogues) but not uniformly — Organisations' tree and Dashboard's
-top-N lists have neither, and only Event History/Custom Orders/User Directory support true
+Directory, Preset Catalogues) but not uniformly — Organisations' tree, Custom Orders' grouped queue
+and Dashboard's top-N lists have neither, and only Event History/User Directory support true
 server-side paging (Preset Catalogues' search filters an already-fully-loaded list, proportionate
 to its small size).
 
