@@ -9,6 +9,7 @@ using DotGlasses.Contracts.ReferenceData;
 using DotGlasses.Contracts.Sales;
 using DotGlasses.Rules;
 using DotGlasses.Rules.ReferenceData;
+using DotGlasses.Rules.Sales;
 using DotGlasses.Web.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -53,7 +54,11 @@ public class LeadConversionController(
             return RedirectToAction("Index", "EventHistory", new { tab = "leads" });
         }
 
-        var form = new LeadConversionFormModel { ConsentGiven = lead.ConsentGiven, CoatingRefIds = lead.CoatingPreferenceRefId is { } coatingRefId ? [coatingRefId] : [] };
+        // Prefilled from the same seed the POST assembles through, so what the admin is shown is
+        // what a straight submit would record — the Coating set seeded from the Lead's Coating
+        // preference included (CONTEXT.md).
+        var seeded = SaleAssembly.Seed(lead);
+        var form = new LeadConversionFormModel { ConsentGiven = seeded.ConsentGiven, CoatingRefIds = seeded.CoatingRefIds };
         return View(await BuildViewModelAsync(lead, form, cancellationToken));
     }
 
@@ -73,8 +78,7 @@ public class LeadConversionController(
             return RedirectToAction("Index", "EventHistory", new { tab = "leads" });
         }
 
-        var lensCarriedOver = lead.LensRangeType is not null;
-        var request = BuildCreateSaleRequest(lead, form, lensCarriedOver);
+        var request = BuildCreateSaleRequest(lead, form);
 
         // The same module SalesController checks against, off the same per-request snapshot
         // BuildViewModelAsync already loads. The source-Lead check the two API endpoints also run
@@ -102,57 +106,50 @@ public class LeadConversionController(
         return RedirectToAction("Index", "EventHistory", new { tab = "leads" });
     }
 
-    private static CreateSaleRequest BuildCreateSaleRequest(LeadDto lead, LeadConversionFormModel form, bool lensCarriedOver) => new()
+    /// <summary>
+    /// Seeds the answers from the Lead, overlays what this form asked, and hands both to the shared
+    /// builder — the same one ConsultationForm.razor uses, so a field added to CreateSaleRequest
+    /// cannot reach one write path and miss the other (which is how the referral answers came to be
+    /// missing from this one). Carry-over and the conditional blanking live in SaleAssembly; what
+    /// stays here is only the part that is genuinely this form's own: which controls it rendered.
+    /// </summary>
+    private static CreateSaleRequest BuildCreateSaleRequest(LeadDto lead, LeadConversionFormModel form)
     {
-        Id = Guid.NewGuid(),
-        SourceLeadId = lead.Id,
-        FullName = lead.CustomerFullName,
-        PhoneNumber = lead.CustomerPhoneNumber,
-        AgeYears = lead.AgeYears,
-        Gender = lead.Gender,
-        OccupationRefId = lead.OccupationRefId,
-        OccupationOtherText = lead.OccupationOtherText,
-        ConsentGiven = form.ConsentGiven,
-        LensRangeType = lensCarriedOver ? lead.LensRangeType!.Value : form.LensRangeType ?? LensRangeType.Custom,
-        PresetCatalogueId = lensCarriedOver ? lead.PresetCatalogueId : form.PresetCatalogueId,
-        LensOptionLeftId = lensCarriedOver ? lead.LensOptionLeftId : form.LensOptionLeftId,
-        LensOptionRightId = lensCarriedOver ? lead.LensOptionRightId : form.LensOptionRightId,
-        CustomSphereLeft = lensCarriedOver ? lead.CustomSphereLeft : form.CustomSphereLeft,
-        CustomCylinderLeft = lensCarriedOver ? lead.CustomCylinderLeft : form.CustomCylinderLeft,
-        CustomAxisLeft = lensCarriedOver ? lead.CustomAxisLeft : form.CustomAxisLeft,
-        CustomAddPowerLeft = lensCarriedOver ? lead.CustomAddPowerLeft : form.CustomAddPowerLeft,
-        CustomSphereRight = lensCarriedOver ? lead.CustomSphereRight : form.CustomSphereRight,
-        CustomCylinderRight = lensCarriedOver ? lead.CustomCylinderRight : form.CustomCylinderRight,
-        CustomAxisRight = lensCarriedOver ? lead.CustomAxisRight : form.CustomAxisRight,
-        CustomAddPowerRight = lensCarriedOver ? lead.CustomAddPowerRight : form.CustomAddPowerRight,
-        LensTypeRefId = lensCarriedOver ? lead.LensTypeRefId : form.LensTypeRefId,
-        LensTypeOtherText = lensCarriedOver ? lead.LensTypeOtherText : form.LensTypeOtherText,
-        OrderFromDotGlasses = form.OrderFromDotGlasses,
-        PupilDistanceMm = lensCarriedOver ? lead.PupilDistanceMm : form.PupilDistanceMm,
-        PresetPupilDistanceBucket = lensCarriedOver ? lead.PresetPupilDistanceBucket : form.PresetPupilDistanceBucket,
-        ChildrensFrame = lensCarriedOver ? lead.ChildrensFrame : form.ChildrensFrame,
-        FrameColourRefId = form.FrameColourRefId ?? Guid.Empty,
-        FrameColourOtherText = form.FrameColourOtherText,
-        // Not asked on either write path (2026-09-04) — the Field App has never rendered a control
-        // for it either, so both paths now record the same FullFrame default. The column and the
-        // DTO field stay, so existing records read back unchanged.
-        FrameCoverage = FrameCoverage.FullFrame,
-        CoatingRefIds = form.CoatingRefIds,
-        HardCaseSold = form.HardCaseSold,
-        HardCaseColourRefId = form.HardCaseSold ? form.HardCaseColourRefId : null,
-        HardCaseOtherColourText = form.HardCaseSold ? form.HardCaseOtherColourText : null,
-        ReferredOrTreated = form.ReferredOrTreated,
-        // The remaining four are only meaningful when ReferredOrTreated is true, and
-        // CreateSaleRequestValidator rejects the request outright if any of them is non-empty when
-        // it's false — blanked here so an admin who ticks the box, fills the detail in, then
-        // unticks it doesn't submit a request that can only fail. Same suppression the
-        // TreatedInFacility branch applies to ReferralLocationFreeText, which the validator
-        // requires to be empty when treatment happened in the facility.
-        ReferralReasonRefId = form.ReferredOrTreated ? form.ReferralReasonRefId : null,
-        ReferralOtherText = form.ReferredOrTreated ? form.ReferralOtherText : null,
-        TreatedInFacility = form.ReferredOrTreated && form.TreatedInFacility,
-        ReferralLocationFreeText = form.ReferredOrTreated && !form.TreatedInFacility ? form.ReferralLocationFreeText : null,
-    };
+        var answers = SaleAssembly.Seed(lead) with
+        {
+            ConsentGiven = form.ConsentGiven,
+            FrameColourRefId = form.FrameColourRefId,
+            FrameColourOtherText = form.FrameColourOtherText,
+            CoatingRefIds = form.CoatingRefIds,
+            HardCaseSold = form.HardCaseSold,
+            HardCaseColourRefId = form.HardCaseColourRefId,
+            HardCaseOtherColourText = form.HardCaseOtherColourText,
+            // Passed through as ticked. This form renders the checkbox unconditionally with its
+            // "Custom range only" condition in the label, so ConsultationRules saying so on submit
+            // is the intended feedback — see SaleAnswers.OrderFromDotGlasses.
+            OrderFromDotGlasses = form.OrderFromDotGlasses,
+            ReferredOrTreated = form.ReferredOrTreated,
+            ReferralReasonRefId = form.ReferralReasonRefId,
+            ReferralOtherText = form.ReferralOtherText,
+            TreatedInFacility = form.TreatedInFacility,
+            ReferralLocationFreeText = form.ReferralLocationFreeText,
+        };
+
+        // The lens block is the Lead's whenever it recorded one — Seed has already carried it over,
+        // and this form showed a read-only summary rather than asking. Only when it recorded none
+        // does the form render the lens controls, and only then do its answers apply.
+        if (!SaleAssembly.CarriesLens(lead))
+        {
+            answers = answers.WithLens(
+                form.LensRangeType, form.PresetCatalogueId, form.LensOptionLeftId, form.LensOptionRightId,
+                form.CustomSphereLeft, form.CustomCylinderLeft, form.CustomAxisLeft, form.CustomAddPowerLeft,
+                form.CustomSphereRight, form.CustomCylinderRight, form.CustomAxisRight, form.CustomAddPowerRight,
+                form.LensTypeRefId, form.LensTypeOtherText,
+                form.PupilDistanceMm, form.PresetPupilDistanceBucket, form.ChildrensFrame);
+        }
+
+        return SaleAssembly.Build(Guid.NewGuid(), lead.Id, answers);
+    }
 
     private async Task<LeadConversionViewModel> BuildViewModelAsync(LeadDto lead, LeadConversionFormModel form, CancellationToken cancellationToken)
     {
@@ -170,7 +167,7 @@ public class LeadConversionController(
             Lead = lead,
             CustomerFullName = lead.CustomerFullName,
             CustomerPhoneNumber = lead.CustomerPhoneNumber,
-            LensCarriedOver = lead.LensRangeType is not null,
+            LensCarriedOver = SaleAssembly.CarriesLens(lead),
             LensSummary = BuildLensSummary(lead, referenceDataSnapshot),
             AvailableCatalogues = catalogues,
             FrameColours = referenceData.Where(x => x.Category == ReferenceDataCategory.FrameColour).OrderBy(x => x.SortOrder).ToList(),
