@@ -7,11 +7,11 @@ using DotGlasses.Rules.ReferenceData;
 namespace DotGlasses.Rules.Tests;
 
 /// <summary>
-/// The rules moved in tickets 09 and 10 — occupation, "referred or treated", reason not purchased,
-/// frame colour, hard case, and the whole lens range — exercised through
-/// <see cref="ConsultationRules"/>'s three entry points, never through the per-topic functions
-/// behind them: those are private precisely so a test can't pin the composition the remaining
-/// migration batch is going to change.
+/// Every rule <see cref="ConsultationRules"/> holds — occupation, "referred or treated", reason
+/// not purchased, frame colour, hard case, the whole lens range, and the Sale's Coating set and
+/// the Test/Lead's Coating preference — exercised through its three entry points, never through
+/// the per-topic functions behind them: those are private precisely so a test pins the behaviour
+/// rather than the composition.
 ///
 /// The snapshot is a plain literal in every case. Occupation and referral are checked on the Test
 /// request and only smoke-checked on Lead/Sale, because there is one rule body behind all three
@@ -20,6 +20,10 @@ namespace DotGlasses.Rules.Tests;
 /// carries the variant under test, because there the three genuinely differ — a Sale requires a
 /// pupil distance where a Test and Lead only range-check one that was given, and all three word
 /// the out-of-range bucket message differently.
+///
+/// Coating splits the same way, but on a sharper line: a <b>Coating set</b> exists only on a Sale
+/// and a <b>Coating preference</b> only on a Test or Lead (ADR-0001's scope correction), so the
+/// two groups below are checked on the requests that actually carry them and nowhere else.
 /// </summary>
 public class ConsultationRulesTests
 {
@@ -46,10 +50,24 @@ public class ConsultationRulesTests
     private static readonly Guid RetiredLensType = Guid.Parse("00000000-0000-0000-0000-00000000001b");
     private static readonly Guid OtherLensType = Guid.Parse("00000000-0000-0000-0000-00000000001c");
 
+    private static readonly Guid ActiveCoating = Guid.Parse("00000000-0000-0000-0000-00000000002a");
+    private static readonly Guid SecondCoating = Guid.Parse("00000000-0000-0000-0000-00000000002b");
+    private static readonly Guid ExcludingCoating = Guid.Parse("00000000-0000-0000-0000-00000000002c");
+    private static readonly Guid RetiredCoating = Guid.Parse("00000000-0000-0000-0000-00000000002d");
+
+    /// <summary>Active, and configured on no lens option at all — the only way to tell the
+    /// availability rule apart from the active-item rule that runs just before it.</summary>
+    private static readonly Guid UnavailableCoating = Guid.Parse("00000000-0000-0000-0000-00000000002e");
+
     private static readonly Guid CatalogueA = Guid.Parse("00000000-0000-0000-0000-000000000f01");
     private static readonly Guid CatalogueB = Guid.Parse("00000000-0000-0000-0000-000000000f02");
     private static readonly Guid LensA1 = Guid.Parse("00000000-0000-0000-0000-000000000f11");
     private static readonly Guid LensA2 = Guid.Parse("00000000-0000-0000-0000-000000000f12");
+
+    /// <summary>On CatalogueA like the other two, but with no Coatings configured for its
+    /// strength — the state 12 of the 16 seeded LensStrength items are actually in (see
+    /// <c>docs/open-issues.md</c>), and what the lens-keyed failure exists for.</summary>
+    private static readonly Guid LensA3NoCoatings = Guid.Parse("00000000-0000-0000-0000-000000000f13");
     private static readonly Guid LensB1 = Guid.Parse("00000000-0000-0000-0000-000000000f21");
 
     private static readonly Guid NeverExisted = Guid.Parse("00000000-0000-0000-0000-0000000000ff");
@@ -81,21 +99,39 @@ public class ConsultationRulesTests
             new ReferenceItemSnapshot(ActiveLensType, ReferenceDataCategory.LensType, "Bifocal", IsActive: true, IsOtherOption: false),
             new ReferenceItemSnapshot(RetiredLensType, ReferenceDataCategory.LensType, "Trifocal", IsActive: false, IsOtherOption: false),
             new ReferenceItemSnapshot(OtherLensType, ReferenceDataCategory.LensType, "Other", IsActive: true, IsOtherOption: true),
+
+            // Coating has no "Other" option — it is a multi-select on a Sale, so there is no
+            // single dropdown for an "Other" row to sit in.
+            new ReferenceItemSnapshot(ActiveCoating, ReferenceDataCategory.Coating, "Photochromic", IsActive: true, IsOtherOption: false),
+            new ReferenceItemSnapshot(SecondCoating, ReferenceDataCategory.Coating, "Blue Block", IsActive: true, IsOtherOption: false),
+            new ReferenceItemSnapshot(ExcludingCoating, ReferenceDataCategory.Coating, "Clear", IsActive: true, IsOtherOption: false),
+            new ReferenceItemSnapshot(RetiredCoating, ReferenceDataCategory.Coating, "Anti-glare", IsActive: false, IsOtherOption: false),
+            new ReferenceItemSnapshot(UnavailableCoating, ReferenceDataCategory.Coating, "Sunglasses", IsActive: true, IsOtherOption: false),
         ],
         [
             // Two catalogues, so "this lens option belongs to some catalogue, just not that one"
             // is a case the tests can actually state — it is the mistake the rule exists to catch,
             // and an id that belongs to nothing would not distinguish the rule from a null check.
+            //
+            // UnavailableCoating is deliberately on no lens option's roster, and LensA3NoCoatings
+            // deliberately has an empty one: those are the two different ways availability fails,
+            // and they are reported against different fields.
             new PresetCatalogueSnapshot(CatalogueA, "Six lens set", PresetCatalogueKind.SixLensSet, [
-                new LensOptionSnapshot(LensA1, "+1.00", 0, []),
-                new LensOptionSnapshot(LensA2, "+2.50", 1, []),
+                new LensOptionSnapshot(LensA1, "+1.00", 0, [ActiveCoating, SecondCoating, ExcludingCoating]),
+                new LensOptionSnapshot(LensA2, "+2.50", 1, [ActiveCoating, SecondCoating, ExcludingCoating]),
+                new LensOptionSnapshot(LensA3NoCoatings, "+3.50", 2, []),
             ]),
             new PresetCatalogueSnapshot(CatalogueB, "Nine lens set", PresetCatalogueKind.NineLensSet, [
-                new LensOptionSnapshot(LensB1, "+3.00", 0, []),
+                new LensOptionSnapshot(LensB1, "+3.00", 0, [ActiveCoating]),
             ]),
         ],
         [],
-        []);
+        [
+            // Clear excludes Photochromic, the worked example in CONTEXT.md and ADR-0001. Stated
+            // one way round only — the rule is symmetric and the snapshot canonicalizes it, which
+            // is exactly what the exclusion tests below check.
+            new CoatingExclusionRule(ExcludingCoating, ActiveCoating),
+        ]);
 
     /// <summary>A request nothing objects to. On a Test or Lead that means no lens range at all —
     /// LensRangeType is nullable there and "not chosen yet" is a valid consultation. Coating
@@ -112,8 +148,9 @@ public class ConsultationRulesTests
 
     /// <summary>A Sale cannot decline to name a lens range: LensRangeType is non-nullable and its
     /// default is SixLensSet, so the baseline request has to carry a complete preset range —
-    /// catalogue, both lens options, and the pupil-distance bucket a Sale is required to have.
-    /// Coatings are ticket 11's and the rules module does not look at them yet.</summary>
+    /// catalogue, both lens options, and the pupil-distance bucket a Sale is required to have. It
+    /// also has to carry a Coating set: at least one entry is required on both branches, so a
+    /// baseline with an empty one would not be valid.</summary>
     private static CreateSaleRequest ValidSale() => new()
     {
         Id = Guid.NewGuid(),
@@ -124,6 +161,7 @@ public class ConsultationRulesTests
         LensOptionLeftId = LensA1,
         LensOptionRightId = LensA2,
         PresetPupilDistanceBucket = 2,
+        CoatingRefIds = [ActiveCoating],
     };
 
     /// <summary>A Test on a complete preset range. The bucket is left unset: optional on a Test.</summary>
@@ -1284,6 +1322,349 @@ public class ConsultationRulesTests
             AssertSingleFailure(ConsultationRules.Check(sale, Snapshot())).Message);
     }
 
+    // --- Coating set (Sale) ---------------------------------------------------------------
+
+    [Fact]
+    public void CoatingSet_OneAvailableActiveCoating_IsAccepted()
+    {
+        Assert.True(ConsultationRules.Check(ValidSale(), Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void CoatingSet_SeveralAvailableActiveCoatings_IsAccepted()
+    {
+        // A set, not a single value — the whole point of ADR-0001.
+        var request = ValidSale();
+        request.CoatingRefIds = [ActiveCoating, SecondCoating];
+
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void CoatingSet_Empty_IsRejectedOnBothBranches(bool preset)
+    {
+        // Required on a preset range and on a Custom prescription alike: a sold lens always
+        // carries at least one Coating.
+        var request = preset ? ValidSale() : CustomSale();
+        request.CoatingRefIds = [];
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("CoatingRefIds", failure.Key);
+        Assert.Equal("Choose at least one coating.", failure.Message);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void CoatingSet_ContainingTheSameCoatingTwice_IsRejectedOnBothBranches(bool preset)
+    {
+        var request = preset ? ValidSale() : CustomSale();
+        request.CoatingRefIds = [ActiveCoating, ActiveCoating];
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("CoatingRefIds", failure.Key);
+        Assert.Equal("CoatingRefIds must not contain duplicates.", failure.Message);
+    }
+
+    [Fact]
+    public void CoatingSet_ContainingARetiredCoating_IsRejected()
+    {
+        var request = ValidSale();
+        request.CoatingRefIds = [ActiveCoating, RetiredCoating];
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("CoatingRefIds", failure.Key);
+        Assert.Equal("CoatingRefIds must only reference existing, active Coating reference-data items.", failure.Message);
+    }
+
+    [Fact]
+    public void CoatingSet_ContainingAnItemFromAnotherCategory_IsRejected()
+    {
+        // A Guid that resolves to a Frame colour is not an answer to "which Coating is this".
+        var request = ValidSale();
+        request.CoatingRefIds = [ActiveFrameColour];
+
+        Assert.Equal(
+            "CoatingRefIds must only reference existing, active Coating reference-data items.",
+            AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Message);
+    }
+
+    [Fact]
+    public void CoatingSet_OnAPresetRange_RejectsACoatingNotConfiguredForTheChosenLens()
+    {
+        // UnavailableCoating is active and real — it is simply not on this lens strength's
+        // roster. That is the distinction between this rule and the active-item check above.
+        var request = ValidSale();
+        request.CoatingRefIds = [UnavailableCoating];
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("CoatingRefIds", failure.Key);
+        Assert.Equal("Every coating must be configured as available for the chosen lens option (see Reference Data > Lens Strength).", failure.Message);
+    }
+
+    [Fact]
+    public void CoatingSet_OnACustomPrescription_AcceptsAnyActiveCoatingRegardlessOfLensAvailability()
+    {
+        // Availability is a per-catalogue restriction, so a Custom prescription — which names no
+        // catalogue at all — has nothing to restrict against.
+        var request = CustomSale();
+        request.CoatingRefIds = [UnavailableCoating];
+
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void CoatingSet_AvailabilityIsScopedByTheLeftLensOnly()
+    {
+        // The rule reads the left lens option and only the left one. LensB1 carries a different
+        // roster, and putting it on the right does not widen or narrow what the left allows —
+        // it is rejected for belonging to another catalogue, and the coatings still pass.
+        var request = ValidSale();
+        request.LensOptionRightId = LensB1;
+        request.CoatingRefIds = [SecondCoating];
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("LensOptionRightId", failure.Key);
+    }
+
+    [Fact]
+    public void CoatingSet_OnALensWithNoCoatingsConfigured_IsReportedAgainstTheLensNotTheSet()
+    {
+        // The behaviour change ticket 11 made deliberately. IsCoatingAvailableForLensOption
+        // returns false rather than throwing when a strength has no coatings configured, so this
+        // used to read "every coating must be configured as available for the chosen lens option"
+        // against CoatingRefIds — advice no choice of coating could satisfy, because none is
+        // available. It is the lens that has to change.
+        var request = ValidSale();
+        request.LensOptionLeftId = LensA3NoCoatings;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("LensOptionLeftId", failure.Key);
+        Assert.Equal("This lens has no coatings configured yet, so it can't be sold on a preset range.", failure.Message);
+    }
+
+    [Fact]
+    public void CoatingSet_OnALensWithNoCoatingsConfigured_SaysSoEvenWhenNoCoatingWasChosen()
+    {
+        // Asked ahead of "choose at least one coating": sending the technician to a picker with
+        // nothing in it would be the one piece of advice they cannot act on.
+        var request = ValidSale();
+        request.LensOptionLeftId = LensA3NoCoatings;
+        request.CoatingRefIds = [];
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("LensOptionLeftId", failure.Key);
+        Assert.Equal("This lens has no coatings configured yet, so it can't be sold on a preset range.", failure.Message);
+    }
+
+    [Fact]
+    public void CoatingSet_TwoCoatingsThatExcludeOneAnother_IsRejected()
+    {
+        var request = ValidSale();
+        request.CoatingRefIds = [ExcludingCoating, ActiveCoating];
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("CoatingRefIds", failure.Key);
+        Assert.Equal("This coating combination isn't allowed — two of the selected coatings exclude each other.", failure.Message);
+    }
+
+    [Fact]
+    public void CoatingSet_ExclusionIsCheckedSymmetrically()
+    {
+        // The snapshot holds the pair one way round only (Clear → Photochromic). Selecting them
+        // in the opposite order has to be rejected identically, or the rule would depend on which
+        // checkbox the technician happened to tick first.
+        var forwards = ValidSale();
+        forwards.CoatingRefIds = [ExcludingCoating, ActiveCoating];
+        var backwards = ValidSale();
+        backwards.CoatingRefIds = [ActiveCoating, ExcludingCoating];
+
+        Assert.Equal(
+            "This coating combination isn't allowed — two of the selected coatings exclude each other.",
+            AssertSingleFailure(ConsultationRules.Check(forwards, Snapshot())).Message);
+        Assert.Equal(
+            "This coating combination isn't allowed — two of the selected coatings exclude each other.",
+            AssertSingleFailure(ConsultationRules.Check(backwards, Snapshot())).Message);
+    }
+
+    [Fact]
+    public void CoatingSet_ExclusionIsCheckedAcrossEveryPairNotJustAdjacentOnes()
+    {
+        // Three coatings, and the excluding pair sits at either end. A rule that only compared
+        // neighbours would let this through.
+        var request = ValidSale();
+        request.CoatingRefIds = [ExcludingCoating, SecondCoating, ActiveCoating];
+
+        Assert.Equal(
+            "This coating combination isn't allowed — two of the selected coatings exclude each other.",
+            AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Message);
+    }
+
+    [Fact]
+    public void CoatingSet_ExclusionAppliesOnACustomPrescriptionToo()
+    {
+        // Exclusion describes physical compatibility between coatings, so it holds on both
+        // branches — unlike availability, which is a per-catalogue restriction (ADR-0001).
+        var request = CustomSale();
+        request.CoatingRefIds = [ExcludingCoating, ActiveCoating];
+
+        Assert.Equal(
+            "This coating combination isn't allowed — two of the selected coatings exclude each other.",
+            AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Message);
+    }
+
+    [Fact]
+    public void CoatingSet_ACoatingDoesNotExcludeItself()
+    {
+        // Guarded by the duplicate check before it, but worth stating: canonicalizing a pair of
+        // identical ids must not make a coating exclude itself.
+        var request = ValidSale();
+        request.CoatingRefIds = [ExcludingCoating];
+
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void CoatingSet_WithoutACompletePresetRange_SaysNothing()
+    {
+        // No left lens option means nothing to scope availability by, and telling a technician
+        // who has not picked a lens yet to choose a coating would be noise on top of the real
+        // failure — the same short-circuit the lens-range rule makes.
+        var request = ValidSale();
+        request.LensOptionLeftId = null;
+        request.CoatingRefIds = [];
+
+        Assert.Equal(
+            ["PresetCatalogueId"],
+            ConsultationRules.Check(request, Snapshot()).Failures.Select(f => f.Key));
+    }
+
+    // --- Coating preference (Test/Lead) ----------------------------------------------------
+
+    [Fact]
+    public void CoatingPreference_NotRecorded_IsAccepted()
+    {
+        // Optional — a Test or Lead often records no preference at all.
+        Assert.True(ConsultationRules.Check(ValidTest(), Snapshot()).IsValid);
+        Assert.True(ConsultationRules.Check(ValidLead(), Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void CoatingPreference_ActiveCoating_IsAccepted()
+    {
+        var test = ValidTest();
+        test.CoatingPreferenceRefId = ActiveCoating;
+        var lead = ValidLead();
+        lead.CoatingPreferenceRefId = ActiveCoating;
+
+        Assert.True(ConsultationRules.Check(test, Snapshot()).IsValid);
+        Assert.True(ConsultationRules.Check(lead, Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void CoatingPreference_RetiredCoating_IsRejected()
+    {
+        var test = ValidTest();
+        test.CoatingPreferenceRefId = RetiredCoating;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(test, Snapshot()));
+
+        Assert.Equal("CoatingPreferenceRefId", failure.Key);
+        Assert.Equal("CoatingPreferenceRefId must reference an existing, active Coating reference-data item.", failure.Message);
+    }
+
+    [Fact]
+    public void CoatingPreference_RecordedBeforeAnyLensWasChosen_IsAccepted()
+    {
+        // A preference is an intention captured before any lens exists (CONTEXT.md), so it is
+        // asked for every LensRangeType including the unset one — where there is no lens to scope
+        // availability by, and none is applied.
+        var test = ValidTest();
+        test.CoatingPreferenceRefId = UnavailableCoating;
+
+        Assert.True(ConsultationRules.Check(test, Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void CoatingPreference_OnAPresetRange_MustBeAvailableForTheChosenLens()
+    {
+        var test = PresetTest();
+        test.CoatingPreferenceRefId = UnavailableCoating;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(test, Snapshot()));
+
+        Assert.Equal("CoatingPreferenceRefId", failure.Key);
+        Assert.Equal("CoatingPreferenceRefId is not configured as available for the chosen lens option (see Reference Data > Lens Strength).", failure.Message);
+    }
+
+    [Fact]
+    public void CoatingPreference_OnACustomPrescription_IsNotScopedByAnyLens()
+    {
+        var test = CustomTest();
+        test.CoatingPreferenceRefId = UnavailableCoating;
+
+        Assert.True(ConsultationRules.Check(test, Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void CoatingPreference_OnALensWithNoCoatingsConfigured_StaysKeyedToThePreference()
+    {
+        // Deliberately *not* the lens-keyed failure the Sale's Coating set now reports. A
+        // preference is optional, so a technician can always clear it and carry on — it is never
+        // unsatisfiable the way a mandatory Coating set is.
+        var test = PresetTest();
+        test.LensOptionLeftId = LensA3NoCoatings;
+        test.CoatingPreferenceRefId = ActiveCoating;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(test, Snapshot()));
+
+        Assert.Equal("CoatingPreferenceRefId", failure.Key);
+    }
+
+    [Fact]
+    public void CoatingPreference_FailingBothChecks_KeepsEachRequestTypesOwnOrdering()
+    {
+        // Pre-existing ordering drift, preserved: both failures report against
+        // CoatingPreferenceRefId, and a Test has always reported availability first where a Lead
+        // reports the active-item check first. Harmonising it would be its own decision.
+        var test = PresetTest();
+        test.CoatingPreferenceRefId = RetiredCoating;
+        var lead = PresetLead();
+        lead.CoatingPreferenceRefId = RetiredCoating;
+
+        var testFailures = ConsultationRules.Check(test, Snapshot()).Failures;
+        var leadFailures = ConsultationRules.Check(lead, Snapshot()).Failures;
+
+        Assert.Equal(
+            ["CoatingPreferenceRefId is not configured as available for the chosen lens option (see Reference Data > Lens Strength).",
+             "CoatingPreferenceRefId must reference an existing, active Coating reference-data item."],
+            testFailures.Select(f => f.Message));
+        Assert.Equal(
+            ["CoatingPreferenceRefId must reference an existing, active Coating reference-data item.",
+             "CoatingPreferenceRefId is not configured as available for the chosen lens option (see Reference Data > Lens Strength)."],
+            leadFailures.Select(f => f.Message));
+    }
+
+    [Fact]
+    public void CoatingPreference_IsASingleValueNotASet()
+    {
+        // Per ADR-0001's scope correction a Test or Lead never carries a Coating set, so none of
+        // the set rules reach them: a preference that excludes nothing and duplicates nothing is
+        // simply one id, checked once.
+        Assert.Null(typeof(CreateTestRequest).GetProperty("CoatingRefIds"));
+        Assert.Null(typeof(CreateLeadRequest).GetProperty("CoatingRefIds"));
+    }
+
     // --- Composition ----------------------------------------------------------------------
 
     [Fact]
@@ -1308,15 +1689,21 @@ public class ConsultationRulesTests
     public void AnEmptySnapshot_RejectsEveryReferenceDataAnswerRatherThanThrowing()
     {
         // A Field App that has never been online holds nothing — no reference items and no preset
-        // catalogues — and the rules still have to answer rather than throw. The lens options are
-        // rejected for the same reason the occupation is: nothing in the snapshot carries that id.
+        // catalogues — and the rules still have to answer rather than throw. The lens options and
+        // the Coating set are rejected for the same reason the occupation is: nothing in the
+        // snapshot carries that id.
+        //
+        // The Coating set reports "not an active Coating" rather than the lens-keyed
+        // no-coatings-configured message, and that is the intended split: with an empty snapshot
+        // the left lens option resolves to nothing at all, which is a different failure that the
+        // lens-range rule has already reported against LensOptionLeftId.
         var request = ValidSale();
         request.OccupationRefId = ActiveOccupation;
 
         var result = ConsultationRules.Check(request, ReferenceDataSnapshot.Empty);
 
         Assert.Equal(
-            ["OccupationRefId", "FrameColourRefId", "LensOptionLeftId", "LensOptionRightId"],
+            ["OccupationRefId", "FrameColourRefId", "LensOptionLeftId", "LensOptionRightId", "CoatingRefIds"],
             result.Failures.Select(f => f.Key));
     }
 }
