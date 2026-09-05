@@ -8,10 +8,12 @@ are the record of *how* things got built; don't restate that here.
 
 ## Architecture rules
 
-- Clean Architecture, dependency direction: `Web`/`App` → `Application`/`Contracts`;
-  `Application` → `Domain`; `Infrastructure` → `Domain`/`Application` (implements its
-  interfaces). Nothing references `Infrastructure` except `Web`'s `Program.cs` (composition
-  root) and `AppHost` (orchestration).
+- Clean Architecture, dependency direction: `Web`/`App` → `Application`/`Contracts`/`Rules`;
+  `Application` → `Domain`/`Rules`; `Rules` → `Contracts`; `Infrastructure` →
+  `Domain`/`Application` (implements its interfaces). Nothing references `Infrastructure` except
+  `Web`'s `Program.cs` (composition root) and `AppHost` (orchestration). `Rules` sits below
+  `Application` rather than beside it because the snapshot `Application` hands to the rules is
+  defined there — see the two `Rules` bullets below for what that buys and what it costs.
 - **`DotGlasses.App` may reference `DotGlasses.Contracts` and `DotGlasses.Rules`, and nothing
   else.** If a change seems to need `App` to reference anything further, that's a signal the type
   belongs in `Contracts` (a wire shape) or `Rules` (a rule the device and the server must agree

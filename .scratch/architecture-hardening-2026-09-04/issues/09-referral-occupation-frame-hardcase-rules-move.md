@@ -10,11 +10,11 @@ Nothing changes for a user — this is the same behaviour with one expression in
 **Status:** ready-for-agent
 **Category:** refactor
 
-- [ ] Referral rules exist once: reason required when referred or treated, "Other" text required for an "Other" reason, location required unless treated in facility, and all referral fields empty otherwise
-- [ ] Occupation, frame colour and hard-case rules exist once, including their "Other" free-text requirements
-- [ ] Hard-case colour fields must be empty when no hard case was sold
-- [ ] A referenced reference-data item must exist, be active, and belong to the expected category
-- [ ] All three validators call the shared rules for these topics and keep the rest
-- [ ] Failure keys are unchanged request-property names
-- [ ] Every rule in this batch is covered by tests at the shared module's interface, with a snapshot supplied as a literal value
-- [ ] Externally observable validation behaviour is identical to before
+- [x] Referral rules exist once: reason required when referred or treated, "Other" text required for an "Other" reason, location required unless treated in facility, and all referral fields empty otherwise
+- [x] Occupation, frame colour and hard-case rules exist once, including their "Other" free-text requirements
+- [x] Hard-case colour fields must be empty when no hard case was sold
+- [x] A referenced reference-data item must exist, be active, and belong to the expected category
+- [x] All three validators call the shared rules for these topics and keep the rest
+- [x] Failure keys are unchanged request-property names
+- [x] Every rule in this batch is covered by tests at the shared module's interface, with a snapshot supplied as a literal value
+- [x] Externally observable validation behaviour is identical to before

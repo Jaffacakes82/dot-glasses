@@ -742,11 +742,10 @@
     // "validated" and "queued" the same object rather than two hand-matched projections of the
     // same fields — the drift this ticket exists to remove would otherwise just move here.
     //
-    // That holds for the Sale only so far: SaveSaleAsync calls BuildSaleRequest, which goes through
-    // the shared SaleAssembly the Admin Portal also assembles through. SaveTestCoreAsync and
-    // SaveLeadAsync still build their own copy of what BuildTestRequest/BuildLeadRequest produce,
-    // so those two are validated and queued as two hand-matched objects — the same drift, one
-    // entity type down. Collapse them the same way when either next needs a field.
+    // All three save paths go through the Build* method Validate() checked, so "would the server
+    // refuse this" and "what gets queued" are the same object rather than two hand-matched
+    // projections. The Sale's assembly lives in the shared SaleAssembly the Admin Portal also
+    // builds through; Test and Lead have only the one write path each, so theirs stay here.
 
     /// <summary>A fresh idempotency key per save attempt, or the failed record's own when
     /// correcting one — the server's upsert keys on it. Never Guid.Empty, which is why the
@@ -890,81 +889,14 @@
 
     private async Task<Guid?> SaveTestCoreAsync()
     {
-        var request = new CreateTestRequest
-        {
-            Id = FixOutboxId ?? Guid.NewGuid(),
-            AgeYears = _age,
-            Gender = _gender,
-            OccupationRefId = _occupationRefId,
-            OccupationOtherText = _occupationOtherText,
-            Outcome = _testOutcome,
-            ReferredOrTreated = _referredOrTreated,
-            ReferralReasonRefId = _referredOrTreated ? _referralReasonRefId : null,
-            ReferralOtherText = _referredOrTreated ? _referralOtherText : null,
-            ReferralLocationFreeText = _referredOrTreated && !_treatedInFacility ? _referralLocationFreeText : null,
-            TreatedInFacility = _referredOrTreated && _treatedInFacility,
-            LensRangeType = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.LensRangeType : null,
-            PresetCatalogueId = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.PresetCatalogueId : null,
-            LensOptionLeftId = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.LensOptionLeftId : null,
-            LensOptionRightId = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.LensOptionRightId : null,
-            CustomSphereLeft = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomSphereLeft : null,
-            CustomCylinderLeft = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomCylinderLeft : null,
-            CustomAxisLeft = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomAxisLeft : null,
-            CustomAddPowerLeft = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomAddPowerLeft : null,
-            CustomSphereRight = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomSphereRight : null,
-            CustomCylinderRight = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomCylinderRight : null,
-            CustomAxisRight = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomAxisRight : null,
-            CustomAddPowerRight = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.CustomAddPowerRight : null,
-            LensTypeRefId = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.LensTypeRefId : null,
-            LensTypeOtherText = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.LensTypeOtherText : null,
-            PupilDistanceMm = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.PupilDistanceMm : null,
-            PresetPupilDistanceBucket = _testOutcome == TestOutcome.NeedsGlasses ? _lensRange.PresetPupilDistanceBucket : null,
-            ChildrensFrame = _testOutcome == TestOutcome.NeedsGlasses && _lensRange.ChildrensFrame,
-            CoatingPreferenceRefId = _testOutcome == TestOutcome.NeedsGlasses ? _coatingPreferenceRefId : null,
-        };
+        var request = BuildTestRequest();
 
         return await SubmitAsync(request.Id, "Test", "api/v1/tests", request) ? request.Id : null;
     }
 
     private async Task SaveLeadAsync()
     {
-        var request = new CreateLeadRequest
-        {
-            Id = FixOutboxId ?? Guid.NewGuid(),
-            SourceTestId = SourceTestId,
-            FullName = _name,
-            PhoneNumber = _phone,
-            AgeYears = _age,
-            Gender = _gender,
-            OccupationRefId = _occupationRefId,
-            OccupationOtherText = _occupationOtherText,
-            ConsentGiven = _consentGiven,
-            ReferredOrTreated = _referredOrTreated,
-            ReferralReasonRefId = _referredOrTreated ? _referralReasonRefId : null,
-            ReferralOtherText = _referredOrTreated ? _referralOtherText : null,
-            ReferralLocationFreeText = _referredOrTreated && !_treatedInFacility ? _referralLocationFreeText : null,
-            TreatedInFacility = _referredOrTreated && _treatedInFacility,
-            ReasonNotPurchasedRefId = _reasonNotPurchasedRefId ?? Guid.Empty,
-            ReasonNotPurchasedOtherText = _reasonNotPurchasedOtherText,
-            LensRangeType = _lensRange.LensRangeType,
-            PresetCatalogueId = _lensRange.PresetCatalogueId,
-            LensOptionLeftId = _lensRange.LensOptionLeftId,
-            LensOptionRightId = _lensRange.LensOptionRightId,
-            CustomSphereLeft = _lensRange.CustomSphereLeft,
-            CustomCylinderLeft = _lensRange.CustomCylinderLeft,
-            CustomAxisLeft = _lensRange.CustomAxisLeft,
-            CustomAddPowerLeft = _lensRange.CustomAddPowerLeft,
-            CustomSphereRight = _lensRange.CustomSphereRight,
-            CustomCylinderRight = _lensRange.CustomCylinderRight,
-            CustomAxisRight = _lensRange.CustomAxisRight,
-            CustomAddPowerRight = _lensRange.CustomAddPowerRight,
-            LensTypeRefId = _lensRange.LensTypeRefId,
-            LensTypeOtherText = _lensRange.LensTypeOtherText,
-            PupilDistanceMm = _lensRange.PupilDistanceMm,
-            PresetPupilDistanceBucket = _lensRange.PresetPupilDistanceBucket,
-            ChildrensFrame = _lensRange.ChildrensFrame,
-            CoatingPreferenceRefId = _coatingPreferenceRefId,
-        };
+        var request = BuildLeadRequest();
 
         if (await SubmitAsync(request.Id, "Lead", "api/v1/leads", request))
         {

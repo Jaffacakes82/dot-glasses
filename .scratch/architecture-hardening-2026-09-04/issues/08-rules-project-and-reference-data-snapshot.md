@@ -12,12 +12,12 @@ records why caching the snapshot across requests is deliberately deferred.
 **Status:** ready-for-agent
 **Category:** refactor
 
-- [ ] A new shared project exists that the Field App and the server may both reference
-- [ ] The behavioural contract document's App-reference rule is amended in the same commit that creates it
-- [ ] The snapshot carries reference-data items with their active and "Other option" state, preset catalogues, and Coating pairing and exclusion rules
-- [ ] A server-side adapter fills it from the database, including retired items
-- [ ] A Field App adapter fills it from the existing cached response, with no API change
-- [ ] Label resolution for every server-side consumer goes through the snapshot, with one fallback for a missing item
-- [ ] A historical record referencing a retired item still renders its label
-- [ ] The "Other" free-text override still wins over the stored label wherever it did before
-- [ ] The snapshot is loaded once per request
+- [x] A new shared project exists that the Field App and the server may both reference
+- [x] The behavioural contract document's App-reference rule is amended in the same commit that creates it
+- [x] The snapshot carries reference-data items with their active and "Other option" state, preset catalogues, and Coating pairing and exclusion rules
+- [x] A server-side adapter fills it from the database, including retired items
+- [x] A Field App adapter fills it from the existing cached response, with no API change
+- [x] Label resolution for every server-side consumer goes through the snapshot, with one fallback for a missing item
+- [x] A historical record referencing a retired item still renders its label
+- [x] The "Other" free-text override still wins over the stored label wherever it did before
+- [x] The snapshot is loaded once per request
