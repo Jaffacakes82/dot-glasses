@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using DotGlasses.Application.ReferenceData;
 using DotGlasses.Application.Reporting;
 using DotGlasses.Domain.Entities;
@@ -9,67 +10,81 @@ namespace DotGlasses.Infrastructure.Persistence;
 /// <summary>Reference-data labels come from IReferenceDataSnapshotProvider, which loads retired
 /// items too — a historical Lead/referral pointing at a since-retired reason must still render
 /// that reason rather than an em-dash, so the Field-App-facing active-only view is the wrong
-/// source here.</summary>
+/// source here.
+///
+/// Every tab is the same three steps — filter, order newest-first, map — with paging as the only
+/// optional one. RunAsync holds those steps once, so the on-screen list and the CSV export of a
+/// tab are the same query by construction rather than by two methods agreeing.</summary>
 public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceDataSnapshotProvider referenceDataSnapshotProvider, IUnscopedReportQueryService unscopedReportQueryService) : IEventHistoryQueryService
 {
-    public async Task<PagedResult<SaleOrTestEventRow>> ListSalesAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, int page, int pageSize, CancellationToken cancellationToken = default)
+    public Task<EventHistoryResult<SaleOrTestEventRow>> ListSalesAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, PageRequest? paging, CancellationToken cancellationToken = default) =>
+        RunAsync(FilterSales(fromUtc, toUtcExclusive), x => x.CreatedAtUtc, paging, MapSalesAsync, cancellationToken);
+
+    public Task<EventHistoryResult<SaleOrTestEventRow>> ListTestsAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, PageRequest? paging, CancellationToken cancellationToken = default) =>
+        RunAsync(FilterTests(fromUtc, toUtcExclusive), x => x.CreatedAtUtc, paging, MapTestsAsync, cancellationToken);
+
+    public Task<EventHistoryResult<LeadEventRow>> ListLeadsAsync(string? searchByName, DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, PageRequest? paging, CancellationToken cancellationToken = default) =>
+        RunAsync(FilterLeads(searchByName, fromUtc, toUtcExclusive), x => x.CreatedAtUtc, paging, MapLeadsAsync, cancellationToken);
+
+    public Task<EventHistoryResult<ReferralEventRow>> ListReferralsAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, PageRequest? paging, CancellationToken cancellationToken = default)
     {
-        var query = FilterSales(fromUtc, toUtcExclusive);
-        var totalCount = await query.CountAsync(cancellationToken);
-        var sales = await query.OrderByDescending(x => x.CreatedAtUtc).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
-        var items = await MapSalesAsync(sales, cancellationToken);
-        return new PagedResult<SaleOrTestEventRow>(items, totalCount, page, pageSize);
+        // Merged across all three entities (2026-09-03 — "referred or treated" is no longer
+        // Test-only). Each Select projects the same shape so Concat becomes one SQL UNION ALL, and
+        // ordering/paging happens once after the union rather than per-entity.
+        //
+        // The projection is an ANONYMOUS type, not the named ReferralSourceRow it converts to
+        // below, and that is load-bearing: EF Core treats a projection into a named type as a
+        // client projection and then refuses the set operation outright — "Unable to translate set
+        // operation after client projection has been applied". An anonymous type is recognised as
+        // a server-side projection and translates. Both the Referrals tab and its export threw on
+        // every call before this; the EF InMemory provider translated the named-type version
+        // happily, so nothing caught it until the tests moved onto real Postgres (ticket 02).
+        // The three anonymous projections must keep identical member names, order and types, or
+        // they stop being the same type and Concat won't compile.
+        var testRows = dbContext.Tests.Where(t => t.ReferredOrTreated)
+            .Select(t => new { Source = "Test", t.HierarchyPath, t.ReferralReasonRefId, t.ReferralOtherText, t.TreatedInFacility, t.CreatedAtUtc });
+        var leadRows = dbContext.Leads.Where(l => l.ReferredOrTreated)
+            .Select(l => new { Source = "Lead", l.HierarchyPath, l.ReferralReasonRefId, l.ReferralOtherText, l.TreatedInFacility, l.CreatedAtUtc });
+        var saleRows = dbContext.Sales.Where(s => s.ReferredOrTreated)
+            .Select(s => new { Source = "Sale", s.HierarchyPath, s.ReferralReasonRefId, s.ReferralOtherText, s.TreatedInFacility, s.CreatedAtUtc });
+
+        var query = testRows.Concat(leadRows).Concat(saleRows);
+        if (fromUtc is { } from) query = query.Where(x => x.CreatedAtUtc >= from);
+        if (toUtcExclusive is { } to) query = query.Where(x => x.CreatedAtUtc < to);
+
+        return RunAsync(
+            query,
+            x => x.CreatedAtUtc,
+            paging,
+            (rows, ct) => MapReferralsAsync(
+                rows.Select(r => new ReferralSourceRow(r.Source, r.HierarchyPath, r.ReferralReasonRefId, r.ReferralOtherText, r.TreatedInFacility, r.CreatedAtUtc)).ToList(),
+                ct),
+            cancellationToken);
     }
 
-    public async Task<IReadOnlyList<SaleOrTestEventRow>> ExportSalesAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, CancellationToken cancellationToken = default)
+    /// <summary>The one shape every tab runs. Only the Skip/Take differs between a screen page and
+    /// an export, which is what stops an export ever seeing rows the screen would not have — the
+    /// filter (and with it the global hierarchy-scoping query filter) is the same IQueryable in
+    /// both cases. Unpaged skips the COUNT: every matching row comes back, so the row count is the
+    /// total, and a second round trip would only re-derive it.</summary>
+    private static async Task<EventHistoryResult<TRow>> RunAsync<TSource, TRow>(
+        IQueryable<TSource> filtered,
+        Expression<Func<TSource, DateTimeOffset>> newestFirstBy,
+        PageRequest? paging,
+        Func<List<TSource>, CancellationToken, Task<List<TRow>>> mapAsync,
+        CancellationToken cancellationToken)
     {
-        var sales = await FilterSales(fromUtc, toUtcExclusive).OrderByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
-        return await MapSalesAsync(sales, cancellationToken);
-    }
+        var ordered = filtered.OrderByDescending(newestFirstBy);
 
-    public async Task<PagedResult<SaleOrTestEventRow>> ListTestsAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, int page, int pageSize, CancellationToken cancellationToken = default)
-    {
-        var query = FilterTests(fromUtc, toUtcExclusive);
-        var totalCount = await query.CountAsync(cancellationToken);
-        var tests = await query.OrderByDescending(x => x.CreatedAtUtc).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
-        var items = await MapTestsAsync(tests, cancellationToken);
-        return new PagedResult<SaleOrTestEventRow>(items, totalCount, page, pageSize);
-    }
+        if (paging is null)
+        {
+            var all = await ordered.ToListAsync(cancellationToken);
+            return new EventHistoryResult<TRow>(await mapAsync(all, cancellationToken), all.Count);
+        }
 
-    public async Task<IReadOnlyList<SaleOrTestEventRow>> ExportTestsAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, CancellationToken cancellationToken = default)
-    {
-        var tests = await FilterTests(fromUtc, toUtcExclusive).OrderByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
-        return await MapTestsAsync(tests, cancellationToken);
-    }
-
-    public async Task<PagedResult<LeadEventRow>> ListLeadsAsync(string? searchByName, DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, int page, int pageSize, CancellationToken cancellationToken = default)
-    {
-        var query = FilterLeads(searchByName, fromUtc, toUtcExclusive);
-        var totalCount = await query.CountAsync(cancellationToken);
-        var leads = await query.OrderByDescending(x => x.CreatedAtUtc).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
-        var items = await MapLeadsAsync(leads, cancellationToken);
-        return new PagedResult<LeadEventRow>(items, totalCount, page, pageSize);
-    }
-
-    public async Task<IReadOnlyList<LeadEventRow>> ExportLeadsAsync(string? searchByName, DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, CancellationToken cancellationToken = default)
-    {
-        var leads = await FilterLeads(searchByName, fromUtc, toUtcExclusive).OrderByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
-        return await MapLeadsAsync(leads, cancellationToken);
-    }
-
-    public async Task<PagedResult<ReferralEventRow>> ListReferralsAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, int page, int pageSize, CancellationToken cancellationToken = default)
-    {
-        var query = FilterReferrals(fromUtc, toUtcExclusive);
-        var totalCount = await query.CountAsync(cancellationToken);
-        var referrals = await query.OrderByDescending(x => x.CreatedAtUtc).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
-        var items = await MapReferralsAsync(referrals, cancellationToken);
-        return new PagedResult<ReferralEventRow>(items, totalCount, page, pageSize);
-    }
-
-    public async Task<IReadOnlyList<ReferralEventRow>> ExportReferralsAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, CancellationToken cancellationToken = default)
-    {
-        var referrals = await FilterReferrals(fromUtc, toUtcExclusive).OrderByDescending(x => x.CreatedAtUtc).ToListAsync(cancellationToken);
-        return await MapReferralsAsync(referrals, cancellationToken);
+        var totalCount = await filtered.CountAsync(cancellationToken);
+        var page = await ordered.Skip(paging.Skip).Take(paging.PageSize).ToListAsync(cancellationToken);
+        return new EventHistoryResult<TRow>(await mapAsync(page, cancellationToken), totalCount);
     }
 
     private IQueryable<Sale> FilterSales(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive)
@@ -151,26 +166,6 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
         }).ToList();
     }
 
-    private IQueryable<ReferralSourceRow> FilterReferrals(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive)
-    {
-        // Merged across all three entities (2026-09-03 — "referred or treated" is no longer
-        // Test-only). Each Select projects to the same ReferralSourceRow shape so Concat
-        // translates to a single SQL UNION ALL — ordering/paging happens once, after the union,
-        // not per-entity. A named record (not an anonymous type) is required here so
-        // FilterReferrals/MapReferralsAsync have a concrete type to share as their signature.
-        var testRows = dbContext.Tests.Where(t => t.ReferredOrTreated)
-            .Select(t => new ReferralSourceRow("Test", t.HierarchyPath, t.ReferralReasonRefId, t.ReferralOtherText, t.TreatedInFacility, t.CreatedAtUtc));
-        var leadRows = dbContext.Leads.Where(l => l.ReferredOrTreated)
-            .Select(l => new ReferralSourceRow("Lead", l.HierarchyPath, l.ReferralReasonRefId, l.ReferralOtherText, l.TreatedInFacility, l.CreatedAtUtc));
-        var saleRows = dbContext.Sales.Where(s => s.ReferredOrTreated)
-            .Select(s => new ReferralSourceRow("Sale", s.HierarchyPath, s.ReferralReasonRefId, s.ReferralOtherText, s.TreatedInFacility, s.CreatedAtUtc));
-
-        var query = testRows.Concat(leadRows).Concat(saleRows);
-        if (fromUtc is { } from) query = query.Where(x => x.CreatedAtUtc >= from);
-        if (toUtcExclusive is { } to) query = query.Where(x => x.CreatedAtUtc < to);
-        return query;
-    }
-
     private async Task<List<ReferralEventRow>> MapReferralsAsync(List<ReferralSourceRow> referrals, CancellationToken cancellationToken)
     {
         var orgLookup = await BuildOrgLookupAsync(cancellationToken);
@@ -238,5 +233,8 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
 
     /// <summary>Common projected shape for the Test/Lead/Sale union behind FilterReferrals — see
     /// its doc comment for why this needs to be a named record rather than an anonymous type.</summary>
+    /// <summary>The materialised shape of one unioned referral row. Deliberately NOT the type the
+    /// union projects into — see ListReferralsAsync for why that has to be anonymous. This exists
+    /// so MapReferralsAsync has a named parameter type to read against.</summary>
     private sealed record ReferralSourceRow(string Source, string HierarchyPath, Guid? ReferralReasonRefId, string? ReferralOtherText, bool TreatedInFacility, DateTimeOffset CreatedAtUtc);
 }
