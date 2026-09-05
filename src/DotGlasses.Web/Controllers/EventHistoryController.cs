@@ -12,91 +12,126 @@ public class EventHistoryController(IEventHistoryQueryService eventHistoryQueryS
 {
     private const int PageSize = 25;
 
-    public async Task<IActionResult> Index(string tab = "sales", string? search = null, DateOnly? fromDate = null, DateOnly? toDate = null, int page = 1, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> Index(string? tab = null, string? search = null, DateOnly? fromDate = null, DateOnly? toDate = null, int page = 1, CancellationToken cancellationToken = default)
     {
-        page = Math.Max(1, page);
+        var activeTab = ParseTab(tab);
+        var paging = new PageRequest(Math.Max(1, page), PageSize);
         var (fromUtc, toUtcExclusive) = DateRange.ToUtcRange(fromDate, toDate);
 
         var model = new EventHistoryViewModel
         {
-            ActiveTab = tab,
+            ActiveTab = RouteValue(activeTab),
             SearchQuery = search,
             FromDate = fromDate,
             ToDate = toDate,
-            Page = page,
-            PageSize = PageSize,
+            Page = paging.Page,
+            PageSize = paging.PageSize,
         };
 
-        switch (tab)
+        switch (activeTab)
         {
-            case "sales":
-                var salesPage = await eventHistoryQueryService.ListSalesAsync(fromUtc, toUtcExclusive, page, PageSize, cancellationToken);
-                model.Events = salesPage.Items.Select(ToWebModel).ToList();
-                model.TotalCount = salesPage.TotalCount;
-                model.TotalPages = salesPage.TotalPages;
+            case EventHistoryTab.Tests:
+                var tests = await eventHistoryQueryService.ListTestsAsync(fromUtc, toUtcExclusive, paging, cancellationToken);
+                model.Events = tests.Rows.Select(ToWebModel).ToList();
+                ApplyTotals(model, tests.TotalCount, paging);
                 break;
-            case "tests":
-                var testsPage = await eventHistoryQueryService.ListTestsAsync(fromUtc, toUtcExclusive, page, PageSize, cancellationToken);
-                model.Events = testsPage.Items.Select(ToWebModel).ToList();
-                model.TotalCount = testsPage.TotalCount;
-                model.TotalPages = testsPage.TotalPages;
+            case EventHistoryTab.Leads:
+                var leads = await eventHistoryQueryService.ListLeadsAsync(search, fromUtc, toUtcExclusive, paging, cancellationToken);
+                model.Leads = leads.Rows.Select(ToWebModel).ToList();
+                ApplyTotals(model, leads.TotalCount, paging);
                 break;
-            case "leads":
-                var leadsPage = await eventHistoryQueryService.ListLeadsAsync(search, fromUtc, toUtcExclusive, page, PageSize, cancellationToken);
-                model.Leads = leadsPage.Items.Select(ToWebModel).ToList();
-                model.TotalCount = leadsPage.TotalCount;
-                model.TotalPages = leadsPage.TotalPages;
+            case EventHistoryTab.Referrals:
+                var referrals = await eventHistoryQueryService.ListReferralsAsync(fromUtc, toUtcExclusive, paging, cancellationToken);
+                model.Referrals = referrals.Rows.Select(ToWebModel).ToList();
+                ApplyTotals(model, referrals.TotalCount, paging);
                 break;
-            case "referrals":
-                var referralsPage = await eventHistoryQueryService.ListReferralsAsync(fromUtc, toUtcExclusive, page, PageSize, cancellationToken);
-                model.Referrals = referralsPage.Items.Select(ToWebModel).ToList();
-                model.TotalCount = referralsPage.TotalCount;
-                model.TotalPages = referralsPage.TotalPages;
+            default:
+                var sales = await eventHistoryQueryService.ListSalesAsync(fromUtc, toUtcExclusive, paging, cancellationToken);
+                model.Events = sales.Rows.Select(ToWebModel).ToList();
+                ApplyTotals(model, sales.TotalCount, paging);
                 break;
         }
 
         return View(model);
     }
 
-    /// <summary>Drives off the same ExportXAsync methods as Index's ListXAsync equivalents — same
-    /// filter parameters, same scoping, just unpaged — so a user can never export rows they
-    /// couldn't otherwise see on screen.</summary>
-    public async Task<IActionResult> Export(string tab = "sales", string? search = null, DateOnly? fromDate = null, DateOnly? toDate = null, CancellationToken cancellationToken = default)
+    /// <summary>Calls exactly the methods Index calls, with paging omitted — same filters, same
+    /// ordering, and (because it is one query rather than two) the same hierarchy scoping, so a
+    /// user can never export rows they could not have seen on screen. The tab is resolved through
+    /// the same ParseTab as Index, so the two actions cannot disagree about what a given ?tab=
+    /// means: they used to, with the screen quietly rendering an empty Referrals table for an
+    /// unrecognised value while the export returned 400.</summary>
+    public async Task<IActionResult> Export(string? tab = null, string? search = null, DateOnly? fromDate = null, DateOnly? toDate = null, CancellationToken cancellationToken = default)
     {
+        var activeTab = ParseTab(tab);
         var (fromUtc, toUtcExclusive) = DateRange.ToUtcRange(fromDate, toDate);
 
         byte[] csv;
-        switch (tab)
+        switch (activeTab)
         {
-            case "sales":
-                var sales = await eventHistoryQueryService.ExportSalesAsync(fromUtc, toUtcExclusive, cancellationToken);
-                csv = CsvExport.Build(
-                    ["Type", "Custom", "Name", "Outlet", "Country", "Created", "ConsentGiven"],
-                    sales.Select(r => (IReadOnlyList<string?>)[r.Type, r.Custom.ToString(), r.Name, r.Outlet, r.Country, FormatCsvDate(r.CreatedAtUtc), r.ConsentGiven?.ToString()]));
-                break;
-            case "tests":
-                var tests = await eventHistoryQueryService.ExportTestsAsync(fromUtc, toUtcExclusive, cancellationToken);
+            case EventHistoryTab.Tests:
+                var tests = await eventHistoryQueryService.ListTestsAsync(fromUtc, toUtcExclusive, paging: null, cancellationToken);
                 csv = CsvExport.Build(
                     ["Type", "Outlet", "Country", "Created"],
-                    tests.Select(r => (IReadOnlyList<string?>)[r.Type, r.Outlet, r.Country, FormatCsvDate(r.CreatedAtUtc)]));
+                    tests.Rows.Select(r => (IReadOnlyList<string?>)[r.Type, r.Outlet, r.Country, FormatCsvDate(r.CreatedAtUtc)]));
                 break;
-            case "leads":
-                var leads = await eventHistoryQueryService.ExportLeadsAsync(search, fromUtc, toUtcExclusive, cancellationToken);
+            case EventHistoryTab.Leads:
+                var leads = await eventHistoryQueryService.ListLeadsAsync(search, fromUtc, toUtcExclusive, paging: null, cancellationToken);
                 csv = CsvExport.Build(
                     ["Name", "Phone", "Outlet", "Reason", "ConsentGiven", "Created", "Converted"],
-                    leads.Select(r => (IReadOnlyList<string?>)[r.Name, r.PhoneMasked, r.Outlet, r.Reason, r.ConsentGiven.ToString(), FormatCsvDate(r.CreatedAtUtc), r.ConvertedFlag.ToString()]));
+                    leads.Rows.Select(r => (IReadOnlyList<string?>)[r.Name, r.PhoneMasked, r.Outlet, r.Reason, r.ConsentGiven.ToString(), FormatCsvDate(r.CreatedAtUtc), r.ConvertedFlag.ToString()]));
                 break;
-            case "referrals":
-                var referrals = await eventHistoryQueryService.ExportReferralsAsync(fromUtc, toUtcExclusive, cancellationToken);
+            case EventHistoryTab.Referrals:
+                var referrals = await eventHistoryQueryService.ListReferralsAsync(fromUtc, toUtcExclusive, paging: null, cancellationToken);
                 csv = CsvExport.Build(
                     ["Outlet", "Country", "Reason", "Created"],
-                    referrals.Select(r => (IReadOnlyList<string?>)[r.Outlet, r.Country, r.Reason, FormatCsvDate(r.CreatedAtUtc)]));
+                    referrals.Rows.Select(r => (IReadOnlyList<string?>)[r.Outlet, r.Country, r.Reason, FormatCsvDate(r.CreatedAtUtc)]));
                 break;
             default:
-                return BadRequest();
+                var sales = await eventHistoryQueryService.ListSalesAsync(fromUtc, toUtcExclusive, paging: null, cancellationToken);
+                csv = CsvExport.Build(
+                    ["Type", "Custom", "Name", "Outlet", "Country", "Created", "ConsentGiven"],
+                    sales.Rows.Select(r => (IReadOnlyList<string?>)[r.Type, r.Custom.ToString(), r.Name, r.Outlet, r.Country, FormatCsvDate(r.CreatedAtUtc), r.ConsentGiven?.ToString()]));
+                break;
         }
 
-        return File(csv, "text/csv", $"event-history-{tab}-{DateTime.UtcNow:yyyyMMddHHmmss}.csv");
+        return File(csv, "text/csv", $"event-history-{RouteValue(activeTab)}-{DateTime.UtcNow:yyyyMMddHHmmss}.csv");
+    }
+
+    /// <summary>The four screen tabs. An unrecognised ?tab= value resolves to the same tab an
+    /// absent one does — Sales, which is what the two actions' own parameter default already
+    /// said — rather than one action erroring and the other rendering something. It is parsed
+    /// once so the screen and the export cannot answer that question differently, and the
+    /// resolved value (not the raw query-string value) is what reaches the view's ActiveTab and
+    /// the export's filename.</summary>
+    private enum EventHistoryTab
+    {
+        Sales,
+        Tests,
+        Leads,
+        Referrals,
+    }
+
+    private static EventHistoryTab ParseTab(string? tab) => tab switch
+    {
+        "tests" => EventHistoryTab.Tests,
+        "leads" => EventHistoryTab.Leads,
+        "referrals" => EventHistoryTab.Referrals,
+        _ => EventHistoryTab.Sales,
+    };
+
+    private static string RouteValue(EventHistoryTab tab) => tab switch
+    {
+        EventHistoryTab.Tests => "tests",
+        EventHistoryTab.Leads => "leads",
+        EventHistoryTab.Referrals => "referrals",
+        _ => "sales",
+    };
+
+    private static void ApplyTotals(EventHistoryViewModel model, int totalCount, PageRequest paging)
+    {
+        model.TotalCount = totalCount;
+        model.TotalPages = paging.TotalPages(totalCount);
     }
 
     private static string FormatCsvDate(DateTimeOffset timestamp) => timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
