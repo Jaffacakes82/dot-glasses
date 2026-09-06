@@ -9,7 +9,7 @@
 
 <div class="dg-screen" style="justify-content:center; align-items:center;">
     <div style="width:100%; max-width:320px; text-align:center;">
-        <p style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; letter-spacing:0.02em; font-size:22px; margin-bottom:var(--space-5);">Dot Glasses</p>
+        <img src="images/dot-glasses-logo.png" alt="Dot Glasses" style="width:180px; max-width:60%; margin-bottom:var(--space-5);" />
 
         @if (TokenStore.IsAuthenticated)
         {
@@ -27,7 +27,7 @@
                 <InputText @bind-Value="_request.UserName" autocomplete="username" />
             </div>
             <div class="dg-field">
-                <label>PIN</label>
+                <label>Password</label>
                 <InputText type="password" @bind-Value="_request.Password" autocomplete="current-password" />
             </div>
             <button type="submit" class="dg-btn dg-btn-primary" style="width:100%;" disabled="@_isSubmitting">Log in</button>
