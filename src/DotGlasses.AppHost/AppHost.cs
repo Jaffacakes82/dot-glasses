@@ -112,8 +112,14 @@ storage.ConfigureInfrastructure(infra =>
 });
 var referenceDataImages = storage.AddBlobContainer("reference-data-images");
 
+// WithExternalHttpEndpoints is required here: without it, PublishAsAzureContainerApp ships
+// internal-only ingress (external: false) — unreachable from outside the Container Apps
+// environment's own network, and a request against it comes back as a 404 rather than a
+// connection failure, which reads exactly like an app-level routing bug. The Admin Portal is
+// meant to be reached by admins over the public internet.
 var web = builder.AddProject<Projects.DotGlasses_Web>("web")
     .WithComputeEnvironment(containerAppEnvironment)
+    .WithExternalHttpEndpoints()
     .WithReference(dotglassesdb)
     .WaitFor(dotglassesdb)
     .WithReference(referenceDataImages)

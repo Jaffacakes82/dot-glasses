@@ -28,10 +28,12 @@ machine" rule.
 - **Key Vault secrets**: `Jwt--Key`, `Jwt--Issuer`, `Jwt--Audience` must be set in the real Key
   Vault (`az keyvault secret set` or the portal) after `azd up` provisions staging/production —
   the app reads them via `AddAzureKeyVaultSecrets`, but nothing sets them yet.
-- **`AZURE_POSTGRES_AAD_USERNAME`**: a repo/environment variable the CI migration step
-  (`deploy.yml`) needs, matching whatever identity `az postgres flexible-server ad-admin create`
-  was granted for the deploying principal. That grant itself is a one-time infra/RBAC step. Until
-  it's done, the "Apply database migrations" CI step is untested against a real server.
+- **Prod Postgres grant for the CI migration identity**: nonprod's "Apply database migrations"
+  step now authenticates successfully as `msi-dot-glasses` (granted via `az postgres
+  flexible-server microsoft-entra-admin create` against `rg-dotglasses-nonprod`'s server,
+  2026-09-06 — see CLAUDE.md's Deployment section for what that identity is and why it's separate
+  from `web_identity-*`). The equivalent grant against `rg-dotglasses-prod`'s server hasn't been
+  done yet, so production's migration step will fail with the same `28P01` until it is.
 - **Field App API URL placeholders**: `appsettings.Staging.json`/`appsettings.Production.json`
   both carry `ApiBaseUrl: ...REPLACE-AFTER-FIRST-DEPLOY...` — Azure Container Apps only assigns
   the real FQDN's unique suffix at first provision, so this can't be pre-filled. Update both right
