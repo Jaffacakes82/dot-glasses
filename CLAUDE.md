@@ -320,7 +320,15 @@ body" is not a safe shortcut.
   required-reviewers rule. A CI step runs `dotnet ef database update` against a short-lived
   Postgres AAD token after `azd up` — this is the *only* place migrations get applied to a real
   environment (`Program.cs`'s auto-migrate-on-boot is `IsDevelopment()`-gated and never runs
-  against a real database).
+  against a real database). That token is minted for `msi-dot-glasses`, the user-assigned managed
+  identity `azd pipeline config` created for GitHub's OIDC federation (its client ID is
+  `AZURE_CLIENT_ID`) — a *different* principal from `web_identity-*`, the identity Aspire grants
+  Postgres access to automatically for the running app's own connection (wired by
+  `AddAzurePostgresFlexibleServer` + `WithReference` in `AppHost.cs`). `msi-dot-glasses` needs its
+  own explicit grant per environment, via `az postgres flexible-server microsoft-entra-admin
+  create` — not `ad-admin`, which Azure CLI dropped entirely under the Azure AD → Microsoft Entra
+  ID rebrand — with `--display-name` matching the `AZURE_POSTGRES_AAD_USERNAME` repo/environment
+  variable exactly.
 - **Field App per-environment config**: `wwwroot/appsettings.{Environment}.json` (Staging/
   Production, alongside the dev-only `appsettings.json`), selected at build time via the
   `WasmApplicationEnvironmentName` MSBuild property — `deploy.yml` sets it as a job-level env var,
@@ -373,6 +381,21 @@ once in this codebase:
   `gh auth refresh -h github.com -s workflow`, which needs the user to complete an interactive
   device-code flow in their own browser (relay the printed one-time code/URL; the command itself
   can be started from a session, but the authorization step cannot).
+- **An Aspire project resource needs `.WithExternalHttpEndpoints()` explicitly, or
+  `PublishAsAzureContainerApp` ships it with internal-only Container App ingress**
+  (`external: false`) — reachable only from inside the Container Apps environment's own network,
+  never from the public internet. Hitting it from outside doesn't fail to connect; the
+  environment's boundary hands back a **404**, which reads exactly like an app-level routing bug
+  rather than an infra misconfiguration. The tell is `ingress.fqdn` containing `.internal.` (check
+  via `az containerapp list --query "[].properties.configuration.ingress"`) — check that before
+  chasing routing code. Bit `Web`'s own Container App after Phase 8 (found 2026-09-06).
+- **`az postgres flexible-server ad-admin` was renamed to `microsoft-entra-admin`** under Azure's
+  Azure AD → Microsoft Entra ID rebrand. Current Azure CLI (2.7x+) has no `ad-admin` command group
+  at all — it fails with `'ad-admin' is misspelled or not recognized by the system`, not a
+  deprecation warning, so this isn't a version-skew issue to retry past. Older docs, blog posts,
+  and any of this repo's own earlier comments referencing `ad-admin` need the new subgroup name;
+  the flags (`--resource-group`, `--server-name`, `--display-name`, `--object-id`, `--type`) are
+  unchanged.
 
 ## Testing
 
