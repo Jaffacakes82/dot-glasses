@@ -93,16 +93,13 @@ public class DashboardQueryService(DotGlassesDbContext dbContext, IUnscopedRepor
             // toward every other Dashboard number; only these two rankings exclude it. Custom
             // Orders and Event History deliberately keep showing "No retailer" as a real group
             // heading — a different kind of screen (a full listing, not a top-N leaderboard) — so
-            // this exclusion is local to RankByKey's Retailer/Country calls, not to OrgTreeLookup
-            // itself.
+            // this exclusion is local to these two RankByKey calls, not to OrgTreeLookup itself.
             RankByKey(
-                sales.Where(s => orgLookup.RowRetailer(s.HierarchyPath).HasRetailer).ToList(),
-                tests.Where(t => orgLookup.RowRetailer(t.HierarchyPath).HasRetailer).ToList(),
-                s => orgLookup.RowRetailerName(s.HierarchyPath), t => orgLookup.RowRetailerName(t.HierarchyPath)),
+                sales, tests, s => orgLookup.RowRetailerName(s.HierarchyPath), t => orgLookup.RowRetailerName(t.HierarchyPath),
+                s => orgLookup.RowRetailer(s.HierarchyPath).HasRetailer, t => orgLookup.RowRetailer(t.HierarchyPath).HasRetailer),
             RankByKey(
-                sales.Where(s => orgLookup.RowCountryName(s.HierarchyPath) != OrgTreeLookup.UnknownCountry).ToList(),
-                tests.Where(t => orgLookup.RowCountryName(t.HierarchyPath) != OrgTreeLookup.UnknownCountry).ToList(),
-                s => orgLookup.RowCountryName(s.HierarchyPath), t => orgLookup.RowCountryName(t.HierarchyPath)),
+                sales, tests, s => orgLookup.RowCountryName(s.HierarchyPath), t => orgLookup.RowCountryName(t.HierarchyPath),
+                s => orgLookup.RowHasCountry(s.HierarchyPath), t => orgLookup.RowHasCountry(t.HierarchyPath)),
             RankByKey(sales, tests, s => technicianNames.GetValueOrDefault(s.TechnicianUserId, "—"), t => technicianNames.GetValueOrDefault(t.TechnicianUserId, "—")));
     }
 
@@ -130,10 +127,25 @@ public class DashboardQueryService(DotGlassesDbContext dbContext, IUnscopedRepor
 
     /// <summary>Groups Sales and Tests by the same key (outlet/retailer/country/technician),
     /// ranks by sales volume descending, and pairs each with its own conversion % (that key's
-    /// share of Tests that became a Sale) — top 5.</summary>
+    /// share of Tests that became a Sale) — top 5. isAttributable, when given, drops rows that
+    /// can't be meaningfully grouped by this key (e.g. no Retailer/Country above them) from the
+    /// ranking entirely, rather than grouping them under a fallback label as if it were a real
+    /// competing entity — Outlets/Technicians never pass one, since every row is either a real
+    /// named node or data corruption, both handled by the fallback string itself.</summary>
     private static IReadOnlyList<DashboardRankedEntry> RankByKey(
-        IReadOnlyList<Sale> sales, IReadOnlyList<Test> tests, Func<Sale, string> saleKey, Func<Test, string> testKey)
+        IReadOnlyList<Sale> sales, IReadOnlyList<Test> tests, Func<Sale, string> saleKey, Func<Test, string> testKey,
+        Func<Sale, bool>? saleIsAttributable = null, Func<Test, bool>? testIsAttributable = null)
     {
+        if (saleIsAttributable is not null)
+        {
+            sales = sales.Where(saleIsAttributable).ToList();
+        }
+
+        if (testIsAttributable is not null)
+        {
+            tests = tests.Where(testIsAttributable).ToList();
+        }
+
         var testCountsByKey = tests.GroupBy(testKey).ToDictionary(g => g.Key, g => g.Count());
 
         return sales.GroupBy(saleKey)
