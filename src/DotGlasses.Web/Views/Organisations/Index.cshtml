@@ -83,7 +83,7 @@
                 <form asp-action="SetTrainingOrgFlag" method="post">
                     <input type="hidden" name="id" value="@Model.Selected.Id" />
                     <input type="hidden" name="value" value="@((!Model.Selected.IsTrainingOrg).ToString())" />
-                    <button class="dg-btn dg-btn-ghost" style="width:100%; justify-content:center;" type="submit">
+                    <button class="dg-btn dg-btn-ghost" style="width:100%;" type="submit">
                         @(Model.Selected.IsTrainingOrg ? "Remove training-org flag" : "Flag as training organisation")
                     </button>
                 </form>
@@ -107,7 +107,7 @@
                     <form asp-action="SetActive" method="post" onsubmit="return confirm('Deactivate @Model.Selected.Name? It will disappear from the tree until reactivated.');">
                         <input type="hidden" name="id" value="@Model.Selected.Id" />
                         <input type="hidden" name="value" value="false" />
-                        <button class="dg-btn dg-btn-ghost" style="width:100%; justify-content:center; color:#b00;" type="submit">Deactivate</button>
+                        <button class="dg-btn dg-btn-ghost" style="width:100%; color:#b00;" type="submit">Deactivate</button>
                     </form>
                 }
             </div>
