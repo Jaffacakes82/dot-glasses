@@ -1,6 +1,6 @@
 # 02 — Offline loses track of the active organisation
 
-Status: ready-for-agent
+Status: done (implemented 2026-09-09, PR: fix/offline-status-and-dashboard-scoping-2026-09-09)
 Blocked by: None — can start immediately
 Category: bug
 
