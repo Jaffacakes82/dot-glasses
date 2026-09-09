@@ -62,7 +62,7 @@
             var result = await response.Content.ReadFromJsonAsync<LoginResponse>();
             if (result is not null)
             {
-                await TokenStore.SetTokenAsync(result.AccessToken, result.ExpiresAtUtc);
+                await TokenStore.SetTokenAsync(result.AccessToken, result.ExpiresAtUtc, result.DisplayName);
                 Navigation.NavigateTo("/");
             }
         }

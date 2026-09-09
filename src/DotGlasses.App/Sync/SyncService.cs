@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using DotGlasses.App.Validation;
 using DotGlasses.Contracts.Sync;
 
 namespace DotGlasses.App.Sync;
@@ -118,14 +119,5 @@ public class SyncService(ISyncQueueStore queueStore, HttpClient httpClient, ILog
         }
 
         return SyncAttemptResult.Rejected("The server rejected this record.");
-    }
-
-    private sealed class ValidationProblemResponse
-    {
-        public string? Title { get; set; }
-
-        public string? Detail { get; set; }
-
-        public Dictionary<string, string[]>? Errors { get; set; }
     }
 }

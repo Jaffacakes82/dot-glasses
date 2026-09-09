@@ -166,8 +166,8 @@
                     <div class="dg-field">
                         <label>Did the customer share contact details?</label>
                         <div style="display:flex; gap:8px;">
-                            <button type="button" class="dg-btn dg-btn-ghost" style="flex:1;" @onclick="() => _contactShared = false">No</button>
-                            <button type="button" class="dg-btn dg-btn-ghost" style="flex:1;" @onclick="() => _contactShared = true">Yes</button>
+                            <button type="button" class="dg-btn @(_contactShared == false ? "dg-btn-primary" : "dg-btn-ghost")" style="flex:1;" @onclick="() => _contactShared = false">No</button>
+                            <button type="button" class="dg-btn @(_contactShared == true ? "dg-btn-primary" : "dg-btn-ghost")" style="flex:1;" @onclick="() => _contactShared = true">Yes</button>
                         </div>
                         @if (_contactShared == true)
                         {
@@ -236,7 +236,7 @@
                     @RenderFrameSwatches()
 
                     <div class="dg-field">
-                        <label style="display:flex; align-items:center; justify-content:space-between; gap:8px;">Did this person buy a hard case? (click for yes)<input type="checkbox" @bind="_hardCaseSold" style="width:auto; flex:none;" /></label>
+                        <label><input type="checkbox" @bind="_hardCaseSold" style="width:auto; margin-right:8px;" />Did this person buy a hard case?</label>
                     </div>
                     @if (_hardCaseSold)
                     {
