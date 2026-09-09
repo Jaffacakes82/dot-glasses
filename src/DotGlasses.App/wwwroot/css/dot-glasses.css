@@ -175,12 +175,19 @@ html, body {
     font-family: var(--font-body);
     font-weight: 700;
     font-size: 15px;
+    text-decoration: none;
     cursor: pointer;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.dg-btn:hover {
+    transform: scale(1.03);
 }
 
 .dg-btn:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+    transform: none;
 }
 
 .dg-btn-primary {
