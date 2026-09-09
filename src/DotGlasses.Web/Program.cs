@@ -172,10 +172,14 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.ConfigureOptions<ConfigureSwaggerOptions>();
 builder.Services.AddSwaggerGen();
 
-// [OPEN] dev-only origins for DotGlasses.App's standalone dev server (see its
-// Properties/launchSettings.json). Replace with the real deployed App origin before production.
+// The first two origins are DotGlasses.App's standalone dev server (see its
+// Properties/launchSettings.json); the latter two are its real deployed custom domains
+// (src/DotGlasses.App/infra/field-app/field-app.module.bicep) — nonprod and prod alike, since
+// this one appsettings-driven policy runs unmodified in every environment (no per-environment
+// CORS config exists today, and a fixed allowlist of the App's own known origins costs nothing
+// to leave permissive across environments — see docs/open-issues.md for the DNS this depends on).
 builder.Services.AddCors(options => options.AddPolicy("App", policy => policy
-    .WithOrigins("https://localhost:7299", "http://localhost:5253")
+    .WithOrigins("https://localhost:7299", "http://localhost:5253", "https://nonprod.app.dotglasses.com", "https://app.dotglasses.com")
     .AllowAnyHeader()
     .AllowAnyMethod()));
 
