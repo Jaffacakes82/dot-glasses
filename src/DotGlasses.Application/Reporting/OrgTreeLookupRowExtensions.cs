@@ -33,6 +33,12 @@ public static class OrgTreeLookupRowExtensions
     public static string RowCountryName(this OrgTreeLookup lookup, string? hierarchyPath) =>
         RowPath(hierarchyPath) is { } path ? lookup.CountryName(path) : OrgTreeLookup.UnknownCountry;
 
+    /// <summary>Whether the row resolves to a real Country — the typed equivalent of
+    /// RowRetailer(...).HasRetailer, so a caller excluding unattributable rows from a ranking
+    /// doesn't have to compare display text against OrgTreeLookup.UnknownCountry.</summary>
+    public static bool RowHasCountry(this OrgTreeLookup lookup, string? hierarchyPath) =>
+        RowPath(hierarchyPath) is { } path && lookup.FindCountry(path) is not null;
+
     public static RetailerResolution RowRetailer(this OrgTreeLookup lookup, string? hierarchyPath) =>
         RowPath(hierarchyPath) is { } path ? lookup.ResolveRetailer(path) : RetailerResolution.Unknown;
 

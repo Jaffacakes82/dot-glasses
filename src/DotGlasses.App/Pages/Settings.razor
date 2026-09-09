@@ -126,9 +126,9 @@
     }
 
     /// <summary>Distinguishes "genuinely no orgs assigned" (a real, successful response) from
-    /// "couldn't reach the server and this device has no saved copy yet" — before this, both
-    /// looked identical and a technician going offline read as having lost their org assignment.
-    /// </summary>
+    /// "couldn't reach the server and this device has no saved copy yet" (LocationClient.LoadError)
+    /// — before this, both looked identical and a technician going offline read as having lost
+    /// their org assignment.</summary>
     private string NoOrgsMessage()
     {
         if (_loadingOrgs)
@@ -136,9 +136,7 @@
             return "Loading your assigned locations…";
         }
 
-        return LocationClient.LastLoadFailed
-            ? "Couldn't reach the server to load your locations, and this device has no saved copy yet. Connect once to download them."
-            : "No locations assigned yet — contact your admin.";
+        return LocationClient.LoadError ?? "No locations assigned yet — contact your admin.";
     }
 
     /// <summary>

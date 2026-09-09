@@ -27,16 +27,11 @@ public interface IUserLocationClient
     /// callers should treat that as "stayed on the previous location" and show a message.</summary>
     Task<bool> SwitchOrgAsync(Guid orgNodeId);
 
-    /// <summary>True when the most recent GetMyOrgsAsync call served its result from the
-    /// IndexedDB cache rather than a live API response — lets a caller tell "genuinely no orgs
-    /// assigned" apart from "offline, showing the last-known list."</summary>
-    bool IsFromCache { get; }
-
-    /// <summary>True when the most recent GetMyOrgsAsync call's live request itself failed
-    /// (network error, offline, expired token) — independent of IsFromCache, since a failed call
-    /// with nothing cached yet still returns an empty list but is a different fact from
-    /// "genuinely no orgs assigned" (a real 200 with an empty body).</summary>
-    bool LastLoadFailed { get; }
+    /// <summary>Non-null only when the most recent GetMyOrgsAsync call's live request failed *and*
+    /// this device has no cached copy to fall back to — same shape as ReferenceDataClient's
+    /// LoadError, so a caller can tell "genuinely no orgs assigned" (a real empty response, this
+    /// stays null) apart from "couldn't check, and there's nothing to show yet."</summary>
+    string? LoadError { get; }
 }
 
 public class UserLocationClient(HttpClient httpClient, AuthTokenStore tokenStore, IJSRuntime jsRuntime) : IUserLocationClient
@@ -45,17 +40,14 @@ public class UserLocationClient(HttpClient httpClient, AuthTokenStore tokenStore
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    public bool IsFromCache { get; private set; }
-
-    public bool LastLoadFailed { get; private set; }
+    public string? LoadError { get; private set; }
 
     public async Task<IReadOnlyList<AssignedOrgDto>> GetMyOrgsAsync()
     {
         try
         {
             var orgs = await httpClient.GetFromJsonAsync<List<AssignedOrgDto>>("api/v1/auth/my-orgs") ?? [];
-            IsFromCache = false;
-            LastLoadFailed = false;
+            LoadError = null;
             await WriteCacheAsync(orgs);
             return orgs;
         }
@@ -64,8 +56,9 @@ public class UserLocationClient(HttpClient httpClient, AuthTokenStore tokenStore
             // Unreachable, offline, or the token has expired — fall back to the last-cached copy
             // rather than reporting an empty, unassigned-looking list.
             var cached = await TryLoadFromCacheAsync();
-            IsFromCache = cached is not null;
-            LastLoadFailed = true;
+            LoadError = cached is null
+                ? "Couldn't reach the server to load your locations, and this device has no saved copy yet. Connect once to download them."
+                : null;
             return cached ?? [];
         }
     }
