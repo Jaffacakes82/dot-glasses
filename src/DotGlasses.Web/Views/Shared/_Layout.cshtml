@@ -86,24 +86,29 @@
                         </a>
                     }
                 </nav>
-                <div class="dg-user-chip">
-                    <a asp-controller="Account" asp-action="Settings" title="Account settings"
-                       style="display:flex; align-items:center; gap:inherit; flex:1; min-width:0; text-decoration:none; color:inherit;">
+                <div class="dropup dg-user-chip">
+                    @* A single dropdown toggle replaces the old "whole chip links to Settings, plus a
+                       separate tiny sign-out icon" layout — it wasn't obvious the chip was clickable
+                       at all. The caret is the discoverability cue; both destinations are named. *@
+                    <button class="dg-user-chip-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Account menu">
                         <div class="dg-avatar">@initials</div>
                         <div style="flex:1; min-width:0;">
                             <div style="font-weight:600; font-size:13px;">@CurrentUser.UserName</div>
                             <div style="font-size:11px; opacity:0.7; text-transform:uppercase;">@roleLabel</div>
                         </div>
-                    </a>
-                    @* AccountController.Logout has existed since the portal was built but nothing
-                       ever posted to it, so there was no way to end a session short of clearing
-                       cookies. *@
-                    <form asp-controller="Account" asp-action="Logout" method="post" style="margin:0;">
-                        <button type="submit" title="Sign out" aria-label="Sign out"
-                                style="border:none; background:none; cursor:pointer; padding:4px; color:inherit; opacity:0.7; font-size:22px; line-height:1;">
-                            ➜]
-                        </button>
-                    </form>
+                        <span class="dg-caret">&#9662;</span>
+                    </button>
+                    <ul class="dropdown-menu dg-user-menu">
+                        <li><a class="dropdown-item" asp-controller="Account" asp-action="Settings">My Profile</a></li>
+                        <li>
+                            @* AccountController.Logout has existed since the portal was built but nothing
+                               ever posted to it, so there was no way to end a session short of clearing
+                               cookies. *@
+                            <form asp-controller="Account" asp-action="Logout" method="post" style="margin:0;">
+                                <button type="submit" class="dropdown-item" style="color:var(--dot-orange);">➜] Sign Out</button>
+                            </form>
+                        </li>
+                    </ul>
                 </div>
             </aside>
             <main class="dg-content" role="main">
