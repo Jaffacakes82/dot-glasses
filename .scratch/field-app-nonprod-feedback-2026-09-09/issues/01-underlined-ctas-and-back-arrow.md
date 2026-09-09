@@ -1,6 +1,6 @@
 # 01 — Home action tiles and back-arrow links show a browser-default underline
 
-Status: ready-for-agent
+Status: done (implemented 2026-09-09, PR: fix/field-app-nonprod-feedback-2026-09-09)
 Blocked by: None — can start immediately
 Category: bug
 

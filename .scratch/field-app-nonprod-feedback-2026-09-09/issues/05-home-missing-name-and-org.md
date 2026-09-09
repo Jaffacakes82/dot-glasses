@@ -1,6 +1,6 @@
 # 05 — Home screen never shows the technician's name or their active org
 
-Status: ready-for-agent
+Status: done (implemented 2026-09-09, PR: fix/field-app-nonprod-feedback-2026-09-09)
 Blocked by: None — can start immediately
 Category: bug
 
