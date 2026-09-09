@@ -1,6 +1,6 @@
 # 04 — Settings: drop the "Coming soon" placeholders, add a real Change Password action
 
-Status: ready-for-agent
+Status: done (implemented 2026-09-09, PR: fix/field-app-nonprod-feedback-2026-09-09)
 Blocked by: None — can start immediately
 Category: feature / cleanup
 
