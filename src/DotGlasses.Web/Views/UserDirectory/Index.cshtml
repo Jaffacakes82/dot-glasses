@@ -18,7 +18,9 @@
 @if (TempData["SetPasswordLink"] is string link)
 {
     <div class="alert alert-success" style="border-radius:var(--radius-md); margin-bottom:var(--space-4); word-break:break-all;">
-        No email sending is wired up yet — copy this set-password link and send it to <strong>@TempData["SetPasswordLinkFor"]</strong> yourself:<br />
+        An email was sent to <strong>@TempData["SetPasswordLinkFor"]</strong> if email delivery is
+        configured in this environment — you can also copy this set-password link and send it
+        yourself:<br />
         <code>@link</code>
     </div>
 }

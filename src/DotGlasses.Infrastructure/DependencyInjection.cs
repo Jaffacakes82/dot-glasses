@@ -11,7 +11,6 @@ using DotGlasses.Application.Reporting;
 using DotGlasses.Application.Sales;
 using DotGlasses.Application.Users;
 using DotGlasses.Application.VisionTests;
-using DotGlasses.Application.WidgetExamples;
 using Azure.Communication.Email;
 using DotGlasses.Infrastructure.Identity;
 using DotGlasses.Infrastructure.Notifications;
@@ -38,8 +37,6 @@ public static class DependencyInjection
         // override OnConfiguring itself, EF Core throws at startup for that on a pooled context.
         // See CLAUDE.md's Test/Lead/Sale API section for the full story.
 
-        services.AddScoped<IWidgetExampleRepository, WidgetExampleRepository>();
-        services.AddScoped<IWidgetExampleService, WidgetExampleService>();
         services.AddScoped<IUnscopedReportQueryService, UnscopedReportQueryService>();
         services.AddScoped<IEventHistoryQueryService, EventHistoryQueryService>();
         services.AddScoped<ICustomOrderService, CustomOrderService>();

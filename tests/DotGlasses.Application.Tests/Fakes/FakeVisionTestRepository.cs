@@ -4,11 +4,10 @@ using DotGlasses.Domain.Entities;
 namespace DotGlasses.Application.Tests.Fakes;
 
 /// <summary>
-/// Dictionary-backed stand-in for the EF repository, following
-/// <c>FakeWidgetExampleRepository</c>. Reads honour <see cref="HideFromCaller"/>, which models
-/// the global hierarchy query filter: a row outside the caller's subtree is simply not returned,
-/// while still existing in the store — so a test can assert what did (or did not) happen to a row
-/// the caller could not see.
+/// Dictionary-backed stand-in for the EF repository. Reads honour <see cref="HideFromCaller"/>,
+/// which models the global hierarchy query filter: a row outside the caller's subtree is simply
+/// not returned, while still existing in the store — so a test can assert what did (or did not)
+/// happen to a row the caller could not see.
 /// </summary>
 public class FakeVisionTestRepository : IVisionTestRepository
 {

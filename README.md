@@ -9,18 +9,15 @@ two front ends sharing one backend data model:
 2. **Field Distribution App** — a Blazor WebAssembly PWA, installable on low/mid-range Android
    phones, used fully offline by field agents to record vision tests, leads, and sales.
 
-This is currently an **architectural skeleton**: real domain entities (org hierarchy, lens
-catalogues, Test/Lead/Sale) are not yet designed. Every cross-cutting concern — audit/soft
-delete, data scoping, RBAC, offline sync, observability — is proven end-to-end using one
-deliberately generic placeholder entity, `WidgetExample`, so the patterns are established
-before real entities are dropped in. See [CLAUDE.md](CLAUDE.md) for the behavioural rules this
-repo is built against.
+Real domain entities (org hierarchy, lens catalogues, Test/Lead/Sale) are designed and wired end
+to end — every cross-cutting concern (audit/soft delete, data scoping, RBAC, offline sync) is
+proven against them. See [CLAUDE.md](CLAUDE.md) for the behavioural rules this repo is built
+against.
 
-Both front ends now also have a full **UI skeleton** matching the design system handoff
-(colors/type/spacing tokens in each project's `wwwroot/css/dot-glasses.css`, component patterns
-described in `CLAUDE.md`): every screen from the design mockups is a real, navigable route, but
-populated with static placeholder data rather than a database — not wired to real domain
-entities for the same reason as above.
+Both front ends follow the design system handoff (colors/type/spacing tokens in each project's
+`wwwroot/css/dot-glasses.css`, component patterns described in `CLAUDE.md`); see CLAUDE.md's UI
+section and `docs/functional-capabilities.md` for what's real data versus what remains a
+placeholder screen.
 
 ## Solution structure
 
