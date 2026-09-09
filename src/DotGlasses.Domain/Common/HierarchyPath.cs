@@ -82,9 +82,9 @@ public sealed record HierarchyPath
     public override string ToString() => Value;
 
     /// <summary>Validates the invariant and counts the segments in one pass: a leading separator,
-    /// one or more non-empty all-digit segments, each closed by a separator. Mirrors the wire-level
-    /// regex on CreateWidgetExampleRequest ("^/(\d+/)+$"), which stays a string — Contracts may not
-    /// reference Domain.</summary>
+    /// one or more non-empty all-digit segments, each closed by a separator. No Contracts DTO
+    /// accepts a client-submitted hierarchy path today (see CLAUDE.md's Domain model section), so
+    /// this is currently the invariant's only enforcement point.</summary>
     private static bool TryMeasure(string value, out int depth)
     {
         depth = 0;

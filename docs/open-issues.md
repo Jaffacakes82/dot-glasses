@@ -34,10 +34,13 @@ machine" rule.
   2026-09-06 — see CLAUDE.md's Deployment section for what that identity is and why it's separate
   from `web_identity-*`). The equivalent grant against `rg-dotglasses-prod`'s server hasn't been
   done yet, so production's migration step will fail with the same `28P01` until it is.
-- **Field App API URL placeholders**: `appsettings.Staging.json`/`appsettings.Production.json`
-  both carry `ApiBaseUrl: ...REPLACE-AFTER-FIRST-DEPLOY...` — Azure Container Apps only assigns
-  the real FQDN's unique suffix at first provision, so this can't be pre-filled. Update both right
-  after each environment's first `azd up`.
+- **Field App API URL placeholders — resolved 2026-09-09**: `appsettings.Staging.json`/
+  `appsettings.Production.json` now point `ApiBaseUrl` at the Admin Portal's real custom domains
+  (`nonprod.admin.dotglasses.com` / `admin.dotglasses.com`) instead of the
+  `...REPLACE-AFTER-FIRST-DEPLOY...` `azurecontainerapps.io` placeholders — no longer blocked on
+  waiting for Container Apps to assign an FQDN suffix, since a stable custom domain exists
+  regardless. `Program.cs`'s CORS policy was extended to allow both origins alongside the
+  existing local-dev ones.
 - **Prod's `admin.dotglasses.com` DNS**: `AppHost.cs` now declares the Admin Portal's custom
   domain + managed certificate for both environments (see CLAUDE.md's Deployment section), but a
   managed certificate can't complete domain-control validation without the domain's DNS (a CNAME
@@ -48,6 +51,18 @@ machine" rule.
   that deploy down with it. Get the Container App's default FQDN first (`az containerapp show
   --name ca-dotglasses-prod --resource-group rg-dotglasses-prod --query
   properties.configuration.ingress.fqdn`) and point the CNAME at that.
+- **Field App custom domain DNS — neither environment configured yet**: as of 2026-09-09,
+  `field-app.module.bicep` declares `nonprod.app.dotglasses.com` (nonprod) /
+  `app.dotglasses.com` (prod) as the Static Web App's custom domain, using the AVM module's
+  `customDomains` param (`cname-delegation` validation, since both are subdomains). Unlike
+  `admin.dotglasses.com`, **neither of these domains has ever been configured before** — there is
+  no prior manual-portal setup to fall back on for nonprod this time. The CNAME (pointed at the
+  Static Web App's default `<name>.azurestaticapps.net` hostname — `az staticwebapp show --name
+  <name> --resource-group rg-dotglasses-<env> --query defaultHostname`, or read
+  `FIELD_APP_URI` from the `field-app` azd project's own outputs after a first plain deploy)
+  needs to exist *before* the next `azd up` against **either** `rg-dotglasses-nonprod` or
+  `rg-dotglasses-prod` for the `field-app` azd project runs, or the custom-domain resource's
+  validation will fail and may take that deploy down with it.
 - **ACS custom domain**: `acs.bicep` still provisions the free Azure Managed Domain, not a real
   verified `dotglasses.com`. When that changes, prod and non-prod need **separate subdomains**
   (`prod.dotglasses.com` / `nonprod.dotglasses.com`) — a verified custom domain can only link to

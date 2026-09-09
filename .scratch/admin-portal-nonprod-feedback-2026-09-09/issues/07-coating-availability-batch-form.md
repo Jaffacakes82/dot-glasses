@@ -1,0 +1,85 @@
+# 07 — Lens strength coating availability grid reloads the page per checkbox
+
+Status: done (implemented 2026-09-09, PR: fix/admin-portal-ux-feedback-2026-09-09)
+Blocked by: None — can start immediately
+Category: enhancement
+
+Source: Admin Portal non-prod testing, 2026-09-09, Joe — "the Lens strength coating availability
+- can we make that a form? At the moment, every time you check a box it reloads the page, so the
+UX is quite clunky."
+
+## Agent Brief
+
+**Category:** enhancement (UX — batch the grid into one submit)
+
+**Summary:** The Preset Catalogues screen's "Lens strength coating availability" grid (every lens
+strength × every active coating) is not real checkboxes — each cell is its own `<form>` that
+full-page POSTs a single toggle and redirects back, so every click is a full page reload.
+
+**Current behavior:**
+`Views/Catalogues/Index.cshtml:207-227` — for every `(strength, coating)` cell:
+```html
+<form asp-action="SetCoatingAvailability" method="post">
+    <input type="hidden" name="LensStrengthRefId" value="@strength.Id" />
+    <input type="hidden" name="CoatingRefId" value="@coating.Id" />
+    <input type="hidden" name="Available" value="@(!available.Contains(coating.Id) ? "true" : "false")" />
+    <button type="submit" ...>@(available.Contains(coating.Id) ? "✅" : "⬜")</button>
+</form>
+```
+`CataloguesController.SetCoatingAvailability` (`Controllers/CataloguesController.cs:110-131`) takes
+one `SetCoatingAvailabilityRequest` (`LensStrengthRefId`, `CoatingRefId`, `Available`;
+`Models/CataloguesViewModels.cs:48-53`), validated by
+`SetCoatingAvailabilityRequestValidator`, and calls
+`catalogueAdminService.AddAvailableCoatingAsync`/`RemoveAvailableCoatingAsync`
+(`IPresetCatalogueAdminService.cs:61,63` — one pair at a time), then redirects back to `Index`.
+
+**Desired behavior:**
+Replace the per-cell forms with one `<form>` wrapping the whole grid, using real
+`<input type="checkbox">` cells and a single "Save" submit button — check/uncheck as many cells as
+needed, then one POST applies every change at once (no reload per click).
+
+Server-side, this needs a new request shape carrying the *full checked set* for the grid (e.g. a
+list of `"{lensStrengthId}:{coatingId}"` values from the checked boxes) and a new controller
+action that diffs it against current state — `AvailableCoatingsByLensStrength`
+(`Models/CataloguesViewModels.cs:9`, already built by
+`CataloguesController.BuildViewModelAsync`) — calling
+`AddAvailableCoatingAsync`/`RemoveAvailableCoatingAsync` per pair whose state actually changed.
+`IPresetCatalogueAdminService` has no existing batch method — adding a single
+`SetAvailableCoatingsAsync` (or looping the existing pair-at-a-time calls from the controller) is
+an implementation choice, not prescribed here.
+
+**Key interfaces:**
+- `src/DotGlasses.Web/Views/Catalogues/Index.cshtml:183-232` (the grid markup to replace)
+- `src/DotGlasses.Web/Controllers/CataloguesController.cs:110-131` (`SetCoatingAvailability` — the
+  action to replace/extend)
+- `src/DotGlasses.Web/Models/CataloguesViewModels.cs:48-53` (`SetCoatingAvailabilityRequest` — the
+  request shape to replace with a batch-capable one)
+- `src/DotGlasses.Web/Validation/PresetCatalogues/SetCoatingAvailabilityRequestValidator.cs` (will
+  need updating for whatever the new request shape is — every coating ref in the submitted set
+  still needs the same active/exists check this validator does today)
+- `src/DotGlasses.Application/PresetCatalogues/IPresetCatalogueAdminService.cs:61,63`
+  (`AddAvailableCoatingAsync`/`RemoveAvailableCoatingAsync` — the per-pair primitives to build the
+  batch save on top of)
+
+**Acceptance criteria:**
+- [ ] Checking/unchecking any number of cells in the grid does not reload the page until "Save" is
+      clicked.
+- [ ] A single "Save" click persists every changed cell (both newly-checked and newly-unchecked)
+      in one request.
+- [ ] Every coating ref submitted is still validated as an existing, active Coating item before
+      being persisted (same guarantee `SetCoatingAvailabilityRequestValidator` gives today) — a
+      request referencing a retired/unknown coating is rejected, not silently applied.
+- [ ] `docs/functional-capabilities.md`'s description of this screen, if it describes the
+      per-toggle round-trip, is updated to match (check before assuming — grep before editing).
+
+**Out of scope:**
+- Any change to what "coating availability" *means* (still per-lens-strength, per-active-coating,
+  driving the Field App's preset-range coating picker) — this ticket is purely about how the
+  change is submitted, not the underlying data model.
+- Client-side (JS) optimistic UI or partial-page updates — a normal full-form POST-redirect-GET
+  for the whole grid is sufficient; this repo has no established SPA/fetch pattern in the Admin
+  Portal to reuse (see CLAUDE.md: Web API and MVC are separate, no MediatR/JS framework here).
+
+## Comments
+
+> *This was generated by AI during triage.*

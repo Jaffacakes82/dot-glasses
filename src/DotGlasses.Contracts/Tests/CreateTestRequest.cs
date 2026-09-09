@@ -3,7 +3,7 @@ using DotGlasses.Contracts.Common;
 namespace DotGlasses.Contracts.Tests;
 
 /// <summary>
-/// Id is client-generated (offline-sync outbox idempotency key), same as WidgetExample.
+/// Id is client-generated (offline-sync outbox idempotency key).
 /// Deliberately has no HierarchyPath/TechnicianUserId fields — the server derives both from the
 /// authenticated caller (see TestsController), never trusting client-submitted values for a
 /// real technician's data entry. No ConvertedToLeadId either — that's set later by the
