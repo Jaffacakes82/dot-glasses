@@ -83,13 +83,26 @@ public class DashboardQueryService(DotGlassesDbContext dbContext, IUnscopedRepor
             trend,
             genderMalePercent,
             genderFemalePercent,
-            // Ranked by the resolved *name*, so the Retailer rows a retail point contributes to
-            // are the ones OrgTreeLookup names — including the honest "No retailer" bucket for
-            // outlets hanging directly off a Country, which is a different row from the
-            // "Unknown retailer" one meaning "that path is not in the tree" (CONTEXT.md).
             RankByKey(sales, tests, s => orgLookup.RowOutletName(s.HierarchyPath), t => orgLookup.RowOutletName(t.HierarchyPath)),
-            RankByKey(sales, tests, s => orgLookup.RowRetailerName(s.HierarchyPath), t => orgLookup.RowRetailerName(t.HierarchyPath)),
-            RankByKey(sales, tests, s => orgLookup.RowCountryName(s.HierarchyPath), t => orgLookup.RowCountryName(t.HierarchyPath)),
+            // Unlike Outlets, a row that OrgTreeLookup can't honestly name a Retailer/Country for
+            // ("No retailer" — genuinely hangs directly off a Country; "Unknown retailer"/"Unknown
+            // country" — the path isn't in the tree at all) is excluded here rather than ranked
+            // under that fallback string as if it were a real competing entity — a leaderboard
+            // entry reading "No retailer" or "Unknown country" (possibly #1, if it has the most
+            // sales) reads as a real attribution rather than "we can't say." It still counts
+            // toward every other Dashboard number; only these two rankings exclude it. Custom
+            // Orders and Event History deliberately keep showing "No retailer" as a real group
+            // heading — a different kind of screen (a full listing, not a top-N leaderboard) — so
+            // this exclusion is local to RankByKey's Retailer/Country calls, not to OrgTreeLookup
+            // itself.
+            RankByKey(
+                sales.Where(s => orgLookup.RowRetailer(s.HierarchyPath).HasRetailer).ToList(),
+                tests.Where(t => orgLookup.RowRetailer(t.HierarchyPath).HasRetailer).ToList(),
+                s => orgLookup.RowRetailerName(s.HierarchyPath), t => orgLookup.RowRetailerName(t.HierarchyPath)),
+            RankByKey(
+                sales.Where(s => orgLookup.RowCountryName(s.HierarchyPath) != OrgTreeLookup.UnknownCountry).ToList(),
+                tests.Where(t => orgLookup.RowCountryName(t.HierarchyPath) != OrgTreeLookup.UnknownCountry).ToList(),
+                s => orgLookup.RowCountryName(s.HierarchyPath), t => orgLookup.RowCountryName(t.HierarchyPath)),
             RankByKey(sales, tests, s => technicianNames.GetValueOrDefault(s.TechnicianUserId, "—"), t => technicianNames.GetValueOrDefault(t.TechnicianUserId, "—")));
     }
 
