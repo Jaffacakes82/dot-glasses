@@ -350,6 +350,23 @@ body" is not a safe shortcut.
   first-class azd/`azure.yaml` field to inject an MSBuild property for a `staticwebapp`-host
   service). Blazor WASM has no secure client-side storage regardless of delivery mechanism — a
   genuine secret can never live in the Field App directly, only proxied through `Web`'s backend.
+  Its `ApiBaseUrl` in each environment's `appsettings.*.json` points at the Admin Portal's own
+  custom domain (`nonprod.admin.dotglasses.com` / `admin.dotglasses.com`), not the Container
+  App's raw `azurecontainerapps.io` FQDN — `Web`'s CORS policy (`Program.cs`) allows both origins
+  alongside the local-dev ones.
+- **The Field App's custom domain is declared in `field-app.module.bicep`** via the AVM
+  static-site module's `customDomains` param — same prod/nonprod split as the Admin Portal's
+  (`app.dotglasses.com` / `nonprod.app.dotglasses.com`, picked by the same kind of deployment-time
+  ternary on this file's own `envToken`, for the same reason: one hand-authored bicep template
+  serves both azd environments). Unlike the Admin Portal's domains, **neither of these has ever
+  been configured** — there's no prior manual-portal setup to fall back on, so DNS (a CNAME to the
+  Static Web App's default `azurestaticapps.net` hostname) must exist before the *first* `azd up`
+  against either environment for the `field-app` azd project, or the custom domain's validation
+  fails and may take that deploy down with it — see `docs/open-issues.md`. The Free SKU (`sku:
+  'Free'` in this same module) supports `customDomains` directly; only Azure Static Web Apps'
+  separate "linked backends" reverse-proxy feature needs the paid Standard plan, and this repo
+  doesn't use that — the Field App calls the Admin Portal's API cross-origin via a plain
+  `HttpClient` base address instead (see the config bullet above), not a same-origin SWA proxy.
 - This repo is **public** — `/design` (Claude Design handoff bundle) and local Claude Code
   settings are gitignored; never commit them or reference them from `README.md`.
 
