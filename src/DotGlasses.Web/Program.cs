@@ -25,10 +25,17 @@ using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// WriteTo.Console is what actually gets these logs anywhere in staging/production — Container
+// Apps only captures a container's own stdout as its console log stream, and nothing else in this
+// pipeline (ReadFrom.Configuration/Services, the OpenTelemetry logging provider ServiceDefaults
+// adds below) writes there on its own. Found live 2026-09-09: no application logs of any kind
+// were reaching the nonprod Container App's log stream, including the JWT-signing-key exception
+// that broke Field App login the same day.
 builder.Host.UseSerilog((context, services, configuration) => configuration
     .ReadFrom.Configuration(context.Configuration)
     .ReadFrom.Services(services)
-    .Enrich.FromLogContext());
+    .Enrich.FromLogContext()
+    .WriteTo.Console(new Serilog.Formatting.Compact.CompactJsonFormatter()));
 
 builder.AddServiceDefaults();
 

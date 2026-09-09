@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace DotGlasses.Web.Controllers.Api.V1;
 
@@ -31,7 +32,8 @@ public class AuthController(
     IUserOrgAssignmentService userOrgAssignmentService,
     ICurrentUserContext currentUser,
     IValidator<LoginRequest> loginValidator,
-    IValidator<SwitchOrgRequest> switchOrgValidator) : ControllerBase
+    IValidator<SwitchOrgRequest> switchOrgValidator,
+    IValidator<ChangePasswordRequest> changePasswordValidator) : ControllerBase
 {
     [HttpPost("login")]
     [AllowAnonymous]
@@ -61,7 +63,7 @@ public class AuthController(
         var principal = await claimsPrincipalFactory.CreateAsync(user);
         var (token, expiresAtUtc) = jwtTokenService.CreateToken(principal.Claims);
 
-        return Ok(new LoginResponse { AccessToken = token, ExpiresAtUtc = expiresAtUtc });
+        return Ok(new LoginResponse { AccessToken = token, ExpiresAtUtc = expiresAtUtc, DisplayName = user.DisplayName(fallback: string.Empty) });
     }
 
     /// <summary>The caller's own assignable locations (UserOrgAssignment), for Settings.razor's
@@ -106,6 +108,46 @@ public class AuthController(
         var principal = await claimsPrincipalFactory.CreateAsync(user);
         var (token, expiresAtUtc) = jwtTokenService.CreateToken(principal.Claims);
 
-        return Ok(new LoginResponse { AccessToken = token, ExpiresAtUtc = expiresAtUtc });
+        return Ok(new LoginResponse { AccessToken = token, ExpiresAtUtc = expiresAtUtc, DisplayName = user.DisplayName(fallback: string.Empty) });
+    }
+
+    /// <summary>Changes the caller's own password. No fresh token is issued — a password change
+    /// touches no JWT claim, and there's no server-side revocation to invalidate the old one
+    /// either way, same reasoning as SwitchOrg's doc comment for why that one *does* reissue.
+    /// </summary>
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword(ChangePasswordRequest request, CancellationToken cancellationToken)
+    {
+        var validation = await changePasswordValidator.ValidateAsync(request, cancellationToken);
+        if (!validation.IsValid)
+        {
+            return ValidationProblem(validation.ToModelStateDictionary());
+        }
+
+        if (currentUser.UserId is not { } userId)
+        {
+            return Unauthorized();
+        }
+
+        var user = await userManager.FindByIdAsync(userId.ToString()) ?? throw new InvalidOperationException("User not found.");
+        var result = await userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
+        if (!result.Succeeded)
+        {
+            var modelState = new ModelStateDictionary();
+            foreach (var error in result.Errors)
+            {
+                // PasswordMismatch is the only IdentityResult error about the *current* password;
+                // every other code (PasswordTooShort, PasswordRequiresNonAlphanumeric, ...) is
+                // about the new one failing the configured policy.
+                var field = error.Code == "PasswordMismatch"
+                    ? nameof(ChangePasswordRequest.CurrentPassword)
+                    : nameof(ChangePasswordRequest.NewPassword);
+                modelState.AddModelError(field, error.Description);
+            }
+
+            return ValidationProblem(modelState);
+        }
+
+        return Ok();
     }
 }

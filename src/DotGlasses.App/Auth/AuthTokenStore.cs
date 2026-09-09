@@ -27,6 +27,8 @@ public class AuthTokenStore(IJSRuntime jsRuntime)
 
     public DateTimeOffset? ExpiresAtUtc { get; private set; }
 
+    public string? DisplayName { get; private set; }
+
     public bool IsAuthenticated => AccessToken is not null && ExpiresAtUtc is { } expires && expires > DateTimeOffset.UtcNow;
 
     /// <summary>
@@ -63,14 +65,16 @@ public class AuthTokenStore(IJSRuntime jsRuntime)
 
         AccessToken = persisted.AccessToken;
         ExpiresAtUtc = persisted.ExpiresAtUtc;
+        DisplayName = persisted.DisplayName;
     }
 
-    public async Task SetTokenAsync(string accessToken, DateTimeOffset expiresAtUtc)
+    public async Task SetTokenAsync(string accessToken, DateTimeOffset expiresAtUtc, string? displayName = null)
     {
         AccessToken = accessToken;
         ExpiresAtUtc = expiresAtUtc;
+        DisplayName = displayName;
 
-        var json = JsonSerializer.Serialize(new PersistedToken(accessToken, expiresAtUtc), JsonOptions);
+        var json = JsonSerializer.Serialize(new PersistedToken(accessToken, expiresAtUtc, displayName), JsonOptions);
         await jsRuntime.InvokeVoidAsync("dotGlassesIdb.kvSet", StorageKey, json);
     }
 
@@ -78,8 +82,9 @@ public class AuthTokenStore(IJSRuntime jsRuntime)
     {
         AccessToken = null;
         ExpiresAtUtc = null;
+        DisplayName = null;
         await jsRuntime.InvokeVoidAsync("dotGlassesIdb.kvRemove", StorageKey);
     }
 
-    private sealed record PersistedToken(string AccessToken, DateTimeOffset ExpiresAtUtc);
+    private sealed record PersistedToken(string AccessToken, DateTimeOffset ExpiresAtUtc, string? DisplayName);
 }
