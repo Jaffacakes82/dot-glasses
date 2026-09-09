@@ -120,8 +120,7 @@ public class OrganisationAdminService(DotGlassesDbContext dbContext, IUnscopedRe
 
             // Remove() on an ISoftDeletable entity is turned into a soft-delete by
             // AuditSaveChangesInterceptor (State flips Deleted -> Modified, IsDeleted/
-            // DeletedAtUtc/DeletedBy get stamped) — same sanctioned pattern WidgetExampleRepository
-            // already uses, not a hard delete.
+            // DeletedAtUtc/DeletedBy get stamped), not a hard delete.
             dbContext.OrganisationNodes.Remove(entity);
         }
 

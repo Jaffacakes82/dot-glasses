@@ -37,8 +37,8 @@ The system separates **what rows you can see** from **what you can do with them*
 never touch.
 
 **Data scoping (visibility)** is a global EF Core query filter applied automatically to every
-entity carrying a hierarchy path — `OrganisationNode`, `Customer`, `Test`, `Lead`, `Sale` and
-`WidgetExample`. The rule is: *a row is visible if its `HierarchyPath` starts with the signed-in
+entity carrying a hierarchy path — `OrganisationNode`, `Customer`, `Test`, `Lead` and `Sale`. The
+rule is: *a row is visible if its `HierarchyPath` starts with the signed-in
 user's own `HierarchyPath`*. This is completely role-independent. Scoping is downward only — you
 see your own node and everything beneath it, never anything above or beside you.
 
@@ -71,7 +71,7 @@ only by a free-text `Kind` display label.
 The tree's shape is enforced: DGI's only legal child is a Country; a Country or Intermediate may
 have Intermediate or Retail Point children; a Retail Point is always a leaf.
 
-### 2.3 The six authorization policies
+### 2.3 The five authorization policies
 
 | Policy | Rule as coded | Gates |
 |---|---|---|
@@ -80,7 +80,6 @@ have Intermediate or Retail Point children; a Retail Point is always a leaf.
 | `CustomOrders.View` | **Any role** AND level ≤ **Country** | The whole Custom Orders screen, *and* its Advance-status action |
 | `Organisations.ManageInScope` | Role = **Admin** AND target org's path is at/below the caller's | Every Organisations write action, per node |
 | `Users.ManageInScope` | Role = **Admin** AND target user's path is at/below the caller's | Every User Directory write action, per user |
-| `WidgetExample.Create` | Role = **Admin** (no level or scope check) | The developer sandbox API only |
 
 One design point worth stating explicitly, because it's deliberate: **`CustomOrders.View` is the
 only policy where a plain `User` gets access to something an Admin below Country level does
@@ -879,12 +878,10 @@ Versioned at `v1`, with Swagger exposed in development only.
 | `GET /api/v1/reference-data` | JWT | Any authenticated user | All **active** reference items across all categories. Not hierarchy-scoped. |
 | `GET /api/v1/preset-catalogues` | JWT | Any authenticated user | Catalogues assigned at or above the caller's org, with each lens's available coatings and the catalogue's `Kind`. 400 if the caller has no org. |
 | `POST /api/v1/client-logs` | JWT | Any authenticated user | Accepts a batch of client log entries with a correlation ID; writes them to the server log. |
-| `GET/POST/PUT/DELETE /api/v1/widget-examples` | JWT | Read/update/delete: any user. Create: Admin. | Developer sandbox (see §8). |
 
 **Capabilities reachable through the API that no UI exposes:**
 - `GET` list and by-ID for Tests, Leads and Sales — nothing in either application reads these
   endpoints; the Field App only writes, and the Admin Portal queries the database directly.
-- Full update and hard delete of a widget example.
 
 **Restrictions that exist only in the UI, not the API:**
 - Any authenticated user of any role or level can create a Test, Lead or Sale. The Admin Portal
@@ -903,8 +900,6 @@ These exist in the running product but are not real product capability:
 | Surface | Status |
 |---|---|
 | Field App **Messages** | Two hard-coded announcements. No backing data or API. |
-| Field App **Widget Examples** (`/widget-examples`) | A developer walkthrough for the offline outbox. Lets the user type an **arbitrary hierarchy path**, which the API accepts as-is (unlike Test/Lead/Sale, where the server stamps it). A `User`-role account is refused by the create policy and produces a permanently Failed outbox item. |
-| **Widget Examples API** | The full CRUD sandbox behind the above. |
 | **Developer user seeder** | Creates up to three accounts (DGI / Country / Retail Point) on start-up so RBAC is exercisable locally — gated behind `DevSeed:*` configuration values, sourced from user secrets, never committed and never set in production. Each account seeds independently based on which of its secrets is present. |
 | **Seeded org tree** | Four nodes: DOT Glasses International → Kenya → Kangemi Vision Centre → Kangemi Vision Centre — Outreach Post. |
 | **Automatic database migration on start-up** | Development only — real environments apply migrations via an explicit CI step instead. |

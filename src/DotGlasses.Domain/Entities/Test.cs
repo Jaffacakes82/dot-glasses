@@ -5,8 +5,7 @@ namespace DotGlasses.Domain.Entities;
 
 /// <summary>
 /// Atomic vision-test event, always logged regardless of whether it becomes a Lead. Id is
-/// client-generated so it doubles as the offline-sync outbox idempotency key, same as
-/// WidgetExample.
+/// client-generated so it doubles as the offline-sync outbox idempotency key.
 /// </summary>
 public class Test : IAuditable, ISoftDeletable, IHierarchyScoped
 {

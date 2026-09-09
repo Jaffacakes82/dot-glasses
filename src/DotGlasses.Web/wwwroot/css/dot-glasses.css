@@ -241,12 +241,16 @@ body {
 }
 
 .dg-sidebar-logo {
-    color: var(--dot-white);
-    font-family: var(--font-display);
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
-    text-decoration: none;
+    display: block;
+    line-height: 0;
+}
+
+.dg-sidebar-logo img {
+    height: 32px;
+    width: auto;
+    /* The source mark is black-on-transparent (same asset as the light-background login page) —
+       collapse it to solid black then invert to white so it reads against the dark sidebar. */
+    filter: brightness(0) invert(1);
 }
 
 .dg-nav-toggle {
