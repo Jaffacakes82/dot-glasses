@@ -329,6 +329,25 @@ body" is not a safe shortcut.
   create` — not `ad-admin`, which Azure CLI dropped entirely under the Azure AD → Microsoft Entra
   ID rebrand — with `--display-name` matching the `AZURE_POSTGRES_AAD_USERNAME` repo/environment
   variable exactly.
+- **The Admin Portal's custom domain is declared in `AppHost.cs`'s `web.PublishAsAzureContainerApp`**
+  callback, not added by hand through the portal or `az containerapp hostname bind` — prod gets
+  `admin.dotglasses.com`, nonprod gets `nonprod.admin.dotglasses.com`, picked by a Bicep-time
+  ternary on `EnvToken()` (there is no C#-level nonprod/prod branch — `azd infra gen` emits one
+  Bicep template shared by both environments, so the choice has to be a runtime expression, not a
+  build-time one). It provisions its own `Microsoft.App/managedEnvironments/managedCertificates`
+  resource (CNAME domain-control validation) referencing the environment via an `existing`
+  lookup by name — computed the same way `env.module.bicep` names itself, not threaded through as
+  a new cross-module output — and binds it on the Container App's own `ingress.customDomains`.
+  This has to live inline on `web`'s own ingress config precisely because ARM has no separate
+  child-resource type for a Container App's hostname bindings the way Postgres has
+  `administrators`; anything added out-of-band gets silently wiped by the next `azd up`, which
+  redeclares the whole `ingress` object (see Common pitfalls below — this is what happened to a
+  domain added manually through the portal, 2026-09-09). **A brand-new environment's first deploy
+  needs the domain's DNS (CNAME to the Container App's default FQDN) already in place before that
+  deploy runs** — the managed certificate can't complete domain-control validation otherwise, and
+  an unvalidated certificate risks failing the whole `azd up` for that environment. nonprod's DNS
+  already existed (this only re-declares a binding that already worked once); prod's does not yet
+  — see `docs/open-issues.md`.
 - **Field App per-environment config**: `wwwroot/appsettings.{Environment}.json` (Staging/
   Production, alongside the dev-only `appsettings.json`), selected at build time via the
   `WasmApplicationEnvironmentName` MSBuild property — `deploy.yml` sets it as a job-level env var,
@@ -388,7 +407,12 @@ once in this codebase:
   environment's boundary hands back a **404**, which reads exactly like an app-level routing bug
   rather than an infra misconfiguration. The tell is `ingress.fqdn` containing `.internal.` (check
   via `az containerapp list --query "[].properties.configuration.ingress"`) — check that before
-  chasing routing code. Bit `Web`'s own Container App after Phase 8 (found 2026-09-06).
+  chasing routing code. Bit `Web`'s own Container App after Phase 8 (found 2026-09-06). The same
+  "the whole declared object wins" rule bit `ingress.customDomains` three days later (2026-09-09):
+  a custom domain added by hand through the portal vanished on the very next deploy, because
+  nothing in `AppHost.cs` declared it — see this file's Deployment section for where it's now
+  declared instead. Any Container App property this repo doesn't manage in `AppHost.cs` should be
+  assumed to not survive the next `azd up`, not just `ingress.external`/`customDomains`.
 - **`az postgres flexible-server ad-admin` was renamed to `microsoft-entra-admin`** under Azure's
   Azure AD → Microsoft Entra ID rebrand. Current Azure CLI (2.7x+) has no `ad-admin` command group
   at all — it fails with `'ad-admin' is misspelled or not recognized by the system`, not a

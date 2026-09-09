@@ -39,6 +39,13 @@ resource web 'Microsoft.App/containerApps@2025-10-02-preview' = {
         external: true
         targetPort: int(web_containerport)
         transport: 'http'
+        customDomains: [
+          {
+            name: (substring(resourceGroup().name, 14) == 'prod') ? 'admin.dotglasses.com' : 'nonprod.admin.dotglasses.com'
+            bindingType: 'SniEnabled'
+            certificateId: web_customDomainCert.id
+          }
+        ]
       }
       registries: [
         {
@@ -146,4 +153,18 @@ resource web 'Microsoft.App/containerApps@2025-10-02-preview' = {
       '${env_outputs_azure_container_registry_managed_identity_id}': { }
     }
   }
+}
+
+resource web_customDomainEnv 'Microsoft.App/managedEnvironments@2025-10-02-preview' existing = {
+  name: 'cae-dotglasses-${substring(resourceGroup().name, 14)}'
+}
+
+resource web_customDomainCert 'Microsoft.App/managedEnvironments/managedCertificates@2025-10-02-preview' = {
+  name: 'cert-dotglasses-admin-${substring(resourceGroup().name, 14)}'
+  location: resourceGroup().location
+  properties: {
+    subjectName: (substring(resourceGroup().name, 14) == 'prod') ? 'admin.dotglasses.com' : 'nonprod.admin.dotglasses.com'
+    domainControlValidation: 'CNAME'
+  }
+  parent: web_customDomainEnv
 }

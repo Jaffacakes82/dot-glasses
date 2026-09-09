@@ -38,6 +38,16 @@ machine" rule.
   both carry `ApiBaseUrl: ...REPLACE-AFTER-FIRST-DEPLOY...` — Azure Container Apps only assigns
   the real FQDN's unique suffix at first provision, so this can't be pre-filled. Update both right
   after each environment's first `azd up`.
+- **Prod's `admin.dotglasses.com` DNS**: `AppHost.cs` now declares the Admin Portal's custom
+  domain + managed certificate for both environments (see CLAUDE.md's Deployment section), but a
+  managed certificate can't complete domain-control validation without the domain's DNS (a CNAME
+  to the Container App's default FQDN) already in place. nonprod's `nonprod.admin.dotglasses.com`
+  already had this from the earlier manual portal setup, so its re-declaration should just work.
+  Prod's `admin.dotglasses.com` has never been configured — its DNS needs to exist *before* the
+  next `azd up` against `rg-dotglasses-prod` runs, or certificate provisioning may fail and take
+  that deploy down with it. Get the Container App's default FQDN first (`az containerapp show
+  --name ca-dotglasses-prod --resource-group rg-dotglasses-prod --query
+  properties.configuration.ingress.fqdn`) and point the CNAME at that.
 - **ACS custom domain**: `acs.bicep` still provisions the free Azure Managed Domain, not a real
   verified `dotglasses.com`. When that changes, prod and non-prod need **separate subdomains**
   (`prod.dotglasses.com` / `nonprod.dotglasses.com`) — a verified custom domain can only link to
