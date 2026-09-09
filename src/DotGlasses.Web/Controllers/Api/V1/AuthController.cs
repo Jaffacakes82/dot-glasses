@@ -61,7 +61,7 @@ public class AuthController(
         var principal = await claimsPrincipalFactory.CreateAsync(user);
         var (token, expiresAtUtc) = jwtTokenService.CreateToken(principal.Claims);
 
-        return Ok(new LoginResponse { AccessToken = token, ExpiresAtUtc = expiresAtUtc });
+        return Ok(new LoginResponse { AccessToken = token, ExpiresAtUtc = expiresAtUtc, DisplayName = DisplayNameFor(user) });
     }
 
     /// <summary>The caller's own assignable locations (UserOrgAssignment), for Settings.razor's
@@ -106,6 +106,11 @@ public class AuthController(
         var principal = await claimsPrincipalFactory.CreateAsync(user);
         var (token, expiresAtUtc) = jwtTokenService.CreateToken(principal.Claims);
 
-        return Ok(new LoginResponse { AccessToken = token, ExpiresAtUtc = expiresAtUtc });
+        return Ok(new LoginResponse { AccessToken = token, ExpiresAtUtc = expiresAtUtc, DisplayName = DisplayNameFor(user) });
     }
+
+    /// <summary>Same fallback UserAdminService uses for User Directory display — the three
+    /// DevUserSeeder dev accounts predate FullName and have none.</summary>
+    private static string DisplayNameFor(ApplicationUser user) =>
+        string.IsNullOrWhiteSpace(user.FullName) ? user.UserName ?? string.Empty : user.FullName;
 }

@@ -52,7 +52,7 @@ public class UserLocationClient(HttpClient httpClient, AuthTokenStore tokenStore
                 return false;
             }
 
-            await tokenStore.SetTokenAsync(body.AccessToken, body.ExpiresAtUtc);
+            await tokenStore.SetTokenAsync(body.AccessToken, body.ExpiresAtUtc, body.DisplayName);
             return true;
         }
         catch (Exception)
