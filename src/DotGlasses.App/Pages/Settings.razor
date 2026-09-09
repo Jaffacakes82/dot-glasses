@@ -1,11 +1,14 @@
 @page "/settings"
+@using System.Net.Http.Json
 @using DotGlasses.App.Auth
+@using DotGlasses.App.Validation
 @using DotGlasses.Contracts.Auth
 @using DotGlasses.Contracts.Sync
 @inject AuthTokenStore TokenStore
 @inject ISyncQueueStore OutboxStore
 @inject ISyncService SyncService
 @inject IUserLocationClient LocationClient
+@inject HttpClient Http
 @inject NavigationManager Navigation
 
 <PageTitle>Settings</PageTitle>
@@ -41,12 +44,21 @@
         }
     }
 
-    <p style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:#666; margin: var(--space-4) 0 var(--space-2);">Toolkit</p>
-    @foreach (var item in _toolkitItems)
+    <p style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:#666; margin: var(--space-4) 0 var(--space-2);">Change password</p>
+    <div class="dg-field">
+        <label>Current password</label>
+        <input type="password" @bind="_currentPassword" autocomplete="current-password" />
+        <FieldError Errors="_passwordErrors" For="CurrentPassword" />
+    </div>
+    <div class="dg-field">
+        <label>New password</label>
+        <input type="password" @bind="_newPassword" autocomplete="new-password" />
+        <FieldError Errors="_passwordErrors" For="NewPassword" />
+    </div>
+    <button class="dg-btn dg-btn-ghost" style="width:100%;" type="button" disabled="@_changingPassword" @onclick="ChangePasswordAsync">Change password</button>
+    @if (_passwordMessage is not null)
     {
-        <div class="dg-outlet-button" style="color:#999; cursor:default;">
-            @item <span style="color:var(--dot-orange); font-weight:700;">· Coming soon</span>
-        </div>
+        <p style="font-size:13px; color:#555; margin-top:8px;">@_passwordMessage</p>
     }
 
     <div style="margin-top:auto; padding-top:var(--space-5);">
@@ -81,12 +93,17 @@
 </div>
 
 @code {
-    private readonly string[] _toolkitItems = ["Talking points & FAQs", "Near-vision chart", "Distance-vision chart"];
-
     private IReadOnlyList<AssignedOrgDto> _orgs = [];
     private bool _loadingOrgs = true;
     private bool _switchingOrg;
     private string? _locationError;
+
+    private string _currentPassword = string.Empty;
+    private string _newPassword = string.Empty;
+    private bool _changingPassword;
+    private string? _passwordMessage;
+    private readonly FormErrors _passwordErrors = new();
+    private static readonly string[] PasswordKnownFields = ["CurrentPassword", "NewPassword"];
 
     private bool _confirmingSignOut;
     private bool _busy;
@@ -133,6 +150,57 @@
         {
             _switchingOrg = false;
         }
+    }
+
+    /// <summary>
+    /// Posts directly to the API rather than through the offline outbox — like Login, this needs
+    /// an immediate answer against the live server (the current password can only be checked
+    /// online) and makes no sense queued for a later, unattended sync.
+    /// </summary>
+    private async Task ChangePasswordAsync()
+    {
+        _changingPassword = true;
+        _passwordMessage = null;
+        _passwordErrors.Clear();
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/v1/auth/change-password", new ChangePasswordRequest
+            {
+                CurrentPassword = _currentPassword,
+                NewPassword = _newPassword,
+            });
+
+            if (response.IsSuccessStatusCode)
+            {
+                _currentPassword = string.Empty;
+                _newPassword = string.Empty;
+                _passwordMessage = "Password changed.";
+                return;
+            }
+
+            var problem = await response.Content.ReadFromJsonAsync<ValidationProblemResponse>();
+            if (problem?.Errors is { Count: > 0 } errors)
+            {
+                _passwordErrors.Merge(errors, PasswordKnownFields);
+            }
+            else
+            {
+                _passwordMessage = "Couldn't change password — check your connection and try again.";
+            }
+        }
+        catch (Exception)
+        {
+            _passwordMessage = "Couldn't change password — check your connection and try again.";
+        }
+        finally
+        {
+            _changingPassword = false;
+        }
+    }
+
+    private sealed class ValidationProblemResponse
+    {
+        public Dictionary<string, string[]>? Errors { get; set; }
     }
 
     private async Task SyncNowAsync()
