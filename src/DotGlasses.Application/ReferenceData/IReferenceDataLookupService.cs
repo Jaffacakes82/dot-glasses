@@ -14,7 +14,7 @@ namespace DotGlasses.Application.ReferenceData;
 ///
 /// <b>The interface itself was expected to go with them and did not.</b> Its two remaining callers
 /// are Admin Portal validators — AddLensOptionRequestValidator and
-/// SetCoatingAvailabilityRequestValidator, on the Preset Catalogues screen — and they are a
+/// SetCoatingAvailabilityBatchRequestValidator, on the Preset Catalogues screen — and they are a
 /// genuinely different case from a consultation rule: both run inside a <em>write</em> to the
 /// reference-data library, where the per-request memoized snapshot is the one thing that must not
 /// be consulted (it may predate the write; see ADR-0002 and CLAUDE.md). A direct row read is

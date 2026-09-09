@@ -456,8 +456,9 @@ every Retail Point beneath it. Each assignment can be individually removed from 
 card's assigned-orgs list.
 
 **Lens strength coating availability** — a grid with active lens strengths as rows and active
-coatings as columns. Each cell is a one-click ✅/⬜ toggle recording "this strength can be sold in
-this coating". This grid directly drives the Field App: a technician choosing a preset lens is
+coatings as columns. Each cell is a checkbox recording "this strength can be sold in this
+coating"; check/uncheck any number of cells and click Save to submit every change in one request
+(no reload per cell). This grid directly drives the Field App: a technician choosing a preset lens is
 offered exactly the coatings ticked here, and a strength with **no** coatings ticked cannot be
 sold on a preset range at all — the Field App shows an explanatory message instead of an empty
 dropdown, and the API rejects the sale. If no active Coating reference items exist, the whole grid
