@@ -59,6 +59,7 @@ body {
 .dg-btn {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: var(--space-2);
     border: none;
     border-radius: var(--radius-pill);
@@ -67,6 +68,7 @@ body {
     font-weight: 700;
     font-size: 15px;
     letter-spacing: 0.02em;
+    text-decoration: none;
     cursor: pointer;
     transition: transform 0.15s ease, opacity 0.15s ease;
 }
