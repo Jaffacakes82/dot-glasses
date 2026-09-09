@@ -22,7 +22,7 @@ public class CataloguesController(
     IValidator<UpdateCatalogueRequest> updateValidator,
     IValidator<AddLensOptionRequest> addLensOptionValidator,
     IValidator<AssignCataloguesRequest> assignValidator,
-    IValidator<SetCoatingAvailabilityRequest> coatingAvailabilityValidator) : Controller
+    IValidator<SetCoatingAvailabilityBatchRequest> coatingAvailabilityValidator) : Controller
 {
     public async Task<IActionResult> Index(string? search, CancellationToken cancellationToken) =>
         View(await BuildViewModelAsync(search, cancellationToken));
@@ -107,9 +107,13 @@ public class CataloguesController(
         return RedirectToAction(nameof(Index));
     }
 
+    /// <summary>The coating-availability grid posts its whole checked-set in one request (see
+    /// SetCoatingAvailabilityBatchRequest) rather than one request per cell — this diffs the
+    /// submitted set against what's currently available and only writes the cells that actually
+    /// changed.</summary>
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> SetCoatingAvailability(SetCoatingAvailabilityRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> SaveCoatingAvailability(SetCoatingAvailabilityBatchRequest request, CancellationToken cancellationToken)
     {
         var validationResult = await coatingAvailabilityValidator.ValidateAsync(request, cancellationToken);
         if (!validationResult.IsValid)
@@ -118,16 +122,43 @@ public class CataloguesController(
             return View(nameof(Index), await BuildViewModelAsync(null, cancellationToken));
         }
 
-        if (request.Available)
+        var selectedPairs = new HashSet<(Guid LensStrengthRefId, Guid CoatingRefId)>();
+        foreach (var raw in request.Selected)
         {
-            await catalogueAdminService.AddAvailableCoatingAsync(request.LensStrengthRefId, request.CoatingRefId, cancellationToken);
+            if (SetCoatingAvailabilityBatchRequest.TryParsePair(raw, out var lensStrengthRefId, out var coatingRefId))
+            {
+                selectedPairs.Add((lensStrengthRefId, coatingRefId));
+            }
         }
-        else
+
+        var (lensStrengths, coatings) = await GetLensStrengthAndCoatingOptionsAsync(cancellationToken);
+        foreach (var lensStrength in lensStrengths)
         {
-            await catalogueAdminService.RemoveAvailableCoatingAsync(request.LensStrengthRefId, request.CoatingRefId, cancellationToken);
+            var currentlyAvailable = (await catalogueAdminService.ListAvailableCoatingsAsync(lensStrength.Id, cancellationToken)).ToHashSet();
+            foreach (var coating in coatings)
+            {
+                var shouldBeAvailable = selectedPairs.Contains((lensStrength.Id, coating.Id));
+                var isCurrentlyAvailable = currentlyAvailable.Contains(coating.Id);
+                if (shouldBeAvailable && !isCurrentlyAvailable)
+                {
+                    await catalogueAdminService.AddAvailableCoatingAsync(lensStrength.Id, coating.Id, cancellationToken);
+                }
+                else if (!shouldBeAvailable && isCurrentlyAvailable)
+                {
+                    await catalogueAdminService.RemoveAvailableCoatingAsync(lensStrength.Id, coating.Id, cancellationToken);
+                }
+            }
         }
 
         return RedirectToAction(nameof(Index));
+    }
+
+    private async Task<(IReadOnlyList<(Guid Id, string Label)> LensStrengths, IReadOnlyList<(Guid Id, string Label)> Coatings)> GetLensStrengthAndCoatingOptionsAsync(CancellationToken cancellationToken)
+    {
+        var referenceItems = await referenceDataAdminService.ListAllAsync(cancellationToken);
+        var lensStrengths = referenceItems.Where(x => x.Category == ReferenceDataCategory.LensStrength && x.IsActive).OrderBy(x => x.SortOrder).Select(x => (x.Id, x.Label)).ToList();
+        var coatings = referenceItems.Where(x => x.Category == ReferenceDataCategory.Coating && x.IsActive).OrderBy(x => x.SortOrder).Select(x => (x.Id, x.Label)).ToList();
+        return (lensStrengths, coatings);
     }
 
     private async Task<CataloguesIndexViewModel> BuildViewModelAsync(string? search, CancellationToken cancellationToken)
@@ -142,10 +173,7 @@ public class CataloguesController(
             catalogues = catalogues.Where(c => c.Name.Contains(search, StringComparison.OrdinalIgnoreCase)).ToList();
         }
         var orgs = await organisationAdminService.ListAsync(cancellationToken);
-        var referenceItems = await referenceDataAdminService.ListAllAsync(cancellationToken);
-
-        var lensStrengths = referenceItems.Where(x => x.Category == ReferenceDataCategory.LensStrength && x.IsActive).OrderBy(x => x.SortOrder).ToList();
-        var coatings = referenceItems.Where(x => x.Category == ReferenceDataCategory.Coating && x.IsActive).OrderBy(x => x.SortOrder).ToList();
+        var (lensStrengths, coatings) = await GetLensStrengthAndCoatingOptionsAsync(cancellationToken);
 
         var availableCoatingsByStrength = new Dictionary<Guid, IReadOnlyList<Guid>>();
         foreach (var strength in lensStrengths)
@@ -171,8 +199,8 @@ public class CataloguesController(
 
         return new CataloguesIndexViewModel(
             catalogueCards,
-            lensStrengths.Select(x => (x.Id, x.Label)).ToList(),
-            coatings.Select(x => (x.Id, x.Label)).ToList(),
+            lensStrengths,
+            coatings,
             availableCoatingsByStrength,
             assignableOrgs,
             search);

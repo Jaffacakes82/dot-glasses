@@ -45,9 +45,24 @@ public class AssignCataloguesRequest
     public List<Guid> CatalogueIds { get; set; } = [];
 }
 
-public class SetCoatingAvailabilityRequest
+/// <summary>The coating-availability grid posts once, carrying every checked cell — "checked"
+/// checkboxes are the only ones the browser submits, so `Selected` is the full desired-available
+/// set, not a list of changes. Each entry is "{LensStrengthRefId}:{CoatingRefId}"; see
+/// `TryParsePair`.</summary>
+public class SetCoatingAvailabilityBatchRequest
 {
-    public Guid LensStrengthRefId { get; set; }
-    public Guid CoatingRefId { get; set; }
-    public bool Available { get; set; }
+    public List<string> Selected { get; set; } = [];
+
+    public static bool TryParsePair(string raw, out Guid lensStrengthRefId, out Guid coatingRefId)
+    {
+        var parts = raw.Split(':');
+        if (parts.Length == 2 && Guid.TryParse(parts[0], out lensStrengthRefId) && Guid.TryParse(parts[1], out coatingRefId))
+        {
+            return true;
+        }
+
+        lensStrengthRefId = Guid.Empty;
+        coatingRefId = Guid.Empty;
+        return false;
+    }
 }

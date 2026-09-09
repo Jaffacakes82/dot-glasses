@@ -9,14 +9,26 @@ namespace DotGlasses.Web.Controllers;
 /// <summary>
 /// Basic login page for the Admin Portal's cookie-authenticated MVC session, plus the anonymous
 /// SetPassword page a User Directory invite/reset link points at (see CLAUDE.md's Admin Portal
-/// wiring (User Directory screen) section) — real Identity password-reset tokens, no email
-/// sending yet (IEmailSender is stubbed).
+/// wiring (User Directory screen) section) — real Identity password-reset tokens. Invite/reset
+/// email delivery is real (AzureEmailSender) once Azure Communication Services is provisioned in
+/// a deployed environment; LoggingEmailSender is the local-dev/unprovisioned fallback — see
+/// IEmailSender.
 /// </summary>
 public class AccountController(SignInManager<ApplicationUser> signInManager) : Controller
 {
     [HttpGet]
     [AllowAnonymous]
-    public IActionResult Login(string? returnUrl = null) => View(new LoginViewModel { ReturnUrl = returnUrl });
+    public IActionResult Login(string? returnUrl = null)
+    {
+        if (signInManager.IsSignedIn(User))
+        {
+            return !string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl)
+                ? Redirect(returnUrl)
+                : RedirectToAction("Index", "Home");
+        }
+
+        return View(new LoginViewModel { ReturnUrl = returnUrl });
+    }
 
     [HttpPost]
     [AllowAnonymous]
