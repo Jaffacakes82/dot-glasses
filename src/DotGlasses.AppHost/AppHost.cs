@@ -127,6 +127,52 @@ var web = builder.AddProject<Projects.DotGlasses_Web>("web")
 web.PublishAsAzureContainerApp((infra, app) =>
 {
     app.Name = BicepFunction.Interpolate($"ca-{Workload}-{EnvToken()}");
+
+    // Custom domain (agreed with the user 2026-09-09): prod gets admin.dotglasses.com, nonprod
+    // gets nonprod.admin.dotglasses.com. Declared here, not left to the portal or
+    // `az containerapp hostname bind` after the fact — ARM has no separate child-resource type
+    // for a Container App's hostname bindings the way Postgres has `administrators`;
+    // `customDomains` lives inline on the same `ingress` object this module redeclares in full on
+    // every `azd up`, so anything added out-of-band gets silently reset on the next deploy (bit
+    // us live 2026-09-09 — see CLAUDE.md's Common pitfalls). The managed environment is
+    // referenced as `existing` by a name computed the same way env.module.bicep names itself
+    // (same EnvToken()/Workload expression), rather than asking Aspire to thread a new
+    // cross-module output through for it — that name is already fully computable in this module.
+    var isProd = new BinaryExpression(
+        ((IBicepValue)EnvToken()).Expression!, BinaryBicepOperator.Equal, new StringLiteralExpression("prod"));
+    var hostname = new BicepValue<string>(new ConditionalExpression(
+        isProd,
+        new StringLiteralExpression("admin.dotglasses.com"),
+        new StringLiteralExpression("nonprod.admin.dotglasses.com")));
+
+    var environment = ContainerAppManagedEnvironment.FromExisting("web_customDomainEnv", "2025-10-02-preview");
+    environment.Name = BicepFunction.Interpolate($"cae-{Workload}-{EnvToken()}");
+    infra.Add(environment);
+
+    var certificate = new ContainerAppManagedCertificate("web_customDomainCert", "2025-10-02-preview")
+    {
+        Name = BicepFunction.Interpolate($"cert-{Workload}-admin-{EnvToken()}"),
+        // resourceGroup().location, not app.Location: referencing another resource's own runtime
+        // property here creates a Bicep dependency edge back onto `web` — which already depends
+        // on this certificate for its customDomains[].certificateId — a genuine cycle Bicep
+        // rejects (BCP080). resourceGroup().location is a deployment-time constant, same value,
+        // no edge.
+        Location = BicepFunction.GetResourceGroup().Location,
+        Parent = environment,
+        Properties = new ManagedCertificateProperties
+        {
+            SubjectName = hostname,
+            DomainControlValidation = ManagedCertificateDomainControlValidation.Cname,
+        },
+    };
+    infra.Add(certificate);
+
+    app.Configuration.Ingress.CustomDomains.Add(new ContainerAppCustomDomain
+    {
+        Name = hostname,
+        BindingType = ContainerAppCustomDomainBindingType.SniEnabled,
+        CertificateId = certificate.Id,
+    });
 });
 
 // No Aspire hosting integration exists for Azure Communication Services (confirmed via
