@@ -48,7 +48,7 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
             rows.Add(new UserAdminRow(
                 user.Id,
                 user.Email ?? user.UserName ?? "—",
-                string.IsNullOrWhiteSpace(user.FullName) ? user.UserName ?? "—" : user.FullName,
+                user.DisplayName(),
                 roles.FirstOrDefault() ?? "—",
                 assignedOrgNames,
                 assignedOrgIds,

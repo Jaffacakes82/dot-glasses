@@ -198,11 +198,6 @@
         }
     }
 
-    private sealed class ValidationProblemResponse
-    {
-        public Dictionary<string, string[]>? Errors { get; set; }
-    }
-
     private async Task SyncNowAsync()
     {
         _busy = true;
