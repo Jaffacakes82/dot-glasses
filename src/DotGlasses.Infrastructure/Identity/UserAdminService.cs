@@ -116,7 +116,7 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
     public async Task<InviteUserResult> InviteAsync(string email, string fullName, string role, IReadOnlyList<Guid> orgNodeIds, CancellationToken cancellationToken = default)
     {
         // Routed through the execution strategy rather than calling BeginTransactionAsync
-        // directly: Aspire's AddNpgsqlDbContext turns connection retries on by default
+        // directly: Aspire's AddAzureNpgsqlDbContext turns connection retries on by default
         // (NpgsqlEntityFrameworkCorePostgreSQLSettings.DisableRetry defaults to false), and a
         // retrying strategy refuses a user-initiated transaction unless the whole transaction is
         // the retriable unit. Calling BeginTransactionAsync straight would pass every test here —

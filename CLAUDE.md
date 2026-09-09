@@ -396,6 +396,20 @@ once in this codebase:
   and any of this repo's own earlier comments referencing `ad-admin` need the new subgroup name;
   the flags (`--resource-group`, `--server-name`, `--display-name`, `--object-id`, `--type`) are
   unchanged.
+- **`Aspire.Npgsql.EntityFrameworkCore.PostgreSQL`'s plain `AddNpgsqlDbContext` has no idea Entra
+  ID auth exists.** Against a `passwordAuth: 'Disabled'` Postgres Flexible Server (see this file's
+  Deployment section), the connection string Aspire hands the app carries no Username/Password at
+  all — only the Azure-aware `Aspire.Azure.Npgsql.EntityFrameworkCore.PostgreSQL` package's
+  `AddAzureNpgsqlDbContext` knows to attach an Entra ID token provider and detect the Username
+  from the app's managed identity (`AZURE_CLIENT_ID`). The plain component just passes the
+  connection string through, Npgsql finds no Username, and falls back to the OS user the
+  container runs as — `app` in the official .NET images — which Postgres has no `pg_hba.conf`
+  entry for. The error reads exactly like a firewall/network problem
+  (`no pg_hba.conf entry for host "<ip>", user "app", database "..."`) but the app never even
+  presented a real login. `DotGlasses.Web` shipped on the plain component for weeks before this
+  was caught (found live 2026-09-09) because the app could always reach Postgres over the
+  network — TCP connected fine, only authentication failed, so it looked infra-side rather than
+  code-side.
 
 ## Testing
 

@@ -52,11 +52,21 @@ if (builder.Configuration.GetConnectionString("keyvault") is not null)
 // AuditSaveChangesInterceptor is wired here via configureDbContextOptions, not inside
 // DotGlassesDbContext.OnConfiguring — EF Core throws at startup ("'OnConfiguring' cannot be used
 // to modify DbContextOptions when DbContext pooling is enabled") for a context registered via
-// AddNpgsqlDbContext, which always pools. This is the officially-supported place to add an
+// AddAzureNpgsqlDbContext, which always pools. This is the officially-supported place to add an
 // interceptor for a pooled context. A single HttpContextAccessor built once here stays correct
 // for every future request — its .HttpContext is backed by a static AsyncLocal, not instance
 // state (same reasoning DotGlassesDbContext's own query filter already relies on).
-builder.AddNpgsqlDbContext<DotGlassesDbContext>("dotglassesdb", configureDbContextOptions: optionsBuilder =>
+//
+// AddAzureNpgsqlDbContext, not the plain AddNpgsqlDbContext: the connection string Postgres
+// resource hands over here carries no Username/Password (passwordAuth: 'Disabled', Entra ID
+// only — see CLAUDE.md's Deployment section), and only the Azure-aware component knows to
+// attach an Entra ID token provider and detect the Username from the app's managed identity
+// (AZURE_CLIENT_ID). The plain component has no idea any of that is needed — it passes the
+// connection string through as-is, Npgsql finds no Username, and falls back to the container's
+// own OS user ("app" in the official .NET images), which Postgres naturally has no
+// pg_hba.conf entry for. Found live 2026-09-09 after Web's Container App could reach Postgres's
+// network but never authenticate.
+builder.AddAzureNpgsqlDbContext<DotGlassesDbContext>("dotglassesdb", configureDbContextOptions: optionsBuilder =>
     optionsBuilder.AddInterceptors(new AuditSaveChangesInterceptor(new CurrentUserContext(new HttpContextAccessor()))));
 
 builder.Services.AddInfrastructure();

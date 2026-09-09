@@ -15,7 +15,7 @@ namespace DotGlasses.Web.Tests;
 /// Program.cs reads ("ConnectionStrings:dotglassesdb", the name AppHost gives the database
 /// resource) is pointed at a throwaway container, and fixed Jwt settings are supplied so tests
 /// can mint their own tokens. Everything downstream of that — Aspire's pooled
-/// AddNpgsqlDbContext registration, the audit interceptor it attaches, the global query filters,
+/// AddAzureNpgsqlDbContext registration, the audit interceptor it attaches, the global query filters,
 /// the real migration chain and its seed data — is exactly what runs in production. The
 /// previous EF Core InMemory swap could not say that: it replaced the provider outright, so the
 /// registration under test was one the application never uses, and no SQL was ever generated.
@@ -67,7 +67,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
     protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
     {
         // UseSetting, not ConfigureAppConfiguration, for the connection string alone: Aspire's
-        // AddNpgsqlDbContext reads it eagerly while Program.cs is still executing, whereas a
+        // AddAzureNpgsqlDbContext reads it eagerly while Program.cs is still executing, whereas a
         // ConfigureAppConfiguration source is merged in only just before Build() — late enough
         // for the lazily-bound Jwt options below, far too late for this. UseSetting lands in
         // host configuration, which is in place before any application code runs.

@@ -16,7 +16,7 @@ public class DotGlassesDbContext(DbContextOptions<DotGlassesDbContext> options, 
     : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>(options), IUnitOfWork
 {
     // Depends on IHttpContextAccessor (singleton) rather than the scoped ICurrentUserContext
-    // directly: DotGlasses.Web registers this DbContext via Aspire's AddNpgsqlDbContext, which
+    // directly: DotGlasses.Web registers this DbContext via Aspire's AddAzureNpgsqlDbContext, which
     // pools DbContext instances (AddDbContextPool) — a pooled context's constructor is built
     // once from the root provider, so a scoped constructor dependency fails to resolve at
     // startup ("Cannot resolve scoped service ... from root provider"). IHttpContextAccessor
