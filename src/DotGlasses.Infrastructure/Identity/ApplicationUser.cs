@@ -25,4 +25,11 @@ public class ApplicationUser : IdentityUser<Guid>
     /// <summary>Nullable — the three DevUserSeeder dev accounts predate this field and have
     /// none; User Directory falls back to UserName/Email for display when absent.</summary>
     public string? FullName { get; set; }
+
+    /// <summary>The one fallback rule for "what do we call this user" — every caller-facing
+    /// display of a user's name needs it, parameterized only by what "unset" should render as in
+    /// that context (an admin table cell wants "—"; a technician's own device greeting wants
+    /// nothing at all rather than a literal em dash).</summary>
+    public string DisplayName(string fallback = "—") =>
+        string.IsNullOrWhiteSpace(FullName) ? UserName ?? fallback : FullName;
 }

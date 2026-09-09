@@ -63,7 +63,7 @@ public class AuthController(
         var principal = await claimsPrincipalFactory.CreateAsync(user);
         var (token, expiresAtUtc) = jwtTokenService.CreateToken(principal.Claims);
 
-        return Ok(new LoginResponse { AccessToken = token, ExpiresAtUtc = expiresAtUtc, DisplayName = DisplayNameFor(user) });
+        return Ok(new LoginResponse { AccessToken = token, ExpiresAtUtc = expiresAtUtc, DisplayName = user.DisplayName(fallback: string.Empty) });
     }
 
     /// <summary>The caller's own assignable locations (UserOrgAssignment), for Settings.razor's
@@ -108,7 +108,7 @@ public class AuthController(
         var principal = await claimsPrincipalFactory.CreateAsync(user);
         var (token, expiresAtUtc) = jwtTokenService.CreateToken(principal.Claims);
 
-        return Ok(new LoginResponse { AccessToken = token, ExpiresAtUtc = expiresAtUtc, DisplayName = DisplayNameFor(user) });
+        return Ok(new LoginResponse { AccessToken = token, ExpiresAtUtc = expiresAtUtc, DisplayName = user.DisplayName(fallback: string.Empty) });
     }
 
     /// <summary>Changes the caller's own password. No fresh token is issued — a password change
@@ -150,9 +150,4 @@ public class AuthController(
 
         return Ok();
     }
-
-    /// <summary>Same fallback UserAdminService uses for User Directory display — the three
-    /// DevUserSeeder dev accounts predate FullName and have none.</summary>
-    private static string DisplayNameFor(ApplicationUser user) =>
-        string.IsNullOrWhiteSpace(user.FullName) ? user.UserName ?? string.Empty : user.FullName;
 }
