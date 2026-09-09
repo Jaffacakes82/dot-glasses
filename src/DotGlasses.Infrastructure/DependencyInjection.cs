@@ -32,9 +32,9 @@ public static class DependencyInjection
 
         // AuditSaveChangesInterceptor is NOT registered as IInterceptor here for DI
         // auto-discovery — that doesn't actually fire for a context resolved via Aspire's pooled
-        // AddNpgsqlDbContext (found live: CreatedAtUtc/CreatedBy silently never got stamped
+        // AddAzureNpgsqlDbContext (found live: CreatedAtUtc/CreatedBy silently never got stamped
         // through the real HTTP pipeline). It's wired instead in DotGlasses.Web's Program.cs, via
-        // AddNpgsqlDbContext's configureDbContextOptions callback — DotGlassesDbContext can't
+        // AddAzureNpgsqlDbContext's configureDbContextOptions callback — DotGlassesDbContext can't
         // override OnConfiguring itself, EF Core throws at startup for that on a pooled context.
         // See CLAUDE.md's Test/Lead/Sale API section for the full story.
 
