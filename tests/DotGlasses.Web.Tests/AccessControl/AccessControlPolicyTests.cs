@@ -11,10 +11,6 @@ namespace DotGlasses.Web.Tests.AccessControl;
 /// The guarantees are stated in terms of who reaches a screen or completes a write, never in
 /// terms of which requirement type or handler produced the decision — the policies could be
 /// re-implemented wholesale and these tests should still hold.
-///
-/// WidgetExample.Create is the one row of that table not covered here: WidgetExamplesApiTests
-/// already exercises both its sides (Admin creates, plain User is refused) over the JWT API it
-/// gates, and it carries no level or scope check to add a boundary case to.
 /// </summary>
 public class AccessControlPolicyTests(AccessControlFixture fixture) : IClassFixture<AccessControlFixture>
 {

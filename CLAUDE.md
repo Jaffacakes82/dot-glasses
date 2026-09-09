@@ -135,8 +135,8 @@ are the record of *how* things got built; don't restate that here.
 ## Data scoping vs RBAC — do not conflate
 
 - **Data scoping** (which rows a user can see) is a global EF Core query filter on
-  `IHierarchyScoped` entities (`OrganisationNode`, `Customer`, `Test`, `Lead`, `Sale`,
-  `WidgetExample`), keyed off `ICurrentUserContext.HierarchyPathPrefix`. It is role-independent:
+  `IHierarchyScoped` entities (`OrganisationNode`, `Customer`, `Test`, `Lead`, `Sale`), keyed off
+  `ICurrentUserContext.HierarchyPathPrefix`. It is role-independent:
   a row is visible if its `HierarchyPath` starts with the caller's own path. Scoping is downward
   only — your own node and everything beneath it, never above or beside you.
   `ReferenceDataItem`/`PresetCatalogue`/`LensOption`/`LensStrengthCoatingOption` are **not**
@@ -201,10 +201,6 @@ Real domain entities, in `DotGlasses.Domain/Entities` and `/Enums`:
   item per category (server-enforced), which is what makes a dropdown reveal a free-text field.
 - **`Customer`** — internal-only, matched by exact name + phone within an outlet, find-or-create,
   no public API, no fuzzy matching.
-- **`WidgetExample`** remains the architectural reference pattern (audit/soft-delete/hierarchy-
-  scoping/offline-sync skeleton) alongside the real entities — don't delete it, and don't treat
-  its own repository/controller as a template to literally copy for a new *reporting* service
-  (see the no-repository-interface rule above).
 
 ## RBAC model (current state)
 
@@ -219,7 +215,6 @@ functionally distinct from Admin anywhere).
 | `CustomOrders.View` | Any role, Country level+ | Custom Orders screen + its advance-status action |
 | `Organisations.ManageInScope` | Admin, resource-based (target org at/below caller) | Every Organisations write action |
 | `Users.ManageInScope` | Admin, resource-based (target user at/below caller) | Every User Directory write action |
-| `WidgetExample.Create` | Admin (no level/scope check) | Developer sandbox API only |
 
 Backed by `OrgLevelRequirement` (no DB round trip — reads `ICurrentUserContext.OrgLevel`,
 denormalized onto `ApplicationUser.OrgLevel`, stamped as a JWT/cookie claim at sign-in) and

@@ -2,8 +2,6 @@ namespace DotGlasses.Web.Authorization;
 
 public static class AuthorizationPolicies
 {
-    public const string WidgetExampleCreate = "WidgetExample.Create";
-
     /// <summary>Any role, Country level and above (2026-08-04 decision: restrict Custom Orders
     /// to DGI/Country, hidden entirely below that).</summary>
     public const string CustomOrdersView = "CustomOrders.View";

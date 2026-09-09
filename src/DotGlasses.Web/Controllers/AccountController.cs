@@ -76,7 +76,15 @@ public class AccountController(SignInManager<ApplicationUser> signInManager) : C
 
     [HttpGet]
     [AllowAnonymous]
-    public IActionResult SetPassword(string userId, string token) => View(new SetPasswordViewModel { UserId = userId, Token = token });
+    public IActionResult SetPassword(string userId, string token)
+    {
+        if (signInManager.IsSignedIn(User))
+        {
+            return RedirectToAction("Index", "Home");
+        }
+
+        return View(new SetPasswordViewModel { UserId = userId, Token = token });
+    }
 
     [HttpPost]
     [AllowAnonymous]

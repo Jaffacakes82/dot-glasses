@@ -31,8 +31,6 @@ public class DotGlassesDbContext(DbContextOptions<DotGlassesDbContext> options, 
     // instances alive at once, for different users, started returning each other's rows).
     private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
 
-    public DbSet<WidgetExample> WidgetExamples => Set<WidgetExample>();
-
     public DbSet<OrganisationNode> OrganisationNodes => Set<OrganisationNode>();
     public DbSet<UserOrgAssignment> UserOrgAssignments => Set<UserOrgAssignment>();
     public DbSet<ReferenceDataItem> ReferenceDataItems => Set<ReferenceDataItem>();

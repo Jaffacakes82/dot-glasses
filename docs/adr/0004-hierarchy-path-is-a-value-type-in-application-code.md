@@ -6,8 +6,8 @@ load-bearing trailing slash — it is what stops the prefix `/1/4/` matching the
 prefix-match it or interpolate it. The prefix comparison flips direction depending on the question
 being asked — `data.StartsWith(me)` to find descendants, `me.StartsWith(data)` to resolve an
 ancestor — with nothing in the codebase naming which is which. The trailing-slash invariant is
-enforced nowhere except one `WidgetExample` DTO regex and the string interpolation that mints new
-segments. CLAUDE.md already records ancestor resolution as a standing gotcha "caught twice
+enforced nowhere except the string interpolation that mints new segments. CLAUDE.md already
+records ancestor resolution as a standing gotcha "caught twice
 independently (Dashboard, Event History) before being treated as a standing rule."
 
 **Decision.** A `HierarchyPath` value type in `Domain` owns the invariant and exposes the two
@@ -30,5 +30,5 @@ continues to operate on the raw string column rather than the value type — cha
 moving the expression builder to an `EF.Property<string>` form for no benefit, since the filter
 asks exactly one question and asks it correctly. The value type wraps at the application edges, not
 at the database. Anyone who later "tidies" the filter to use the value type should read this first.
-`CreateWidgetExampleRequest`'s hierarchy-path string field stays a string — it is wire shape, and
-`Contracts` may not reference `Domain`.
+Any future Contracts DTO carrying a client-submitted hierarchy-path field stays a plain string —
+it is wire shape, and `Contracts` may not reference `Domain`.
