@@ -44,11 +44,6 @@ public class LeadsController(
     [HttpGet("match")]
     public async Task<ActionResult<LeadDto>> Match([FromQuery] string fullName, [FromQuery] string? phoneNumber, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(currentUser.HierarchyPathPrefix))
-        {
-            return Problem("The authenticated user has no org assignment.", statusCode: StatusCodes.Status400BadRequest);
-        }
-
         if (string.IsNullOrWhiteSpace(fullName))
         {
             return BadRequest();
@@ -66,9 +61,9 @@ public class LeadsController(
     [HttpPost]
     public async Task<ActionResult<LeadDto>> Create(CreateLeadRequest request, CancellationToken cancellationToken)
     {
-        if (currentUser.UserId is not { } technicianUserId || string.IsNullOrEmpty(currentUser.HierarchyPathPrefix))
+        if (currentUser.UserId is not { } technicianUserId)
         {
-            return Problem("The authenticated user has no org assignment and cannot record a lead.", statusCode: StatusCodes.Status400BadRequest);
+            return Problem("The authenticated request has no user id.", statusCode: StatusCodes.Status400BadRequest);
         }
 
         // One reference-data read for the whole request, then every rule answered in memory —

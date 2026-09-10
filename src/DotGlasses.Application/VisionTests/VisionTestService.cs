@@ -1,5 +1,6 @@
 using DotGlasses.Application.Common;
 using DotGlasses.Contracts.Tests;
+using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Entities;
 using DomainOutcome = DotGlasses.Domain.Enums.TestOutcome;
 using ContractOutcome = DotGlasses.Contracts.Tests.TestOutcome;
@@ -22,6 +23,11 @@ public class VisionTestService(IVisionTestRepository repository, IUnitOfWork uni
 
     public async Task<TestDto> CreateAsync(CreateTestRequest request, Guid technicianUserId, string hierarchyPath, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrEmpty(hierarchyPath))
+        {
+            throw new DomainRuleViolationException("Your account has no org assignment and cannot record a test.");
+        }
+
         var existing = await repository.GetByIdAsync(request.Id, cancellationToken);
         if (existing is not null)
         {

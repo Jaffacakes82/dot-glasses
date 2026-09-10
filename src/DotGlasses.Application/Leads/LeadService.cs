@@ -46,6 +46,11 @@ public class LeadService(
     /// no open Lead.</summary>
     public async Task<LeadDto?> FindOpenMatchAsync(string hierarchyPath, string fullName, string? phoneNumber, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrEmpty(hierarchyPath))
+        {
+            throw new DomainRuleViolationException("Your account has no org assignment and cannot look up a lead.");
+        }
+
         var customer = await customerRepository.FindByNameAndPhoneAsync(hierarchyPath, fullName, phoneNumber, cancellationToken);
         if (customer is null)
         {
@@ -58,6 +63,11 @@ public class LeadService(
 
     public async Task<LeadDto> CreateAsync(CreateLeadRequest request, Guid technicianUserId, string hierarchyPath, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrEmpty(hierarchyPath))
+        {
+            throw new DomainRuleViolationException("Your account has no org assignment and cannot record a lead.");
+        }
+
         var existing = await repository.GetByIdAsync(request.Id, cancellationToken);
         if (existing is not null)
         {

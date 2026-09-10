@@ -2,6 +2,7 @@ using DotGlasses.Application.Tests.Fakes;
 using DotGlasses.Application.VisionTests;
 using DotGlasses.Contracts.Common;
 using DotGlasses.Contracts.Tests;
+using DotGlasses.Domain.Common;
 
 namespace DotGlasses.Application.Tests.VisionTests;
 
@@ -45,6 +46,19 @@ public class VisionTestServiceTests
         // authenticated caller, never accepted from the body. See CLAUDE.md's offline-sync note.
         Assert.Equal(RetailPoint, recorded.HierarchyPath);
         Assert.Equal(technician, recorded.TechnicianUserId);
+    }
+
+    [Fact]
+    public async Task ACallerWithNoOrgAssignment_IsRefusedAndWritesNothing()
+    {
+        var sut = CreateSut(out _, out var unitOfWork);
+
+        var rejection = await Assert.ThrowsAsync<DomainRuleViolationException>(
+            () => sut.CreateAsync(ARecordedTest(), Guid.NewGuid(), hierarchyPath: ""));
+
+        Assert.Contains("no org assignment", rejection.Message);
+        Assert.Empty(await sut.ListAsync());
+        Assert.Equal(0, unitOfWork.SaveCount);
     }
 
     [Fact]

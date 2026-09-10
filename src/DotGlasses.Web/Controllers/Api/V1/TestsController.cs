@@ -39,9 +39,9 @@ public class TestsController(
     [HttpPost]
     public async Task<ActionResult<TestDto>> Create(CreateTestRequest request, CancellationToken cancellationToken)
     {
-        if (currentUser.UserId is not { } technicianUserId || string.IsNullOrEmpty(currentUser.HierarchyPathPrefix))
+        if (currentUser.UserId is not { } technicianUserId)
         {
-            return Problem("The authenticated user has no org assignment and cannot record a test.", statusCode: StatusCodes.Status400BadRequest);
+            return Problem("The authenticated request has no user id.", statusCode: StatusCodes.Status400BadRequest);
         }
 
         // One reference-data read for the whole request, then every rule answered in memory —
