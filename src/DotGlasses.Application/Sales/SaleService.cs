@@ -36,6 +36,11 @@ public class SaleService(
 
     public async Task<SaleDto> CreateAsync(CreateSaleRequest request, Guid technicianUserId, string hierarchyPath, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrEmpty(hierarchyPath))
+        {
+            throw new DomainRuleViolationException("Your account has no org assignment and cannot record a sale.");
+        }
+
         var existing = await repository.GetByIdAsync(request.Id, cancellationToken);
         if (existing is not null)
         {

@@ -54,6 +54,31 @@ public class LeadServiceTests
     };
 
     [Fact]
+    public async Task ACallerWithNoOrgAssignment_IsRefusedAndWritesNothing()
+    {
+        var sut = CreateSut(out _, out _, out var customers, out var unitOfWork);
+
+        var rejection = await Assert.ThrowsAsync<DomainRuleViolationException>(
+            () => sut.CreateAsync(ARecordedLead(), Guid.NewGuid(), hierarchyPath: ""));
+
+        Assert.Contains("no org assignment", rejection.Message);
+        Assert.Empty(await sut.ListAsync());
+        Assert.Equal(0, customers.Count);
+        Assert.Equal(0, unitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task LookingUpAnOpenLead_WithNoOrgAssignment_IsRefused()
+    {
+        var sut = CreateSut(out _, out _, out _, out _);
+
+        var rejection = await Assert.ThrowsAsync<DomainRuleViolationException>(
+            () => sut.FindOpenMatchAsync(hierarchyPath: "", "Amina Okoro", "0700111222"));
+
+        Assert.Contains("no org assignment", rejection.Message);
+    }
+
+    [Fact]
     public async Task ConvertingATestToALead_LinksBothRecordsInBothDirections()
     {
         var sut = CreateSut(out _, out var tests, out _, out _);

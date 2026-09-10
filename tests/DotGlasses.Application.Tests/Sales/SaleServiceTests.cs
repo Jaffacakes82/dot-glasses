@@ -67,6 +67,20 @@ public class SaleServiceTests
     };
 
     [Fact]
+    public async Task ACallerWithNoOrgAssignment_IsRefusedAndWritesNothing()
+    {
+        var sut = CreateSut(out var sales, out _, out var customers, out var unitOfWork);
+
+        var rejection = await Assert.ThrowsAsync<DomainRuleViolationException>(
+            () => sut.CreateAsync(ARecordedSale(), Guid.NewGuid(), hierarchyPath: ""));
+
+        Assert.Contains("no org assignment", rejection.Message);
+        Assert.Equal(0, sales.Count);
+        Assert.Equal(0, customers.Count);
+        Assert.Equal(0, unitOfWork.SaveCount);
+    }
+
+    [Fact]
     public async Task ConvertingALeadToASale_LinksBothRecordsAndMarksTheLeadConverted()
     {
         var sut = CreateSut(out _, out var leads, out _, out _);

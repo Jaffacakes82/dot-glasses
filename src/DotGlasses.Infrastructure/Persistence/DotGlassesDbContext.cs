@@ -121,8 +121,13 @@ public class DotGlassesDbContext(DbContextOptions<DotGlassesDbContext> options, 
             var startsWithMethod = typeof(string).GetMethod(nameof(string.StartsWith), [typeof(string)])!;
             var startsWithCall = Expression.Call(hierarchyPathAccess, startsWithMethod, prefixAccess);
 
+            // string.StartsWith("") is always true, so an unassigned caller's empty prefix would
+            // otherwise match every row instead of none — fail closed by requiring a non-empty
+            // prefix before the StartsWith check runs at all.
+            var prefixIsNotEmpty = Expression.NotEqual(prefixAccess, Expression.Constant(string.Empty));
+
             var isAuthenticatedAccess = Expression.Call(IsAuthenticatedMethod, accessorField);
-            var hierarchyCheck = Expression.AndAlso(isAuthenticatedAccess, startsWithCall);
+            var hierarchyCheck = Expression.AndAlso(isAuthenticatedAccess, Expression.AndAlso(prefixIsNotEmpty, startsWithCall));
 
             body = body is null ? hierarchyCheck : Expression.AndAlso(body, hierarchyCheck);
         }
