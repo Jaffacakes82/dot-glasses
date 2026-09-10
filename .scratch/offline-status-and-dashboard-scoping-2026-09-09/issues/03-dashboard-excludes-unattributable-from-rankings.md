@@ -1,0 +1,84 @@
+# 03 — Dashboard "Top performing" ranks unattributable sales as if they were a real retailer/country
+
+Status: done (implemented 2026-09-09, PR: fix/offline-status-and-dashboard-scoping-2026-09-09)
+Blocked by: None — can start immediately
+Category: bug
+
+Source: Admin Portal testing, 2026-09-09, Joe — "Dashboard in admin portal - if I log events at
+DGI, it reports those metrics against retailer/country in 'top performing'."
+
+## Agent Brief
+
+**Category:** bug (ranking widget includes a placeholder bucket as a real entity)
+
+**Summary:** Confirmed by writing a real test against Postgres during triage (not just static
+reading): a Sale with `HierarchyPath` at DGI level resolves *honestly* — `OrgTreeLookup` already
+returns `"No retailer"` / `"Unknown country"`, not a wrong real name (`ResolveRetailer`/
+`FindCountry`, `src/DotGlasses.Application/Reporting/OrgTreeLookup.cs:60-80`). There is no
+misattribution bug in the resolution itself.
+
+The actual bug is in what `DashboardQueryService.RankByKey`
+(`src/DotGlasses.Infrastructure/Persistence/DashboardQueryService.cs:118-136`) does with that
+honest answer: it groups and ranks by whatever string `RowRetailerName`/`RowCountryName` returns,
+with no exclusion for the fallback strings — so `"No retailer"` / `"Unknown country"` compete for a
+Top-5 slot exactly like a real retailer or country name, including the `#1` orange highlight in
+`Views/Home/Index.cshtml:59,69,79,89` when the bucket happens to have the most sales (trivially
+true with a small dataset, or even just one DGI-level sale and nothing else). This reads exactly
+like "reporting metrics against retailer/country" for something that is neither. Contrast with
+`Sale`/`Test` rows under a training org, which `DashboardQueryService.GetAsync` already filters out
+entirely before any aggregation (`IsRowUnderTrainingOrg`, `DashboardQueryService.cs:30,34,38`) —
+this ticket gives unattributable rows the same treatment, but only for the two ranking widgets, not
+the overall totals.
+
+**Decision made during triage (asked directly, not assumed):** exclude these rows from the Top
+Retailers/Top Countries rankings entirely — they still count toward every other Dashboard number
+(pending leads, total tests, conversion %, gender split, the trend line) exactly as today. Do not
+introduce a more honestly-labelled bucket that still competes for a rank slot.
+
+**Desired behavior:** `RankByKey`'s Retailer and Country calls skip any row whose `RowRetailerName`/
+`RowCountryName` is one of the "we can't meaningfully name this" fallbacks (`OrgTreeLookup.NoRetailer`,
+`OrgTreeLookup.UnknownRetailer`, `OrgTreeLookup.UnknownCountry`) before grouping — Top Outlets and
+Top Technicians are unaffected (an outlet is always either a real named node or genuinely unknown-as-
+data-corruption, and `RowOutletName`'s only fallback is `UnknownOutlet`, which is the same "we
+can't say" case and arguably deserves the same exclusion for consistency, but wasn't named in the
+report — flag it during implementation rather than silently expanding scope).
+
+**Key interfaces:**
+- `src/DotGlasses.Infrastructure/Persistence/DashboardQueryService.cs:91-92` (the `RankByKey` calls
+  for Retailer and Country) — filter `sales`/`tests` to exclude rows resolving to
+  `OrgTreeLookup.NoRetailer`/`OrgTreeLookup.UnknownRetailer` (Retailer ranking) or
+  `OrgTreeLookup.UnknownCountry` (Country ranking) before grouping, rather than filtering inside
+  `RankByKey` itself (which is a generic ranker with no knowledge of what a "fallback" string means
+  for a given key selector).
+- `src/DotGlasses.Application/Reporting/OrgTreeLookup.cs` — the constants to filter against
+  (`NoRetailer`, `UnknownRetailer`, `UnknownCountry`).
+
+**Acceptance criteria:**
+- [ ] A Sale/Test at DGI level (or any row with no Country ancestor) no longer appears as an entry
+      in Top Countries.
+- [ ] A Sale/Test at a retail point with no Retailer above it (hangs directly off a Country) no
+      longer appears as an entry in Top Retailers.
+- [ ] Those same rows still count in every other Dashboard number — pending leads, total tests,
+      standard/custom sales counts, both conversion percentages, the gender split, the 6-bucket
+      trend line, Top Outlets, and Top Technicians are all unchanged by this ticket.
+- [ ] If every Sale in range is unattributable, Top Retailers/Top Countries render as empty (not as
+      a single "No retailer"/"Unknown country" entry) while Top Outlets/Top Technicians can still
+      show real entries.
+
+**Out of scope:**
+- Excluding `UnknownOutlet` rows from Top Outlets — not part of the report; flag it if it comes up
+  during implementation rather than folding it in silently (see Desired behavior).
+- Any change to `OrgTreeLookup` itself, Custom Orders' or Event History's use of it (both
+  deliberately keep showing "No retailer" as a real group heading — see
+  `CustomOrderRetailerGroupingTests.HavingNoRetailerAndNotBeingInTheTree_AreSeparateGroups`), or to
+  how the fallback strings are worded.
+
+## Comments
+
+> *This was generated by AI during triage — confirmed with a real Postgres-backed test written and
+> run during this session (the ranking bug was visible even though the underlying name resolution
+> was already correct). That investigative test became the real regression test on implementation:
+> `tests/DotGlasses.Infrastructure.Tests/Persistence/DashboardTopPerformingTests.cs`. Also confirmed
+> live against the dev database, which happened to already contain one real DGI-level sale — it
+> showed up correctly in Top Outlets ("DOT Glasses International") and correctly disappeared from
+> Top Retailers/Top Countries after the fix.*

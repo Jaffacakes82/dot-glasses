@@ -181,6 +181,7 @@ window.dotGlassesIdb = (function () {
 
         registerConnectivityCallback: function (dotnetRef) {
             window.addEventListener('online', () => dotnetRef.invokeMethodAsync('OnOnline'));
+            window.addEventListener('offline', () => dotnetRef.invokeMethodAsync('OnOffline'));
         },
 
         isOnline: function () {
