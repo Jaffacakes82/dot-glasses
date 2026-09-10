@@ -22,7 +22,7 @@
     <p style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:#666; margin-bottom:var(--space-2);">Active location</p>
     @if (_orgs.Count == 0)
     {
-        <p style="font-size:13px; color:#666;">@(_loadingOrgs ? "Loading your assigned locations…" : "No locations assigned yet — contact your admin.")</p>
+        <p style="font-size:13px; color:#666;">@NoOrgsMessage()</p>
     }
     else
     {
@@ -123,6 +123,20 @@
         _loadingOrgs = true;
         _orgs = await LocationClient.GetMyOrgsAsync();
         _loadingOrgs = false;
+    }
+
+    /// <summary>Distinguishes "genuinely no orgs assigned" (a real, successful response) from
+    /// "couldn't reach the server and this device has no saved copy yet" (LocationClient.LoadError)
+    /// — before this, both looked identical and a technician going offline read as having lost
+    /// their org assignment.</summary>
+    private string NoOrgsMessage()
+    {
+        if (_loadingOrgs)
+        {
+            return "Loading your assigned locations…";
+        }
+
+        return LocationClient.LoadError ?? "No locations assigned yet — contact your admin.";
     }
 
     /// <summary>
