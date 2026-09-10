@@ -455,7 +455,12 @@ under it) and does not reproduce the SQL string-matching semantics the hierarchy
 on. `Infrastructure.Tests` shares one container per assembly and applies the real migrations;
 `Web.Tests` points `WebApplicationFactory` at its own container. The two assemblies deliberately
 use different state-isolation strategies (fresh database per test vs a shared one) because the
-Web host bakes its connection string in at build time — each file says so where it matters.
+Web host bakes its connection string in at build time — each file says so where it matters. A
+third pattern exists for testing an `IHostedService` directly (`DevUserSeederTests`): its own
+dedicated per-test-class container and a hand-built `ServiceCollection`, bypassing
+`WebApplicationFactory` entirely — a hosted service isn't HTTP-reachable, so the shared
+`CustomWebApplicationFactory` fixture (which never configures `DevSeedOptions`, and is shared
+across every other test in the assembly) can't exercise it.
 
 **`Application.Tests` must stay dependency-free** — pure rule and service tests, hand-written
 dictionary-backed fakes, no container, no database. No mocking library is referenced by any
