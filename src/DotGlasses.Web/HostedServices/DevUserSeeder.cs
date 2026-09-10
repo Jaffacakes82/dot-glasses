@@ -1,4 +1,5 @@
 using DotGlasses.Application.Common;
+using DotGlasses.Application.Users;
 using DotGlasses.Domain.Enums;
 using DotGlasses.Infrastructure.Identity;
 using DotGlasses.Infrastructure.Persistence.Configurations;
@@ -39,6 +40,7 @@ public class DevUserSeeder(IServiceScopeFactory scopeFactory, IOptions<DevSeedOp
     {
         using var scope = scopeFactory.CreateScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var userAdminService = scope.ServiceProvider.GetRequiredService<IUserAdminService>();
 
         var seed = devSeedOptions.Value;
         if (string.IsNullOrEmpty(seed.AdminUserName) || string.IsNullOrEmpty(seed.AdminPassword))
@@ -47,24 +49,33 @@ public class DevUserSeeder(IServiceScopeFactory scopeFactory, IOptions<DevSeedOp
         }
 
         await CreateOrUpdateAsync(
-            userManager, seed.AdminUserName, seed.AdminPassword,
-            OrganisationSeedConfiguration.DgiId, OrganisationSeedConfiguration.DgiPath, OrganisationLevel.Dgi,
-            RoleNames.Admin);
+            userManager, userAdminService,
+            new DevSeedAccount(
+                seed.AdminUserName, seed.AdminPassword,
+                OrganisationSeedConfiguration.DgiId, OrganisationSeedConfiguration.DgiPath, OrganisationLevel.Dgi,
+                RoleNames.Admin),
+            cancellationToken);
 
         if (!string.IsNullOrEmpty(seed.KenyaManagerPassword))
         {
             await CreateOrUpdateAsync(
-                userManager, KenyaManagerUserName, seed.KenyaManagerPassword,
-                OrganisationSeedConfiguration.KenyaId, OrganisationSeedConfiguration.KenyaPath, OrganisationLevel.Country,
-                RoleNames.Admin);
+                userManager, userAdminService,
+                new DevSeedAccount(
+                    KenyaManagerUserName, seed.KenyaManagerPassword,
+                    OrganisationSeedConfiguration.KenyaId, OrganisationSeedConfiguration.KenyaPath, OrganisationLevel.Country,
+                    RoleNames.Admin),
+                cancellationToken);
         }
 
         if (!string.IsNullOrEmpty(seed.RetailPointUserPassword))
         {
             await CreateOrUpdateAsync(
-                userManager, RetailPointUserUserName, seed.RetailPointUserPassword,
-                OrganisationSeedConfiguration.KenyaRetailPointId, OrganisationSeedConfiguration.KenyaRetailPointPath, OrganisationLevel.RetailPoint,
-                RoleNames.User);
+                userManager, userAdminService,
+                new DevSeedAccount(
+                    RetailPointUserUserName, seed.RetailPointUserPassword,
+                    OrganisationSeedConfiguration.KenyaRetailPointId, OrganisationSeedConfiguration.KenyaRetailPointPath, OrganisationLevel.RetailPoint,
+                    RoleNames.User),
+                cancellationToken);
         }
     }
 
@@ -74,44 +85,56 @@ public class DevUserSeeder(IServiceScopeFactory scopeFactory, IOptions<DevSeedOp
     /// Deployment section), so an account created before OrgNodeId/OrgLevel existed on
     /// ApplicationUser would otherwise stay stuck with nulls forever and silently fail every
     /// OrgLevelRequirement check. Password is only set on first creation, never reset here.
+    ///
+    /// Also ensures a matching UserOrgAssignment row exists for the primary org — every other
+    /// writer of ApplicationUser.OrgNodeId (UserAdminService.InviteAsync/SwitchActiveOrgAsync)
+    /// keeps that table in sync as the "assignable set" behind it, but this seeder used to set
+    /// only the denormalized OrgNodeId/HierarchyPath/OrgLevel fields directly. That let a dev
+    /// account write records under its assigned org (those fields alone drive the JWT claims and
+    /// hierarchy scoping) while the Field App's location picker — which reads UserOrgAssignments,
+    /// not ApplicationUser — showed no org at all. AssignUserToOrgAsync is a no-op if the row
+    /// already exists, so this also backfills any pre-existing seeded account stuck without one.
     /// </summary>
     private static async Task CreateOrUpdateAsync(
-        UserManager<ApplicationUser> userManager, string userName, string password,
-        Guid orgNodeId, string hierarchyPath, OrganisationLevel orgLevel, string role)
+        UserManager<ApplicationUser> userManager, IUserAdminService userAdminService, DevSeedAccount account, CancellationToken cancellationToken)
     {
-        var existing = await userManager.FindByNameAsync(userName);
+        var existing = await userManager.FindByNameAsync(account.UserName);
         if (existing is not null)
         {
-            if (existing.OrgNodeId == orgNodeId && existing.HierarchyPath == hierarchyPath && existing.OrgLevel == orgLevel)
+            if (existing.OrgNodeId != account.OrgNodeId || existing.HierarchyPath != account.HierarchyPath || existing.OrgLevel != account.OrgLevel)
             {
-                return;
+                existing.OrgNodeId = account.OrgNodeId;
+                existing.HierarchyPath = account.HierarchyPath;
+                existing.OrgLevel = account.OrgLevel;
+                await userManager.UpdateAsync(existing);
             }
 
-            existing.OrgNodeId = orgNodeId;
-            existing.HierarchyPath = hierarchyPath;
-            existing.OrgLevel = orgLevel;
-            await userManager.UpdateAsync(existing);
+            await userAdminService.AssignUserToOrgAsync(existing.Id, account.OrgNodeId, cancellationToken);
             return;
         }
 
         var user = new ApplicationUser
         {
-            UserName = userName,
-            Email = userName,
+            UserName = account.UserName,
+            Email = account.UserName,
             EmailConfirmed = true,
-            OrgNodeId = orgNodeId,
-            HierarchyPath = hierarchyPath,
-            OrgLevel = orgLevel,
+            OrgNodeId = account.OrgNodeId,
+            HierarchyPath = account.HierarchyPath,
+            OrgLevel = account.OrgLevel,
         };
 
-        var createResult = await userManager.CreateAsync(user, password);
+        var createResult = await userManager.CreateAsync(user, account.Password);
         if (createResult.Succeeded)
         {
-            await userManager.AddToRoleAsync(user, role);
+            await userManager.AddToRoleAsync(user, account.Role);
+            await userAdminService.AssignUserToOrgAsync(user.Id, account.OrgNodeId, cancellationToken);
         }
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    private sealed record DevSeedAccount(
+        string UserName, string Password, Guid OrgNodeId, string HierarchyPath, OrganisationLevel OrgLevel, string Role);
 }
 
 public class DevSeedOptions
