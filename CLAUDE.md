@@ -121,7 +121,7 @@ are the record of *how* things got built; don't restate that here.
   `InviteAtomicityTests`. Anything a user-visible operation *emits* (an email, a set-password
   link) is produced **after** the commit — a live invite link for an account the rollback removed
   is worse than the failure it came from.
-- FluentValidation still backs the **ten remaining validators** (Organisations, Preset Catalogues,
+- FluentValidation still backs the **ten remaining validators** (Organisations, Lens Sets,
   Reference Data, User Directory) and is deliberately **not** wired up via
   `AddFluentValidationAutoValidation()` — that runs FluentValidation synchronously inside ASP.NET's
   model-binding pipeline, which can't invoke the async rules several of them need for DB-backed
@@ -216,7 +216,7 @@ functionally distinct from Admin anywhere).
 | Policy | Rule | Gates |
 |---|---|---|
 | `ReferenceData.Manage` | Admin, DGI level only | Reference Data screen |
-| `PresetCatalogue.Manage` | Admin, Country level+ | Preset Catalogues screen (incl. the global lens-strength coating grid) |
+| `PresetCatalogue.Manage` | Admin, Country level+ | Lens Sets screen (incl. the global lens-strength coating grid) |
 | `PresetCatalogue.EditInScope` | `PresetCatalogue.Manage`, resource-based (lens set's *owning* org at/below caller) | Editing a lens set: name/description, lens powers, retire/reactivate |
 | `PresetCatalogue.AssignInScope` | `PresetCatalogue.Manage`, resource-based (target org at/below caller) | Assigning/unassigning any active lens set |
 | `CustomOrders.View` | Any role, Country level+ | Custom Orders screen + its advance-status action |
@@ -230,7 +230,7 @@ specific target user/org). Dashboard, Organisations, Event History and User Dire
 `[Authorize]` — any authenticated user reaches them; what they see is narrowed by data scoping,
 not by policy.
 
-The sidebar (`_Layout.cshtml`) hides Preset Catalogues/Custom Orders/Reference Data per-request
+The sidebar (`_Layout.cshtml`) hides Lens Sets/Custom Orders/Reference Data per-request
 via `IAuthorizationService.AuthorizeAsync` against the same three policies their controllers
 enforce — nav filtering is real, not decorative, but every controller action still re-checks
 server-side regardless (never trust the hidden-button UX alone). A failed policy check redirects
@@ -387,7 +387,7 @@ once in this codebase:
   regardless of the attribute's actual name — Razor emits `value="value"` when true and omits the
   attribute entirely when false, **never** the string `"True"`/`"False"`. Model binding silently
   receives the wrong value or nothing. Fix: `.ToString()` or a ternary to a real string. Bitten
-  two separate screens (Organisations' flag toggles, Preset Catalogues' coating-availability
+  two separate screens (Organisations' flag toggles, Lens Sets' coating-availability
   grid) — treat any bare-bool-bound attribute as a standing red flag in review.
 - **A `DateOnly`/`DateTime` value placed into a URL** (`asp-route-*`, a query string) via plain
   Razor interpolation calls `.ToString()` with the request's culture, which can render day/month

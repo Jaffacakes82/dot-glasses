@@ -12,7 +12,6 @@ public class CreateCatalogueRequestValidator : AbstractValidator<CreateCatalogue
             .MustAsync(async (name, cancellationToken) => !await catalogueAdminService.IsNameTakenAsync(name, excludeId: null, cancellationToken))
             .WithMessage(LensSetNameMessages.Taken);
         RuleFor(x => x.Description).MaximumLength(500);
-        RuleFor(x => x.RangeDescription).MaximumLength(100);
     }
 }
 

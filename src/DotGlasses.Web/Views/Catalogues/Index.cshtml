@@ -1,17 +1,17 @@
 @model DotGlasses.Web.Models.CataloguesIndexViewModel
 @{
-    ViewData["Title"] = "Preset Catalogues";
+    ViewData["Title"] = "Lens Sets";
 }
 
 <div class="dg-page-header">
     <div>
         <span class="dg-crumb">Configuration</span>
-        <h1 class="dg-page-title">Preset Catalogues</h1>
+        <h1 class="dg-page-title">Lens Sets</h1>
     </div>
-    <button class="dg-btn dg-btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#createCatalogueModal">Create package</button>
+    <button class="dg-btn dg-btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#createCatalogueModal">Create lens set</button>
 </div>
 
-<p class="dg-crumb" style="margin-bottom:var(--space-5);">Catalogue creation is restricted to DGI/Country-office level — retailers and outlets may only assign what's pushed to them.</p>
+<p class="dg-crumb" style="margin-bottom:var(--space-5);">Lens set creation is restricted to DGI/Country-office level — retailers and outlets may only assign what's pushed to them.</p>
 
 @if (!ViewData.ModelState.IsValid)
 {
@@ -19,7 +19,7 @@
 }
 
 <form method="get" asp-action="Index" style="display:flex; gap:8px; margin-bottom:var(--space-4);">
-    <input class="form-control" style="max-width:280px;" name="search" value="@Model.Search" placeholder="Search by package name" />
+    <input class="form-control" style="max-width:280px;" name="search" value="@Model.Search" placeholder="Search by lens set name" />
     <button class="dg-btn dg-btn-ghost" style="padding:8px 16px; font-size:13px;" type="submit">Search</button>
     @if (!string.IsNullOrEmpty(Model.Search))
     {
@@ -29,7 +29,7 @@
 
 @if (Model.Catalogues.Count == 0)
 {
-    <div class="dg-empty-state"><div class="dg-ring"></div><p>No catalogues match "@Model.Search".</p></div>
+    <div class="dg-empty-state"><div class="dg-ring"></div><p>No lens sets match "@Model.Search".</p></div>
 }
 
 <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-6);">
@@ -49,10 +49,6 @@
                 <p class="dg-crumb">Owned above your organisation — you can assign it, but not change it.</p>
             }
             <p style="color:var(--text-muted-2); font-size:14px;">@catalogue.Description</p>
-            @if (!string.IsNullOrEmpty(catalogue.RangeDescription))
-            {
-                <p class="dg-crumb">Diopter range: @catalogue.RangeDescription</p>
-            }
             <p class="dg-stat-label">Assigned to @catalogue.AssignedOrgs.Count org(s)</p>
             @if (catalogue.AssignedOrgs.Any())
             {
@@ -112,7 +108,7 @@
             }
             else if (catalogue.CanEdit)
             {
-                <p style="font-size:12px; color:#999; margin:0;">Every active lens strength is already on this catalogue.</p>
+                <p style="font-size:12px; color:#999; margin:0;">Every active lens strength is already in this lens set.</p>
             }
         </div>
 
@@ -132,16 +128,12 @@
                         </div>
                         <div class="modal-body">
                             <div class="dg-auth-field">
-                                <label>Package name</label>
+                                <label>Lens set name</label>
                                 <input class="form-control" name="Name" value="@catalogue.Name" />
                             </div>
                             <div class="dg-auth-field">
                                 <label>Description</label>
                                 <input class="form-control" name="Description" value="@catalogue.Description" />
-                            </div>
-                            <div class="dg-auth-field">
-                                <label>Diopter / strength range</label>
-                                <input class="form-control" name="RangeDescription" value="@catalogue.RangeDescription" />
                             </div>
                         </div>
                         <div class="modal-footer">
@@ -149,7 +141,7 @@
                                     data-confirm="Retire @catalogue.Name? It stops being offered in the Field App; records that used it keep its name, and you can reactivate it later."
                                     onclick="return confirm(this.dataset.confirm);">Retire</button>
                             <button class="dg-btn dg-btn-ghost" type="button" data-bs-dismiss="modal">Cancel</button>
-                            <button class="dg-btn dg-btn-primary" type="submit">Save package</button>
+                            <button class="dg-btn dg-btn-primary" type="submit">Save lens set</button>
                         </div>
                     </form>
                     @* A sibling form, not nested — HTML forbids a form inside a form; the Retire button
@@ -190,9 +182,9 @@
 }
 
 <div class="dg-card" style="margin-bottom:var(--space-6);">
-    <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin-top:0;">Assign packages to a retailer</h3>
+    <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin-top:0;">Assign lens sets to a retailer</h3>
     <p style="font-size:12px; color:var(--text-muted); margin-bottom:var(--space-3);">
-        An outlet can hold more than one preset at a time (e.g. during a stock transition) — select all
+        An outlet can hold more than one lens set at a time (e.g. during a stock transition) — select all
         that apply. Assignment cascades automatically to every outlet under the selected org.
     </p>
     <form asp-action="AssignCatalogues" method="post" style="display:flex; gap:var(--space-3); flex-wrap:wrap; align-items:flex-end;">
@@ -206,7 +198,7 @@
             </select>
         </div>
         <div style="flex:1; min-width:200px;">
-            <label class="dg-stat-label" style="display:block; margin-bottom:4px;">Catalogues</label>
+            <label class="dg-stat-label" style="display:block; margin-bottom:4px;">Lens sets</label>
             <select class="form-select" name="CatalogueIds" multiple size="@Math.Max(2, Model.Catalogues.Count)">
                 @foreach (var catalogue in Model.Catalogues)
                 {
@@ -271,26 +263,22 @@
         <div class="modal-content" style="border-radius:var(--radius-md); border:none;">
             <form asp-action="CreateCatalogue" method="post">
                 <div class="modal-header">
-                    <h2 class="dg-page-title" style="font-size:20px;">Create package</h2>
+                    <h2 class="dg-page-title" style="font-size:20px;">Create lens set</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <div class="dg-auth-field">
-                        <label>Package name</label>
+                        <label>Lens set name</label>
                         <input class="form-control" name="Name" />
                     </div>
                     <div class="dg-auth-field">
                         <label>Description</label>
                         <input class="form-control" name="Description" />
                     </div>
-                    <div class="dg-auth-field">
-                        <label>Diopter / strength range</label>
-                        <input class="form-control" name="RangeDescription" />
-                    </div>
                 </div>
                 <div class="modal-footer">
                     <button class="dg-btn dg-btn-ghost" type="button" data-bs-dismiss="modal">Cancel</button>
-                    <button class="dg-btn dg-btn-primary" type="submit">Save package</button>
+                    <button class="dg-btn dg-btn-primary" type="submit">Save lens set</button>
                 </div>
             </form>
         </div>

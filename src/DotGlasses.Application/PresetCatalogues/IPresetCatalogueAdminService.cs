@@ -31,9 +31,9 @@ public interface IPresetCatalogueAdminService
     /// <summary>owningOrgNodeId is the caller's own org node (stamped by the Web controller from
     /// ICurrentUserContext, never client-submitted) — see PresetCatalogue's own doc comment for
     /// why it must be Dgi/Country. Enforced here, not in Domain.</summary>
-    Task<PresetCatalogueAdminDto> CreateAsync(string name, string? description, string? rangeDescription, Guid owningOrgNodeId, CancellationToken cancellationToken = default);
+    Task<PresetCatalogueAdminDto> CreateAsync(string name, string? description, Guid owningOrgNodeId, CancellationToken cancellationToken = default);
 
-    Task UpdateAsync(Guid id, string name, string? description, string? rangeDescription, CancellationToken cancellationToken = default);
+    Task UpdateAsync(Guid id, string name, string? description, CancellationToken cancellationToken = default);
 
     /// <summary>SortOrder is max+1 within the catalogue — matches ReferenceDataAdminService's
     /// CreateAsync convention.</summary>
@@ -77,7 +77,6 @@ public record PresetCatalogueAdminDto(
     Guid Id,
     string Name,
     string? Description,
-    string? RangeDescription,
     Guid OwningOrgNodeId,
     IReadOnlyList<PresetCatalogueLensOptionAdminDto> LensOptions);
 
