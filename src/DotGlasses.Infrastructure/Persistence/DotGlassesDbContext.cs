@@ -5,6 +5,7 @@ using DotGlasses.Application.Common;
 using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Entities;
 using DotGlasses.Infrastructure.Identity;
+using DotGlasses.Infrastructure.Persistence.Configurations;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -51,6 +52,10 @@ public class DotGlassesDbContext(DbContextOptions<DotGlassesDbContext> options, 
         base.OnModelCreating(modelBuilder);
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(DotGlassesDbContext).Assembly);
+
+        // Model-level, so it can't live on OrganisationNodeConfiguration's EntityTypeBuilder —
+        // see that class for why path segments come from a sequence.
+        modelBuilder.HasSequence<int>(OrganisationNodeConfiguration.PathSegmentSequence);
 
         ApplyGlobalQueryFilters(modelBuilder);
     }
