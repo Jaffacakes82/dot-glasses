@@ -28,9 +28,7 @@ public class OrganisationNodeConfiguration : IEntityTypeConfiguration<Organisati
         builder.Property(x => x.CreatedBy).HasMaxLength(256);
         builder.Property(x => x.ModifiedBy).HasMaxLength(256);
         builder.Property(x => x.DeletedBy).HasMaxLength(256);
-        // Unique across every row, deactivated ones included (no IsDeleted filter): a deactivated
-        // node can be reactivated, so its path is still taken. The backstop behind
-        // PathSegmentSequence, not the mechanism.
+        // Deliberately unfiltered by IsDeleted — the backstop behind PathSegmentSequence.
         builder.HasIndex(x => x.HierarchyPath).IsUnique();
         builder.HasIndex(x => x.ParentId);
 

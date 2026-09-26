@@ -25,6 +25,17 @@ depend on). Its decisions are recorded in ADRs 0002–0004.
 These can't be done from a coding session — see CLAUDE.md's "no infra deployed from a developer
 machine" rule.
 
+- **Duplicate organisation paths**: before 2026-09-26, creating an org could re-mint a
+  deactivated org's `HierarchyPath` segment, putting two orgs on one path (found live as two
+  orgs on `/1/2/`). The `EnforceUniqueOrganisationPaths` migration refuses to apply to a database
+  that still holds duplicates, and names them. Repair by hand before deploying it there: keep the
+  older node on its path, move the newer node's subtree to fresh segments, and rewrite the
+  stamped copies (`AspNetUsers`, `Tests`, `Leads`, `Sales`, `Customers`) in the same
+  transaction. Rows stamped with a shared path are ambiguous, and deciding which org each belongs
+  to is a judgement call. Affected users must sign in again afterwards, because their token still
+  carries the old path. Diagnostic SQL and the full outline are in
+  `.scratch/triage-2026-09-26/issues/02-repair-duplicate-org-paths-in-affected-environment.md`.
+
 - **Key Vault secrets**: `Jwt--Key`, `Jwt--Issuer`, `Jwt--Audience` must be set in the real Key
   Vault (`az keyvault secret set` or the portal) after `azd up` provisions staging/production —
   the app reads them via `AddAzureKeyVaultSecrets`, but nothing sets them yet.
