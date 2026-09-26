@@ -1,6 +1,6 @@
 # 01 — Org path segments are re-minted after deactivation, creating duplicate HierarchyPaths
 
-Status: ready-for-agent
+Status: done (implemented 2026-09-26, branch fix/org-path-segment-minting)
 Blocked by: None to build and merge. **Deploying it to an environment that already holds duplicates
 is blocked by 02** (the new unique index cannot be created over duplicate rows).
 Category: bug

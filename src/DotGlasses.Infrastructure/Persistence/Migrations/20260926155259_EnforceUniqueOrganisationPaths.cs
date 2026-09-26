@@ -13,7 +13,8 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
             // An environment that already holds two nodes on one path can't take the unique index
             // below, and must not have it "fixed" by this migration: which org keeps the path, and
             // which org the rows stamped with it belong to, is a judgement call. Fail before
-            // changing anything, naming the paths and pointing at the repair.
+            // changing anything, naming the paths and pointing at the repair (docs/open-issues.md,
+            // not a triage note — an applied migration outlives any scratch file).
             migrationBuilder.Sql("""
                 DO $$
                 DECLARE duplicated text;
@@ -25,7 +26,7 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                         GROUP BY "HierarchyPath" HAVING COUNT(*) > 1);
 
                     IF duplicated IS NOT NULL THEN
-                        RAISE EXCEPTION 'OrganisationNodes holds duplicate HierarchyPaths (%). Repair them before applying this migration — see .scratch/triage-2026-09-26/issues/02-repair-duplicate-org-paths-in-affected-environment.md.', duplicated;
+                        RAISE EXCEPTION 'OrganisationNodes holds duplicate HierarchyPaths (%). Repair them before applying this migration — see "Duplicate organisation paths" in docs/open-issues.md.', duplicated;
                     END IF;
                 END $$;
                 """);

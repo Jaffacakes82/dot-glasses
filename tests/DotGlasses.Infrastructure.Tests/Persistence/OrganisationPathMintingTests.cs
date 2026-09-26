@@ -47,6 +47,13 @@ public class OrganisationPathMintingTests(PostgresContainerFixture postgres)
         var second = await service.CreateChildAsync(OrganisationSeedConfiguration.KenyaId, "Kisumu Outlet", OrganisationLevel.RetailPoint, "Standalone");
 
         Assert.NotEqual(first.HierarchyPath, second.HierarchyPath);
+
+        // Reactivating the first is what turned the live duplicate from latent into a crash.
+        await service.SetActiveAsync(first.Id, isActive: true);
+
+        var active = await CreateService(context).ListAsync();
+        Assert.Contains(active, n => n.Id == first.Id && n.HierarchyPath == first.HierarchyPath);
+        Assert.Contains(active, n => n.Id == second.Id && n.HierarchyPath == second.HierarchyPath);
     }
 
     [Fact]
@@ -115,12 +122,14 @@ public class OrganisationPathMintingTests(PostgresContainerFixture postgres)
         var ex = await Assert.ThrowsAsync<PostgresException>(() => migrator.MigrateAsync());
 
         Assert.Contains(OrganisationSeedConfiguration.KenyaPath, ex.MessageText);
-        Assert.Contains("02-repair-duplicate-org-paths", ex.MessageText);
+        Assert.Contains("Duplicate organisation paths", ex.MessageText);
         Assert.Contains(PreviousMigration, await context.Database.GetAppliedMigrationsAsync());
-        Assert.DoesNotContain(context.Database.GetMigrations().Last(), await context.Database.GetAppliedMigrationsAsync());
+        Assert.DoesNotContain(ThisMigration, await context.Database.GetAppliedMigrationsAsync());
     }
 
     private const string PreviousMigration = "20260910071312_AddUserOrgAssignmentForeignKeys";
+
+    private const string ThisMigration = "20260926155259_EnforceUniqueOrganisationPaths";
 
     private static int LastSegment(string hierarchyPath) =>
         int.Parse(hierarchyPath.Split('/', StringSplitOptions.RemoveEmptyEntries)[^1]);
