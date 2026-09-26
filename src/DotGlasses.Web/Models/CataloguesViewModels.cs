@@ -13,7 +13,7 @@ public record CataloguesIndexViewModel(
 
 public record RetiredCatalogueCard(Guid Id, string Name, bool CanReactivate);
 
-public record CatalogueCard(Guid Id, string Name, string? Description, string? RangeDescription, IReadOnlyList<LensOptionCard> LensOptions, IReadOnlyList<AssignedOrgCard> AssignedOrgs, bool CanEdit);
+public record CatalogueCard(Guid Id, string Name, string? Description, IReadOnlyList<LensOptionCard> LensOptions, IReadOnlyList<AssignedOrgCard> AssignedOrgs, bool CanEdit);
 
 public record AssignedOrgCard(Guid OrgNodeId, string OrgName, bool CanUnassign);
 
@@ -23,7 +23,6 @@ public class CreateCatalogueRequest
 {
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
-    public string? RangeDescription { get; set; }
 }
 
 public class UpdateCatalogueRequest
@@ -31,7 +30,6 @@ public class UpdateCatalogueRequest
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
-    public string? RangeDescription { get; set; }
 }
 
 public class AddLensOptionRequest

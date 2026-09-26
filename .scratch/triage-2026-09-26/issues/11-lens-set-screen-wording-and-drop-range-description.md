@@ -1,6 +1,6 @@
 # 11 — Catalogues screen speaks "lens set", and "Diopter range" is dropped
 
-Status: ready-for-agent
+Status: done (implemented 2026-09-26, branch feat/lens-sets)
 Blocked by: 07 (removes the "Field App picker role" field from the same view)
 Category: enhancement
 

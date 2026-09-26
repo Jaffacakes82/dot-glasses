@@ -19,7 +19,7 @@ and the data repair in the affected environment are separate jobs with separate 
 | 08 | Retire and reactivate lens sets | `done` (branch `feat/lens-sets`) |
 | 09 | Refuse a lens set that isn't available at the record's location | `done` (branch `feat/lens-sets`) |
 | 10 | Lens set editing limited to the owning org; names unique among active sets | `done` (branch `feat/lens-sets`) |
-| 11 | Catalogues screen speaks "lens set"; "Diopter range" dropped | `ready-for-agent` (after 07) |
+| 11 | Catalogues screen speaks "lens set"; "Diopter range" dropped | `done` (branch `feat/lens-sets`) |
 
 ## Ordering
 

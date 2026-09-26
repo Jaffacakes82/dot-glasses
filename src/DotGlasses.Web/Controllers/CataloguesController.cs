@@ -41,7 +41,7 @@ public class CataloguesController(
             return View(nameof(Index), await BuildViewModelAsync(null, cancellationToken));
         }
 
-        await catalogueAdminService.CreateAsync(request.Name, request.Description, request.RangeDescription, currentUserContext.OrgNodeId!.Value, cancellationToken);
+        await catalogueAdminService.CreateAsync(request.Name, request.Description, currentUserContext.OrgNodeId!.Value, cancellationToken);
         return RedirectToAction(nameof(Index));
     }
 
@@ -61,7 +61,7 @@ public class CataloguesController(
             return View(nameof(Index), await BuildViewModelAsync(null, cancellationToken));
         }
 
-        await catalogueAdminService.UpdateAsync(request.Id, request.Name, request.Description, request.RangeDescription, cancellationToken);
+        await catalogueAdminService.UpdateAsync(request.Id, request.Name, request.Description, cancellationToken);
         return RedirectToAction(nameof(Index));
     }
 
@@ -286,7 +286,7 @@ public class CataloguesController(
             }
 
             catalogueCards.Add(new CatalogueCard(
-                c.Id, c.Name, c.Description, c.RangeDescription,
+                c.Id, c.Name, c.Description,
                 c.LensOptions.Select(l => new LensOptionCard(l.Id, l.LensStrengthRefId, l.Label, l.SortOrder)).ToList(),
                 assignedOrgCards,
                 CanEdit: await IsAuthorizedAtAsync(c.OwningOrgNodeId, AuthorizationPolicies.PresetCatalogueEditInScope, orgPaths)));

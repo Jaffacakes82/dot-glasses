@@ -67,7 +67,6 @@ public class PresetCatalogueAdminService(DotGlassesDbContext dbContext, IReferen
             c.Id,
             c.Name,
             c.Description,
-            c.RangeDescription,
             c.OwningOrgNodeId,
             lensOptions.Where(l => l.PresetCatalogueId == c.Id)
                 .Select(l => new PresetCatalogueLensOptionAdminDto(l.Id, l.LensStrengthRefId, referenceData.ResolveLabel(l.LensStrengthRefId), l.SortOrder))
@@ -75,7 +74,7 @@ public class PresetCatalogueAdminService(DotGlassesDbContext dbContext, IReferen
             .ToList();
     }
 
-    public async Task<PresetCatalogueAdminDto> CreateAsync(string name, string? description, string? rangeDescription, Guid owningOrgNodeId, CancellationToken cancellationToken = default)
+    public async Task<PresetCatalogueAdminDto> CreateAsync(string name, string? description, Guid owningOrgNodeId, CancellationToken cancellationToken = default)
     {
         var owningOrg = await dbContext.OrganisationNodes.FirstAsync(x => x.Id == owningOrgNodeId, cancellationToken);
         if (owningOrg.Level is not (OrganisationLevel.Dgi or OrganisationLevel.Country))
@@ -88,22 +87,20 @@ public class PresetCatalogueAdminService(DotGlassesDbContext dbContext, IReferen
             Id = Guid.NewGuid(),
             Name = name,
             Description = description,
-            RangeDescription = rangeDescription,
             OwningOrgNodeId = owningOrgNodeId,
         };
 
         dbContext.PresetCatalogues.Add(entity);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        return new PresetCatalogueAdminDto(entity.Id, entity.Name, entity.Description, entity.RangeDescription, entity.OwningOrgNodeId, []);
+        return new PresetCatalogueAdminDto(entity.Id, entity.Name, entity.Description, entity.OwningOrgNodeId, []);
     }
 
-    public async Task UpdateAsync(Guid id, string name, string? description, string? rangeDescription, CancellationToken cancellationToken = default)
+    public async Task UpdateAsync(Guid id, string name, string? description, CancellationToken cancellationToken = default)
     {
         var entity = await dbContext.PresetCatalogues.FirstAsync(x => x.Id == id, cancellationToken);
         entity.Name = name;
         entity.Description = description;
-        entity.RangeDescription = rangeDescription;
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 

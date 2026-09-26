@@ -23,10 +23,6 @@ public class PresetCatalogue : IAuditable, ISoftDeletable
     /// alongside real catalogue create/edit.</summary>
     public string? Description { get; set; }
 
-    /// <summary>Free-text summary of the dioptre/strength span (e.g. "+2.50 to -4.50") — display
-    /// only, not derived from the actual LensOption roster or validated against it.</summary>
-    public string? RangeDescription { get; set; }
-
     public Guid OwningOrgNodeId { get; set; }
 
     public DateTimeOffset CreatedAtUtc { get; set; }

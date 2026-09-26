@@ -13,7 +13,6 @@ public class PresetCatalogueConfiguration : IEntityTypeConfiguration<PresetCatal
         builder.Property(x => x.Id).ValueGeneratedNever();
         builder.Property(x => x.Name).IsRequired().HasMaxLength(200);
         builder.Property(x => x.Description).HasMaxLength(500);
-        builder.Property(x => x.RangeDescription).HasMaxLength(100);
         builder.Property(x => x.CreatedBy).HasMaxLength(256);
         builder.Property(x => x.ModifiedBy).HasMaxLength(256);
         builder.Property(x => x.DeletedBy).HasMaxLength(256);

@@ -27,7 +27,6 @@ public class PresetCatalogueSeedConfiguration : IEntityTypeConfiguration<PresetC
                 Id = SixLensSetId,
                 Name = "6-Lens Set",
                 Description = "Standard six-option lens range for outlets with local stock.",
-                RangeDescription = "+2.50 to -4.50",
                 OwningOrgNodeId = OrganisationSeedConfiguration.DgiId,
                 CreatedAtUtc = now,
             },
@@ -36,7 +35,6 @@ public class PresetCatalogueSeedConfiguration : IEntityTypeConfiguration<PresetC
                 Id = NineLensSetId,
                 Name = "9-Lens Set",
                 Description = "Extended nine-option lens range for outlets with wider stock.",
-                RangeDescription = "+3.00 to -4.00",
                 OwningOrgNodeId = OrganisationSeedConfiguration.DgiId,
                 CreatedAtUtc = now,
             });
