@@ -14,28 +14,35 @@ namespace DotGlasses.Web.Tests.ErrorPage;
 public class ErrorPageTraceIdTests
 {
     [Fact]
-    public void Shows_the_trace_id_serilog_writes_as_tr()
+    public void WithAW3CActivity_ShowsTheTraceIdSerilogWritesAsTr()
     {
         using var activity = new Activity("Microsoft.AspNetCore.Hosting.HttpRequestIn")
             .SetIdFormat(ActivityIdFormat.W3C)
             .Start();
 
-        var model = RenderError(traceIdentifier: "0HNABC123:00000001");
+        var model = ErrorModelFor(traceIdentifier: "0HNABC123:00000001");
 
         Assert.Equal(activity.TraceId.ToHexString(), model.TraceId);
     }
 
     [Fact]
-    public void Falls_back_to_the_trace_identifier_without_an_activity()
+    public void WithNoActivity_FallsBackToTheTraceIdentifier()
     {
+        var previous = Activity.Current;
         Activity.Current = null;
+        try
+        {
+            var model = ErrorModelFor(traceIdentifier: "0HNABC123:00000001");
 
-        var model = RenderError(traceIdentifier: "0HNABC123:00000001");
-
-        Assert.Equal("0HNABC123:00000001", model.TraceId);
+            Assert.Equal("0HNABC123:00000001", model.TraceId);
+        }
+        finally
+        {
+            Activity.Current = previous;
+        }
     }
 
-    private static ErrorViewModel RenderError(string traceIdentifier)
+    private static ErrorViewModel ErrorModelFor(string traceIdentifier)
     {
         // Error() never touches the dashboard service.
         var controller = new HomeController(dashboardQueryService: null!)
