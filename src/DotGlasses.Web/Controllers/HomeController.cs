@@ -41,6 +41,14 @@ public class HomeController(IDashboardQueryService dashboardQueryService) : Cont
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
     public IActionResult Error()
     {
-        return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
+        // The trace ID alone, not Activity.Id: Serilog's CompactJsonFormatter writes it as "@tr" on
+        // every log line of the request, whereas Activity.Id is the full W3C traceparent
+        // ("00-<trace>-<span>-<flags>"), which no log field contains verbatim. TraceIdentifier is
+        // the fallback because it matches the "RequestId" property from ASP.NET Core's log scope.
+        var traceId = Activity.Current is { IdFormat: ActivityIdFormat.W3C } activity
+            ? activity.TraceId.ToHexString()
+            : HttpContext.TraceIdentifier;
+
+        return View(new ErrorViewModel { TraceId = traceId });
     }
 }
