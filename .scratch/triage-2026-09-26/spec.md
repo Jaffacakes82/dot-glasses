@@ -10,7 +10,7 @@ and the data repair in the affected environment are separate jobs with separate 
 | # | Title | Status |
 |---|---|---|
 | 01 | Org path segments are re-minted after deactivation, which creates duplicate `HierarchyPath`s | `ready-for-agent` |
-| 02 | Repair the duplicate `/1/2/` org paths in the affected environment | `needs-info` → then `ready-for-human` |
+| 02 | Repair the duplicate `/1/2/` org paths in the affected environment | `done` (nonprod repaired by hand, verified 2026-09-26) |
 | 03 | Why `AspNetUsers` carries `HierarchyPath` as well as `OrgNodeId` | `wontfix` (question answered; FK confirmed present in staging) |
 | 04 | Preset Catalogue "Field App picker role" and "Diopter range" are confusing, and "Other" catalogues are dead config | `needs-info` (product decision) |
 | 05 | CI's migration step authenticates to Postgres by accident (blank username → `runner`) | `ready-for-human` |
