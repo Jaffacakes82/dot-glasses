@@ -23,10 +23,10 @@ public class LensSetAvailabilityTests(PostgresContainerFixture postgres)
             new AuditSaveChangesInterceptor(new FakeCurrentUserContext()));
 
     private static PresetCatalogueQueryService CreateService(DotGlassesDbContext context) =>
-        new(context, new UnscopedReportQueryService(context), new ReferenceDataSnapshotProvider(context));
+        new(new ReferenceDataSnapshotProvider(context, new UnscopedReportQueryService(context)));
 
     private static PresetCatalogueAdminService CreateAdminService(DotGlassesDbContext context) =>
-        new(context, new ReferenceDataSnapshotProvider(context));
+        new(context, new ReferenceDataSnapshotProvider(context, new UnscopedReportQueryService(context)));
 
     private static async Task<Guid> AddLensSetAsync(string connectionString, string name, Guid assignedTo, bool withLensPowers = true)
     {
@@ -101,7 +101,7 @@ public class LensSetAvailabilityTests(PostgresContainerFixture postgres)
         await CreateAdminService(context).RetireAsync(id);
         var lensOptionId = context.LensOptions.Single(l => l.PresetCatalogueId == id).Id;
 
-        var snapshot = await new ReferenceDataSnapshotProvider(context).GetAsync();
+        var snapshot = await new ReferenceDataSnapshotProvider(context, new UnscopedReportQueryService(context)).GetAsync();
 
         var lensSet = snapshot.FindCatalogue(id);
         Assert.NotNull(lensSet);

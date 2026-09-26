@@ -1,6 +1,6 @@
 # 09 — Refuse a lens set that isn't available at the record's location
 
-Status: ready-for-agent
+Status: done (implemented 2026-09-26, branch feat/lens-sets)
 Blocked by: 07 (rewrites the same lens-range rule branch)
 Category: bug
 

@@ -95,7 +95,8 @@ public class LeadConversionController(
         // has nothing to do here: it asks whether this Lead is already converted, and the
         // ConvertedFlag guard above has answered that with friendlier copy — SaleService sets
         // ConvertedFlag and SaleId together in one transaction, so the two can't disagree.
-        var snapshot = await referenceDataSnapshotProvider.GetAsync(cancellationToken);
+        // Placed at the *Lead's* location: the Sale inherits the Lead's attribution (ADR-0005).
+        var snapshot = (await referenceDataSnapshotProvider.GetAsync(cancellationToken)).AtLocation(lead.HierarchyPath);
         var rules = ConsultationRules.Check(request, snapshot);
         if (!rules.IsValid)
         {

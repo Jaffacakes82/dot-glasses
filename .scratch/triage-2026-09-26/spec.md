@@ -17,7 +17,7 @@ and the data repair in the affected environment are separate jobs with separate 
 | 06 | The error page's Request ID can't be found in the logs | `done` (PR #26) |
 | 07 | Lens range is "a lens set" or "Custom prescription", driven by assigned lens sets | `done` (branch `feat/lens-sets`) |
 | 08 | Retire and reactivate lens sets | `done` (branch `feat/lens-sets`) |
-| 09 | Refuse a lens set that isn't available at the record's location | `ready-for-agent` (after 07) |
+| 09 | Refuse a lens set that isn't available at the record's location | `done` (branch `feat/lens-sets`) |
 | 10 | Lens set editing limited to the owning org; names unique among active sets | `ready-for-agent` |
 | 11 | Catalogues screen speaks "lens set"; "Diopter range" dropped | `ready-for-agent` (after 07) |
 
