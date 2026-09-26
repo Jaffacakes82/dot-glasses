@@ -44,6 +44,19 @@ public sealed class OrgTreeLookup
     {
         var parsed = nodes.Select(n => new Node(n, HierarchyPath.Parse(n.HierarchyPath))).ToList();
 
+        var duplicates = parsed
+            .GroupBy(n => n.Path)
+            .Where(g => g.Count() > 1)
+            .Select(g => $"{g.Key} ({string.Join(", ", g.Select(n => n.Summary.Id))})")
+            .ToList();
+
+        if (duplicates.Count > 0)
+        {
+            throw new ArgumentException(
+                $"Organisation nodes share a HierarchyPath, which merges their data scopes: {string.Join("; ", duplicates)}.",
+                nameof(nodes));
+        }
+
         _byPath = parsed.ToDictionary(n => n.Path);
         _countries = parsed.Where(n => n.Summary.Level == OrganisationLevel.Country).ToList();
         _intermediates = parsed.Where(n => n.Summary.Level == OrganisationLevel.Intermediate).ToList();

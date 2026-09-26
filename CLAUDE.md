@@ -173,8 +173,11 @@ Real domain entities, in `DotGlasses.Domain/Entities` and `/Enums`:
   carry business rules (`Intermediate` covers every reseller/distributor tier via a free-text
   `Kind` label). Tree shape is enforced: DGI's only child level is Country; Country/Intermediate
   may have Intermediate or RetailPoint children; RetailPoint is always a leaf. `HierarchyPath`
-  segments are minted as (global max segment across the whole tree) + 1 — globally unique and
-  ever-increasing, not per-parent (no locking; see `docs/open-issues.md`). `IsTrainingOrg` nodes
+  segments are drawn from a Postgres sequence (`OrganisationPathSegments`) — globally unique,
+  not per-parent, and **never reused**: a deactivated node keeps its path and can be reactivated,
+  so its segments stay spent. Don't go back to "current max + 1" — it re-minted a deactivated
+  node's segment and put two orgs on `/1/2/`, merging their data scopes. `HierarchyPath` is
+  unique across every row (deactivated included) as the backstop. `IsTrainingOrg` nodes
   are excluded from Dashboard aggregates only (not Event History/Custom Orders/User Directory).
 - **`Test`/`Lead`/`Sale`** — separate atomic create-once events, no update endpoint by design
   (server-side linking happens inside the service layer instead): a Test converts to a Lead

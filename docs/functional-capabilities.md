@@ -272,9 +272,10 @@ check the panel says "You don't have permission to manage this node." and no act
    display label, ≤ 100 chars), `Level` (a select only when more than one level is legal; a hidden
    field with an explanatory line when exactly one is; the button is hidden entirely for Retail
    Points). Level legality is enforced three times over — in the UI, in the validator, and in the
-   service. The new node's hierarchy path is minted as *parent path + (global maximum path segment
-   across the whole tree + 1)*, so segments are globally unique and ever-increasing rather than
-   per-parent.
+   service. The new node's hierarchy path is *parent path + the next value of a database
+   sequence*, so segments are globally unique rather than per-parent, and a segment is never
+   handed out twice — not even one belonging to a deactivated org, which keeps its path in case it
+   is reactivated. The database also refuses two orgs on one path outright.
 5. **Assign users** — a modal with a single-select dropdown of every user in the caller's own
    scope. Creates a `UserOrgAssignment` row; re-submitting the same pair is a silent no-op. This
    **does not** change the user's primary organisation on its own — see §4.5 and §5.7 for how a
@@ -289,8 +290,6 @@ check the panel says "You don't have permission to manage this node." and no act
 - No move/re-parent.
 - Assigning a user has no effect on their primary org — see the location-switching capability in
   §4.5/§5.7 for how that's actually controlled.
-- Path-segment minting is read-max-then-increment with no locking; concurrent creates could
-  collide (see `open-issues.md`).
 - Users created by the developer seeder have no `UserOrgAssignment` rows unless separately
   assigned, so they won't appear in any node's "Assigned users" list despite having a primary org.
 
