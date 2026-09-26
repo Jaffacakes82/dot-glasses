@@ -45,6 +45,14 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                 keyValue: new Guid("c0000000-0000-0000-0000-000000000002"),
                 column: "Kind",
                 value: 2);
+
+            // The best inverse available: a record on the lens set that was the 9-Lens one goes back
+            // to NineLensSet (1). Any other lens set collapses to SixLensSet (0), the old type had no
+            // way to say otherwise.
+            foreach (var table in new[] { "Tests", "Leads", "Sales" })
+            {
+                migrationBuilder.Sql($"""UPDATE "{table}" SET "LensRangeType" = 1 WHERE "LensRangeType" = 0 AND "PresetCatalogueId" = 'c0000000-0000-0000-0000-000000000002';""");
+            }
         }
     }
 }

@@ -32,8 +32,8 @@ public class LensRangeSelection
     /// <summary>The real inter-pupillary distance in mm — Custom range only.</summary>
     public decimal? PupilDistanceMm { get; set; }
 
-    /// <summary>Coarse 0-4 PD shorthand for a lens set (0-2 when ChildrensFrame) — preset
-    /// ranges only, see Sale.PresetPupilDistanceBucket.</summary>
+    /// <summary>Coarse 0-4 PD shorthand for a lens set (0-2 when ChildrensFrame) — lens sets
+    /// only, see Sale.PresetPupilDistanceBucket.</summary>
     public int? PresetPupilDistanceBucket { get; set; }
 
     public bool ChildrensFrame { get; set; }

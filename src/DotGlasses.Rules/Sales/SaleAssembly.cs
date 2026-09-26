@@ -81,6 +81,18 @@ public static class SaleAssembly
     }
 
     /// <summary>
+    /// A Sale has no default lens range (ADR-0005), yet <see cref="CreateSaleRequest.LensRangeType"/>
+    /// can't say "not chosen" — <see cref="Build"/> has to put <em>something</em> there, and the
+    /// rules would then report a missing Custom prescription the user never meant to enter. So the
+    /// unmade choice is caught on the answers, before Build, by both write paths through this one
+    /// rule. Keyed on the request's own property name like every other failure.
+    /// </summary>
+    public static RuleFailure? LensRangeNotChosen(SaleAnswers answers) =>
+        answers.LensRangeType is null
+            ? new RuleFailure(nameof(CreateSaleRequest.LensRangeType), "Choose a lens range.")
+            : null;
+
+    /// <summary>
     /// Assembles the request both paths send. Everything on <see cref="CreateSaleRequest"/> comes
     /// from <paramref name="answers"/> except the two identifiers, which are not answers:
     /// <paramref name="id"/> is the offline-sync outbox's idempotency key (a fresh Guid, or a

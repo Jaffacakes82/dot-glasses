@@ -48,6 +48,12 @@ public class LensRangeMigrationTests(PostgresContainerFixture postgres)
         Assert.Equal(LensRangeType.Custom, sales[custom]);
         Assert.Equal(LensRangeType.LensSet, (await context.Tests.SingleAsync(t => t.Id == formerNine)).LensRangeType);
         Assert.Equal(LensRangeType.LensSet, (await context.Leads.SingleAsync(l => l.Id == formerNine)).LensRangeType);
+
+        // And the picker role is gone from the table, not just from the model.
+        var kindColumns = await context.Database
+            .SqlQueryRaw<int>("""SELECT COUNT(*)::int AS "Value" FROM information_schema.columns WHERE table_name = 'PresetCatalogues' AND column_name = 'Kind'""")
+            .SingleAsync();
+        Assert.Equal(0, kindColumns);
     }
 
     private static Sale Sale(Guid id, LensRangeType lensRangeType) => new()

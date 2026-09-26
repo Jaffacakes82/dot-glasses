@@ -719,13 +719,12 @@
         _errors.Unattributed.Clear();
         _summaryMessage = null;
 
-        // A Sale has no default lens range (ADR-0005). Left unchosen, SaleAssembly.Build falls back
-        // to Custom and the shared rules would ask for a prescription the technician never meant
-        // to type — so ask for the actual decision first. FormErrors keeps the first message per
-        // field, so this one wins over the rules' LensRangeType failure below.
-        if (IsSale && _lensRange.LensRangeType is null)
+        // A Sale has no default lens range (ADR-0005) — the same rule the Admin Portal's conversion
+        // asks through. FormErrors keeps the first message per field, so this one wins over the
+        // rules' Custom-prescription failure that an unmade choice would otherwise produce below.
+        if (IsSale && SaleAssembly.LensRangeNotChosen(BuildSaleAnswers()) is { } notChosen)
         {
-            _errors.Add("LensRangeType", "Choose a lens range.");
+            _errors.Add(notChosen.Key, notChosen.Message);
         }
 
         var result = IsTest

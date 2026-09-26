@@ -111,6 +111,23 @@ public class LensSetAvailabilityTests(PostgresContainerFixture postgres)
     }
 
     [Fact]
+    public async Task ReactivatingALensSetWhoseNameIsNowTaken_IsRefused()
+    {
+        // Retiring frees a name (ticket 10); reactivating must not quietly put two active lens
+        // sets under it — the name is the only thing a technician tells them apart by.
+        var connectionString = await postgres.CreateDatabaseAsync();
+        var retired = await AddLensSetAsync(connectionString, "Seasonal Readers", OrganisationSeedConfiguration.KenyaRetailerId);
+
+        await using var context = CreateContext(connectionString);
+        var admin = CreateAdminService(context);
+        await admin.RetireAsync(retired);
+        await AddLensSetAsync(connectionString, "seasonal readers", OrganisationSeedConfiguration.KenyaRetailerId);
+
+        var ex = await Assert.ThrowsAsync<DomainRuleViolationException>(() => admin.ReactivateAsync(retired));
+        Assert.Contains("Seasonal Readers", ex.Message);
+    }
+
+    [Fact]
     public async Task ARetiredLensSetCannotBeAssigned()
     {
         // The assign form doesn't offer one; a hand-built POST gets a sentence, not a silent no-op.

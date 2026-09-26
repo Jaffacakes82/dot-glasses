@@ -3,6 +3,7 @@
 @using DotGlasses.Contracts.Common
 @using DotGlasses.Contracts.PresetCatalogues
 @using DotGlasses.Contracts.ReferenceData
+@using DotGlasses.Rules.LensRanges
 
 <div class="dg-field">
     <label>Lens range</label>
@@ -210,18 +211,19 @@ else if (Model.LensRangeType == LensRangeType.Custom)
     // that showed it without selecting it, which submitted a null range.)
     private const string NoPreference = "none";
     private const string NotChosen = "";
-    private const string CustomRange = "custom";
+    private const string CustomRange = LensRangeChoice.Custom;
 
     /// <summary>The lens set the model names, or null when it names one not reaching this retail
     /// point (a converted Lead's set, since retired or unassigned).</summary>
     private PresetCatalogueDto? SelectedLensSet => Catalogues.FirstOrDefault(c => c.Id == Model.PresetCatalogueId);
 
-    private string SelectedRangeValue => Model.LensRangeType switch
-    {
-        LensRangeType.LensSet when SelectedLensSet is { } lensSet => lensSet.Id.ToString(),
-        LensRangeType.Custom => CustomRange,
-        _ => AllowNoPreference ? NoPreference : NotChosen,
-    };
+    /// <summary>A lens set that isn't in the list shows the placeholder — the red note below says
+    /// why — rather than a value the dropdown has no option for.</summary>
+    private string SelectedRangeValue =>
+        (Model.LensRangeType is not LensRangeType.LensSet || SelectedLensSet is not null
+            ? LensRangeChoice.Format(Model.LensRangeType, Model.PresetCatalogueId)
+            : null)
+        ?? (AllowNoPreference ? NoPreference : NotChosen);
 
     private async Task OnRangeChanged(ChangeEventArgs e)
     {
@@ -245,12 +247,7 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         Model.PupilDistanceMm = null;
         Model.PresetPupilDistanceBucket = null;
 
-        (Model.LensRangeType, Model.PresetCatalogueId) = value switch
-        {
-            CustomRange => (LensRangeType.Custom, (Guid?)null),
-            _ when Guid.TryParse(value, out var lensSetId) => (LensRangeType.LensSet, lensSetId),
-            _ => ((LensRangeType?)null, (Guid?)null),
-        };
+        (Model.LensRangeType, Model.PresetCatalogueId) = LensRangeChoice.Parse(value);
 
         await SelectionChanged.InvokeAsync();
     }

@@ -101,13 +101,19 @@ public sealed class ReferenceDataSnapshot
     public ReferenceDataSnapshot AtLocation(string hierarchyPath) =>
         new(Items, PresetCatalogues, CoatingPairings, CoatingExclusions) { Location = hierarchyPath };
 
+    /// <summary>Whether a lens set can be chosen at <see cref="Location"/>: present, active, and
+    /// assigned at or above it. The lens sets a retail point is offered, and whether a Lead's lens
+    /// set still carries over, are both this one question.</summary>
+    public bool IsLensSetAvailable(Guid? presetCatalogueId) =>
+        FindCatalogue(presetCatalogueId) is { IsActive: true } lensSet && ReachesLocation(lensSet);
+
     /// <summary>
     /// Whether this lens set is assigned at or above <see cref="Location"/> — assignment cascades
     /// down the tree (ADR-0005). Paths carry a trailing slash, so a prefix match can't confuse
-    /// <c>/1/4/</c> with <c>/1/40/</c>. A lens set with no assignment paths is the device's filling
-    /// and reaches by construction. One that has them but whose snapshot was never placed fails
-    /// closed: a server check that forgot <see cref="AtLocation"/> refuses every lens set rather
-    /// than waving them all through.
+    /// <c>/1/4/</c> with <c>/1/40/</c>. A lens set whose paths are unknown is the device's filling
+    /// (see <see cref="PresetCatalogueSnapshot.AssignedOrgPaths"/>) and reaches by construction.
+    /// One that has them but whose snapshot was never placed fails closed: a server check that
+    /// forgot <see cref="AtLocation"/> refuses every lens set rather than waving them all through.
     /// </summary>
     public bool ReachesLocation(PresetCatalogueSnapshot lensSet) =>
         lensSet.AssignedOrgPaths is not { } assignedTo
@@ -128,7 +134,10 @@ public sealed class ReferenceDataSnapshot
                 c.Id,
                 c.Name,
                 IsActive: true,
-                c.LensOptions.Select(l => new LensOptionSnapshot(l.Id, l.Label, l.SortOrder, l.AvailableCoatingIds)).ToList())).ToList(),
+                c.LensOptions.Select(l => new LensOptionSnapshot(l.Id, l.Label, l.SortOrder, l.AvailableCoatingIds)).ToList(),
+                // Unknown on the device, and not needed: the server sent only the lens sets that
+                // reach this device's retail point.
+                AssignedOrgPaths: null)).ToList(),
             coatingPairings.Select(p => new CoatingPairingRule(p.TriggerCoatingRefId, p.PairedCoatingRefId)).ToList(),
             coatingExclusions.Select(e => new CoatingExclusionRule(e.CoatingRefIdA, e.CoatingRefIdB)).ToList());
 
@@ -214,7 +223,7 @@ public sealed record ReferenceItemSnapshot(Guid Id, ReferenceDataCategory Catego
 /// device's retail point. See <see cref="ReferenceDataSnapshot.ReachesLocation"/>.</summary>
 public sealed record PresetCatalogueSnapshot(
     Guid Id, string Name, bool IsActive, IReadOnlyList<LensOptionSnapshot> LensOptions,
-    IReadOnlyList<string>? AssignedOrgPaths = null);
+    IReadOnlyList<string>? AssignedOrgPaths);
 
 /// <summary>Label is the linked LensStrength reference item's label (e.g. <c>+2.50</c>);
 /// AvailableCoatingIds is which Coatings that strength is sellable in, empty meaning "not

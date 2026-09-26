@@ -28,8 +28,8 @@ public class PresetCatalogueSnapshotTests
             [
                 new LensOptionSnapshot(LensPlus250, "+2.50", 0, [BlueBlock, Photochromic]),
                 new LensOptionSnapshot(LensWithNoCoatings, "+3.00", 1, []),
-            ]),
-            new PresetCatalogueSnapshot(OtherCatalogue, "Nine lens set", IsActive: true, []),
+            ], AssignedOrgPaths: null),
+            new PresetCatalogueSnapshot(OtherCatalogue, "Nine lens set", IsActive: true, [], AssignedOrgPaths: null),
         ],
         [new CoatingPairingRule(BlueBlock, Photochromic)],
         [new CoatingExclusionRule(Clear, Photochromic)]);

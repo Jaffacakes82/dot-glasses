@@ -32,6 +32,18 @@ public class LensSetNameTests(AdminPortalFactory factory) : IClassFixture<AdminP
     }
 
     [Fact]
+    public async Task ABlankName_IsReportedAsRequired_NotChecked()
+    {
+        // The uniqueness check must not run on a name that isn't there.
+        var client = factory.CreateAdminClient(orgNodeId: OrganisationSeedConfiguration.DgiId);
+
+        var response = await CreateAsync(client, "");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("&#x27;Name&#x27; must not be empty.", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task ARetiredLensSetsNameCanBeUsedAgain()
     {
         var client = factory.CreateAdminClient(orgNodeId: OrganisationSeedConfiguration.DgiId);
