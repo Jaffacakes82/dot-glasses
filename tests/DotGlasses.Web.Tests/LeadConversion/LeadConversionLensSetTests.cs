@@ -48,27 +48,37 @@ public class LeadConversionLensSetTests(AdminPortalFactory factory) : IClassFixt
         Assert.True(six >= 0 && nine > six && custom > nine, "Expected 6-Lens Set, then 9-Lens Set, then Custom prescription as lens range options.");
     }
 
-    [Fact]
-    public async Task ChoosingALensSetConvertsTheLeadIntoALensSetSaleOnThatSet()
-    {
-        var leadId = SeedLeadWithNoLensPreference();
-        var (lensOptionId, coatingId) = Query(db =>
-            (from option in db.LensOptions
-             join availability in db.LensStrengthCoatingOptions on option.LensStrengthRefId equals availability.LensStrengthRefId
-             where option.PresetCatalogueId == PresetCatalogueSeedConfiguration.NineLensSetId
-             select new { option.Id, availability.CoatingRefId }).AsEnumerable().Select(x => (x.Id, x.CoatingRefId)).First());
-        var frameColourId = Query(db => db.ReferenceDataItems.First(x => x.Category == ReferenceDataCategory.FrameColour && x.IsActive && !x.IsOtherOption).Id);
+    /// <summary>A lens option on the seeded 9-Lens set whose strength is sellable in at least one
+    /// coating, and that coating — the minimum a lens-set Sale needs to pass the rules.</summary>
+    private (Guid LensOptionId, Guid CoatingId) NineLensOptionWithACoating() => Query(db =>
+        (from option in db.LensOptions
+         join availability in db.LensStrengthCoatingOptions on option.LensStrengthRefId equals availability.LensStrengthRefId
+         where option.PresetCatalogueId == PresetCatalogueSeedConfiguration.NineLensSetId
+         select new { option.Id, availability.CoatingRefId }).AsEnumerable().Select(x => (x.Id, x.CoatingRefId)).First());
 
-        var client = factory.CreateAdminClient();
+    private Guid AFrameColour() =>
+        Query(db => db.ReferenceDataItems.First(x => x.Category == ReferenceDataCategory.FrameColour && x.IsActive && !x.IsOtherOption).Id);
+
+    private async Task ConvertOntoTheNineLensSetAsync(HttpClient client, Guid leadId)
+    {
+        var (lensOptionId, coatingId) = NineLensOptionWithACoating();
         var token = await AdminPortalFactory.GetAntiforgeryTokenAsync(client, $"/Leads/Convert/{leadId}");
-        var (_, _) = await AdminPortalFactory.PostAndFollowAsync(client, $"/Leads/Convert/{leadId}", AdminPortalFactory.Form(token,
+        await AdminPortalFactory.PostAndFollowAsync(client, $"/Leads/Convert/{leadId}", AdminPortalFactory.Form(token,
             ("Form.ConsentGiven", "true"),
             ("Form.LensRange", PresetCatalogueSeedConfiguration.NineLensSetId.ToString()),
             ("Form.LensOptionLeftId", lensOptionId.ToString()),
             ("Form.LensOptionRightId", lensOptionId.ToString()),
             ("Form.PresetPupilDistanceBucket", "2"),
-            ("Form.FrameColourRefId", frameColourId.ToString()),
+            ("Form.FrameColourRefId", AFrameColour().ToString()),
             ("Form.CoatingRefIds", coatingId.ToString())));
+    }
+
+    [Fact]
+    public async Task ChoosingALensSetConvertsTheLeadIntoALensSetSaleOnThatSet()
+    {
+        var leadId = SeedLeadWithNoLensPreference();
+
+        await ConvertOntoTheNineLensSetAsync(factory.CreateAdminClient(), leadId);
 
         var sale = Query(db => db.Sales.IgnoreQueryFilters().Single(s => s.SourceLeadId == leadId));
         Assert.Equal(LensRangeType.LensSet, sale.LensRangeType);
@@ -76,13 +86,13 @@ public class LeadConversionLensSetTests(AdminPortalFactory factory) : IClassFixt
     }
 
     [Fact]
-    public async Task ALeadWhoseLensSetNoLongerReachesItsRetailPoint_IsNotConverted_AndSaysWhy()
+    public async Task ALeadWhoseLensSetNoLongerReachesItsRetailPoint_SaysWhy_AndTheAdminPicksAgain()
     {
-        // The Lead's lens set carries over as-is (SaleAssembly.Seed); nothing swaps in another. The
-        // check runs at the *Lead's* location, and this set is assigned nowhere near it.
-        var (lensOptionStrength, coatingId) = Query(db =>
+        // The Lead's lens set carries over as-is (SaleAssembly.Seed), and nothing swaps in another
+        // silently — but a read-only summary would leave the admin nowhere to go. So the screen says
+        // why and offers the lens range choice instead, checked at the *Lead's* location.
+        var (strength, _) = Query(db =>
             db.LensStrengthCoatingOptions.AsEnumerable().Select(x => (x.LensStrengthRefId, x.CoatingRefId)).First());
-        var frameColourId = Query(db => db.ReferenceDataItems.First(x => x.Category == ReferenceDataCategory.FrameColour && x.IsActive && !x.IsOtherOption).Id);
         var lensSetId = Guid.NewGuid();
         var lensOptionId = Guid.NewGuid();
         var customerId = Guid.NewGuid();
@@ -90,7 +100,7 @@ public class LeadConversionLensSetTests(AdminPortalFactory factory) : IClassFixt
         factory.Seed(db =>
         {
             db.PresetCatalogues.Add(new PresetCatalogue { Id = lensSetId, Name = $"Unassigned Readers {lensSetId:N}", OwningOrgNodeId = OrganisationSeedConfiguration.DgiId });
-            db.LensOptions.Add(new LensOption { Id = lensOptionId, PresetCatalogueId = lensSetId, LensStrengthRefId = lensOptionStrength, SortOrder = 0 });
+            db.LensOptions.Add(new LensOption { Id = lensOptionId, PresetCatalogueId = lensSetId, LensStrengthRefId = strength, SortOrder = 0 });
             db.Customers.Add(new Customer { Id = customerId, FullName = "Otieno Were", PhoneNumber = "+254722000000", HierarchyPath = OrganisationSeedConfiguration.KenyaRetailPointPath });
             db.Leads.Add(new Lead
             {
@@ -98,17 +108,17 @@ public class LeadConversionLensSetTests(AdminPortalFactory factory) : IClassFixt
                 LensRangeType = LensRangeType.LensSet, PresetCatalogueId = lensSetId, LensOptionLeftId = lensOptionId, LensOptionRightId = lensOptionId, PresetPupilDistanceBucket = 2,
             });
         });
-
         var client = factory.CreateAdminClient();
-        var token = await AdminPortalFactory.GetAntiforgeryTokenAsync(client, $"/Leads/Convert/{leadId}");
-        var response = await client.PostAsync($"/Leads/Convert/{leadId}", AdminPortalFactory.Form(token,
-            ("Form.ConsentGiven", "true"),
-            ("Form.FrameColourRefId", frameColourId.ToString()),
-            ("Form.CoatingRefIds", coatingId.ToString())));
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains("This lens set isn&#x27;t available at this retail point", await response.Content.ReadAsStringAsync());
-        Assert.False(Query(db => db.Sales.IgnoreQueryFilters().Any(s => s.SourceLeadId == leadId)));
+        var page = await client.GetStringAsync($"/Leads/Convert/{leadId}");
+        Assert.Contains($"Unassigned Readers {lensSetId:N}", page);
+        Assert.Contains("isn't available at this lead's retail point any more", page);
+        Assert.Contains("name=\"Form.LensRange\"", page);
+
+        await ConvertOntoTheNineLensSetAsync(client, leadId);
+
+        var sale = Query(db => db.Sales.IgnoreQueryFilters().Single(s => s.SourceLeadId == leadId));
+        Assert.Equal(PresetCatalogueSeedConfiguration.NineLensSetId, sale.PresetCatalogueId);
     }
 
     [Fact]

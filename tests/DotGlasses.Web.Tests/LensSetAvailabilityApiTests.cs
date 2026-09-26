@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Json;
 using DotGlasses.Application.Common;
+using DotGlasses.Contracts.Leads;
 using DotGlasses.Contracts.Sales;
 using DotGlasses.Contracts.Tests;
 using DotGlasses.Domain.Entities;
@@ -112,6 +113,33 @@ public class LensSetAvailabilityApiTests(CustomWebApplicationFactory factory)
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Contains(nameof(CreateTestRequest.PresetCatalogueId), (await ErrorsAsync(response)).Keys);
+    }
+
+    [Fact]
+    public async Task ALeadOnALensSetAssignedOnlyElsewhere_IsRefusedAgainstTheLensSet()
+    {
+        var fixture = SeedLensSetAssignedElsewhere();
+        Guid reasonNotPurchasedId;
+        using (var scope = factory.Services.CreateScope())
+        {
+            reasonNotPurchasedId = scope.ServiceProvider.GetRequiredService<DotGlassesDbContext>().ReferenceDataItems
+                .First(x => x.Category == ReferenceDataCategory.ReasonNotPurchased && x.IsActive && !x.IsOtherOption).Id;
+        }
+
+        var response = await CreateAuthenticatedClient().PostAsJsonAsync("api/v1/leads", new CreateLeadRequest
+        {
+            Id = Guid.NewGuid(),
+            FullName = "Amina Okoro",
+            PhoneNumber = "0700111222",
+            ReasonNotPurchasedRefId = reasonNotPurchasedId,
+            LensRangeType = ContractLensRangeType.LensSet,
+            PresetCatalogueId = fixture.LensSetId,
+            LensOptionLeftId = fixture.LensOptionId,
+            LensOptionRightId = fixture.LensOptionId,
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains(nameof(CreateLeadRequest.PresetCatalogueId), (await ErrorsAsync(response)).Keys);
     }
 
     [Fact]

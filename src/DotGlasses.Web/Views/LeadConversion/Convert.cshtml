@@ -24,6 +24,13 @@
             <br /><span style="color:inherit;">@Model.LensSummary</span>
         </p>
     }
+    else if (Model.UnavailableLensSetName is { } unavailable)
+    {
+        <p style="font-size:13px; color:#c00; margin:8px 0 0;">
+            This lead chose the lens set “@unavailable”, which isn't available at this lead's retail point any more
+            (retired or unassigned since) — choose a lens range below.
+        </p>
+    }
     else
     {
         <p style="font-size:13px; color:var(--text-muted-2); margin:8px 0 0;">
@@ -47,7 +54,7 @@
                 {
                     <option value="@catalogue.Id">@catalogue.Name</option>
                 }
-                <option value="@DotGlasses.Web.Models.LeadConversionFormModel.CustomLensRange">Custom prescription</option>
+                <option value="@DotGlasses.Rules.LensRanges.LensRangeChoice.Custom">Custom prescription</option>
             </select>
             @if (Model.AvailableCatalogues.Count == 0)
             {

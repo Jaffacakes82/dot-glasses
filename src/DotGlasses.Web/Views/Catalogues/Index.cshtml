@@ -112,46 +112,44 @@
             }
         </div>
 
-        @if (!catalogue.CanEdit)
+        @if (catalogue.CanEdit)
         {
-            continue;
-        }
-
-        <div class="modal fade" id="editCatalogueModal-@catalogue.Id" tabindex="-1" aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content" style="border-radius:var(--radius-md); border:none;">
-                    <form asp-action="UpdateCatalogue" method="post">
-                        <input type="hidden" name="Id" value="@catalogue.Id" />
-                        <div class="modal-header">
-                            <h2 class="dg-page-title" style="font-size:20px;">Edit @catalogue.Name</h2>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="dg-auth-field">
-                                <label>Lens set name</label>
-                                <input class="form-control" name="Name" value="@catalogue.Name" />
+            <div class="modal fade" id="editCatalogueModal-@catalogue.Id" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content" style="border-radius:var(--radius-md); border:none;">
+                        <form asp-action="UpdateCatalogue" method="post">
+                            <input type="hidden" name="Id" value="@catalogue.Id" />
+                            <div class="modal-header">
+                                <h2 class="dg-page-title" style="font-size:20px;">Edit @catalogue.Name</h2>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                             </div>
-                            <div class="dg-auth-field">
-                                <label>Description</label>
-                                <input class="form-control" name="Description" value="@catalogue.Description" />
+                            <div class="modal-body">
+                                <div class="dg-auth-field">
+                                    <label>Lens set name</label>
+                                    <input class="form-control" name="Name" value="@catalogue.Name" />
+                                </div>
+                                <div class="dg-auth-field">
+                                    <label>Description</label>
+                                    <input class="form-control" name="Description" value="@catalogue.Description" />
+                                </div>
                             </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button class="dg-btn dg-btn-ghost" type="submit" form="retireCatalogueForm-@catalogue.Id" style="margin-right:auto;"
-                                    data-confirm="Retire @catalogue.Name? It stops being offered in the Field App; records that used it keep its name, and you can reactivate it later."
-                                    onclick="return confirm(this.dataset.confirm);">Retire</button>
-                            <button class="dg-btn dg-btn-ghost" type="button" data-bs-dismiss="modal">Cancel</button>
-                            <button class="dg-btn dg-btn-primary" type="submit">Save lens set</button>
-                        </div>
-                    </form>
-                    @* A sibling form, not nested — HTML forbids a form inside a form; the Retire button
-                       above submits this one through its form attribute. *@
-                    <form id="retireCatalogueForm-@catalogue.Id" asp-action="RetireCatalogue" method="post">
-                        <input type="hidden" name="catalogueId" value="@catalogue.Id" />
-                    </form>
+                            <div class="modal-footer">
+                                <button class="dg-btn dg-btn-ghost" type="submit" form="retireCatalogueForm-@catalogue.Id" style="margin-right:auto;"
+                                        data-confirm="Retire @catalogue.Name? It stops being offered in the Field App; records that used it keep its name, and you can reactivate it later."
+                                        onclick="return confirm(this.dataset.confirm);">Retire</button>
+                                <button class="dg-btn dg-btn-ghost" type="button" data-bs-dismiss="modal">Cancel</button>
+                                <button class="dg-btn dg-btn-primary" type="submit">Save lens set</button>
+                            </div>
+                        </form>
+                        @* A sibling form, not nested — HTML forbids a form inside a form; the Retire button
+                           above submits this one through its form attribute. *@
+                        <form id="retireCatalogueForm-@catalogue.Id" asp-action="RetireCatalogue" method="post">
+                            <input type="hidden" name="catalogueId" value="@catalogue.Id" />
+                        </form>
+                    </div>
                 </div>
             </div>
-        </div>
+        }
     }
 </div>
 

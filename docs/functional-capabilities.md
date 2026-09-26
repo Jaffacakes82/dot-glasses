@@ -784,7 +784,9 @@ prescription*. Switching range clears every field belonging to the previous one.
 
 The Admin Portal's Lead→Sale conversion screen offers the same choice for a Lead that recorded no
 lens preference — the lens sets reaching the *Lead's* retail point, then *Custom prescription* —
-and asks "Choose a lens range." if it is left empty.
+and asks "Choose a lens range." if it is left empty. A Lead whose lens set no longer reaches its
+retail point gets the same choice, under a note naming the lens set and saying it isn't available
+there any more; its other lens preferences don't carry over either, since they belonged to that set.
 
 **Lens set** →
 - *Lens power — left eye* and *— right eye*: selects listing the catalogue's lens options in sort

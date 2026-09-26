@@ -23,6 +23,14 @@ public interface IPresetCatalogueAdminService
 
     Task ReactivateAsync(Guid id, CancellationToken cancellationToken = default);
 
+    /// <summary>The org that owns a lens set, retired ones included (so Reactivate can be
+    /// authorized too), or null if there is no such lens set — the resource the edit permission
+    /// is checked against.</summary>
+    Task<Guid?> FindOwningOrgNodeIdAsync(Guid catalogueId, CancellationToken cancellationToken = default);
+
+    /// <summary>The lens set a lens option belongs to, or null if there is no such option.</summary>
+    Task<Guid?> FindCatalogueIdForLensOptionAsync(Guid lensOptionId, CancellationToken cancellationToken = default);
+
     /// <summary>True if an active lens set other than <paramref name="excludeId"/> already has this
     /// name, ignoring case and surrounding whitespace — the name is the only thing a technician
     /// sees to tell lens sets apart (ADR-0005). A retired lens set's name doesn't count.</summary>

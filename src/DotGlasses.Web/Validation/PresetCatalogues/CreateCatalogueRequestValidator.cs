@@ -8,7 +8,8 @@ public class CreateCatalogueRequestValidator : AbstractValidator<CreateCatalogue
 {
     public CreateCatalogueRequestValidator(IPresetCatalogueAdminService catalogueAdminService)
     {
-        RuleFor(x => x.Name).NotEmpty().MaximumLength(200)
+        // Cascade stop: the uniqueness check has nothing to look up on a blank or overlong name.
+        RuleFor(x => x.Name).Cascade(CascadeMode.Stop).NotEmpty().MaximumLength(200)
             .MustAsync(async (name, cancellationToken) => !await catalogueAdminService.IsNameTakenAsync(name, excludeId: null, cancellationToken))
             .WithMessage(LensSetNameMessages.Taken);
         RuleFor(x => x.Description).MaximumLength(500);

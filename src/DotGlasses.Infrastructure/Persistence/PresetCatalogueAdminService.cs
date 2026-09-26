@@ -38,11 +38,31 @@ public class PresetCatalogueAdminService(DotGlassesDbContext dbContext, IReferen
         // filter hides. AuditSaveChangesInterceptor has no "undelete", so the fields are cleared
         // by hand (same as OrganisationAdminService.SetActiveAsync).
         var entity = await dbContext.PresetCatalogues.IgnoreQueryFilters().FirstAsync(x => x.Id == id, cancellationToken);
+
+        // Retiring freed this name; if another lens set has taken it since, reactivating would put
+        // two active lens sets under one name — the only thing a technician tells them apart by.
+        if (await IsNameTakenAsync(entity.Name, entity.Id, cancellationToken))
+        {
+            throw new DomainRuleViolationException($"Another active lens set is already called \"{entity.Name}\" — rename one of them before reactivating this.");
+        }
+
         entity.IsDeleted = false;
         entity.DeletedAtUtc = null;
         entity.DeletedBy = null;
         await dbContext.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task<Guid?> FindOwningOrgNodeIdAsync(Guid catalogueId, CancellationToken cancellationToken = default) =>
+        await dbContext.PresetCatalogues.IgnoreQueryFilters()
+            .Where(c => c.Id == catalogueId)
+            .Select(c => (Guid?)c.OwningOrgNodeId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public async Task<Guid?> FindCatalogueIdForLensOptionAsync(Guid lensOptionId, CancellationToken cancellationToken = default) =>
+        await dbContext.LensOptions
+            .Where(l => l.Id == lensOptionId)
+            .Select(l => (Guid?)l.PresetCatalogueId)
+            .FirstOrDefaultAsync(cancellationToken);
 
     public async Task<bool> IsNameTakenAsync(string name, Guid? excludeId = null, CancellationToken cancellationToken = default)
     {

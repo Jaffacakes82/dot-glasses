@@ -89,8 +89,8 @@ public class CataloguesController(
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> RemoveLensOption(Guid lensOptionId, CancellationToken cancellationToken)
     {
-        var lensSet = (await catalogueAdminService.ListAsync(cancellationToken)).FirstOrDefault(c => c.LensOptions.Any(l => l.Id == lensOptionId));
-        if (lensSet is null || !await CanEditLensSetAsync(lensSet.Id, cancellationToken))
+        if (await catalogueAdminService.FindCatalogueIdForLensOptionAsync(lensOptionId, cancellationToken) is not { } catalogueId
+            || !await CanEditLensSetAsync(catalogueId, cancellationToken))
         {
             return Forbid();
         }
@@ -216,15 +216,9 @@ public class CataloguesController(
 
     /// <summary>Edit, lens powers, retire and reactivate: the caller must be at or above the lens
     /// set's owning org. Retired lens sets are included so Reactivate can be checked too.</summary>
-    private async Task<bool> CanEditLensSetAsync(Guid catalogueId, CancellationToken cancellationToken)
-    {
-        var lensSet = (await catalogueAdminService.ListAsync(cancellationToken))
-            .Concat(await catalogueAdminService.ListRetiredAsync(cancellationToken))
-            .FirstOrDefault(c => c.Id == catalogueId);
-
-        return lensSet is not null && await IsAuthorizedAtAsync(
-            lensSet.OwningOrgNodeId, AuthorizationPolicies.PresetCatalogueEditInScope, await OrgPathsAsync(cancellationToken));
-    }
+    private async Task<bool> CanEditLensSetAsync(Guid catalogueId, CancellationToken cancellationToken) =>
+        await catalogueAdminService.FindOwningOrgNodeIdAsync(catalogueId, cancellationToken) is { } owningOrgNodeId
+        && await IsAuthorizedAtAsync(owningOrgNodeId, AuthorizationPolicies.PresetCatalogueEditInScope, await OrgPathsAsync(cancellationToken));
 
     /// <summary>Assign/unassign: the org must be at or below the caller. Which lens set doesn't
     /// matter — any active one may be assigned within the caller's own part of the tree.</summary>

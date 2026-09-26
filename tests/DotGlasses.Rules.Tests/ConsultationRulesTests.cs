@@ -132,10 +132,10 @@ public class ConsultationRulesTests
             ], AssignedOrgPaths: catalogueAAssignedTo),
             new PresetCatalogueSnapshot(CatalogueB, "Nine lens set", IsActive: true, [
                 new LensOptionSnapshot(LensB1, "+3.00", 0, [ActiveCoating]),
-            ]),
+            ], AssignedOrgPaths: null),
             new PresetCatalogueSnapshot(RetiredCatalogue, "Retired lens set", IsActive: false, [
                 new LensOptionSnapshot(LensRetired1, "+1.50", 0, [ActiveCoating]),
-            ]),
+            ], AssignedOrgPaths: null),
         ],
         [],
         [

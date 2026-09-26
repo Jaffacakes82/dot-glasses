@@ -133,16 +133,10 @@ builder.Services.AddAuthorizationBuilder()
         policy.Requirements.Add(new OrgLevelRequirement(OrganisationLevel.Dgi, RoleNames.Admin)))
     .AddPolicy(AuthorizationPolicies.PresetCatalogueManage, policy =>
         policy.Requirements.Add(new OrgLevelRequirement(OrganisationLevel.Country, RoleNames.Admin)))
-    .AddPolicy(AuthorizationPolicies.PresetCatalogueEditInScope, policy =>
-    {
-        policy.Requirements.Add(new OrgLevelRequirement(OrganisationLevel.Country, RoleNames.Admin));
-        policy.Requirements.Add(new HierarchyDescendantRequirement(RoleNames.Admin));
-    })
-    .AddPolicy(AuthorizationPolicies.PresetCatalogueAssignInScope, policy =>
-    {
-        policy.Requirements.Add(new OrgLevelRequirement(OrganisationLevel.Country, RoleNames.Admin));
-        policy.Requirements.Add(new HierarchyDescendantRequirement(RoleNames.Admin));
-    })
+    // Same requirements, different resource: EditInScope is checked against a lens set's owning
+    // org, AssignInScope against the org being assigned to. Two names so each call site says which.
+    .AddPolicy(AuthorizationPolicies.PresetCatalogueEditInScope, PresetCatalogueManageInScope)
+    .AddPolicy(AuthorizationPolicies.PresetCatalogueAssignInScope, PresetCatalogueManageInScope)
     .AddPolicy(AuthorizationPolicies.ManageUsersInScope, policy =>
         policy.Requirements.Add(new HierarchyDescendantRequirement(RoleNames.Admin)))
     .AddPolicy(AuthorizationPolicies.ManageOrgInScope, policy =>
@@ -255,6 +249,13 @@ app.MapControllerRoute(
     .WithStaticAssets();
 
 app.Run();
+
+// PresetCatalogue.Manage's own requirement, plus the resource-based scope check.
+static void PresetCatalogueManageInScope(AuthorizationPolicyBuilder policy)
+{
+    policy.Requirements.Add(new OrgLevelRequirement(OrganisationLevel.Country, RoleNames.Admin));
+    policy.Requirements.Add(new HierarchyDescendantRequirement(RoleNames.Admin));
+}
 
 // Exposed for DotGlasses.Web.Tests' WebApplicationFactory<Program>.
 public partial class Program;

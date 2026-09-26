@@ -14,8 +14,12 @@ public class CataloguesScreenWordingTests(AdminPortalFactory factory) : IClassFi
 
         Assert.Contains("Create lens set", html);
         Assert.Contains("Assign lens sets to a retailer", html);
-        Assert.DoesNotContain("package", html, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Diopter", html, StringComparison.OrdinalIgnoreCase);
+        // The screen's own copy, not any word that happens to appear on the page — a lens set may
+        // legitimately be *named* anything.
+        Assert.DoesNotContain("Create package", html);
+        Assert.DoesNotContain("Package name", html);
+        Assert.DoesNotContain("Assign packages", html);
+        Assert.DoesNotContain("Diopter", html);
         Assert.DoesNotContain("name=\"RangeDescription\"", html);
     }
 }
