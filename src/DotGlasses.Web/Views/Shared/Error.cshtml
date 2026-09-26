@@ -16,9 +16,9 @@
             <span class="dg-crumb">Error</span>
             <h1 class="dg-page-title">Something went wrong</h1>
             <p style="color:var(--text-muted-2);">An error occurred while processing your request.</p>
-            @if (Model.ShowRequestId)
+            @if (Model.ShowTraceId)
             {
-                <p style="font-size:13px; color:var(--text-muted);">Request ID: <code>@Model.RequestId</code></p>
+                <p style="font-size:13px; color:var(--text-muted);">Trace ID: <code>@Model.TraceId</code></p>
             }
             <a class="dg-btn dg-btn-primary" asp-controller="Home" asp-action="Index">Back to dashboard</a>
         </div>
