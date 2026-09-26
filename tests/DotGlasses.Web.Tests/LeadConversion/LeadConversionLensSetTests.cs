@@ -76,6 +76,42 @@ public class LeadConversionLensSetTests(AdminPortalFactory factory) : IClassFixt
     }
 
     [Fact]
+    public async Task ALeadWhoseLensSetNoLongerReachesItsRetailPoint_IsNotConverted_AndSaysWhy()
+    {
+        // The Lead's lens set carries over as-is (SaleAssembly.Seed); nothing swaps in another. The
+        // check runs at the *Lead's* location, and this set is assigned nowhere near it.
+        var (lensOptionStrength, coatingId) = Query(db =>
+            db.LensStrengthCoatingOptions.AsEnumerable().Select(x => (x.LensStrengthRefId, x.CoatingRefId)).First());
+        var frameColourId = Query(db => db.ReferenceDataItems.First(x => x.Category == ReferenceDataCategory.FrameColour && x.IsActive && !x.IsOtherOption).Id);
+        var lensSetId = Guid.NewGuid();
+        var lensOptionId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var leadId = Guid.NewGuid();
+        factory.Seed(db =>
+        {
+            db.PresetCatalogues.Add(new PresetCatalogue { Id = lensSetId, Name = $"Unassigned Readers {lensSetId:N}", OwningOrgNodeId = OrganisationSeedConfiguration.DgiId });
+            db.LensOptions.Add(new LensOption { Id = lensOptionId, PresetCatalogueId = lensSetId, LensStrengthRefId = lensOptionStrength, SortOrder = 0 });
+            db.Customers.Add(new Customer { Id = customerId, FullName = "Otieno Were", PhoneNumber = "+254722000000", HierarchyPath = OrganisationSeedConfiguration.KenyaRetailPointPath });
+            db.Leads.Add(new Lead
+            {
+                Id = leadId, CustomerId = customerId, TechnicianUserId = Guid.NewGuid(), HierarchyPath = OrganisationSeedConfiguration.KenyaRetailPointPath, ConsentGiven = true,
+                LensRangeType = LensRangeType.LensSet, PresetCatalogueId = lensSetId, LensOptionLeftId = lensOptionId, LensOptionRightId = lensOptionId, PresetPupilDistanceBucket = 2,
+            });
+        });
+
+        var client = factory.CreateAdminClient();
+        var token = await AdminPortalFactory.GetAntiforgeryTokenAsync(client, $"/Leads/Convert/{leadId}");
+        var response = await client.PostAsync($"/Leads/Convert/{leadId}", AdminPortalFactory.Form(token,
+            ("Form.ConsentGiven", "true"),
+            ("Form.FrameColourRefId", frameColourId.ToString()),
+            ("Form.CoatingRefIds", coatingId.ToString())));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("This lens set isn&#x27;t available at this retail point", await response.Content.ReadAsStringAsync());
+        Assert.False(Query(db => db.Sales.IgnoreQueryFilters().Any(s => s.SourceLeadId == leadId)));
+    }
+
+    [Fact]
     public async Task SubmittingWithNoLensRangeChosenAsksForOne()
     {
         var leadId = SeedLeadWithNoLensPreference();

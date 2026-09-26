@@ -760,6 +760,13 @@ prescription*. Switching range clears every field belonging to the previous one.
 - **A converted Lead's lens set that no longer reaches the retail point** (retired or unassigned
   since) carries over as-is and shows "This lens set isn't available at your retail point — choose
   another lens range." Nothing is substituted silently.
+- **The server enforces the same rule.** A Test, Lead or Sale naming a lens set that isn't
+  assigned at or above the record's own location is refused against `PresetCatalogueId` ("This
+  lens set isn't available at this retail point — choose another lens range."). The location is
+  the caller's for the API, and the Lead's for an Admin Portal conversion. In practice this
+  catches a record queued offline while an admin unassigned the set; it lands on Failed records
+  against the lens range control. The Field App's list and the server's check share one
+  definition of "reaches", `ReferenceDataSnapshot.ReachesLocation`.
 
 The Admin Portal's Lead→Sale conversion screen offers the same choice for a Lead that recorded no
 lens preference — the lens sets reaching the *Lead's* retail point, then *Custom prescription* —

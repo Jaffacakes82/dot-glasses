@@ -86,6 +86,33 @@ public sealed class ReferenceDataSnapshot
 
     public IReadOnlyList<CoatingExclusionRule> CoatingExclusions { get; }
 
+    /// <summary>The HierarchyPath the record being checked will be stamped with, or null when this
+    /// snapshot hasn't been placed anywhere — see <see cref="AtLocation"/>.</summary>
+    public string? Location { get; private init; }
+
+    /// <summary>
+    /// This same snapshot, placed at the location a record will be stamped with (the caller's own
+    /// path on the create endpoints; the Lead's on an Admin Portal conversion). Only the server's
+    /// filling needs placing: its lens sets carry the org paths they're assigned to, and which of
+    /// them reach a retail point depends on where that is. The device's filling is already
+    /// narrowed to its retail point, so it needs no location. A server snapshot that was never
+    /// placed reaches nothing — see <see cref="ReachesLocation"/>.
+    /// </summary>
+    public ReferenceDataSnapshot AtLocation(string hierarchyPath) =>
+        new(Items, PresetCatalogues, CoatingPairings, CoatingExclusions) { Location = hierarchyPath };
+
+    /// <summary>
+    /// Whether this lens set is assigned at or above <see cref="Location"/> — assignment cascades
+    /// down the tree (ADR-0005). Paths carry a trailing slash, so a prefix match can't confuse
+    /// <c>/1/4/</c> with <c>/1/40/</c>. A lens set with no assignment paths is the device's filling
+    /// and reaches by construction. One that has them but whose snapshot was never placed fails
+    /// closed: a server check that forgot <see cref="AtLocation"/> refuses every lens set rather
+    /// than waving them all through.
+    /// </summary>
+    public bool ReachesLocation(PresetCatalogueSnapshot lensSet) =>
+        lensSet.AssignedOrgPaths is not { } assignedTo
+        || (Location is { } location && assignedTo.Any(path => location.StartsWith(path, StringComparison.Ordinal)));
+
     /// <summary>The Field App adapter: the cached reference-data response, verbatim. Everything
     /// the API returns is active by definition, so <see cref="ReferenceItemSnapshot.IsActive"/> is
     /// true for every item — see this type's own doc comment for why that still makes "present and
@@ -180,9 +207,14 @@ public sealed class ReferenceDataSnapshot
 /// its free-text field.</summary>
 public sealed record ReferenceItemSnapshot(Guid Id, ReferenceDataCategory Category, string Label, bool IsActive, bool IsOtherOption);
 
-/// <summary>A catalogue's lens roster, in display order. Which catalogue a lens option belongs to
-/// is the nesting, not a field — the snapshot indexes that on the way in.</summary>
-public sealed record PresetCatalogueSnapshot(Guid Id, string Name, bool IsActive, IReadOnlyList<LensOptionSnapshot> LensOptions);
+/// <summary>A lens set's lens roster, in display order. Which lens set a lens option belongs to
+/// is the nesting, not a field — the snapshot indexes that on the way in.
+/// <paramref name="AssignedOrgPaths"/> is the HierarchyPaths of the orgs it is assigned to — the
+/// server's filling — or null for the device's, whose list the server already narrowed to the
+/// device's retail point. See <see cref="ReferenceDataSnapshot.ReachesLocation"/>.</summary>
+public sealed record PresetCatalogueSnapshot(
+    Guid Id, string Name, bool IsActive, IReadOnlyList<LensOptionSnapshot> LensOptions,
+    IReadOnlyList<string>? AssignedOrgPaths = null);
 
 /// <summary>Label is the linked LensStrength reference item's label (e.g. <c>+2.50</c>);
 /// AvailableCoatingIds is which Coatings that strength is sellable in, empty meaning "not

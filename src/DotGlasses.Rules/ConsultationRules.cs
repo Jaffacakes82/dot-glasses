@@ -392,10 +392,23 @@ public static class ConsultationRules
         // lens sets so historical records still resolve their labels. The device's snapshot only
         // ever holds active ones, so there a retired set is simply absent and the belongs-to
         // checks below report it instead.
-        if (snapshot.FindCatalogue(catalogueId) is { IsActive: false })
+        if (snapshot.FindCatalogue(catalogueId) is { } lensSet)
         {
-            yield return new RuleFailure(PresetCatalogueIdKey, "This lens set has been retired — choose another lens range.");
-            yield break;
+            if (!lensSet.IsActive)
+            {
+                yield return new RuleFailure(PresetCatalogueIdKey, "This lens set has been retired — choose another lens range.");
+                yield break;
+            }
+
+            // Assigned at or above where the record is made (ADR-0005). The device's list is
+            // already narrowed to its retail point, so this only ever refuses server-side — most
+            // often a technician offline while an admin unassigned the set, which lands on Failed
+            // records against this control.
+            if (!snapshot.ReachesLocation(lensSet))
+            {
+                yield return new RuleFailure(PresetCatalogueIdKey, "This lens set isn't available at this retail point — choose another lens range.");
+                yield break;
+            }
         }
 
         if (!snapshot.LensOptionBelongsToCatalogue(leftId, catalogueId))

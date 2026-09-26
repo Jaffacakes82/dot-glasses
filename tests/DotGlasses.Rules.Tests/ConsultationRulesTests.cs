@@ -79,8 +79,12 @@ public class ConsultationRulesTests
 
     /// <summary>The server's filling: the whole library, retired items carrying IsActive = false.
     /// Every category this batch touches has an active item, a retired one, and the category's one
-    /// "Other" option.</summary>
-    private static ReferenceDataSnapshot Snapshot() => new(
+    /// "Other" option.
+    ///
+    /// Lens sets are left without assignment paths — the device's filling, already narrowed to its
+    /// retail point — unless <paramref name="catalogueAAssignedTo"/> gives CatalogueA the server's
+    /// kind: the org paths it is assigned to, checked against the record's location.</summary>
+    private static ReferenceDataSnapshot Snapshot(IReadOnlyList<string>? catalogueAAssignedTo = null) => new(
         [
             new ReferenceItemSnapshot(ActiveOccupation, ReferenceDataCategory.Occupation, "Farmer", IsActive: true, IsOtherOption: false),
             new ReferenceItemSnapshot(RetiredOccupation, ReferenceDataCategory.Occupation, "Typist", IsActive: false, IsOtherOption: false),
@@ -125,7 +129,7 @@ public class ConsultationRulesTests
                 new LensOptionSnapshot(LensA1, "+1.00", 0, [ActiveCoating, SecondCoating, ExcludingCoating]),
                 new LensOptionSnapshot(LensA2, "+2.50", 1, [ActiveCoating, SecondCoating, ExcludingCoating]),
                 new LensOptionSnapshot(LensA3NoCoatings, "+3.50", 2, []),
-            ]),
+            ], AssignedOrgPaths: catalogueAAssignedTo),
             new PresetCatalogueSnapshot(CatalogueB, "Nine lens set", IsActive: true, [
                 new LensOptionSnapshot(LensB1, "+3.00", 0, [ActiveCoating]),
             ]),
@@ -892,6 +896,38 @@ public class ConsultationRulesTests
 
         Assert.Equal("PresetCatalogueId", failure.Key);
         Assert.Equal("This lens set has been retired — choose another lens range.", failure.Message);
+    }
+
+    // --- Lens range: is the lens set available where the record is made? ---------------------
+
+    [Theory]
+    [InlineData("/1/2/3/4/", "/1/2/")]      // assigned at an ancestor — assignment cascades down
+    [InlineData("/1/2/3/4/", "/1/2/3/4/")]  // assigned at the retail point itself
+    [InlineData("/1/2/3/4/", "/1/9/", "/1/2/3/")] // any one assignment reaching it is enough
+    public void LensSet_AssignedAtOrAboveTheRecordsLocation_IsAccepted(string location, params string[] assignedTo)
+    {
+        Assert.True(ConsultationRules.Check(ValidSale(), Snapshot(assignedTo).AtLocation(location)).IsValid);
+    }
+
+    [Theory]
+    [InlineData("/1/40/5/", "/1/4/")]   // a sibling whose path merely starts with the same digits
+    [InlineData("/1/2/3/4/", "/1/2/3/4/7/")] // assigned only *below* the record's location
+    [InlineData("/1/2/3/4/")]           // assigned nowhere
+    public void LensSet_NotAssignedAtOrAboveTheRecordsLocation_IsRejectedAgainstTheLensSet(string location, params string[] assignedTo)
+    {
+        var failure = AssertSingleFailure(ConsultationRules.Check(ValidSale(), Snapshot(assignedTo).AtLocation(location)));
+
+        Assert.Equal("PresetCatalogueId", failure.Key);
+        Assert.Equal("This lens set isn't available at this retail point — choose another lens range.", failure.Message);
+    }
+
+    [Fact]
+    public void LensSet_ServerSnapshotWithNoLocation_FailsClosed()
+    {
+        // A server-side check that forgot AtLocation must not wave every lens set through.
+        var failure = AssertSingleFailure(ConsultationRules.Check(ValidSale(), Snapshot(["/1/"])));
+
+        Assert.Equal("PresetCatalogueId", failure.Key);
     }
 
     [Theory]
