@@ -100,6 +100,7 @@ public sealed class ReferenceDataSnapshot
             catalogues.Select(c => new PresetCatalogueSnapshot(
                 c.Id,
                 c.Name,
+                IsActive: true,
                 c.LensOptions.Select(l => new LensOptionSnapshot(l.Id, l.Label, l.SortOrder, l.AvailableCoatingIds)).ToList())).ToList(),
             coatingPairings.Select(p => new CoatingPairingRule(p.TriggerCoatingRefId, p.PairedCoatingRefId)).ToList(),
             coatingExclusions.Select(e => new CoatingExclusionRule(e.CoatingRefIdA, e.CoatingRefIdB)).ToList());
@@ -181,7 +182,7 @@ public sealed record ReferenceItemSnapshot(Guid Id, ReferenceDataCategory Catego
 
 /// <summary>A catalogue's lens roster, in display order. Which catalogue a lens option belongs to
 /// is the nesting, not a field — the snapshot indexes that on the way in.</summary>
-public sealed record PresetCatalogueSnapshot(Guid Id, string Name, IReadOnlyList<LensOptionSnapshot> LensOptions);
+public sealed record PresetCatalogueSnapshot(Guid Id, string Name, bool IsActive, IReadOnlyList<LensOptionSnapshot> LensOptions);
 
 /// <summary>Label is the linked LensStrength reference item's label (e.g. <c>+2.50</c>);
 /// AvailableCoatingIds is which Coatings that strength is sellable in, empty meaning "not

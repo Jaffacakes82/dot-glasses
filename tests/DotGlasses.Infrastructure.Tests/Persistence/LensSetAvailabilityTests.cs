@@ -1,6 +1,8 @@
+using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Entities;
 using DotGlasses.Infrastructure.Persistence;
 using DotGlasses.Infrastructure.Persistence.Configurations;
+using DotGlasses.Infrastructure.Persistence.Interceptors;
 using DotGlasses.Infrastructure.Tests.Postgres;
 using DotGlasses.Infrastructure.Tests.TestDoubles;
 
@@ -17,12 +19,16 @@ public class LensSetAvailabilityTests(PostgresContainerFixture postgres)
     private static DotGlassesDbContext CreateContext(string connectionString) =>
         PostgresContainerFixture.CreateContext(
             connectionString,
-            FakeHttpContextAccessor.Create(isAuthenticated: true, OrganisationSeedConfiguration.KenyaRetailPointPath));
+            FakeHttpContextAccessor.Create(isAuthenticated: true, OrganisationSeedConfiguration.KenyaRetailPointPath),
+            new AuditSaveChangesInterceptor(new FakeCurrentUserContext()));
 
     private static PresetCatalogueQueryService CreateService(DotGlassesDbContext context) =>
         new(context, new UnscopedReportQueryService(context), new ReferenceDataSnapshotProvider(context));
 
-    private static async Task AddLensSetAsync(string connectionString, string name, Guid assignedTo, bool withLensPowers = true)
+    private static PresetCatalogueAdminService CreateAdminService(DotGlassesDbContext context) =>
+        new(context, new ReferenceDataSnapshotProvider(context));
+
+    private static async Task<Guid> AddLensSetAsync(string connectionString, string name, Guid assignedTo, bool withLensPowers = true)
     {
         await using var context = CreateContext(connectionString);
         var id = Guid.NewGuid();
@@ -36,6 +42,86 @@ public class LensSetAvailabilityTests(PostgresContainerFixture postgres)
         }
 
         await context.SaveChangesAsync();
+        return id;
+    }
+
+    private static async Task<IReadOnlyList<string>> OfferedAtTheRetailPointAsync(string connectionString)
+    {
+        await using var context = CreateContext(connectionString);
+        var offered = await CreateService(context).ListAvailableForCallerAsync(OrganisationSeedConfiguration.KenyaRetailPointPath);
+        return offered.Select(c => c.Name).ToList();
+    }
+
+    [Fact]
+    public async Task ARetiredLensSetIsNotOffered_AndReactivatingItRestoresItWithItsAssignments()
+    {
+        var connectionString = await postgres.CreateDatabaseAsync();
+        var id = await AddLensSetAsync(connectionString, "Seasonal Readers", OrganisationSeedConfiguration.KenyaRetailerId);
+
+        await using (var context = CreateContext(connectionString))
+        {
+            await CreateAdminService(context).RetireAsync(id);
+        }
+
+        Assert.DoesNotContain("Seasonal Readers", await OfferedAtTheRetailPointAsync(connectionString));
+
+        await using (var context = CreateContext(connectionString))
+        {
+            await CreateAdminService(context).ReactivateAsync(id);
+        }
+
+        // Nothing was re-assigned by hand: retiring kept the assignment to the retailer.
+        Assert.Contains("Seasonal Readers", await OfferedAtTheRetailPointAsync(connectionString));
+    }
+
+    [Fact]
+    public async Task ARetiredLensSetIsListedSeparatelyForReactivation()
+    {
+        var connectionString = await postgres.CreateDatabaseAsync();
+        var id = await AddLensSetAsync(connectionString, "Seasonal Readers", OrganisationSeedConfiguration.KenyaRetailerId);
+
+        await using var context = CreateContext(connectionString);
+        var admin = CreateAdminService(context);
+        await admin.RetireAsync(id);
+
+        Assert.DoesNotContain(await admin.ListAsync(), c => c.Id == id);
+        Assert.Contains(await admin.ListRetiredAsync(), c => c.Id == id && c.Name == "Seasonal Readers");
+    }
+
+    [Fact]
+    public async Task ARetiredLensSetStillNamesTheRecordsThatUsedIt()
+    {
+        // Retiring stops a lens set being offered, not being true: a Lead captured on it still
+        // shows its name and lens powers (the Admin Portal's conversion summary resolves them
+        // through this snapshot), and the rules see it as present but retired.
+        var connectionString = await postgres.CreateDatabaseAsync();
+        var id = await AddLensSetAsync(connectionString, "Seasonal Readers", OrganisationSeedConfiguration.KenyaRetailerId);
+
+        await using var context = CreateContext(connectionString);
+        await CreateAdminService(context).RetireAsync(id);
+        var lensOptionId = context.LensOptions.Single(l => l.PresetCatalogueId == id).Id;
+
+        var snapshot = await new ReferenceDataSnapshotProvider(context).GetAsync();
+
+        var lensSet = snapshot.FindCatalogue(id);
+        Assert.NotNull(lensSet);
+        Assert.Equal("Seasonal Readers", lensSet.Name);
+        Assert.False(lensSet.IsActive);
+        Assert.Equal("+2.50", snapshot.ResolveLensOptionLabel(lensOptionId));
+    }
+
+    [Fact]
+    public async Task ARetiredLensSetCannotBeAssigned()
+    {
+        // The assign form doesn't offer one; a hand-built POST gets a sentence, not a silent no-op.
+        var connectionString = await postgres.CreateDatabaseAsync();
+        var id = await AddLensSetAsync(connectionString, "Seasonal Readers", OrganisationSeedConfiguration.KenyaRetailerId);
+
+        await using var context = CreateContext(connectionString);
+        var admin = CreateAdminService(context);
+        await admin.RetireAsync(id);
+
+        await Assert.ThrowsAsync<DomainRuleViolationException>(() => admin.AssignCatalogueToOrgAsync(id, OrganisationSeedConfiguration.KenyaRetailPointId));
     }
 
     [Fact]

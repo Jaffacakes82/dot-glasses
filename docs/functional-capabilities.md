@@ -443,6 +443,12 @@ per-catalogue role: every non-empty lens set assigned at or above a retail point
   `+0.00 / +2.50 (Bifocal)`).
 - **Remove lens** (the × on each badge) — a **hard delete**, not a retire. This is safe because no
   Test, Lead or Sale can reference a lens option that was never chosen on a real transaction.
+- **Retire** (in the Edit modal, with a confirmation) — a soft delete. The lens set stops being
+  offered in the Field App (from its next reference-data refresh) and in the assign form, and a
+  hand-built assign POST is refused. Its **assignments are kept**. Records that used it still show
+  its name and lens powers, and the server refuses a *new* record on it ("This lens set has been
+  retired — choose another lens range."). Retired lens sets are listed separately under **Retired
+  lens sets**, each with **Reactivate**, which restores it exactly as it was.
 
 **Assign packages to a retailer** — a form with a single-select org dropdown (restricted to
 `Intermediate` and `RetailPoint` nodes only), a multi-select catalogue list, and an Assign button.

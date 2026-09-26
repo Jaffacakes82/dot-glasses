@@ -13,6 +13,16 @@ public interface IPresetCatalogueAdminService
     /// <summary>Every catalogue, with its lens roster (label-resolved) and assignment count.</summary>
     Task<IReadOnlyList<PresetCatalogueAdminDto>> ListAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>Retired lens sets only — listed apart so they can be found and reactivated.</summary>
+    Task<IReadOnlyList<PresetCatalogueAdminDto>> ListRetiredAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>A soft delete: the lens set stops being offered anywhere (Field App, assign form)
+    /// but stays resolvable on the historical records that name it, and keeps its assignments so
+    /// reactivating restores it as it was.</summary>
+    Task RetireAsync(Guid id, CancellationToken cancellationToken = default);
+
+    Task ReactivateAsync(Guid id, CancellationToken cancellationToken = default);
+
     /// <summary>owningOrgNodeId is the caller's own org node (stamped by the Web controller from
     /// ICurrentUserContext, never client-submitted) — see PresetCatalogue's own doc comment for
     /// why it must be Dgi/Country. Enforced here, not in Domain.</summary>

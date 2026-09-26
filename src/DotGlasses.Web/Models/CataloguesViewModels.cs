@@ -4,11 +4,14 @@ namespace DotGlasses.Web.Models;
 
 public record CataloguesIndexViewModel(
     IReadOnlyList<CatalogueCard> Catalogues,
+    IReadOnlyList<RetiredCatalogueCard> RetiredCatalogues,
     IReadOnlyList<(Guid Id, string Label)> AllLensStrengths,
     IReadOnlyList<(Guid Id, string Label)> ActiveCoatings,
     IReadOnlyDictionary<Guid, IReadOnlyList<Guid>> AvailableCoatingsByLensStrength,
     IReadOnlyList<(Guid Id, string Name)> AssignableOrgs,
     string? Search);
+
+public record RetiredCatalogueCard(Guid Id, string Name);
 
 public record CatalogueCard(Guid Id, string Name, string? Description, string? RangeDescription, IReadOnlyList<LensOptionCard> LensOptions, IReadOnlyList<AssignedOrgCard> AssignedOrgs);
 
