@@ -431,10 +431,23 @@ just a count). Below that, the lens roster as removable badges, and an add-lens 
 per-catalogue role: every non-empty lens set assigned at or above a retail point is offered there
 (see §5.6, ADR-0005).
 
-- **Create package** / **Edit** — a modal with three fields: `Name` (required, ≤ 200),
-  `Description` (≤ 500) and `Diopter / strength range` (a free-text label, ≤ 100). On create, the owning
-  org is stamped from the caller's own primary org, never submitted by the client; the service
-  rejects the create if that org isn't DGI or Country level.
+**Who may change what.**
+- **Editing a lens set** — Edit, add or remove lens powers, Retire/Reactivate — is limited to admins
+  at or above its **owning org** (`PresetCatalogue.EditInScope`). A DGI-owned lens set reaches every
+  country, so a country admin can't change what it contains. On a lens set the caller can't edit,
+  those actions aren't shown and the card says "Owned above your organisation — you can assign
+  it, but not change it." The server refuses them regardless, with Access Denied.
+- **Assigning** any active lens set, and removing an assignment, is open to any admin who reaches
+  the screen, but only for orgs within their own scope (`PresetCatalogue.AssignInScope`).
+- The lens-strength coating grid below is a single global setting, not per lens set, so it stays
+  under `PresetCatalogue.Manage`.
+
+- **Create package** / **Edit** — a modal with three fields: `Name` (required, ≤ 200, and
+  **unique among active lens sets**, ignoring case — "A lens set with this name already
+  exists."; a retired lens set's name is free), `Description` (≤ 500) and `Diopter / strength
+  range` (a free-text label, ≤ 100). On create, the owning org is stamped from the caller's own
+  primary org, never submitted by the client; the service rejects the create if that org isn't
+  DGI or Country level.
 - **Add lens** — a dropdown of active `LensStrength` reference items **not already on this
   catalogue** (both client-filtered and server-guarded — a strength can no longer be added twice).
   The chosen strength is appended at the end of the catalogue's sort order. A catalogue's lens

@@ -44,6 +44,14 @@ public class PresetCatalogueAdminService(DotGlassesDbContext dbContext, IReferen
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<bool> IsNameTakenAsync(string name, Guid? excludeId = null, CancellationToken cancellationToken = default)
+    {
+        // The soft-delete filter leaves retired lens sets out, which is the rule: their names are free.
+        var normalized = name.Trim().ToLower();
+        return await dbContext.PresetCatalogues
+            .AnyAsync(c => c.Name.Trim().ToLower() == normalized && c.Id != (excludeId ?? Guid.Empty), cancellationToken);
+    }
+
     private async Task<IReadOnlyList<PresetCatalogueAdminDto>> ToAdminDtosAsync(List<PresetCatalogue> catalogues, CancellationToken cancellationToken)
     {
         var catalogueIds = catalogues.Select(c => c.Id).ToList();

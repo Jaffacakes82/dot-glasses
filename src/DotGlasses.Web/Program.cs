@@ -133,6 +133,16 @@ builder.Services.AddAuthorizationBuilder()
         policy.Requirements.Add(new OrgLevelRequirement(OrganisationLevel.Dgi, RoleNames.Admin)))
     .AddPolicy(AuthorizationPolicies.PresetCatalogueManage, policy =>
         policy.Requirements.Add(new OrgLevelRequirement(OrganisationLevel.Country, RoleNames.Admin)))
+    .AddPolicy(AuthorizationPolicies.PresetCatalogueEditInScope, policy =>
+    {
+        policy.Requirements.Add(new OrgLevelRequirement(OrganisationLevel.Country, RoleNames.Admin));
+        policy.Requirements.Add(new HierarchyDescendantRequirement(RoleNames.Admin));
+    })
+    .AddPolicy(AuthorizationPolicies.PresetCatalogueAssignInScope, policy =>
+    {
+        policy.Requirements.Add(new OrgLevelRequirement(OrganisationLevel.Country, RoleNames.Admin));
+        policy.Requirements.Add(new HierarchyDescendantRequirement(RoleNames.Admin));
+    })
     .AddPolicy(AuthorizationPolicies.ManageUsersInScope, policy =>
         policy.Requirements.Add(new HierarchyDescendantRequirement(RoleNames.Admin)))
     .AddPolicy(AuthorizationPolicies.ManageOrgInScope, policy =>

@@ -11,11 +11,11 @@ public record CataloguesIndexViewModel(
     IReadOnlyList<(Guid Id, string Name)> AssignableOrgs,
     string? Search);
 
-public record RetiredCatalogueCard(Guid Id, string Name);
+public record RetiredCatalogueCard(Guid Id, string Name, bool CanReactivate);
 
-public record CatalogueCard(Guid Id, string Name, string? Description, string? RangeDescription, IReadOnlyList<LensOptionCard> LensOptions, IReadOnlyList<AssignedOrgCard> AssignedOrgs);
+public record CatalogueCard(Guid Id, string Name, string? Description, string? RangeDescription, IReadOnlyList<LensOptionCard> LensOptions, IReadOnlyList<AssignedOrgCard> AssignedOrgs, bool CanEdit);
 
-public record AssignedOrgCard(Guid OrgNodeId, string OrgName);
+public record AssignedOrgCard(Guid OrgNodeId, string OrgName, bool CanUnassign);
 
 public record LensOptionCard(Guid Id, Guid LensStrengthRefId, string Label, int SortOrder);
 
