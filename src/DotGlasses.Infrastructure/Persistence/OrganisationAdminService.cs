@@ -1,16 +1,16 @@
 using DotGlasses.Application.Common;
 using DotGlasses.Application.Organisations;
-using DotGlasses.Application.Reporting;
 using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Entities;
 using DotGlasses.Domain.Enums;
+using DotGlasses.Infrastructure.Persistence.Configurations;
 using Microsoft.EntityFrameworkCore;
 
 namespace DotGlasses.Infrastructure.Persistence;
 
 /// <summary>Queries DotGlassesDbContext directly rather than through a repository — no
 /// repository interface exists for OrganisationNode, matching PresetCatalogueQueryService.</summary>
-public class OrganisationAdminService(DotGlassesDbContext dbContext, IUnscopedReportQueryService unscopedReportQueryService, ICurrentUserContext currentUserContext) : IOrganisationAdminService
+public class OrganisationAdminService(DotGlassesDbContext dbContext, ICurrentUserContext currentUserContext) : IOrganisationAdminService
 {
     public async Task<IReadOnlyList<OrganisationAdminNode>> ListAsync(CancellationToken cancellationToken = default)
     {
@@ -50,19 +50,12 @@ public class OrganisationAdminService(DotGlassesDbContext dbContext, IUnscopedRe
             throw new DomainRuleViolationException($"{level} is not a valid child level under a {parent.Level} node.");
         }
 
-        // New path segments are small ever-increasing integers assigned in creation order across
-        // the *whole* tree (not per-parent) — see the seeded /1/, /1/2/, /1/2/3/ paths. Picking
-        // the next one safely means seeing the current global max, which requires looking outside
-        // the caller's own hierarchy scope (an Admin below DGI creating a node must not collide
-        // with a segment an org they can't see already used) — hence IUnscopedReportQueryService, not a
-        // scoped query here. Known simplification: read-max-then-increment has a small race
-        // window under concurrent creates — acceptable for an infrequent, admin-only action.
-        var allPaths = await unscopedReportQueryService.GetOrganisationNodePathsUnscopedAsync(cancellationToken);
-        var maxSegment = allPaths
-            .SelectMany(p => p.HierarchyPath.Split('/', StringSplitOptions.RemoveEmptyEntries))
-            .Select(s => int.TryParse(s, out var value) ? value : 0)
-            .DefaultIfEmpty(0)
-            .Max();
+        // New path segments are globally unique integers across the *whole* tree (not
+        // per-parent), drawn from a sequence — see OrganisationNodeConfiguration.PathSegmentSequence
+        // for why "current max + 1" was not safe.
+        var segment = await dbContext.Database
+            .SqlQueryRaw<long>($"""SELECT nextval('"{OrganisationNodeConfiguration.PathSegmentSequence}"') AS "Value" """)
+            .SingleAsync(cancellationToken);
 
         var entity = new OrganisationNode
         {
@@ -71,7 +64,7 @@ public class OrganisationAdminService(DotGlassesDbContext dbContext, IUnscopedRe
             Name = name,
             Level = level,
             Kind = kind,
-            HierarchyPath = $"{parent.HierarchyPath}{maxSegment + 1}/",
+            HierarchyPath = $"{parent.HierarchyPath}{segment}/",
             IsTrainingOrg = false,
         };
 

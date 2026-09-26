@@ -171,4 +171,20 @@ public class OrgTreeLookupTests
     {
         Assert.Throws<ArgumentException>(() => new OrgTreeLookup([Node("Broken", OrganisationLevel.Country, "/1/2")]));
     }
+
+    [Fact]
+    public void TwoNodesOnOnePathAreRejectedNamingThePathAndBothNodes()
+    {
+        // Two orgs on one path merge their data scopes, so this is corruption to surface, not to
+        // resolve by picking one. The message is what reaches the log from a 500 on every
+        // reporting screen, so it has to be enough to find the rows without a debugger.
+        var kenya = Node("Kenya", OrganisationLevel.Country, "/1/2/");
+        var secondKenya = Node("Second Kenya", OrganisationLevel.Country, "/1/2/");
+
+        var ex = Assert.Throws<ArgumentException>(() => new OrgTreeLookup([Dgi, kenya, secondKenya]));
+
+        Assert.Contains("/1/2/", ex.Message);
+        Assert.Contains(kenya.Id.ToString(), ex.Message);
+        Assert.Contains(secondKenya.Id.ToString(), ex.Message);
+    }
 }
