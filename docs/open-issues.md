@@ -115,10 +115,6 @@ machine" rule.
 - **Offline sync conflict resolution is last-write-wins** (idempotent upsert keyed on the
   client-generated GUID) — no version/ETag column exists. Don't build anything that assumes
   ordering or conflict detection until this is addressed.
-- **`OrganisationAdminService.CreateChildAsync`'s path-segment minting** is read-current-max-then-
-  increment with no locking — a small race window exists under concurrent org creation. Accepted
-  for an infrequent, admin-only action; would need a real sequence/lock if org creation ever became
-  high-throughput.
 - **The Field App's leads client swallows every exception and logs nothing.** All three of its
   lookups — the worklist, the Lead prefill, and the "convert this instead?" match probe — catch
   broadly and return null or an empty list. Failing soft is right for the offline case, but it means
