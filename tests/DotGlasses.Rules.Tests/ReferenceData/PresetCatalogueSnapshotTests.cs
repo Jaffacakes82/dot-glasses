@@ -24,12 +24,12 @@ public class PresetCatalogueSnapshotTests
     private static ReferenceDataSnapshot ServerSnapshot() => new(
         [],
         [
-            new PresetCatalogueSnapshot(Catalogue, "Six lens set", PresetCatalogueKind.SixLensSet,
+            new PresetCatalogueSnapshot(Catalogue, "Six lens set",
             [
                 new LensOptionSnapshot(LensPlus250, "+2.50", 0, [BlueBlock, Photochromic]),
                 new LensOptionSnapshot(LensWithNoCoatings, "+3.00", 1, []),
             ]),
-            new PresetCatalogueSnapshot(OtherCatalogue, "Nine lens set", PresetCatalogueKind.NineLensSet, []),
+            new PresetCatalogueSnapshot(OtherCatalogue, "Nine lens set", []),
         ],
         [new CoatingPairingRule(BlueBlock, Photochromic)],
         [new CoatingExclusionRule(Clear, Photochromic)]);
@@ -43,14 +43,13 @@ public class PresetCatalogueSnapshotTests
             {
                 Id = Catalogue,
                 Name = "Six lens set",
-                Kind = PresetCatalogueKind.SixLensSet,
                 LensOptions =
                 [
                     new LensOptionDto { Id = LensPlus250, Label = "+2.50", SortOrder = 0, AvailableCoatingIds = [BlueBlock, Photochromic] },
                     new LensOptionDto { Id = LensWithNoCoatings, Label = "+3.00", SortOrder = 1, AvailableCoatingIds = [] },
                 ],
             },
-            new PresetCatalogueDto { Id = OtherCatalogue, Name = "Nine lens set", Kind = PresetCatalogueKind.NineLensSet, LensOptions = [] },
+            new PresetCatalogueDto { Id = OtherCatalogue, Name = "Nine lens set", LensOptions = [] },
         ],
         [new CoatingPairingDto { Id = Guid.NewGuid(), TriggerCoatingRefId = BlueBlock, PairedCoatingRefId = Photochromic }],
         [new CoatingExclusionDto { Id = Guid.NewGuid(), CoatingRefIdA = Clear, CoatingRefIdB = Photochromic }]);
@@ -118,13 +117,12 @@ public class PresetCatalogueSnapshotTests
 
     [Theory]
     [MemberData(nameof(BothFillings))]
-    public void FindCatalogue_ResolvesNameAndKind(ReferenceDataSnapshot snapshot)
+    public void FindCatalogue_ResolvesNameAndLensOptions(ReferenceDataSnapshot snapshot)
     {
         var catalogue = snapshot.FindCatalogue(Catalogue);
 
         Assert.NotNull(catalogue);
         Assert.Equal("Six lens set", catalogue.Name);
-        Assert.Equal(PresetCatalogueKind.SixLensSet, catalogue.Kind);
         Assert.Equal(2, catalogue.LensOptions.Count);
         Assert.Null(snapshot.FindCatalogue(null));
     }

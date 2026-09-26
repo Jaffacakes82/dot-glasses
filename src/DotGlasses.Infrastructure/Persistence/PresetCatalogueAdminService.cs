@@ -30,14 +30,13 @@ public class PresetCatalogueAdminService(DotGlassesDbContext dbContext, IReferen
             c.Description,
             c.RangeDescription,
             c.OwningOrgNodeId,
-            c.Kind,
             lensOptions.Where(l => l.PresetCatalogueId == c.Id)
                 .Select(l => new PresetCatalogueLensOptionAdminDto(l.Id, l.LensStrengthRefId, referenceData.ResolveLabel(l.LensStrengthRefId), l.SortOrder))
                 .ToList()))
             .ToList();
     }
 
-    public async Task<PresetCatalogueAdminDto> CreateAsync(string name, string? description, string? rangeDescription, Guid owningOrgNodeId, PresetCatalogueKind kind, CancellationToken cancellationToken = default)
+    public async Task<PresetCatalogueAdminDto> CreateAsync(string name, string? description, string? rangeDescription, Guid owningOrgNodeId, CancellationToken cancellationToken = default)
     {
         var owningOrg = await dbContext.OrganisationNodes.FirstAsync(x => x.Id == owningOrgNodeId, cancellationToken);
         if (owningOrg.Level is not (OrganisationLevel.Dgi or OrganisationLevel.Country))
@@ -52,34 +51,21 @@ public class PresetCatalogueAdminService(DotGlassesDbContext dbContext, IReferen
             Description = description,
             RangeDescription = rangeDescription,
             OwningOrgNodeId = owningOrgNodeId,
-            Kind = kind,
         };
 
         dbContext.PresetCatalogues.Add(entity);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        return new PresetCatalogueAdminDto(entity.Id, entity.Name, entity.Description, entity.RangeDescription, entity.OwningOrgNodeId, entity.Kind, []);
+        return new PresetCatalogueAdminDto(entity.Id, entity.Name, entity.Description, entity.RangeDescription, entity.OwningOrgNodeId, []);
     }
 
-    public async Task UpdateAsync(Guid id, string name, string? description, string? rangeDescription, PresetCatalogueKind kind, CancellationToken cancellationToken = default)
+    public async Task UpdateAsync(Guid id, string name, string? description, string? rangeDescription, CancellationToken cancellationToken = default)
     {
         var entity = await dbContext.PresetCatalogues.FirstAsync(x => x.Id == id, cancellationToken);
         entity.Name = name;
         entity.Description = description;
         entity.RangeDescription = rangeDescription;
-        entity.Kind = kind;
         await dbContext.SaveChangesAsync(cancellationToken);
-    }
-
-    public async Task<bool> HasCatalogueWithKindAsync(PresetCatalogueKind kind, Guid? excludeId = null, CancellationToken cancellationToken = default)
-    {
-        if (kind == PresetCatalogueKind.Other)
-        {
-            return false;
-        }
-
-        return await dbContext.PresetCatalogues
-            .AnyAsync(c => c.Kind == kind && c.Id != (excludeId ?? Guid.Empty), cancellationToken);
     }
 
     public async Task<PresetCatalogueLensOptionAdminDto> AddLensOptionAsync(Guid catalogueId, Guid lensStrengthRefId, CancellationToken cancellationToken = default)

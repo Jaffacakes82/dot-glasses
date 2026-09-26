@@ -38,7 +38,7 @@ public class CataloguesController(
             return View(nameof(Index), await BuildViewModelAsync(null, cancellationToken));
         }
 
-        await catalogueAdminService.CreateAsync(request.Name, request.Description, request.RangeDescription, currentUserContext.OrgNodeId!.Value, request.Kind, cancellationToken);
+        await catalogueAdminService.CreateAsync(request.Name, request.Description, request.RangeDescription, currentUserContext.OrgNodeId!.Value, cancellationToken);
         return RedirectToAction(nameof(Index));
     }
 
@@ -53,7 +53,7 @@ public class CataloguesController(
             return View(nameof(Index), await BuildViewModelAsync(null, cancellationToken));
         }
 
-        await catalogueAdminService.UpdateAsync(request.Id, request.Name, request.Description, request.RangeDescription, request.Kind, cancellationToken);
+        await catalogueAdminService.UpdateAsync(request.Id, request.Name, request.Description, request.RangeDescription, cancellationToken);
         return RedirectToAction(nameof(Index));
     }
 
@@ -192,7 +192,7 @@ public class CataloguesController(
         {
             var assignedOrgs = await catalogueAdminService.ListAssignedOrgsAsync(c.Id, cancellationToken);
             catalogueCards.Add(new CatalogueCard(
-                c.Id, c.Name, c.Description, c.RangeDescription, c.Kind,
+                c.Id, c.Name, c.Description, c.RangeDescription,
                 c.LensOptions.Select(l => new LensOptionCard(l.Id, l.LensStrengthRefId, l.Label, l.SortOrder)).ToList(),
                 assignedOrgs.Select(a => new AssignedOrgCard(a.OrgNodeId, a.OrgName)).ToList()));
         }

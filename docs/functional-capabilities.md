@@ -425,16 +425,14 @@ Catalogues themselves are **not** hierarchy-scoped: every user who reaches this 
 catalogue in the system, regardless of who owns it. A name search box narrows the list (no
 paging — the table is structurally small, see below).
 
-**Catalogue cards** — one per catalogue, showing name, description, "Diopter range: …", its
-**Kind** ("Field App picker role: SixLensSet/NineLensSet", omitted for `Other`), and the list of
-orgs it's assigned to (with an un-assign action per org, not just a count). Below that, the lens
-roster as removable badges, and an add-lens form.
+**Catalogue cards** — one per catalogue (a **lens set**), showing name, description,
+"Diopter range: …", and the list of orgs it's assigned to (with an un-assign action per org, not
+just a count). Below that, the lens roster as removable badges, and an add-lens form. There is no
+per-catalogue role: every non-empty lens set assigned at or above a retail point is offered there
+(see §5.6, ADR-0005).
 
-- **Create package** / **Edit** — a modal with four fields: `Name` (required, ≤ 200),
-  `Description` (≤ 500), `Diopter / strength range` (a free-text label, ≤ 100), and **`Kind`**
-  (`Other` / `SixLensSet` / `NineLensSet`) — at most one catalogue may hold `SixLensSet` and at
-  most one `NineLensSet`; any number may be `Other`. `Kind` is what the Field App's lens range
-  selector actually matches against (see §5.6) — not the catalogue's name. On create, the owning
+- **Create package** / **Edit** — a modal with three fields: `Name` (required, ≤ 200),
+  `Description` (≤ 500) and `Diopter / strength range` (a free-text label, ≤ 100). On create, the owning
   org is stamped from the caller's own primary org, never submitted by the client; the service
   rejects the create if that org isn't DGI or Country level.
 - **Add lens** — a dropdown of active `LensStrength` reference items **not already on this
@@ -744,22 +742,31 @@ Submitting shows the same price-awareness confirmation as a Lead. A Sale opened 
 
 ### 5.6 The lens range selector (shared by Lead and Sale)
 
-A single dropdown chooses the range: *No preference yet* (Leads only), *6-Lens Set*, *9-Lens Set*,
-*Custom prescription*. Switching range clears every field belonging to the previous one.
+A single dropdown chooses the range (ADR-0005): *No preference yet* (Tests and Leads only) or, on
+a Sale, *Select a lens range…*; then **every lens set assigned at or above the technician's retail
+point**, alphabetically, with lens sets that have no lens powers left out; then *Custom
+prescription*. Switching range clears every field belonging to the previous one.
 
-The two preset options are matched to catalogues **by the catalogue's `Kind` field**
-(`SixLensSet`/`NineLensSet` — see §4.6), not by name. If no catalogue holds a given `Kind`, or the
-matching catalogue isn't assigned to the technician's retail point, the option is suffixed "(not
-available)" and choosing it shows "This preset isn't assigned to your retail point."
+- **A Sale has no default.** Saving without choosing shows "Choose a lens range." against the
+  dropdown.
+- **No lens sets reach the retail point:** only *Custom prescription* is offered, with the note
+  "No lens sets are assigned to this retail point — ask your administrator."
+- **A converted Lead's lens set that no longer reaches the retail point** (retired or unassigned
+  since) carries over as-is and shows "This lens set isn't available at your retail point — choose
+  another lens range." Nothing is substituted silently.
 
-**Preset range** →
+The Admin Portal's Lead→Sale conversion screen offers the same choice for a Lead that recorded no
+lens preference — the lens sets reaching the *Lead's* retail point, then *Custom prescription* —
+and asks "Choose a lens range." if it is left empty.
+
+**Lens set** →
 - *Lens power — left eye* and *— right eye*: selects listing the catalogue's lens options in sort
   order.
 - *Pupil distance (0–4)*: a coarse frame-fit bucket, **not** millimetres. Drops to 0–2 when the
   children's-frame box is ticked, and a previously chosen out-of-range value is cleared.
 - *Coating*: appears once a left lens is chosen, listing **only** the coatings configured for that
   lens strength. If none are configured it is replaced by: "No coatings are configured for this
-  lens yet — it can't be sold on a preset range until DGI configures one in Reference Data."
+  lens yet — it can't be sold on a lens set until DGI configures one in Reference Data."
   Changing the left lens clears any coating already picked.
 
 **Custom range** → per eye (left and right):
@@ -875,7 +882,7 @@ Versioned at `v1`, with Swagger exposed in development only.
 | `GET /api/v1/leads/match?fullName=&phoneNumber=` | JWT | Any authenticated user | An open Lead matching the given name+phone, or 204 — backs the Sale form's automatic conversion prompt. |
 | `GET/POST /api/v1/sales`, `/api/v1/sales/{id}` | JWT | Any authenticated user | As above. `SourceLeadId` on create atomically links and marks the source Lead converted; a second attempt against an already-converted Lead is rejected, as is one naming a Lead the caller can't see. |
 | `GET /api/v1/reference-data` | JWT | Any authenticated user | All **active** reference items across all categories. Not hierarchy-scoped. |
-| `GET /api/v1/preset-catalogues` | JWT | Any authenticated user | Catalogues assigned at or above the caller's org, with each lens's available coatings and the catalogue's `Kind`. 400 if the caller has no org. |
+| `GET /api/v1/preset-catalogues` | JWT | Any authenticated user | Catalogues assigned at or above the caller's org, with each lens's available coatings — non-empty lens sets only, alphabetically. 400 if the caller has no org. |
 | `POST /api/v1/client-logs` | JWT | Any authenticated user | Accepts a batch of client log entries with a correlation ID; writes them to the server log. |
 
 **Capabilities reachable through the API that no UI exposes:**

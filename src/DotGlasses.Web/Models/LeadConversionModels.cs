@@ -44,8 +44,26 @@ public class LeadConversionFormModel
 
     // Only rendered/used when the source Lead captured no lens/prescription preference at all
     // (Lead.LensRangeType is null) — otherwise the Lead's own values carry over unchanged.
+    //
+    // LensRange is the one control the admin actually uses: a lens set's id, or "custom"
+    // (ADR-0005 — a lens range is one lens set or a Custom prescription). It is the single
+    // exception to the 1:1 naming above; ApplyLensRange turns it into the two CreateSaleRequest
+    // fields it stands for, which keep their names so rule failures still remap onto
+    // "Form.{PropertyName}".
+    public string? LensRange { get; set; }
+
     public LensRangeType? LensRangeType { get; set; }
     public Guid? PresetCatalogueId { get; set; }
+
+    public const string CustomLensRange = "custom";
+
+    public void ApplyLensRange() =>
+        (LensRangeType, PresetCatalogueId) = LensRange switch
+        {
+            CustomLensRange => (Contracts.Common.LensRangeType.Custom, (Guid?)null),
+            _ when Guid.TryParse(LensRange, out var lensSetId) => (Contracts.Common.LensRangeType.LensSet, lensSetId),
+            _ => ((LensRangeType?)null, (Guid?)null),
+        };
     public Guid? LensOptionLeftId { get; set; }
     public Guid? LensOptionRightId { get; set; }
     public int? PresetPupilDistanceBucket { get; set; }

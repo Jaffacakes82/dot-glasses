@@ -1,6 +1,6 @@
 # 07 — Lens range is "a lens set" or "Custom prescription", driven by assigned lens sets
 
-Status: ready-for-agent
+Status: done (implemented 2026-09-26, branch feat/lens-sets)
 Blocked by: None — can start immediately
 Category: enhancement
 

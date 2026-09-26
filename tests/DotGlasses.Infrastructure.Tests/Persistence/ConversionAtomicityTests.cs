@@ -224,7 +224,7 @@ public class ConversionAtomicityTests(PostgresContainerFixture postgres)
         ConsentGiven = true,
         ReferredOrTreated = false,
         ReasonNotPurchasedRefId = Guid.NewGuid(),
-        LensRangeType = LensRangeType.SixLensSet,
+        LensRangeType = LensRangeType.LensSet,
     };
 
     private static CreateSaleRequest ARecordedSale(Guid? sourceLeadId = null) => new()
@@ -237,7 +237,7 @@ public class ConversionAtomicityTests(PostgresContainerFixture postgres)
         Gender = Gender.Female,
         ConsentGiven = true,
         ReferredOrTreated = false,
-        LensRangeType = LensRangeType.SixLensSet,
+        LensRangeType = LensRangeType.LensSet,
         OrderFromDotGlasses = false,
         FrameColourRefId = Guid.NewGuid(),
         FrameCoverage = ContractFrameCoverage.FullFrame,

@@ -6,10 +6,11 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 namespace DotGlasses.Infrastructure.Persistence.Configurations;
 
 /// <summary>
-/// Seeds the two standard preset catalogues (HasData, fixed GUIDs) with the exact dioptre values
+/// Seeds the two starting lens sets (HasData, fixed GUIDs) with the exact dioptre values
 /// the client gave on the call (cross-checked against the Kobo dioptres_six/dioptres_nine/_add
 /// lists) — owned by the seeded DGI root (OrganisationSeedConfiguration.DgiId). No "Classical"
-/// catalogue is seeded (decision: dropped entirely, see ReferenceDataSeedConfiguration).
+/// catalogue is seeded (decision: dropped entirely, see ReferenceDataSeedConfiguration). Since
+/// ADR-0005 they are ordinary lens sets with no special role — "6-Lens"/"9-Lens" is only their name.
 /// </summary>
 public class PresetCatalogueSeedConfiguration : IEntityTypeConfiguration<PresetCatalogue>
 {
@@ -28,7 +29,6 @@ public class PresetCatalogueSeedConfiguration : IEntityTypeConfiguration<PresetC
                 Description = "Standard six-option lens range for outlets with local stock.",
                 RangeDescription = "+2.50 to -4.50",
                 OwningOrgNodeId = OrganisationSeedConfiguration.DgiId,
-                Kind = PresetCatalogueKind.SixLensSet,
                 CreatedAtUtc = now,
             },
             new PresetCatalogue
@@ -38,7 +38,6 @@ public class PresetCatalogueSeedConfiguration : IEntityTypeConfiguration<PresetC
                 Description = "Extended nine-option lens range for outlets with wider stock.",
                 RangeDescription = "+3.00 to -4.00",
                 OwningOrgNodeId = OrganisationSeedConfiguration.DgiId,
-                Kind = PresetCatalogueKind.NineLensSet,
                 CreatedAtUtc = now,
             });
     }

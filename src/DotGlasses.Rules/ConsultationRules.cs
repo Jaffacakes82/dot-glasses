@@ -290,8 +290,8 @@ public static class ConsultationRules
 
     /// <summary>
     /// Which lenses this consultation calls for. Three mutually exclusive shapes: not chosen yet
-    /// (Test/Lead only — a Sale always names one), a <b>preset</b> range picked off an
-    /// admin-curated catalogue, or a <b>Custom</b> prescription typed out in full. Whichever is
+    /// (Test/Lead only — a Sale always names one), a <b>lens set</b> (which one is
+    /// PresetCatalogueId — ADR-0005), or a <b>Custom</b> prescription typed out in full. Whichever is
     /// chosen, the other shape's fields must be empty — that is what stops a half-edited form from
     /// being stored as a prescription nobody can grind.
     ///
@@ -329,12 +329,12 @@ public static class ConsultationRules
             case null:
                 if (presetFieldsSet || customFieldsSet || pupilDistanceMm is not null || presetPupilDistanceBucket is not null)
                 {
-                    yield return new RuleFailure(LensRangeTypeKey, "Preset/custom lens fields must be empty when LensRangeType is not set.");
+                    yield return new RuleFailure(LensRangeTypeKey, "Lens set and custom lens fields must be empty when LensRangeType is not set.");
                 }
 
                 break;
 
-            case LensRangeType.SixLensSet or LensRangeType.NineLensSet:
+            case LensRangeType.LensSet:
                 foreach (var failure in PresetBranch(
                     presetCatalogueId, lensOptionLeftId, lensOptionRightId, customFieldsSet,
                     pupilDistanceMm, presetPupilDistanceBucket, childrensFrame,
@@ -379,12 +379,12 @@ public static class ConsultationRules
     {
         if (customFieldsSet)
         {
-            yield return new RuleFailure(LensRangeTypeKey, "Custom prescription fields must be empty for a preset LensRangeType.");
+            yield return new RuleFailure(LensRangeTypeKey, "Custom prescription fields must be empty for a LensSet LensRangeType.");
         }
 
         if (presetCatalogueId is not { } catalogueId || lensOptionLeftId is not { } leftId || lensOptionRightId is not { } rightId)
         {
-            yield return new RuleFailure(PresetCatalogueIdKey, "PresetCatalogueId, LensOptionLeftId and LensOptionRightId are all required for a preset LensRangeType.");
+            yield return new RuleFailure(PresetCatalogueIdKey, "PresetCatalogueId, LensOptionLeftId and LensOptionRightId are all required for a LensSet LensRangeType.");
             yield break;
         }
 
@@ -400,7 +400,7 @@ public static class ConsultationRules
 
         if (pupilDistanceMm is not null)
         {
-            yield return new RuleFailure(PupilDistanceMmKey, "PupilDistanceMm must be empty for a preset LensRangeType — use PresetPupilDistanceBucket instead.");
+            yield return new RuleFailure(PupilDistanceMmKey, "PupilDistanceMm must be empty for a LensSet LensRangeType — use PresetPupilDistanceBucket instead.");
         }
 
         var maxBucket = childrensFrame ? 2 : 4;
@@ -424,7 +424,7 @@ public static class ConsultationRules
             : $"PresetPupilDistanceBucket must be between 0 and {maxBucket}";
 
         return namesTheBranch
-            ? $"{opening} for a preset LensRangeType{(childrensFrame ? " (0-2 for a children's frame)" : "")}."
+            ? $"{opening} for a LensSet LensRangeType{(childrensFrame ? " (0-2 for a children's frame)" : "")}."
             : $"{opening}.";
     }
 
@@ -444,7 +444,7 @@ public static class ConsultationRules
     {
         if (presetFieldsSet)
         {
-            yield return new RuleFailure(LensRangeTypeKey, "Preset fields must be empty for a Custom LensRangeType.");
+            yield return new RuleFailure(LensRangeTypeKey, "Lens set fields must be empty for a Custom LensRangeType.");
         }
 
         if (customSphereLeft is null || customSphereRight is null)
@@ -551,7 +551,7 @@ public static class ConsultationRules
     /// <summary>
     /// The Coatings on a <b>Sale</b>'s lens — a set, per <c>CONTEXT.md</c> and ADR-0001, because
     /// one lens can carry more than one at once. Which Coatings are allowed depends on the lens
-    /// branch: a preset range narrows them to those configured as available for the left lens
+    /// branch: a lens set narrows them to those configured as available for the left lens
     /// option's strength, while a Custom prescription accepts any active Coating. Pairing and
     /// exclusion rules apply universally to both.
     ///
@@ -579,7 +579,7 @@ public static class ConsultationRules
     {
         switch (lensRangeType)
         {
-            case LensRangeType.SixLensSet or LensRangeType.NineLensSet:
+            case LensRangeType.LensSet:
                 if (presetCatalogueId is null || lensOptionRightId is null || lensOptionLeftId is not { } leftId)
                 {
                     return [];
@@ -592,7 +592,7 @@ public static class ConsultationRules
                 // so this stays out of its way and lets the per-coating check below speak.
                 if (snapshot.FindLensOption(leftId) is { AvailableCoatingIds.Count: 0 })
                 {
-                    return [new RuleFailure(LensOptionLeftIdKey, "This lens has no coatings configured yet, so it can't be sold on a preset range.")];
+                    return [new RuleFailure(LensOptionLeftIdKey, "This lens has no coatings configured yet, so it can't be sold on a lens set.")];
                 }
 
                 return Coatings(coatingRefIds, restrictToLensOptionId: leftId, snapshot);
@@ -608,7 +608,7 @@ public static class ConsultationRules
     /// <summary>
     /// The set itself, once the branch has settled what "available" means.
     /// <paramref name="restrictToLensOptionId"/> narrows to the Coatings configured for that lens
-    /// option's strength (preset); null accepts any active Coating (Custom).
+    /// option's strength (lens set); null accepts any active Coating (Custom).
     ///
     /// One failure at a time, deliberately: each check returns rather than accumulating, so a set
     /// that is both duplicated and mutually excluding reports the duplicate first and the
@@ -668,7 +668,7 @@ public static class ConsultationRules
     ///
     /// Optional for every LensRangeType, the unset one included — a preference can be recorded
     /// before a lens has been chosen. Availability is still scoped by the left lens option where a
-    /// preset range names one, with the same three-id short-circuit
+    /// lens set names one, with the same three-id short-circuit
     /// <see cref="CoatingSet"/> uses, and stays keyed to CoatingPreferenceRefId: the
     /// no-coatings-configured case is reported against the lens on a Sale's set only, where
     /// choosing a coating is mandatory and so genuinely unsatisfiable.
@@ -691,7 +691,7 @@ public static class ConsultationRules
             return [];
         }
 
-        var unavailableForTheChosenLens = lensRangeType is LensRangeType.SixLensSet or LensRangeType.NineLensSet
+        var unavailableForTheChosenLens = lensRangeType is LensRangeType.LensSet
             && presetCatalogueId is not null && lensOptionRightId is not null
             && lensOptionLeftId is { } leftId
             && !snapshot.IsCoatingAvailableForLensOption(leftId, coatingRefId);

@@ -4,7 +4,6 @@ namespace DotGlasses.Contracts.Common;
 /// Contracts.Common.Gender for why Contracts keeps its own copy rather than referencing Domain.</summary>
 public enum LensRangeType
 {
-    SixLensSet = 0,
-    NineLensSet = 1,
+    LensSet = 0,
     Custom = 2,
 }
