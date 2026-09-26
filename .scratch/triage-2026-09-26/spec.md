@@ -12,9 +12,14 @@ and the data repair in the affected environment are separate jobs with separate 
 | 01 | Org path segments are re-minted after deactivation, which creates duplicate `HierarchyPath`s | `done` (PR #25) |
 | 02 | Repair the duplicate `/1/2/` org paths in the affected environment | `done` (nonprod repaired by hand, verified 2026-09-26) |
 | 03 | Why `AspNetUsers` carries `HierarchyPath` as well as `OrgNodeId` | `wontfix` (question answered; FK confirmed present in staging) |
-| 04 | Preset Catalogue "Field App picker role" and "Diopter range" are confusing, and "Other" catalogues are dead config | `needs-info` (product decision) |
+| 04 | Preset Catalogue "Field App picker role" and "Diopter range" are confusing, and "Other" catalogues are dead config | resolved via grilling → 07–11, ADR-0005 |
 | 05 | CI's migration step authenticates to Postgres by accident (blank username → `runner`) | `ready-for-human` |
-| 06 | The error page's Request ID can't be found in the logs | `done` (branch `fix/error-page-trace-id`) |
+| 06 | The error page's Request ID can't be found in the logs | `done` (PR #26) |
+| 07 | Lens range is "a lens set" or "Custom prescription", driven by assigned lens sets | `ready-for-agent` |
+| 08 | Retire and reactivate lens sets | `ready-for-agent` |
+| 09 | Refuse a lens set that isn't available at the record's location | `ready-for-agent` (after 07) |
+| 10 | Lens set editing limited to the owning org; names unique among active sets | `ready-for-agent` |
+| 11 | Catalogues screen speaks "lens set"; "Diopter range" dropped | `ready-for-agent` (after 07) |
 
 ## Ordering
 
@@ -26,6 +31,11 @@ and the data repair in the affected environment are separate jobs with separate 
 - 01 can be built and merged at any time. Environments without duplicates (e.g. a fresh local DB)
   are unaffected.
 - 03, 04 and 06 are independent of everything else. 06 was raised later the same day.
+- **Lens sets (07–11):** 07 goes first. It rewrites the lens-range rule branch (which 09 extends)
+  and removes the picker-role field from the Catalogues screen (which 08, 10 and 11 also edit).
+  After 07, the other four can be done in any order. 08/10 carry soft cross-references (the retire
+  permission and "unique among *active*"), and each ticket says what to do if the other hasn't
+  landed.
 
 ## Also noticed during triage
 

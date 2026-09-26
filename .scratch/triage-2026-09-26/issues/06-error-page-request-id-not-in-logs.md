@@ -1,6 +1,6 @@
 # 06 — The error page's Request ID can't be found in the logs
 
-Status: done (implemented 2026-09-26, branch fix/error-page-trace-id)
+Status: done (implemented 2026-09-26, PR #26)
 Blocked by: None
 Category: bug (observability)
 
