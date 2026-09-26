@@ -99,6 +99,24 @@ public class CataloguesController(
         return RedirectToAction(nameof(Index));
     }
 
+    // Gated by the controller-wide PresetCatalogue.Manage policy for now; ticket 10 limits editing
+    // (retire/reactivate included) to admins at or above the lens set's owning org.
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RetireCatalogue(Guid catalogueId, CancellationToken cancellationToken)
+    {
+        await catalogueAdminService.RetireAsync(catalogueId, cancellationToken);
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ReactivateCatalogue(Guid catalogueId, CancellationToken cancellationToken)
+    {
+        await catalogueAdminService.ReactivateAsync(catalogueId, cancellationToken);
+        return RedirectToAction(nameof(Index));
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> UnassignCatalogue(Guid catalogueId, Guid orgNodeId, CancellationToken cancellationToken)
@@ -197,8 +215,13 @@ public class CataloguesController(
                 assignedOrgs.Select(a => new AssignedOrgCard(a.OrgNodeId, a.OrgName)).ToList()));
         }
 
+        var retired = (await catalogueAdminService.ListRetiredAsync(cancellationToken))
+            .Select(c => new RetiredCatalogueCard(c.Id, c.Name))
+            .ToList();
+
         return new CataloguesIndexViewModel(
             catalogueCards,
+            retired,
             lensStrengths,
             coatings,
             availableCoatingsByStrength,

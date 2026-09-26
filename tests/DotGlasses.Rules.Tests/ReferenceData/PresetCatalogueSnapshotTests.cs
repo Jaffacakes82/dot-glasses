@@ -24,12 +24,12 @@ public class PresetCatalogueSnapshotTests
     private static ReferenceDataSnapshot ServerSnapshot() => new(
         [],
         [
-            new PresetCatalogueSnapshot(Catalogue, "Six lens set",
+            new PresetCatalogueSnapshot(Catalogue, "Six lens set", IsActive: true,
             [
                 new LensOptionSnapshot(LensPlus250, "+2.50", 0, [BlueBlock, Photochromic]),
                 new LensOptionSnapshot(LensWithNoCoatings, "+3.00", 1, []),
             ]),
-            new PresetCatalogueSnapshot(OtherCatalogue, "Nine lens set", []),
+            new PresetCatalogueSnapshot(OtherCatalogue, "Nine lens set", IsActive: true, []),
         ],
         [new CoatingPairingRule(BlueBlock, Photochromic)],
         [new CoatingExclusionRule(Clear, Photochromic)]);

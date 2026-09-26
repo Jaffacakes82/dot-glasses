@@ -35,7 +35,10 @@ public class ReferenceDataSnapshotProvider(DotGlassesDbContext dbContext) : IRef
             .OrderBy(x => x.Category).ThenBy(x => x.SortOrder)
             .ToListAsync(cancellationToken);
 
-        var catalogues = await dbContext.PresetCatalogues.OrderBy(c => c.Name).ToListAsync(cancellationToken);
+        // Retired lens sets included, like retired reference items above: historical records still
+        // name them, and the rules ask "present and active". PresetCatalogue isn't hierarchy-scoped,
+        // so IgnoreQueryFilters() lifts only the soft-delete filter here.
+        var catalogues = await dbContext.PresetCatalogues.IgnoreQueryFilters().OrderBy(c => c.Name).ToListAsync(cancellationToken);
         var lensOptions = await dbContext.LensOptions.OrderBy(l => l.SortOrder).ToListAsync(cancellationToken);
         var coatingAvailability = await dbContext.LensStrengthCoatingOptions.ToListAsync(cancellationToken);
         var pairings = await dbContext.CoatingPairings.ToListAsync(cancellationToken);
@@ -51,6 +54,7 @@ public class ReferenceDataSnapshotProvider(DotGlassesDbContext dbContext) : IRef
             catalogues.Select(c => new PresetCatalogueSnapshot(
                 c.Id,
                 c.Name,
+                IsActive: !c.IsDeleted,
                 lensOptions.Where(l => l.PresetCatalogueId == c.Id)
                     .Select(l => new LensOptionSnapshot(
                         l.Id,

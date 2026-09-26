@@ -12,9 +12,40 @@ namespace DotGlasses.Infrastructure.Persistence;
 /// ReferenceDataAdminService/OrganisationAdminService.</summary>
 public class PresetCatalogueAdminService(DotGlassesDbContext dbContext, IReferenceDataSnapshotProvider referenceDataSnapshotProvider) : IPresetCatalogueAdminService
 {
-    public async Task<IReadOnlyList<PresetCatalogueAdminDto>> ListAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<PresetCatalogueAdminDto>> ListAsync(CancellationToken cancellationToken = default) =>
+        await ToAdminDtosAsync(await dbContext.PresetCatalogues.OrderBy(x => x.Name).ToListAsync(cancellationToken), cancellationToken);
+
+    public async Task<IReadOnlyList<PresetCatalogueAdminDto>> ListRetiredAsync(CancellationToken cancellationToken = default) =>
+        await ToAdminDtosAsync(
+            await dbContext.PresetCatalogues.IgnoreQueryFilters().Where(x => x.IsDeleted).OrderBy(x => x.Name).ToListAsync(cancellationToken),
+            cancellationToken);
+
+    public async Task RetireAsync(Guid id, CancellationToken cancellationToken = default)
     {
-        var catalogues = await dbContext.PresetCatalogues.OrderBy(x => x.Name).ToListAsync(cancellationToken);
+        var entity = await dbContext.PresetCatalogues.FirstAsync(x => x.Id == id, cancellationToken);
+
+        // Remove() on an ISoftDeletable entity is turned into a soft-delete by
+        // AuditSaveChangesInterceptor — historical Tests/Leads/Sales still name this lens set by
+        // PresetCatalogueId, so it must never be hard-deleted. Its assignments are left alone, so
+        // reactivating restores it exactly where it was offered before.
+        dbContext.PresetCatalogues.Remove(entity);
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task ReactivateAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        // IgnoreQueryFilters() — the row being reactivated is exactly the one the soft-delete
+        // filter hides. AuditSaveChangesInterceptor has no "undelete", so the fields are cleared
+        // by hand (same as OrganisationAdminService.SetActiveAsync).
+        var entity = await dbContext.PresetCatalogues.IgnoreQueryFilters().FirstAsync(x => x.Id == id, cancellationToken);
+        entity.IsDeleted = false;
+        entity.DeletedAtUtc = null;
+        entity.DeletedBy = null;
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<PresetCatalogueAdminDto>> ToAdminDtosAsync(List<PresetCatalogue> catalogues, CancellationToken cancellationToken)
+    {
         var catalogueIds = catalogues.Select(c => c.Id).ToList();
 
         var lensOptions = await dbContext.LensOptions
@@ -107,6 +138,12 @@ public class PresetCatalogueAdminService(DotGlassesDbContext dbContext, IReferen
 
     public async Task AssignCatalogueToOrgAsync(Guid catalogueId, Guid orgNodeId, CancellationToken cancellationToken = default)
     {
+        // The assign form never offers a retired lens set; this answers a hand-built POST.
+        if (!await dbContext.PresetCatalogues.AnyAsync(x => x.Id == catalogueId, cancellationToken))
+        {
+            throw new DomainRuleViolationException("This lens set is retired — reactivate it before assigning it.");
+        }
+
         var alreadyAssigned = await dbContext.PresetCatalogueAssignments
             .AnyAsync(a => a.PresetCatalogueId == catalogueId && a.OrgNodeId == orgNodeId, cancellationToken);
         if (alreadyAssigned)

@@ -70,6 +70,11 @@ public class ConsultationRulesTests
     private static readonly Guid LensA3NoCoatings = Guid.Parse("00000000-0000-0000-0000-000000000f13");
     private static readonly Guid LensB1 = Guid.Parse("00000000-0000-0000-0000-000000000f21");
 
+    /// <summary>A retired lens set: present in the server's snapshot (historical records still
+    /// resolve it) but no longer sellable.</summary>
+    private static readonly Guid RetiredCatalogue = Guid.Parse("00000000-0000-0000-0000-000000000f03");
+    private static readonly Guid LensRetired1 = Guid.Parse("00000000-0000-0000-0000-000000000f31");
+
     private static readonly Guid NeverExisted = Guid.Parse("00000000-0000-0000-0000-0000000000ff");
 
     /// <summary>The server's filling: the whole library, retired items carrying IsActive = false.
@@ -116,13 +121,16 @@ public class ConsultationRulesTests
             // UnavailableCoating is deliberately on no lens option's roster, and LensA3NoCoatings
             // deliberately has an empty one: those are the two different ways availability fails,
             // and they are reported against different fields.
-            new PresetCatalogueSnapshot(CatalogueA, "Six lens set", [
+            new PresetCatalogueSnapshot(CatalogueA, "Six lens set", IsActive: true, [
                 new LensOptionSnapshot(LensA1, "+1.00", 0, [ActiveCoating, SecondCoating, ExcludingCoating]),
                 new LensOptionSnapshot(LensA2, "+2.50", 1, [ActiveCoating, SecondCoating, ExcludingCoating]),
                 new LensOptionSnapshot(LensA3NoCoatings, "+3.50", 2, []),
             ]),
-            new PresetCatalogueSnapshot(CatalogueB, "Nine lens set", [
+            new PresetCatalogueSnapshot(CatalogueB, "Nine lens set", IsActive: true, [
                 new LensOptionSnapshot(LensB1, "+3.00", 0, [ActiveCoating]),
+            ]),
+            new PresetCatalogueSnapshot(RetiredCatalogue, "Retired lens set", IsActive: false, [
+                new LensOptionSnapshot(LensRetired1, "+1.50", 0, [ActiveCoating]),
             ]),
         ],
         [],
@@ -867,6 +875,23 @@ public class ConsultationRulesTests
         request.LensOptionRightId = LensB1;
 
         Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void LensSet_Retired_IsRejectedAgainstTheLensSet()
+    {
+        // The server's snapshot keeps retired lens sets so historical records still resolve their
+        // labels; "present" is therefore not enough, the set must also be active. Reported against
+        // PresetCatalogueId so a Field App Failed record lands on the lens range control.
+        var request = ValidSale();
+        request.PresetCatalogueId = RetiredCatalogue;
+        request.LensOptionLeftId = LensRetired1;
+        request.LensOptionRightId = LensRetired1;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("PresetCatalogueId", failure.Key);
+        Assert.Equal("This lens set has been retired — choose another lens range.", failure.Message);
     }
 
     [Theory]
