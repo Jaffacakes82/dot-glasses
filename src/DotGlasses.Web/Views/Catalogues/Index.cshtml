@@ -38,9 +38,16 @@
         <div class="dg-card">
             <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                 <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin:0 0 var(--space-2); font-size:16px;">@catalogue.Name</h3>
-                <button class="dg-btn dg-btn-ghost" style="padding:6px 14px; font-size:12px;" type="button"
-                        data-bs-toggle="modal" data-bs-target="#editCatalogueModal-@catalogue.Id">Edit</button>
+                @if (catalogue.CanEdit)
+                {
+                    <button class="dg-btn dg-btn-ghost" style="padding:6px 14px; font-size:12px;" type="button"
+                            data-bs-toggle="modal" data-bs-target="#editCatalogueModal-@catalogue.Id">Edit</button>
+                }
             </div>
+            @if (!catalogue.CanEdit)
+            {
+                <p class="dg-crumb">Owned above your organisation — you can assign it, but not change it.</p>
+            }
             <p style="color:var(--text-muted-2); font-size:14px;">@catalogue.Description</p>
             @if (!string.IsNullOrEmpty(catalogue.RangeDescription))
             {
@@ -54,11 +61,14 @@
                     {
                         <span class="dg-badge" style="background:#f2f2f2; display:inline-flex; align-items:center; gap:6px;">
                             @assignedOrg.OrgName
-                            <form asp-action="UnassignCatalogue" method="post" style="display:inline;">
-                                <input type="hidden" name="catalogueId" value="@catalogue.Id" />
-                                <input type="hidden" name="orgNodeId" value="@assignedOrg.OrgNodeId" />
-                                <button type="submit" aria-label="Unassign from @assignedOrg.OrgName" style="border:none; background:none; cursor:pointer; padding:0; color:#888; font-size:13px; line-height:1;">&times;</button>
-                            </form>
+                            @if (assignedOrg.CanUnassign)
+                            {
+                                <form asp-action="UnassignCatalogue" method="post" style="display:inline;">
+                                    <input type="hidden" name="catalogueId" value="@catalogue.Id" />
+                                    <input type="hidden" name="orgNodeId" value="@assignedOrg.OrgNodeId" />
+                                    <button type="submit" aria-label="Unassign from @assignedOrg.OrgName" style="border:none; background:none; cursor:pointer; padding:0; color:#888; font-size:13px; line-height:1;">&times;</button>
+                                </form>
+                            }
                         </span>
                     }
                 </div>
@@ -73,10 +83,13 @@
                 {
                     <span class="dg-badge" style="background:var(--dot-beige); display:inline-flex; align-items:center; gap:6px;">
                         @lensOption.Label
-                        <form asp-action="RemoveLensOption" method="post" style="display:inline;">
-                            <input type="hidden" name="lensOptionId" value="@lensOption.Id" />
-                            <button type="submit" aria-label="Remove @lensOption.Label" style="border:none; background:none; cursor:pointer; padding:0; color:#888; font-size:13px; line-height:1;">&times;</button>
-                        </form>
+                        @if (catalogue.CanEdit)
+                        {
+                            <form asp-action="RemoveLensOption" method="post" style="display:inline;">
+                                <input type="hidden" name="lensOptionId" value="@lensOption.Id" />
+                                <button type="submit" aria-label="Remove @lensOption.Label" style="border:none; background:none; cursor:pointer; padding:0; color:#888; font-size:13px; line-height:1;">&times;</button>
+                            </form>
+                        }
                     </span>
                 }
             </div>
@@ -84,7 +97,7 @@
             @{
                 var availableStrengths = Model.AllLensStrengths.Where(s => !catalogue.LensOptions.Any(l => l.LensStrengthRefId == s.Id)).ToList();
             }
-            @if (availableStrengths.Any())
+            @if (catalogue.CanEdit && availableStrengths.Any())
             {
                 <form asp-action="AddLensOption" method="post" style="display:flex; gap:var(--space-2);">
                     <input type="hidden" name="CatalogueId" value="@catalogue.Id" />
@@ -97,11 +110,16 @@
                     <button class="dg-btn dg-btn-ghost" style="padding:8px 16px; font-size:13px; white-space:nowrap;" type="submit">Add lens</button>
                 </form>
             }
-            else
+            else if (catalogue.CanEdit)
             {
                 <p style="font-size:12px; color:#999; margin:0;">Every active lens strength is already on this catalogue.</p>
             }
         </div>
+
+        @if (!catalogue.CanEdit)
+        {
+            continue;
+        }
 
         <div class="modal fade" id="editCatalogueModal-@catalogue.Id" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog">
@@ -158,10 +176,13 @@
             {
                 <span class="dg-badge" style="background:#f2f2f2; display:inline-flex; align-items:center; gap:8px;">
                     @retired.Name
-                    <form asp-action="ReactivateCatalogue" method="post" style="display:inline;">
-                        <input type="hidden" name="catalogueId" value="@retired.Id" />
-                        <button type="submit" class="dg-btn dg-btn-ghost" style="padding:2px 10px; font-size:12px;">Reactivate</button>
-                    </form>
+                    @if (retired.CanReactivate)
+                    {
+                        <form asp-action="ReactivateCatalogue" method="post" style="display:inline;">
+                            <input type="hidden" name="catalogueId" value="@retired.Id" />
+                            <button type="submit" class="dg-btn dg-btn-ghost" style="padding:2px 10px; font-size:12px;">Reactivate</button>
+                        </form>
+                    }
                 </span>
             }
         </div>

@@ -216,7 +216,9 @@ functionally distinct from Admin anywhere).
 | Policy | Rule | Gates |
 |---|---|---|
 | `ReferenceData.Manage` | Admin, DGI level only | Reference Data screen |
-| `PresetCatalogue.Manage` | Admin, Country level+ | Preset Catalogues screen |
+| `PresetCatalogue.Manage` | Admin, Country level+ | Preset Catalogues screen (incl. the global lens-strength coating grid) |
+| `PresetCatalogue.EditInScope` | `PresetCatalogue.Manage`, resource-based (lens set's *owning* org at/below caller) | Editing a lens set: name/description, lens powers, retire/reactivate |
+| `PresetCatalogue.AssignInScope` | `PresetCatalogue.Manage`, resource-based (target org at/below caller) | Assigning/unassigning any active lens set |
 | `CustomOrders.View` | Any role, Country level+ | Custom Orders screen + its advance-status action |
 | `Organisations.ManageInScope` | Admin, resource-based (target org at/below caller) | Every Organisations write action |
 | `Users.ManageInScope` | Admin, resource-based (target user at/below caller) | Every User Directory write action |

@@ -23,6 +23,11 @@ public interface IPresetCatalogueAdminService
 
     Task ReactivateAsync(Guid id, CancellationToken cancellationToken = default);
 
+    /// <summary>True if an active lens set other than <paramref name="excludeId"/> already has this
+    /// name, ignoring case and surrounding whitespace — the name is the only thing a technician
+    /// sees to tell lens sets apart (ADR-0005). A retired lens set's name doesn't count.</summary>
+    Task<bool> IsNameTakenAsync(string name, Guid? excludeId = null, CancellationToken cancellationToken = default);
+
     /// <summary>owningOrgNodeId is the caller's own org node (stamped by the Web controller from
     /// ICurrentUserContext, never client-submitted) — see PresetCatalogue's own doc comment for
     /// why it must be Dgi/Country. Enforced here, not in Domain.</summary>
