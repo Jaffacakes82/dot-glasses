@@ -39,24 +39,24 @@
     {
         <div>
             <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin:0 0 8px; font-size:15px;">Lens range</h3>
-            <label>Range type</label>
-            <select class="form-select" asp-for="Form.LensRangeType" asp-items="Html.GetEnumSelectList<DotGlasses.Contracts.Common.LensRangeType>()">
-                <option value="">— Choose —</option>
+            @* The lens sets reaching the Lead's retail point, alphabetically, then Custom — ADR-0005. *@
+            <label>Lens range</label>
+            <select class="form-select" asp-for="Form.LensRange">
+                <option value="">— Choose a lens range —</option>
+                @foreach (var catalogue in Model.AvailableCatalogues)
+                {
+                    <option value="@catalogue.Id">@catalogue.Name</option>
+                }
+                <option value="@DotGlasses.Web.Models.LeadConversionFormModel.CustomLensRange">Custom prescription</option>
             </select>
+            @if (Model.AvailableCatalogues.Count == 0)
+            {
+                <p class="dg-crumb" style="margin-top:4px;">No lens sets are assigned to this lead's retail point — only a Custom prescription can be recorded.</p>
+            }
 
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
                 <div>
-                    <label>Preset catalogue</label>
-                    <select class="form-select" asp-for="Form.PresetCatalogueId">
-                        <option value="">—</option>
-                        @foreach (var catalogue in Model.AvailableCatalogues)
-                        {
-                            <option value="@catalogue.Id">@catalogue.Name</option>
-                        }
-                    </select>
-                </div>
-                <div>
-                    <label>Preset pupil distance (0-4)</label>
+                    <label>Lens set pupil distance (0-4)</label>
                     <input class="form-control" type="number" min="0" max="4" asp-for="Form.PresetPupilDistanceBucket" />
                 </div>
                 <div>

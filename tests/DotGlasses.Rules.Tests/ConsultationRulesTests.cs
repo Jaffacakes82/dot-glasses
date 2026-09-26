@@ -116,12 +116,12 @@ public class ConsultationRulesTests
             // UnavailableCoating is deliberately on no lens option's roster, and LensA3NoCoatings
             // deliberately has an empty one: those are the two different ways availability fails,
             // and they are reported against different fields.
-            new PresetCatalogueSnapshot(CatalogueA, "Six lens set", PresetCatalogueKind.SixLensSet, [
+            new PresetCatalogueSnapshot(CatalogueA, "Six lens set", [
                 new LensOptionSnapshot(LensA1, "+1.00", 0, [ActiveCoating, SecondCoating, ExcludingCoating]),
                 new LensOptionSnapshot(LensA2, "+2.50", 1, [ActiveCoating, SecondCoating, ExcludingCoating]),
                 new LensOptionSnapshot(LensA3NoCoatings, "+3.50", 2, []),
             ]),
-            new PresetCatalogueSnapshot(CatalogueB, "Nine lens set", PresetCatalogueKind.NineLensSet, [
+            new PresetCatalogueSnapshot(CatalogueB, "Nine lens set", [
                 new LensOptionSnapshot(LensB1, "+3.00", 0, [ActiveCoating]),
             ]),
         ],
@@ -147,7 +147,7 @@ public class ConsultationRulesTests
     };
 
     /// <summary>A Sale cannot decline to name a lens range: LensRangeType is non-nullable and its
-    /// default is SixLensSet, so the baseline request has to carry a complete preset range —
+    /// default is LensSet, so the baseline request has to carry a complete lens set range —
     /// catalogue, both lens options, and the pupil-distance bucket a Sale is required to have. It
     /// also has to carry a Coating set: at least one entry is required on both branches, so a
     /// baseline with an empty one would not be valid.</summary>
@@ -156,7 +156,7 @@ public class ConsultationRulesTests
         Id = Guid.NewGuid(),
         FullName = "Amina Okoro",
         FrameColourRefId = ActiveFrameColour,
-        LensRangeType = LensRangeType.SixLensSet,
+        LensRangeType = LensRangeType.LensSet,
         PresetCatalogueId = CatalogueA,
         LensOptionLeftId = LensA1,
         LensOptionRightId = LensA2,
@@ -168,7 +168,7 @@ public class ConsultationRulesTests
     private static CreateTestRequest PresetTest() => new()
     {
         Id = Guid.NewGuid(),
-        LensRangeType = LensRangeType.SixLensSet,
+        LensRangeType = LensRangeType.LensSet,
         PresetCatalogueId = CatalogueA,
         LensOptionLeftId = LensA1,
         LensOptionRightId = LensA2,
@@ -177,7 +177,7 @@ public class ConsultationRulesTests
     private static CreateLeadRequest PresetLead()
     {
         var request = ValidLead();
-        request.LensRangeType = LensRangeType.SixLensSet;
+        request.LensRangeType = LensRangeType.LensSet;
         request.PresetCatalogueId = CatalogueA;
         request.LensOptionLeftId = LensA1;
         request.LensOptionRightId = LensA2;
@@ -815,7 +815,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("LensRangeType", failure.Key);
-        Assert.Equal("Preset/custom lens fields must be empty when LensRangeType is not set.", failure.Message);
+        Assert.Equal("Lens set and custom lens fields must be empty when LensRangeType is not set.", failure.Message);
     }
 
     [Fact]
@@ -829,7 +829,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("LensRangeType", failure.Key);
-        Assert.Equal("Custom prescription fields must be empty for a preset LensRangeType.", failure.Message);
+        Assert.Equal("Custom prescription fields must be empty for a LensSet LensRangeType.", failure.Message);
     }
 
     [Fact]
@@ -841,7 +841,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("LensRangeType", failure.Key);
-        Assert.Equal("Preset fields must be empty for a Custom LensRangeType.", failure.Message);
+        Assert.Equal("Lens set fields must be empty for a Custom LensRangeType.", failure.Message);
     }
 
     // --- Lens range: the preset branch ----------------------------------------------------
@@ -852,6 +852,21 @@ public class ConsultationRulesTests
         Assert.True(ConsultationRules.Check(PresetTest(), Snapshot()).IsValid);
         Assert.True(ConsultationRules.Check(PresetLead(), Snapshot()).IsValid);
         Assert.True(ConsultationRules.Check(ValidSale(), Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void LensSet_WhicheverLensSetIsChosen_TheLensRangeIsTheSame()
+    {
+        // ADR-0005: the lens range says "a lens set"; which one is PresetCatalogueId's job. A Sale
+        // on the second set is the same kind of lens range as one on the first — there is no
+        // per-set kind for the two to disagree about.
+        var request = ValidSale();
+        request.LensRangeType = LensRangeType.LensSet;
+        request.PresetCatalogueId = CatalogueB;
+        request.LensOptionLeftId = LensB1;
+        request.LensOptionRightId = LensB1;
+
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
     }
 
     [Theory]
@@ -874,7 +889,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("PresetCatalogueId", failure.Key);
-        Assert.Equal("PresetCatalogueId, LensOptionLeftId and LensOptionRightId are all required for a preset LensRangeType.", failure.Message);
+        Assert.Equal("PresetCatalogueId, LensOptionLeftId and LensOptionRightId are all required for a LensSet LensRangeType.", failure.Message);
     }
 
     [Fact]
@@ -937,7 +952,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("PupilDistanceMm", failure.Key);
-        Assert.Equal("PupilDistanceMm must be empty for a preset LensRangeType — use PresetPupilDistanceBucket instead.", failure.Message);
+        Assert.Equal("PupilDistanceMm must be empty for a LensSet LensRangeType — use PresetPupilDistanceBucket instead.", failure.Message);
     }
 
     [Theory]
@@ -995,10 +1010,10 @@ public class ConsultationRulesTests
             "PresetPupilDistanceBucket must be between 0 and 4.",
             AssertSingleFailure(ConsultationRules.Check(test, Snapshot())).Message);
         Assert.Equal(
-            "PresetPupilDistanceBucket must be between 0 and 4 for a preset LensRangeType.",
+            "PresetPupilDistanceBucket must be between 0 and 4 for a LensSet LensRangeType.",
             AssertSingleFailure(ConsultationRules.Check(lead, Snapshot())).Message);
         Assert.Equal(
-            "PresetPupilDistanceBucket is required and must be between 0 and 4 for a preset LensRangeType.",
+            "PresetPupilDistanceBucket is required and must be between 0 and 4 for a LensSet LensRangeType.",
             AssertSingleFailure(ConsultationRules.Check(sale, Snapshot())).Message);
     }
 
@@ -1013,10 +1028,10 @@ public class ConsultationRulesTests
         sale.PresetPupilDistanceBucket = null;
 
         Assert.Equal(
-            "PresetPupilDistanceBucket must be between 0 and 2 for a preset LensRangeType (0-2 for a children's frame).",
+            "PresetPupilDistanceBucket must be between 0 and 2 for a LensSet LensRangeType (0-2 for a children's frame).",
             AssertSingleFailure(ConsultationRules.Check(lead, Snapshot())).Message);
         Assert.Equal(
-            "PresetPupilDistanceBucket is required and must be between 0 and 2 for a preset LensRangeType (0-2 for a children's frame).",
+            "PresetPupilDistanceBucket is required and must be between 0 and 2 for a LensSet LensRangeType (0-2 for a children's frame).",
             AssertSingleFailure(ConsultationRules.Check(sale, Snapshot())).Message);
     }
 
@@ -1448,7 +1463,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("LensOptionLeftId", failure.Key);
-        Assert.Equal("This lens has no coatings configured yet, so it can't be sold on a preset range.", failure.Message);
+        Assert.Equal("This lens has no coatings configured yet, so it can't be sold on a lens set.", failure.Message);
     }
 
     [Fact]
@@ -1463,7 +1478,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("LensOptionLeftId", failure.Key);
-        Assert.Equal("This lens has no coatings configured yet, so it can't be sold on a preset range.", failure.Message);
+        Assert.Equal("This lens has no coatings configured yet, so it can't be sold on a lens set.", failure.Message);
     }
 
     [Fact]

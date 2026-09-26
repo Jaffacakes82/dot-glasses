@@ -88,7 +88,7 @@ public class DomainRuleViolationScreenTests(AdminPortalFactory factory) : IClass
         var (_, html) = await AdminPortalFactory.PostAndFollowAsync(
             client,
             "/Catalogues/CreateCatalogue",
-            AdminPortalFactory.Form(token, ("Name", "Rejected range"), ("Kind", nameof(PresetCatalogueKind.Other))),
+            AdminPortalFactory.Form(token, ("Name", "Rejected range")),
             referer: "/Catalogues");
 
         Assert.Contains("A PresetCatalogue&#x27;s owning org must be Dgi or Country level.", html);

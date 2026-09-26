@@ -2,7 +2,6 @@ using DotGlasses.Application.Common;
 using DotGlasses.Application.ReferenceData;
 using DotGlasses.Rules.ReferenceData;
 using Microsoft.EntityFrameworkCore;
-using ContractPresetCatalogueKind = DotGlasses.Contracts.Common.PresetCatalogueKind;
 
 namespace DotGlasses.Infrastructure.Persistence;
 
@@ -52,7 +51,6 @@ public class ReferenceDataSnapshotProvider(DotGlassesDbContext dbContext) : IRef
             catalogues.Select(c => new PresetCatalogueSnapshot(
                 c.Id,
                 c.Name,
-                (ContractPresetCatalogueKind)(int)c.Kind,
                 lensOptions.Where(l => l.PresetCatalogueId == c.Id)
                     .Select(l => new LensOptionSnapshot(
                         l.Id,

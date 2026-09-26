@@ -43,7 +43,7 @@ public class LeadServiceTests
             ConsentGiven = true,
             ReferredOrTreated = false,
             ReasonNotPurchasedRefId = Guid.NewGuid(),
-            LensRangeType = LensRangeType.SixLensSet,
+            LensRangeType = LensRangeType.LensSet,
         };
 
     private static Domain.Entities.Test AnExistingTest(Guid id) => new()

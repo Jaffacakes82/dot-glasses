@@ -46,10 +46,6 @@
             {
                 <p class="dg-crumb">Diopter range: @catalogue.RangeDescription</p>
             }
-            @if (catalogue.Kind != DotGlasses.Domain.Enums.PresetCatalogueKind.Other)
-            {
-                <p class="dg-crumb">Field App picker role: <strong>@catalogue.Kind</strong></p>
-            }
             <p class="dg-stat-label">Assigned to @catalogue.AssignedOrgs.Count org(s)</p>
             @if (catalogue.AssignedOrgs.Any())
             {
@@ -129,16 +125,6 @@
                                 <label>Diopter / strength range</label>
                                 <input class="form-control" name="RangeDescription" value="@catalogue.RangeDescription" />
                             </div>
-                            <div class="dg-auth-field">
-                                <label>Field App picker role</label>
-                                <select class="form-select" name="Kind">
-                                    @foreach (var kind in Enum.GetValues<DotGlasses.Domain.Enums.PresetCatalogueKind>())
-                                    {
-                                        <option value="@((int)kind)" selected="@(catalogue.Kind == kind ? "selected" : null)">@kind</option>
-                                    }
-                                </select>
-                                <p class="dg-crumb" style="margin-top:4px;">SixLensSet/NineLensSet drive the Field App's 6-Lens/9-Lens buttons — only one catalogue may hold each.</p>
-                            </div>
                         </div>
                         <div class="modal-footer">
                             <button class="dg-btn dg-btn-ghost" type="button" data-bs-dismiss="modal">Cancel</button>
@@ -183,8 +169,8 @@
 <div class="dg-card">
     <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin-top:0;">Lens strength coating availability</h3>
     <p style="font-size:12px; color:var(--text-muted); margin-bottom:var(--space-3);">
-        Which coatings each lens strength can be sold with on a preset range — drives the Field App's
-        coating picker. A strength with no coatings checked can't be sold on a preset range yet.
+        Which coatings each lens strength can be sold with on a lens set — drives the Field App's
+        coating picker. A strength with no coatings checked can't be sold on a lens set yet.
     </p>
     @if (!Model.ActiveCoatings.Any())
     {
@@ -248,16 +234,6 @@
                     <div class="dg-auth-field">
                         <label>Diopter / strength range</label>
                         <input class="form-control" name="RangeDescription" />
-                    </div>
-                    <div class="dg-auth-field">
-                        <label>Field App picker role</label>
-                        <select class="form-select" name="Kind">
-                            @foreach (var kind in Enum.GetValues<DotGlasses.Domain.Enums.PresetCatalogueKind>())
-                            {
-                                <option value="@((int)kind)">@kind</option>
-                            }
-                        </select>
-                        <p class="dg-crumb" style="margin-top:4px;">SixLensSet/NineLensSet drive the Field App's 6-Lens/9-Lens buttons — only one catalogue may hold each.</p>
                     </div>
                 </div>
                 <div class="modal-footer">

@@ -313,7 +313,7 @@ public class SaleAssemblyTests
     {
         var request = SaleAssembly.Build(Guid.NewGuid(), null, new SaleAnswers
         {
-            LensRangeType = LensRangeType.SixLensSet,
+            LensRangeType = LensRangeType.LensSet,
             OrderFromDotGlasses = true,
         });
 

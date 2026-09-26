@@ -188,14 +188,16 @@ Real domain entities, in `DotGlasses.Domain/Entities` and `/Enums`:
   `IVisionTestRepository`/`IVisionTestService`/`VisionTestService`, not `ITestRepository` — that
   name would collide with the `DotGlasses.Application.Tests` xUnit project's own root namespace.
   The Domain entity itself is still `Test`.
-- **`PresetCatalogue`/`LensOption`** — admin-configurable lens ranges. A catalogue's roster is
-  "which curated `LensStrength` reference items are included, in what order" — the actual power/
-  bifocal-ness lives in the reference item's own label (e.g. `+2.50`, `+0.00 / +2.50 (Bifocal)`),
-  not typed columns on `LensOption`. `PresetCatalogueKind` (`Other`/`SixLensSet`/`NineLensSet`)
-  identifies which catalogue drives the Field App's two preset-range buttons — at most one
-  catalogue may hold each of `SixLensSet`/`NineLensSet`. `LensStrengthCoatingOption` is the
-  many-to-many "this lens strength is sellable in this coating" — a strength with zero configured
-  coatings can't be sold on a preset range (see `docs/open-issues.md`).
+- **`PresetCatalogue`/`LensOption`** — a **lens set** in product language (`CONTEXT.md`). A
+  catalogue's roster is "which curated `LensStrength` reference items are included, in what
+  order" — the actual power/bifocal-ness lives in the reference item's own label (e.g. `+2.50`,
+  `+0.00 / +2.50 (Bifocal)`), not typed columns on `LensOption`. Lens sets are data-driven
+  (ADR-0005): there is no per-set role or kind, and the Field App offers every non-empty lens set
+  assigned at or above the retail point. A record's `LensRangeType` is only `LensSet` or `Custom`
+  — *which* lens set is `PresetCatalogueId`; never reintroduce a 6-Lens/9-Lens distinction as a
+  type. `LensStrengthCoatingOption` is the many-to-many "this lens strength is sellable in this
+  coating" — a strength with zero configured coatings can't be sold on a lens set (see
+  `docs/open-issues.md`).
 - **`ReferenceDataItem`** — one generic table backing every admin-managed dropdown, keyed by
   `ReferenceDataCategory` (Reasons not purchased, Referral reasons, Coatings & tints, Frame
   colours, Hard case colours, Occupations, Lens strengths). Retiring an option sets `IsActive =

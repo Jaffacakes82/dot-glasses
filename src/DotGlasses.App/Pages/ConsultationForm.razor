@@ -149,14 +149,14 @@
                                        LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
                                        AllowNoPreference="true" Errors="_errors" SelectionChanged="OnLensSelectionChanged" />
 
-                    @if (_lensRange.LensRangeType is LensRangeType.SixLensSet or LensRangeType.NineLensSet && _lensRange.LensOptionLeftId is not null && AvailableCoatingIdsForSelectedPreset.Count > 0)
+                    @if (_lensRange.LensRangeType is LensRangeType.LensSet && _lensRange.LensOptionLeftId is not null && AvailableCoatingIdsForSelectedPreset.Count > 0)
                     {
                         <ReferenceDataDropdown Label="Coating preference (optional)"
                                                 Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating).Where(c => AvailableCoatingIdsForSelectedPreset.Contains(c.Id)).ToList()"
                                                 SelectedId="_coatingPreferenceRefId" SelectedIdChanged="v => _coatingPreferenceRefId = v"
                                                 Errors="_errors" Field="CoatingPreferenceRefId" />
                     }
-                    @if (_lensRange.LensRangeType is not (LensRangeType.SixLensSet or LensRangeType.NineLensSet))
+                    @if (_lensRange.LensRangeType is not LensRangeType.LensSet)
                     {
                         <ReferenceDataDropdown Label="Coating preference (optional)" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
                                                 SelectedId="_coatingPreferenceRefId" SelectedIdChanged="v => _coatingPreferenceRefId = v"
@@ -213,7 +213,7 @@
                                        LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
                                        AllowNoPreference="false" Errors="_errors" SelectionChanged="OnLensSelectionChanged" />
 
-                    @if (_lensRange.LensRangeType is LensRangeType.SixLensSet or LensRangeType.NineLensSet && _lensRange.LensOptionLeftId is not null && AvailableCoatingIdsForSelectedPreset.Count > 0)
+                    @if (_lensRange.LensRangeType is LensRangeType.LensSet && _lensRange.LensOptionLeftId is not null && AvailableCoatingIdsForSelectedPreset.Count > 0)
                     {
                         <CoatingMultiSelector Label="Coating" AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
                                                RestrictToIds="AvailableCoatingIdsForSelectedPreset"
@@ -257,14 +257,14 @@
                                        LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
                                        AllowNoPreference="true" Errors="_errors" SelectionChanged="OnLensSelectionChanged" />
 
-                    @if (_lensRange.LensRangeType is LensRangeType.SixLensSet or LensRangeType.NineLensSet && _lensRange.LensOptionLeftId is not null && AvailableCoatingIdsForSelectedPreset.Count > 0)
+                    @if (_lensRange.LensRangeType is LensRangeType.LensSet && _lensRange.LensOptionLeftId is not null && AvailableCoatingIdsForSelectedPreset.Count > 0)
                     {
                         <ReferenceDataDropdown Label="Coating preference (optional)"
                                                 Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating).Where(c => AvailableCoatingIdsForSelectedPreset.Contains(c.Id)).ToList()"
                                                 SelectedId="_coatingPreferenceRefId" SelectedIdChanged="v => _coatingPreferenceRefId = v"
                                                 Errors="_errors" Field="CoatingPreferenceRefId" />
                     }
-                    @if (_lensRange.LensRangeType is not (LensRangeType.SixLensSet or LensRangeType.NineLensSet))
+                    @if (_lensRange.LensRangeType is not LensRangeType.LensSet)
                     {
                         <ReferenceDataDropdown Label="Coating preference (optional)" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
                                                 SelectedId="_coatingPreferenceRefId" SelectedIdChanged="v => _coatingPreferenceRefId = v"
@@ -718,6 +718,15 @@
         _errors.Clear();
         _errors.Unattributed.Clear();
         _summaryMessage = null;
+
+        // A Sale has no default lens range (ADR-0005). Left unchosen, SaleAssembly.Build falls back
+        // to Custom and the shared rules would ask for a prescription the technician never meant
+        // to type — so ask for the actual decision first. FormErrors keeps the first message per
+        // field, so this one wins over the rules' LensRangeType failure below.
+        if (IsSale && _lensRange.LensRangeType is null)
+        {
+            _errors.Add("LensRangeType", "Choose a lens range.");
+        }
 
         var result = IsTest
             ? ConsultationRules.Check(BuildTestRequest(), Snapshot)

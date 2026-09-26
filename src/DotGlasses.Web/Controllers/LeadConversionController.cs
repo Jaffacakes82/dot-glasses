@@ -78,6 +78,16 @@ public class LeadConversionController(
             return RedirectToAction("Index", "EventHistory", new { tab = "leads" });
         }
 
+        // No default lens range (ADR-0005): with the choice left empty, SaleAssembly.Build would
+        // fall back to Custom and the rules would complain about a missing prescription the admin
+        // never meant to enter. Ask for the actual decision instead.
+        form.ApplyLensRange();
+        if (!SaleAssembly.CarriesLens(lead) && form.LensRangeType is null)
+        {
+            ModelState.AddModelError($"{nameof(form)}.{nameof(form.LensRangeType)}", "Choose a lens range.");
+            return View(await BuildViewModelAsync(lead, form, cancellationToken));
+        }
+
         var request = BuildCreateSaleRequest(lead, form);
 
         // The same module SalesController checks against, off the same per-request snapshot
@@ -183,11 +193,11 @@ public class LeadConversionController(
     {
         switch (lead.LensRangeType)
         {
-            case LensRangeType.SixLensSet or LensRangeType.NineLensSet:
+            case LensRangeType.LensSet:
                 var catalogue = referenceData.FindCatalogue(lead.PresetCatalogueId);
                 var left = referenceData.ResolveLensOptionLabel(lead.LensOptionLeftId);
                 var right = referenceData.ResolveLensOptionLabel(lead.LensOptionRightId);
-                return $"{catalogue?.Name ?? "Preset range"} — Left: {left}, Right: {right}";
+                return $"{catalogue?.Name ?? "Lens set"} — Left: {left}, Right: {right}";
             case LensRangeType.Custom:
                 // Still keyed off the id being present, not off the item resolving: a Lead with no
                 // lens type recorded omits the clause entirely, exactly as before. What changes is

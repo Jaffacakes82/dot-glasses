@@ -31,7 +31,7 @@ public class VisionTestServiceTests
         Gender = Gender.Female,
         Outcome = TestOutcome.NeedsGlasses,
         ReferredOrTreated = false,
-        LensRangeType = LensRangeType.SixLensSet,
+        LensRangeType = LensRangeType.LensSet,
     };
 
     [Fact]

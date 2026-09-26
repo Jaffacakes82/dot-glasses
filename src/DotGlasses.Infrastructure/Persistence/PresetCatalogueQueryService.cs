@@ -40,13 +40,16 @@ public class PresetCatalogueQueryService(DotGlassesDbContext dbContext, IUnscope
 
         var referenceData = await referenceDataSnapshotProvider.GetAsync(cancellationToken);
 
+        // The Field App renders this list as it arrives (ADR-0005): alphabetical, and never a lens
+        // set with no lens powers — nothing on it could be sold. Ordered here rather than relying
+        // on the provider's database ORDER BY, whose result depends on the server's collation.
         return referenceData.PresetCatalogues
-            .Where(c => catalogueIds.Contains(c.Id))
+            .Where(c => catalogueIds.Contains(c.Id) && c.LensOptions.Count > 0)
+            .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
             .Select(c => new PresetCatalogueDto
             {
                 Id = c.Id,
                 Name = c.Name,
-                Kind = c.Kind,
                 LensOptions = c.LensOptions.Select(l => new LensOptionDto
                 {
                     Id = l.Id,

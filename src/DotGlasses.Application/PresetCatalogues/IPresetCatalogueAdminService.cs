@@ -16,14 +16,9 @@ public interface IPresetCatalogueAdminService
     /// <summary>owningOrgNodeId is the caller's own org node (stamped by the Web controller from
     /// ICurrentUserContext, never client-submitted) — see PresetCatalogue's own doc comment for
     /// why it must be Dgi/Country. Enforced here, not in Domain.</summary>
-    Task<PresetCatalogueAdminDto> CreateAsync(string name, string? description, string? rangeDescription, Guid owningOrgNodeId, PresetCatalogueKind kind, CancellationToken cancellationToken = default);
+    Task<PresetCatalogueAdminDto> CreateAsync(string name, string? description, string? rangeDescription, Guid owningOrgNodeId, CancellationToken cancellationToken = default);
 
-    Task UpdateAsync(Guid id, string name, string? description, string? rangeDescription, PresetCatalogueKind kind, CancellationToken cancellationToken = default);
-
-    /// <summary>True if an existing catalogue (other than excludeId) already holds this Kind —
-    /// backs the create/update validators' "at most one SixLensSet, at most one NineLensSet"
-    /// guard. Always false for Kind.Other, which any number of catalogues may hold.</summary>
-    Task<bool> HasCatalogueWithKindAsync(PresetCatalogueKind kind, Guid? excludeId = null, CancellationToken cancellationToken = default);
+    Task UpdateAsync(Guid id, string name, string? description, string? rangeDescription, CancellationToken cancellationToken = default);
 
     /// <summary>SortOrder is max+1 within the catalogue — matches ReferenceDataAdminService's
     /// CreateAsync convention.</summary>
@@ -69,7 +64,6 @@ public record PresetCatalogueAdminDto(
     string? Description,
     string? RangeDescription,
     Guid OwningOrgNodeId,
-    PresetCatalogueKind Kind,
     IReadOnlyList<PresetCatalogueLensOptionAdminDto> LensOptions);
 
 public record PresetCatalogueLensOptionAdminDto(Guid Id, Guid LensStrengthRefId, string Label, int SortOrder);
