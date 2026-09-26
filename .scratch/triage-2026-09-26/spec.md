@@ -14,6 +14,7 @@ and the data repair in the affected environment are separate jobs with separate 
 | 03 | Why `AspNetUsers` carries `HierarchyPath` as well as `OrgNodeId` | `wontfix` (question answered; FK confirmed present in staging) |
 | 04 | Preset Catalogue "Field App picker role" and "Diopter range" are confusing, and "Other" catalogues are dead config | `needs-info` (product decision) |
 | 05 | CI's migration step authenticates to Postgres by accident (blank username → `runner`) | `ready-for-human` |
+| 06 | The error page's Request ID can't be found in the logs | `done` (PR #26) |
 
 ## Ordering
 
@@ -24,7 +25,7 @@ and the data repair in the affected environment are separate jobs with separate 
   `OrgTreeLookup` over the whole unscoped tree.
 - 01 can be built and merged at any time. Environments without duplicates (e.g. a fresh local DB)
   are unaffected.
-- 03 and 04 are independent of everything else.
+- 03, 04 and 06 are independent of everything else. 06 was raised later the same day.
 
 ## Also noticed during triage
 
