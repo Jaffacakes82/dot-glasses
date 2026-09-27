@@ -2,6 +2,7 @@ using DotGlasses.Contracts.Common;
 using DotGlasses.Contracts.Leads;
 using DotGlasses.Contracts.PresetCatalogues;
 using DotGlasses.Contracts.ReferenceData;
+using DotGlasses.Rules.LensRanges;
 
 namespace DotGlasses.Web.Models;
 
@@ -42,8 +43,15 @@ public class LeadConversionFormModel
     public bool TreatedInFacility { get; set; }
     public string? ReferralLocationFreeText { get; set; }
 
-    // Only rendered/used when the source Lead captured no lens/prescription preference at all
-    // (Lead.LensRangeType is null) — otherwise the Lead's own values carry over unchanged.
+    // Only rendered/used when the Lead's own lens preference can't carry over — it recorded none,
+    // or its lens set no longer reaches the Lead's retail point — otherwise it carries unchanged.
+    //
+    // LensRange is the one control the admin actually uses: a lens set's id, or "custom"
+    // (LensRangeChoice, ADR-0005). It is the single exception to the 1:1 naming above;
+    // ApplyLensRange turns it into the two CreateSaleRequest fields it stands for, which keep their
+    // names so rule failures still remap onto "Form.{PropertyName}".
+    public string? LensRange { get; set; }
+
     public LensRangeType? LensRangeType { get; set; }
     public Guid? PresetCatalogueId { get; set; }
     public Guid? LensOptionLeftId { get; set; }
@@ -61,18 +69,24 @@ public class LeadConversionFormModel
     public Guid? LensTypeRefId { get; set; }
     public string? LensTypeOtherText { get; set; }
     public decimal? PupilDistanceMm { get; set; }
+
+    public void ApplyLensRange() => (LensRangeType, PresetCatalogueId) = LensRangeChoice.Parse(LensRange);
 }
 
 /// <summary>LensCarriedOver is true when the Lead already captured a product preference — in
 /// that case the lens/prescription section of the form is a read-only summary (LensSummary) and
 /// the admin only supplies the genuinely-new Sale fields (frame, coating, hard case, order).
-/// When false, the admin must also pick a lens range — see LeadConversionFormModel.</summary>
+/// When false, the admin must also pick a lens range — see LeadConversionFormModel.
+/// UnavailableLensSetName is set when the Lead did record a lens set but it no longer reaches the
+/// Lead's retail point (retired or unassigned since): the screen says so and asks afresh rather
+/// than leaving the admin with a summary they can't act on.</summary>
 public class LeadConversionViewModel
 {
     public required LeadDto Lead { get; init; }
     public required string CustomerFullName { get; init; }
     public required string? CustomerPhoneNumber { get; init; }
     public required bool LensCarriedOver { get; init; }
+    public required string? UnavailableLensSetName { get; init; }
     public required string? LensSummary { get; init; }
     public required IReadOnlyList<PresetCatalogueDto> AvailableCatalogues { get; init; }
     public required IReadOnlyList<ReferenceDataItemDto> FrameColours { get; init; }

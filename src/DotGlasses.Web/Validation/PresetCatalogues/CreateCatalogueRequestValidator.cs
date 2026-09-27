@@ -8,17 +8,16 @@ public class CreateCatalogueRequestValidator : AbstractValidator<CreateCatalogue
 {
     public CreateCatalogueRequestValidator(IPresetCatalogueAdminService catalogueAdminService)
     {
-        RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
+        // Cascade stop: the uniqueness check has nothing to look up on a blank or overlong name.
+        RuleFor(x => x.Name).Cascade(CascadeMode.Stop).NotEmpty().MaximumLength(200)
+            .MustAsync(async (name, cancellationToken) => !await catalogueAdminService.IsNameTakenAsync(name, excludeId: null, cancellationToken))
+            .WithMessage(LensSetNameMessages.Taken);
         RuleFor(x => x.Description).MaximumLength(500);
-        RuleFor(x => x.RangeDescription).MaximumLength(100);
-        RuleFor(x => x.Kind).IsInEnum();
-
-        RuleFor(x => x).CustomAsync(async (request, context, cancellationToken) =>
-        {
-            if (await catalogueAdminService.HasCatalogueWithKindAsync(request.Kind, excludeId: null, cancellationToken))
-            {
-                context.AddFailure(nameof(request.Kind), $"Another catalogue is already set as {request.Kind} — only one catalogue may hold that kind.");
-            }
-        });
     }
+}
+
+/// <summary>Shared by the create and update validators — one sentence for one rule.</summary>
+public static class LensSetNameMessages
+{
+    public const string Taken = "A lens set with this name already exists.";
 }

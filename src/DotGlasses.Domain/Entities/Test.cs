@@ -74,7 +74,7 @@ public class Test : IAuditable, ISoftDeletable, IHierarchyScoped
     /// optional here the same as on a Lead (see Lead.PupilDistanceMm).</summary>
     public decimal? PupilDistanceMm { get; set; }
 
-    /// <summary>Meaningful only for a preset range (SixLensSet/NineLensSet) — see
+    /// <summary>Meaningful only for a lens set — see
     /// Lead.PresetPupilDistanceBucket.</summary>
     public int? PresetPupilDistanceBucket { get; set; }
 

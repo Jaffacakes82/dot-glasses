@@ -4,15 +4,18 @@ namespace DotGlasses.Web.Models;
 
 public record CataloguesIndexViewModel(
     IReadOnlyList<CatalogueCard> Catalogues,
+    IReadOnlyList<RetiredCatalogueCard> RetiredCatalogues,
     IReadOnlyList<(Guid Id, string Label)> AllLensStrengths,
     IReadOnlyList<(Guid Id, string Label)> ActiveCoatings,
     IReadOnlyDictionary<Guid, IReadOnlyList<Guid>> AvailableCoatingsByLensStrength,
     IReadOnlyList<(Guid Id, string Name)> AssignableOrgs,
     string? Search);
 
-public record CatalogueCard(Guid Id, string Name, string? Description, string? RangeDescription, PresetCatalogueKind Kind, IReadOnlyList<LensOptionCard> LensOptions, IReadOnlyList<AssignedOrgCard> AssignedOrgs);
+public record RetiredCatalogueCard(Guid Id, string Name, bool CanReactivate);
 
-public record AssignedOrgCard(Guid OrgNodeId, string OrgName);
+public record CatalogueCard(Guid Id, string Name, string? Description, IReadOnlyList<LensOptionCard> LensOptions, IReadOnlyList<AssignedOrgCard> AssignedOrgs, bool CanEdit);
+
+public record AssignedOrgCard(Guid OrgNodeId, string OrgName, bool CanUnassign);
 
 public record LensOptionCard(Guid Id, Guid LensStrengthRefId, string Label, int SortOrder);
 
@@ -20,8 +23,6 @@ public class CreateCatalogueRequest
 {
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
-    public string? RangeDescription { get; set; }
-    public PresetCatalogueKind Kind { get; set; } = PresetCatalogueKind.Other;
 }
 
 public class UpdateCatalogueRequest
@@ -29,8 +30,6 @@ public class UpdateCatalogueRequest
     public Guid Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
-    public string? RangeDescription { get; set; }
-    public PresetCatalogueKind Kind { get; set; } = PresetCatalogueKind.Other;
 }
 
 public class AddLensOptionRequest

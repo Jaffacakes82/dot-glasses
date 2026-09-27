@@ -12,9 +12,14 @@ and the data repair in the affected environment are separate jobs with separate 
 | 01 | Org path segments are re-minted after deactivation, which creates duplicate `HierarchyPath`s | `done` (PR #25) |
 | 02 | Repair the duplicate `/1/2/` org paths in the affected environment | `done` (nonprod repaired by hand, verified 2026-09-26) |
 | 03 | Why `AspNetUsers` carries `HierarchyPath` as well as `OrgNodeId` | `wontfix` (question answered; FK confirmed present in staging) |
-| 04 | Preset Catalogue "Field App picker role" and "Diopter range" are confusing, and "Other" catalogues are dead config | `needs-info` (product decision) |
+| 04 | Preset Catalogue "Field App picker role" and "Diopter range" are confusing, and "Other" catalogues are dead config | resolved via grilling → 07–11, ADR-0005 |
 | 05 | CI's migration step authenticates to Postgres by accident (blank username → `runner`) | `ready-for-human` |
 | 06 | The error page's Request ID can't be found in the logs | `done` (PR #26) |
+| 07 | Lens range is "a lens set" or "Custom prescription", driven by assigned lens sets | `done` (PR #28) |
+| 08 | Retire and reactivate lens sets | `done` (PR #28) |
+| 09 | Refuse a lens set that isn't available at the record's location | `done` (PR #28) |
+| 10 | Lens set editing limited to the owning org; names unique among active sets | `done` (PR #28) |
+| 11 | Catalogues screen speaks "lens set"; "Diopter range" dropped | `done` (PR #28) |
 
 ## Ordering
 
@@ -26,6 +31,9 @@ and the data repair in the affected environment are separate jobs with separate 
 - 01 can be built and merged at any time. Environments without duplicates (e.g. a fresh local DB)
   are unaffected.
 - 03, 04 and 06 are independent of everything else. 06 was raised later the same day.
+- **Lens sets (07–11)** came out of grilling 04 (ADR-0005) and landed together in PR #28, along
+  with the ADR and the `CONTEXT.md` terms. Those two were first raised as #27, but that PR merged
+  into the error-page branch after it had already merged, so they never reached `main` there.
 
 ## Also noticed during triage
 

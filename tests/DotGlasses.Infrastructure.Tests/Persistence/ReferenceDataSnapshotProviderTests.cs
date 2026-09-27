@@ -46,15 +46,16 @@ public class ReferenceDataSnapshotProviderTests(PostgresContainerFixture postgre
         var counter = new CommandCountingInterceptor();
 
         await using var context = PostgresContainerFixture.CreateContext(connectionString, null, counter);
-        var provider = new ReferenceDataSnapshotProvider(context);
+        var provider = new ReferenceDataSnapshotProvider(context, new UnscopedReportQueryService(context));
 
         var snapshot = await provider.GetAsync();
         var afterLoad = counter.Count;
 
         // The load itself is a fixed handful of set-based reads — items, catalogues, lens options,
-        // coating availability, pairings, exclusions — and nothing about it varies with the
-        // request being checked.
-        Assert.Equal(6, afterLoad);
+        // coating availability, pairings, exclusions, and the lens set assignments plus the org
+        // paths they point at (ADR-0005's "reaches this location") — and nothing about it varies
+        // with the request being checked.
+        Assert.Equal(8, afterLoad);
 
         // A Sale referencing as much reference data as one can: an occupation, a referral reason,
         // a frame colour, a hard-case colour, a lens type and three coatings. Every id is unknown
@@ -99,7 +100,7 @@ public class ReferenceDataSnapshotProviderTests(PostgresContainerFixture postgre
         var counter = new CommandCountingInterceptor();
 
         await using var context = PostgresContainerFixture.CreateContext(connectionString, null, counter);
-        var provider = new ReferenceDataSnapshotProvider(context);
+        var provider = new ReferenceDataSnapshotProvider(context, new UnscopedReportQueryService(context));
 
         var first = await provider.GetAsync();
         var afterFirst = counter.Count;

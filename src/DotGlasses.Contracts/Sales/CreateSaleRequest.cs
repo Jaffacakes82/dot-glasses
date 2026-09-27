@@ -8,9 +8,9 @@ namespace DotGlasses.Contracts.Sales;
 /// creates a Customer from FullName+PhoneNumber, same as Lead.
 ///
 /// CoatingRefIds requires at least one entry for every LensRangeType (2026-08-05 — previously
-/// ignored for preset ranges, server-derived from a single forced coating per lens; see
+/// ignored for lens sets, server-derived from a single forced coating per lens; see
 /// LensOption's doc comment for why that was replaced; 2026-09-03 — became a set rather than a
-/// single value, see ADR-0001). For Custom, any active Coating item is valid; for a preset range,
+/// single value, see ADR-0001). For Custom, any active Coating item is valid; for a lens set,
 /// every entry must be one of the coatings configured as available for the chosen left-eye
 /// LensOption's lens strength — see SaleService/ConsultationRules. Coating pairing/
 /// exclusion rules (also ADR-0001) apply to the set regardless of LensRangeType.
@@ -66,8 +66,8 @@ public class CreateSaleRequest
     /// <summary>The real inter-pupillary distance in mm — required for Custom range only.</summary>
     public decimal? PupilDistanceMm { get; set; }
 
-    /// <summary>Coarse 0-4 PD shorthand for a preset range (0-2 when ChildrensFrame) — required
-    /// for a preset range only, see Sale.PresetPupilDistanceBucket.</summary>
+    /// <summary>Coarse 0-4 PD shorthand for a lens set (0-2 when ChildrensFrame) — required
+    /// for a lens set only, see Sale.PresetPupilDistanceBucket.</summary>
     public int? PresetPupilDistanceBucket { get; set; }
 
     public bool ChildrensFrame { get; set; }

@@ -1,4 +1,9 @@
 using System.Net;
+using DotGlasses.Domain.Entities;
+using DotGlasses.Domain.Enums;
+using DotGlasses.Infrastructure.Persistence;
+using DotGlasses.Infrastructure.Persistence.Configurations;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace DotGlasses.Web.Tests.AccessControl;
 
@@ -239,6 +244,98 @@ public class AccessControlPolicyTests(AccessControlFixture fixture) : IClassFixt
     /// page behind it actually renders is asserted once, by
     /// ADeniedPolicyCheck_LandsOnARealAccessDeniedPage_NotABareNotFound — repeating the fetch in
     /// every test would cost a round trip per assertion to re-prove one global fact.</summary>
+    [Fact]
+    public async Task LensSetEditing_IsRefused_BelowTheLensSetsOwningOrg()
+    {
+        // A DGI-owned lens set reaches every country, so a Kenya admin changing what it contains
+        // would change what Uganda's technicians sell (ADR-0005).
+        var dgiOwned = SeedLensSet(OrganisationSeedConfiguration.DgiId);
+        var countryAdmin = await fixture.SignInAsync(AccessControlFixture.CountryAdmin);
+
+        AssertAccessDenied(await AccessControlFixture.PostFormAsync(countryAdmin, "/Catalogues/UpdateCatalogue",
+            ("Id", dgiOwned.ToString()), ("Name", $"Renamed {dgiOwned:N}")));
+        AssertAccessDenied(await AccessControlFixture.PostFormAsync(countryAdmin, "/Catalogues/AddLensOption",
+            ("CatalogueId", dgiOwned.ToString()), ("LensStrengthRefId", ReferenceDataSeedConfiguration.LensStrength200Id.ToString())));
+        AssertAccessDenied(await AccessControlFixture.PostFormAsync(countryAdmin, "/Catalogues/RetireCatalogue",
+            ("catalogueId", dgiOwned.ToString())));
+
+        // Its own country's lens set is the Kenya admin's to edit.
+        var kenyaOwned = SeedLensSet(OrganisationSeedConfiguration.KenyaId);
+        AssertRedirectedTo("/Catalogues", await AccessControlFixture.PostFormAsync(countryAdmin, "/Catalogues/UpdateCatalogue",
+            ("Id", kenyaOwned.ToString()), ("Name", $"Renamed {kenyaOwned:N}")));
+
+        // And the DGI admin, above the owner, can edit the DGI-owned one — so the refusal above
+        // is the ownership rule, not an unwritable lens set.
+        var dgiAdmin = await fixture.SignInAsync(AccessControlFixture.DgiAdmin);
+        AssertRedirectedTo("/Catalogues", await AccessControlFixture.PostFormAsync(dgiAdmin, "/Catalogues/UpdateCatalogue",
+            ("Id", dgiOwned.ToString()), ("Name", $"Renamed {dgiOwned:N}")));
+    }
+
+    [Fact]
+    public async Task LensSetAssignment_IsOpenForAnyActiveLensSet_ButOnlyToOrgsInTheCallersScope()
+    {
+        var dgiOwned = SeedLensSet(OrganisationSeedConfiguration.DgiId);
+        var ugandaRetailPoint = SeedRetailPoint(fixture.SecondCountryId, AccessControlFixture.SecondCountryPath);
+        var countryAdmin = await fixture.SignInAsync(AccessControlFixture.CountryAdmin);
+
+        // Not the owner, but assigning only touches the Kenya admin's own part of the tree.
+        AssertRedirectedTo("/Catalogues", await AccessControlFixture.PostFormAsync(countryAdmin, "/Catalogues/AssignCatalogues",
+            ("OrgNodeId", OrganisationSeedConfiguration.KenyaRetailPointId.ToString()), ("CatalogueIds", dgiOwned.ToString())));
+
+        // A retail point in another country is beside the caller, not beneath them.
+        AssertAccessDenied(await AccessControlFixture.PostFormAsync(countryAdmin, "/Catalogues/AssignCatalogues",
+            ("OrgNodeId", ugandaRetailPoint.ToString()), ("CatalogueIds", dgiOwned.ToString())));
+
+        // Unassigning follows the same rule, applied to the assignment's org.
+        var dgiAdmin = await fixture.SignInAsync(AccessControlFixture.DgiAdmin);
+        AssertRedirectedTo("/Catalogues", await AccessControlFixture.PostFormAsync(dgiAdmin, "/Catalogues/AssignCatalogues",
+            ("OrgNodeId", ugandaRetailPoint.ToString()), ("CatalogueIds", dgiOwned.ToString())));
+        AssertAccessDenied(await AccessControlFixture.PostFormAsync(countryAdmin, "/Catalogues/UnassignCatalogue",
+            ("catalogueId", dgiOwned.ToString()), ("orgNodeId", ugandaRetailPoint.ToString())));
+    }
+
+    [Fact]
+    public async Task TheCataloguesScreen_OffersEditActionsOnlyOnLensSetsTheCallerCanEdit()
+    {
+        // Hidden-button UX is never the only guard (the test above covers the server side), but a
+        // Country admin shouldn't be offered an Edit they'd be refused.
+        var dgiOwned = SeedLensSet(OrganisationSeedConfiguration.DgiId);
+        var kenyaOwned = SeedLensSet(OrganisationSeedConfiguration.KenyaId);
+
+        var countryAdmin = await fixture.SignInAsync(AccessControlFixture.CountryAdmin);
+        var html = await countryAdmin.GetStringAsync("/Catalogues");
+
+        Assert.DoesNotContain($"editCatalogueModal-{dgiOwned}", html);
+        Assert.Contains($"editCatalogueModal-{kenyaOwned}", html);
+    }
+
+    private Guid SeedLensSet(Guid owningOrgNodeId)
+    {
+        using var scope = fixture.Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<DotGlassesDbContext>();
+        var id = Guid.NewGuid();
+        db.PresetCatalogues.Add(new PresetCatalogue { Id = id, Name = $"Lens set {id:N}", OwningOrgNodeId = owningOrgNodeId });
+        db.SaveChanges();
+        return id;
+    }
+
+    private Guid SeedRetailPoint(Guid parentId, string parentPath)
+    {
+        using var scope = fixture.Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<DotGlassesDbContext>();
+        var node = new OrganisationNode
+        {
+            Id = Guid.NewGuid(),
+            ParentId = parentId,
+            Name = "Kampala Outlet",
+            Level = OrganisationLevel.RetailPoint,
+            HierarchyPath = $"{parentPath}{Random.Shared.Next(100_000, 999_999)}/",
+        };
+        db.OrganisationNodes.Add(node);
+        db.SaveChanges();
+        return node.Id;
+    }
+
     private static void AssertAccessDenied(HttpResponseMessage response) =>
         AssertRedirectedTo("/Account/AccessDenied", response);
 

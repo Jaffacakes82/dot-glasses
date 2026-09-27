@@ -78,15 +78,27 @@ public class LeadConversionController(
             return RedirectToAction("Index", "EventHistory", new { tab = "leads" });
         }
 
-        var request = BuildCreateSaleRequest(lead, form);
+        // Placed at the *Lead's* location: the Sale inherits the Lead's attribution (ADR-0005).
+        var atLeadsLocation = await SnapshotAtLeadsLocationAsync(lead, cancellationToken);
+
+        form.ApplyLensRange();
+        var answers = BuildSaleAnswers(lead, form, LeadLensCarriesOver(lead, atLeadsLocation));
+
+        // No default lens range (ADR-0005) — the same rule the Field App asks through.
+        if (SaleAssembly.LensRangeNotChosen(answers) is { } notChosen)
+        {
+            ModelState.AddModelError($"{nameof(form)}.{notChosen.Key}", notChosen.Message);
+            return View(await BuildViewModelAsync(lead, form, cancellationToken));
+        }
+
+        var request = SaleAssembly.Build(Guid.NewGuid(), lead.Id, answers);
 
         // The same module SalesController checks against, off the same per-request snapshot
         // BuildViewModelAsync already loads. The source-Lead check the two API endpoints also run
         // has nothing to do here: it asks whether this Lead is already converted, and the
         // ConvertedFlag guard above has answered that with friendlier copy — SaleService sets
         // ConvertedFlag and SaleId together in one transaction, so the two can't disagree.
-        var snapshot = await referenceDataSnapshotProvider.GetAsync(cancellationToken);
-        var rules = ConsultationRules.Check(request, snapshot);
+        var rules = ConsultationRules.Check(request, atLeadsLocation);
         if (!rules.IsValid)
         {
             // Failures come back keyed by CreateSaleRequest's own property names — LeadConversionFormModel
@@ -106,14 +118,27 @@ public class LeadConversionController(
         return RedirectToAction("Index", "EventHistory", new { tab = "leads" });
     }
 
+    private async Task<ReferenceDataSnapshot> SnapshotAtLeadsLocationAsync(LeadDto lead, CancellationToken cancellationToken) =>
+        (await referenceDataSnapshotProvider.GetAsync(cancellationToken)).AtLocation(lead.HierarchyPath);
+
     /// <summary>
-    /// Seeds the answers from the Lead, overlays what this form asked, and hands both to the shared
-    /// builder — the same one ConsultationForm.razor uses, so a field added to CreateSaleRequest
-    /// cannot reach one write path and miss the other (which is how the referral answers came to be
-    /// missing from this one). Carry-over and the conditional blanking live in SaleAssembly; what
-    /// stays here is only the part that is genuinely this form's own: which controls it rendered.
+    /// Whether the Lead's own lens preference carries over onto the Sale: it recorded one, and —
+    /// for a lens set — that set is still available at the Lead's retail point. When it isn't,
+    /// nothing is substituted (SaleAssembly.Seed is a seed, not a choice); the screen says why and
+    /// asks for a lens range instead of showing a summary the admin can't act on.
     /// </summary>
-    private static CreateSaleRequest BuildCreateSaleRequest(LeadDto lead, LeadConversionFormModel form)
+    private static bool LeadLensCarriesOver(LeadDto lead, ReferenceDataSnapshot atLeadsLocation) =>
+        SaleAssembly.CarriesLens(lead)
+        && (lead.LensRangeType is not LensRangeType.LensSet || atLeadsLocation.IsLensSetAvailable(lead.PresetCatalogueId));
+
+    /// <summary>
+    /// Seeds the answers from the Lead and overlays what this form asked — the same shared builder
+    /// ConsultationForm.razor uses, so a field added to CreateSaleRequest cannot reach one write
+    /// path and miss the other (which is how the referral answers came to be missing from this
+    /// one). Carry-over and the conditional blanking live in SaleAssembly; what stays here is only
+    /// the part that is genuinely this form's own: which controls it rendered.
+    /// </summary>
+    private static SaleAnswers BuildSaleAnswers(LeadDto lead, LeadConversionFormModel form, bool leadLensCarriesOver)
     {
         var answers = SaleAssembly.Seed(lead) with
         {
@@ -135,10 +160,10 @@ public class LeadConversionController(
             ReferralLocationFreeText = form.ReferralLocationFreeText,
         };
 
-        // The lens block is the Lead's whenever it recorded one — Seed has already carried it over,
-        // and this form showed a read-only summary rather than asking. Only when it recorded none
-        // does the form render the lens controls, and only then do its answers apply.
-        if (!SaleAssembly.CarriesLens(lead))
+        // The lens block is the Lead's whenever it carries over — Seed has already put it there,
+        // and this form showed a read-only summary rather than asking. Otherwise the form rendered
+        // the lens controls, and their answers replace whatever Seed carried.
+        if (!leadLensCarriesOver)
         {
             answers = answers.WithLens(
                 form.LensRangeType, form.PresetCatalogueId, form.LensOptionLeftId, form.LensOptionRightId,
@@ -148,7 +173,7 @@ public class LeadConversionController(
                 form.PupilDistanceMm, form.PresetPupilDistanceBucket, form.ChildrensFrame);
         }
 
-        return SaleAssembly.Build(Guid.NewGuid(), lead.Id, answers);
+        return answers;
     }
 
     private async Task<LeadConversionViewModel> BuildViewModelAsync(LeadDto lead, LeadConversionFormModel form, CancellationToken cancellationToken)
@@ -160,15 +185,19 @@ public class LeadConversionController(
         // able to pick a retired option. The read-only lens summary below is the opposite case:
         // it describes what the Lead already recorded, which may point at an option retired since,
         // so it resolves against the snapshot (retired items included) instead.
-        var referenceDataSnapshot = await referenceDataSnapshotProvider.GetAsync(cancellationToken);
+        var atLeadsLocation = await SnapshotAtLeadsLocationAsync(lead, cancellationToken);
+        var lensCarriesOver = LeadLensCarriesOver(lead, atLeadsLocation);
 
         return new LeadConversionViewModel
         {
             Lead = lead,
             CustomerFullName = lead.CustomerFullName,
             CustomerPhoneNumber = lead.CustomerPhoneNumber,
-            LensCarriedOver = SaleAssembly.CarriesLens(lead),
-            LensSummary = BuildLensSummary(lead, referenceDataSnapshot),
+            LensCarriedOver = lensCarriesOver,
+            UnavailableLensSetName = !lensCarriesOver && lead.LensRangeType is LensRangeType.LensSet
+                ? atLeadsLocation.FindCatalogue(lead.PresetCatalogueId)?.Name ?? ReferenceDataSnapshot.MissingLabel
+                : null,
+            LensSummary = BuildLensSummary(lead, atLeadsLocation),
             AvailableCatalogues = catalogues,
             FrameColours = referenceData.Where(x => x.Category == ReferenceDataCategory.FrameColour).OrderBy(x => x.SortOrder).ToList(),
             Coatings = referenceData.Where(x => x.Category == ReferenceDataCategory.Coating).OrderBy(x => x.SortOrder).ToList(),
@@ -183,11 +212,11 @@ public class LeadConversionController(
     {
         switch (lead.LensRangeType)
         {
-            case LensRangeType.SixLensSet or LensRangeType.NineLensSet:
+            case LensRangeType.LensSet:
                 var catalogue = referenceData.FindCatalogue(lead.PresetCatalogueId);
                 var left = referenceData.ResolveLensOptionLabel(lead.LensOptionLeftId);
                 var right = referenceData.ResolveLensOptionLabel(lead.LensOptionRightId);
-                return $"{catalogue?.Name ?? "Preset range"} — Left: {left}, Right: {right}";
+                return $"{catalogue?.Name ?? "Lens set"} — Left: {left}, Right: {right}";
             case LensRangeType.Custom:
                 // Still keyed off the id being present, not off the item resolving: a Lead with no
                 // lens type recorded omits the clause entirely, exactly as before. What changes is

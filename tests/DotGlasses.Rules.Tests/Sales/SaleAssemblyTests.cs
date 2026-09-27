@@ -44,6 +44,22 @@ public class SaleAssemblyTests
             + "conversion-match path it is only decided at submit time, after the answers were given.",
     };
 
+    // --- The unmade lens range choice --------------------------------------------------------
+
+    [Fact]
+    public void ASaleWithNoLensRangeChosen_IsAskedForOne_AgainstTheLensRangeControl()
+    {
+        // ADR-0005: a Sale has no default lens range. Build must still produce a request (its
+        // LensRangeType can't be null), so the unmade choice has to be caught on the answers —
+        // once, here, for both write paths.
+        var failure = SaleAssembly.LensRangeNotChosen(new SaleAnswers());
+
+        Assert.NotNull(failure);
+        Assert.Equal(nameof(CreateSaleRequest.LensRangeType), failure.Key);
+        Assert.Equal("Choose a lens range.", failure.Message);
+        Assert.Null(SaleAssembly.LensRangeNotChosen(new SaleAnswers { LensRangeType = LensRangeType.Custom }));
+    }
+
     // --- The coverage test -----------------------------------------------------------------
 
     [Fact]
@@ -313,7 +329,7 @@ public class SaleAssemblyTests
     {
         var request = SaleAssembly.Build(Guid.NewGuid(), null, new SaleAnswers
         {
-            LensRangeType = LensRangeType.SixLensSet,
+            LensRangeType = LensRangeType.LensSet,
             OrderFromDotGlasses = true,
         });
 

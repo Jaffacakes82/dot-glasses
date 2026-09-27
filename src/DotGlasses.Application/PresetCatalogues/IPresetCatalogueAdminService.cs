@@ -13,17 +13,35 @@ public interface IPresetCatalogueAdminService
     /// <summary>Every catalogue, with its lens roster (label-resolved) and assignment count.</summary>
     Task<IReadOnlyList<PresetCatalogueAdminDto>> ListAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>Retired lens sets only — listed apart so they can be found and reactivated.</summary>
+    Task<IReadOnlyList<PresetCatalogueAdminDto>> ListRetiredAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>A soft delete: the lens set stops being offered anywhere (Field App, assign form)
+    /// but stays resolvable on the historical records that name it, and keeps its assignments so
+    /// reactivating restores it as it was.</summary>
+    Task RetireAsync(Guid id, CancellationToken cancellationToken = default);
+
+    Task ReactivateAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>The org that owns a lens set, retired ones included (so Reactivate can be
+    /// authorized too), or null if there is no such lens set — the resource the edit permission
+    /// is checked against.</summary>
+    Task<Guid?> FindOwningOrgNodeIdAsync(Guid catalogueId, CancellationToken cancellationToken = default);
+
+    /// <summary>The lens set a lens option belongs to, or null if there is no such option.</summary>
+    Task<Guid?> FindCatalogueIdForLensOptionAsync(Guid lensOptionId, CancellationToken cancellationToken = default);
+
+    /// <summary>True if an active lens set other than <paramref name="excludeId"/> already has this
+    /// name, ignoring case and surrounding whitespace — the name is the only thing a technician
+    /// sees to tell lens sets apart (ADR-0005). A retired lens set's name doesn't count.</summary>
+    Task<bool> IsNameTakenAsync(string name, Guid? excludeId = null, CancellationToken cancellationToken = default);
+
     /// <summary>owningOrgNodeId is the caller's own org node (stamped by the Web controller from
     /// ICurrentUserContext, never client-submitted) — see PresetCatalogue's own doc comment for
     /// why it must be Dgi/Country. Enforced here, not in Domain.</summary>
-    Task<PresetCatalogueAdminDto> CreateAsync(string name, string? description, string? rangeDescription, Guid owningOrgNodeId, PresetCatalogueKind kind, CancellationToken cancellationToken = default);
+    Task<PresetCatalogueAdminDto> CreateAsync(string name, string? description, Guid owningOrgNodeId, CancellationToken cancellationToken = default);
 
-    Task UpdateAsync(Guid id, string name, string? description, string? rangeDescription, PresetCatalogueKind kind, CancellationToken cancellationToken = default);
-
-    /// <summary>True if an existing catalogue (other than excludeId) already holds this Kind —
-    /// backs the create/update validators' "at most one SixLensSet, at most one NineLensSet"
-    /// guard. Always false for Kind.Other, which any number of catalogues may hold.</summary>
-    Task<bool> HasCatalogueWithKindAsync(PresetCatalogueKind kind, Guid? excludeId = null, CancellationToken cancellationToken = default);
+    Task UpdateAsync(Guid id, string name, string? description, CancellationToken cancellationToken = default);
 
     /// <summary>SortOrder is max+1 within the catalogue — matches ReferenceDataAdminService's
     /// CreateAsync convention.</summary>
@@ -67,9 +85,7 @@ public record PresetCatalogueAdminDto(
     Guid Id,
     string Name,
     string? Description,
-    string? RangeDescription,
     Guid OwningOrgNodeId,
-    PresetCatalogueKind Kind,
     IReadOnlyList<PresetCatalogueLensOptionAdminDto> LensOptions);
 
 public record PresetCatalogueLensOptionAdminDto(Guid Id, Guid LensStrengthRefId, string Label, int SortOrder);

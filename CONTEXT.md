@@ -37,6 +37,19 @@ excludes Photochromic and Sunglasses; Photochromic and Sunglasses exclude each o
 _Avoid_: "incompatible coatings" as a stand-alone term without reference to this rule — exclusion
 is the canonical name for this relationship.
 
+**Lens range**:
+What a technician picks for the lens on a Test, Lead or Sale: either one **Lens set**, or a
+**Custom prescription** (per-eye sphere/cylinder/axis/add power, made to order). A record's lens
+range names the specific lens set; "6-Lens" and "9-Lens" are not kinds of lens range.
+_Avoid_: "6-Lens range" / "9-Lens range" as types (2026-09-26); "preset" as a noun on its own.
+
+**Lens set**:
+A named, admin-configured list of ready-made lens powers, owned by an org and assigned to orgs.
+It is available to every retail point at or beneath an org it is assigned to, and there may be
+any number of them.
+_Avoid_: "package", "preset catalogue" (outside the code), "picker role"/"kind" — a lens set has
+no fixed role; the Field App offers whichever lens sets reach the retail point (2026-09-26).
+
 **Referred or treated**:
 An explicit `bool` flag (`ReferredOrTreated`), independently captured at creation time on each of
 `Test`, `Lead`, and `Sale` (2026-09-03) — orthogonal to `TestOutcome`, not tied to any particular

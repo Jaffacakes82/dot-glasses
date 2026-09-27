@@ -4,7 +4,7 @@ using DotGlasses.Domain.Enums;
 namespace DotGlasses.Domain.Entities;
 
 /// <summary>
-/// Full transaction — a completed sale, whether fulfilled from local stock (preset range) or
+/// Full transaction — a completed sale, whether fulfilled from local stock (a lens set) or
 /// routed to fulfilment (Custom + OrderFromDotGlasses). A custom order counts as a completed Sale
 /// immediately — FulfilmentStatus tracks it through the lab/pickup workflow on this same row
 /// (2026-08-05 decision) rather than a separate entity, matching the flat single-status queue the
@@ -88,7 +88,7 @@ public class Sale : IAuditable, ISoftDeletable, IHierarchyScoped
     /// PresetPupilDistanceBucket for the preset-range equivalent).</summary>
     public decimal? PupilDistanceMm { get; set; }
 
-    /// <summary>Meaningful only for a preset range (SixLensSet/NineLensSet) — a coarse 0-4 PD
+    /// <summary>Meaningful only for a lens set — a coarse 0-4 PD
     /// shorthand/frame-fit bucket (0-2 when ChildrensFrame), not a millimetre value, per the CEO
     /// call (2026-08-05 decision — kept as its own field rather than overloading
     /// PupilDistanceMm, which stays the real 54-74mm Custom-range value it always was).</summary>
