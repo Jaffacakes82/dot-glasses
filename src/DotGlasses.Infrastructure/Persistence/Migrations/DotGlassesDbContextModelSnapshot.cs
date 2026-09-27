@@ -650,9 +650,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
-                    b.Property<int>("Kind")
-                        .HasColumnType("integer");
-
                     b.Property<DateTimeOffset?>("ModifiedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -668,10 +665,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("OwningOrgNodeId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("RangeDescription")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
                     b.HasKey("Id");
 
                     b.HasIndex("OwningOrgNodeId");
@@ -685,10 +678,8 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             Description = "Standard six-option lens range for outlets with local stock.",
                             IsDeleted = false,
-                            Kind = 1,
                             Name = "6-Lens Set",
-                            OwningOrgNodeId = new Guid("a0000000-0000-0000-0000-000000000001"),
-                            RangeDescription = "+2.50 to -4.50"
+                            OwningOrgNodeId = new Guid("a0000000-0000-0000-0000-000000000001")
                         },
                         new
                         {
@@ -696,10 +687,8 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                             CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             Description = "Extended nine-option lens range for outlets with wider stock.",
                             IsDeleted = false,
-                            Kind = 2,
                             Name = "9-Lens Set",
-                            OwningOrgNodeId = new Guid("a0000000-0000-0000-0000-000000000001"),
-                            RangeDescription = "+3.00 to -4.00"
+                            OwningOrgNodeId = new Guid("a0000000-0000-0000-0000-000000000001")
                         });
                 });
 

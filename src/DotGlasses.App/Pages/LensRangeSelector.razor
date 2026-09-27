@@ -3,27 +3,43 @@
 @using DotGlasses.Contracts.Common
 @using DotGlasses.Contracts.PresetCatalogues
 @using DotGlasses.Contracts.ReferenceData
+@using DotGlasses.Rules.LensRanges
 
 <div class="dg-field">
     <label>Lens range</label>
-    <select value="@SelectedRangeLabel" @onchange="OnRangeChanged">
+    @* Every lens set reaching this retail point, in the order the server sends them (alphabetical,
+       empty sets already left out), then Custom — ADR-0005. No lens range is preselected. *@
+    <select value="@SelectedRangeValue" @onchange="OnRangeChanged">
         @if (AllowNoPreference)
         {
-            <option value="none">No preference yet</option>
+            <option value="@NoPreference">No preference yet</option>
         }
-        <option value="six">6-Lens Set@(SixLensCatalogue is null ? " (not available)" : "")</option>
-        <option value="nine">9-Lens Set@(NineLensCatalogue is null ? " (not available)" : "")</option>
-        <option value="custom">Custom prescription</option>
+        else
+        {
+            <option value="@NotChosen">Select a lens range…</option>
+        }
+        @foreach (var lensSet in Catalogues)
+        {
+            <option value="@lensSet.Id">@lensSet.Name</option>
+        }
+        <option value="@CustomRange">Custom prescription</option>
     </select>
     <FieldError Errors="Errors" For="LensRangeType" />
+    <FieldError Errors="Errors" For="PresetCatalogueId" />
+    @if (Catalogues.Count == 0)
+    {
+        <p style="font-size:12px;">No lens sets are assigned to this retail point — ask your administrator.</p>
+    }
 </div>
 
-@if (Model.LensRangeType is LensRangeType.SixLensSet or LensRangeType.NineLensSet)
+@if (Model.LensRangeType is LensRangeType.LensSet)
 {
-    var catalogue = Model.LensRangeType == LensRangeType.SixLensSet ? SixLensCatalogue : NineLensCatalogue;
+    var catalogue = SelectedLensSet;
     @if (catalogue is null)
     {
-        <p style="color:#c00; font-size:12px;">This preset isn't assigned to your retail point.</p>
+        @* A converted Lead's lens set carries over as-is (SaleAssembly.Seed); if it has since been
+           retired or unassigned here, say so rather than silently swapping in another. *@
+        <p style="color:#c00; font-size:12px;">This lens set isn't available at your retail point — choose another lens range.</p>
     }
     else
     {
@@ -67,7 +83,7 @@
             var leftOption = catalogue.LensOptions.FirstOrDefault(o => o.Id == Model.LensOptionLeftId);
             @if ((leftOption?.AvailableCoatingIds ?? []).Count == 0)
             {
-                <p style="color:#c00; font-size:12px;">No coatings are configured for this lens yet — it can't be sold on a preset range until DGI configures one in Reference Data.</p>
+                <p style="color:#c00; font-size:12px;">No coatings are configured for this lens yet — it can't be sold on a lens set until DGI configures one in Reference Data.</p>
             }
         }
     }
@@ -189,37 +205,25 @@ else if (Model.LensRangeType == LensRangeType.Custom)
     /// all, see ADR-0001.</summary>
     [Parameter] public EventCallback SelectionChanged { get; set; }
 
-    /// <summary>
-    /// When there's no "no preference" option, the select's first entry (6-Lens Set) is what the
-    /// browser displays — but the model starts null, so display and model disagreed until the
-    /// technician happened to change the dropdown. A Sale left on the apparent default therefore
-    /// submitted a null range. Seeding the model to match what is actually on screen removes the
-    /// mismatch at its source rather than papering over it in validation.
-    /// </summary>
-    protected override void OnInitialized()
-    {
-        if (!AllowNoPreference && Model.LensRangeType is null)
-        {
-            Model.LensRangeType = LensRangeType.SixLensSet;
-            Model.PresetCatalogueId = SixLensCatalogue?.Id;
-        }
-    }
+    // A Sale has no default lens range (ADR-0005): the first entry is an explicit "Select a lens
+    // range…" whose value maps to a null model, so what the browser shows and what the model holds
+    // agree from the start. (An earlier version defaulted a Sale to the 6-Lens set, and before
+    // that showed it without selecting it, which submitted a null range.)
+    private const string NoPreference = "none";
+    private const string NotChosen = "";
+    private const string CustomRange = LensRangeChoice.Custom;
 
-    // Matched by PresetCatalogueDto.Kind (Phase 6) — PresetCatalogueAdminService enforces at most
-    // one catalogue may hold each of SixLensSet/NineLensSet, so this is unambiguous regardless of
-    // how many "Other"-kind catalogues DGI/Country admins create. Previously matched by name
-    // substring ("6-Lens"/"9-Lens"), which broke the moment a third catalogue existed — see
-    // CLAUDE.md's Phase 6 section.
-    private PresetCatalogueDto? SixLensCatalogue => Catalogues.FirstOrDefault(c => c.Kind == PresetCatalogueKind.SixLensSet);
-    private PresetCatalogueDto? NineLensCatalogue => Catalogues.FirstOrDefault(c => c.Kind == PresetCatalogueKind.NineLensSet);
+    /// <summary>The lens set the model names, or null when it names one not reaching this retail
+    /// point (a converted Lead's set, since retired or unassigned).</summary>
+    private PresetCatalogueDto? SelectedLensSet => Catalogues.FirstOrDefault(c => c.Id == Model.PresetCatalogueId);
 
-    private string SelectedRangeLabel => Model.LensRangeType switch
-    {
-        LensRangeType.SixLensSet => "six",
-        LensRangeType.NineLensSet => "nine",
-        LensRangeType.Custom => "custom",
-        _ => "none",
-    };
+    /// <summary>A lens set that isn't in the list shows the placeholder — the red note below says
+    /// why — rather than a value the dropdown has no option for.</summary>
+    private string SelectedRangeValue =>
+        (Model.LensRangeType is not LensRangeType.LensSet || SelectedLensSet is not null
+            ? LensRangeChoice.Format(Model.LensRangeType, Model.PresetCatalogueId)
+            : null)
+        ?? (AllowNoPreference ? NoPreference : NotChosen);
 
     private async Task OnRangeChanged(ChangeEventArgs e)
     {
@@ -243,20 +247,7 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         Model.PupilDistanceMm = null;
         Model.PresetPupilDistanceBucket = null;
 
-        Model.LensRangeType = value switch
-        {
-            "six" => LensRangeType.SixLensSet,
-            "nine" => LensRangeType.NineLensSet,
-            "custom" => LensRangeType.Custom,
-            _ => null,
-        };
-
-        Model.PresetCatalogueId = Model.LensRangeType switch
-        {
-            LensRangeType.SixLensSet => SixLensCatalogue?.Id,
-            LensRangeType.NineLensSet => NineLensCatalogue?.Id,
-            _ => null,
-        };
+        (Model.LensRangeType, Model.PresetCatalogueId) = LensRangeChoice.Parse(value);
 
         await SelectionChanged.InvokeAsync();
     }

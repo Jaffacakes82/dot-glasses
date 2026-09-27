@@ -76,7 +76,7 @@ have Intermediate or Retail Point children; a Retail Point is always a leaf.
 | Policy | Rule as coded | Gates |
 |---|---|---|
 | `ReferenceData.Manage` | Role = **Admin** AND level = **DGI exactly** | The whole Reference Data screen |
-| `PresetCatalogue.Manage` | Role = **Admin** AND level ≤ **Country** | The whole Preset Catalogues screen |
+| `PresetCatalogue.Manage` | Role = **Admin** AND level ≤ **Country** | The whole Lens Sets screen |
 | `CustomOrders.View` | **Any role** AND level ≤ **Country** | The whole Custom Orders screen, *and* its Advance-status action |
 | `Organisations.ManageInScope` | Role = **Admin** AND target org's path is at/below the caller's | Every Organisations write action, per node |
 | `Users.ManageInScope` | Role = **Admin** AND target user's path is at/below the caller's | Every User Directory write action, per user |
@@ -89,7 +89,7 @@ not role-gated.
 
 Dashboard, Organisations, Event History and User Directory carry only a bare `[Authorize]` —
 every authenticated user reaches them, and what they see is narrowed by data scoping rather than
-by policy. The sidebar hides Preset Catalogues/Custom Orders/Reference Data per-request against
+by policy. The sidebar hides Lens Sets/Custom Orders/Reference Data per-request against
 these same three policies, and a failed policy check redirects to a real `/Account/AccessDenied`
 page (not a 404).
 
@@ -118,7 +118,7 @@ page (not a 404).
 | **Event History** (4 tabs) | ● all | ◐ own subtree | ◐ own subtree | ◐ own outlet | ◐ own subtree |
 | **User Directory** — view | ● all users | ◐ subtree users | ◐ subtree users | ○ subtree users | ○ subtree users |
 | **User Directory** — invite / reset / suspend | ● | ● in scope | ● in scope | ✕ (redirected) | ✕ (redirected) |
-| **Preset Catalogues** | ● | ● | ✕ (redirected) | ✕ (redirected) | ✕ (redirected) |
+| **Lens Sets** | ● | ● | ✕ (redirected) | ✕ (redirected) | ✕ (redirected) |
 | **Custom Orders** — view + advance | ● | ● | ✕ (redirected) | ✕ (redirected) | ● |
 | **Reference Data** | ● | ✕ (redirected) | ✕ (redirected) | ✕ (redirected) | ✕ (redirected) |
 | **Field App** — record Test/Lead/Sale, convert Lead | ● (stamped to DGI root) | ● (stamped to their node) | ● | ● | ● |
@@ -129,7 +129,7 @@ endpoints — and the record is stamped with whatever org the caller sits at. A 
 a Sale produces a Sale attached to the DGI root node, which then resolves as "Unknown outlet" and
 "Unknown country" on every reporting screen.
 
-**Navigation now reflects permissions.** The sidebar filters Preset Catalogues/Custom Orders/
+**Navigation now reflects permissions.** The sidebar filters Lens Sets/Custom Orders/
 Reference Data per the policies above; a direct hit on a blocked route (bookmarked, typed) renders
 a real Access Denied page.
 
@@ -416,7 +416,7 @@ which mints a new one.
 
 ---
 
-### 4.6 Preset Catalogues
+### 4.6 Lens Sets
 
 **Route** `/Catalogues?search=…` · **Access** `PresetCatalogue.Manage` — Admin at DGI or Country
 level. Everyone else is redirected to Access Denied.
@@ -425,18 +425,30 @@ Catalogues themselves are **not** hierarchy-scoped: every user who reaches this 
 catalogue in the system, regardless of who owns it. A name search box narrows the list (no
 paging — the table is structurally small, see below).
 
-**Catalogue cards** — one per catalogue, showing name, description, "Diopter range: …", its
-**Kind** ("Field App picker role: SixLensSet/NineLensSet", omitted for `Other`), and the list of
-orgs it's assigned to (with an un-assign action per org, not just a count). Below that, the lens
-roster as removable badges, and an add-lens form.
+**Lens set cards** — one per lens set (a `PresetCatalogue` in the code), showing name,
+description, and the list of orgs it's assigned to (with an un-assign action per org, not just a
+count). Below that, the lens roster as removable badges, and an add-lens form. There is no
+per-catalogue role: every non-empty lens set assigned at or above a retail point is offered there
+(see §5.6, ADR-0005).
 
-- **Create package** / **Edit** — a modal with four fields: `Name` (required, ≤ 200),
-  `Description` (≤ 500), `Diopter / strength range` (a free-text label, ≤ 100), and **`Kind`**
-  (`Other` / `SixLensSet` / `NineLensSet`) — at most one catalogue may hold `SixLensSet` and at
-  most one `NineLensSet`; any number may be `Other`. `Kind` is what the Field App's lens range
-  selector actually matches against (see §5.6) — not the catalogue's name. On create, the owning
-  org is stamped from the caller's own primary org, never submitted by the client; the service
-  rejects the create if that org isn't DGI or Country level.
+**Who may change what.**
+- **Editing a lens set** — Edit, add or remove lens powers, Retire/Reactivate — is limited to admins
+  at or above its **owning org** (`PresetCatalogue.EditInScope`). A DGI-owned lens set reaches every
+  country, so a country admin can't change what it contains. On a lens set the caller can't edit,
+  those actions aren't shown and the card says "Owned above your organisation — you can assign
+  it, but not change it." The server refuses them regardless, with Access Denied.
+- **Assigning** any active lens set, and removing an assignment, is open to any admin who reaches
+  the screen, but only for orgs within their own scope (`PresetCatalogue.AssignInScope`).
+- The lens-strength coating grid below is a single global setting, not per lens set, so it stays
+  under `PresetCatalogue.Manage`.
+
+- **Create lens set** / **Edit** — a modal with two fields: `Name` (required, ≤ 200, and
+  **unique among active lens sets**, ignoring case — "A lens set with this name already
+  exists."; a retired lens set's name is free) and `Description` (≤ 500). The old free-text
+  "Diopter / strength range" was removed (2026-09-26): nothing read it, the device never saw it,
+  and the lens roster on the same card already states the range exactly. On create, the owning org is stamped from the caller's own
+  primary org, never submitted by the client; the service rejects the create if that org isn't
+  DGI or Country level.
 - **Add lens** — a dropdown of active `LensStrength` reference items **not already on this
   catalogue** (both client-filtered and server-guarded — a strength can no longer be added twice).
   The chosen strength is appended at the end of the catalogue's sort order. A catalogue's lens
@@ -445,8 +457,14 @@ roster as removable badges, and an add-lens form.
   `+0.00 / +2.50 (Bifocal)`).
 - **Remove lens** (the × on each badge) — a **hard delete**, not a retire. This is safe because no
   Test, Lead or Sale can reference a lens option that was never chosen on a real transaction.
+- **Retire** (in the Edit modal, with a confirmation) — a soft delete. The lens set stops being
+  offered in the Field App (from its next reference-data refresh) and in the assign form, and a
+  hand-built assign POST is refused. Its **assignments are kept**. Records that used it still show
+  its name and lens powers, and the server refuses a *new* record on it ("This lens set has been
+  retired — choose another lens range."). Retired lens sets are listed separately under **Retired
+  lens sets**, each with **Reactivate**, which restores it exactly as it was.
 
-**Assign packages to a retailer** — a form with a single-select org dropdown (restricted to
+**Assign lens sets to a retailer** — a form with a single-select org dropdown (restricted to
 `Intermediate` and `RetailPoint` nodes only), a multi-select catalogue list, and an Assign button.
 Each selected catalogue produces one assignment; re-assigning an existing pair is a silent no-op.
 **Assignment cascades downward** — assigning to an Intermediate makes the catalogue available to
@@ -538,7 +556,7 @@ Seven category cards in a fixed display order, each with an explanatory scope no
 |---|---|
 | Reasons not purchased | Field App Lead form (required) |
 | Referral reasons | Field App Test form when outcome is *Referred* |
-| Coatings & tints | Lead coating preference, Sale coating, and the Preset Catalogues availability grid |
+| Coatings & tints | Lead coating preference, Sale coating, and the Lens Sets availability grid |
 | Frame colors | Sale frame-colour swatches |
 | Hard case colors | Sale, when a hard case is sold |
 | Occupations | Optional on Test, Lead and Sale |
@@ -574,7 +592,7 @@ Coatings ships with an "Other" row.
 
 Only the four bifocal lens strengths ship with a coating configured (Photochromic). **The other
 twelve strengths have no coatings configured and are therefore unsellable on a preset range** until
-someone ticks a box on the Preset Catalogues grid (tracked in `open-issues.md`). This is visible
+someone ticks a box on the Lens Sets grid (tracked in `open-issues.md`). This is visible
 rather than silent — the Field App tells the technician the lens has no coatings configured.
 
 **Not built**
@@ -744,22 +762,40 @@ Submitting shows the same price-awareness confirmation as a Lead. A Sale opened 
 
 ### 5.6 The lens range selector (shared by Lead and Sale)
 
-A single dropdown chooses the range: *No preference yet* (Leads only), *6-Lens Set*, *9-Lens Set*,
-*Custom prescription*. Switching range clears every field belonging to the previous one.
+A single dropdown chooses the range (ADR-0005): *No preference yet* (Tests and Leads only) or, on
+a Sale, *Select a lens range…*; then **every lens set assigned at or above the technician's retail
+point**, alphabetically, with lens sets that have no lens powers left out; then *Custom
+prescription*. Switching range clears every field belonging to the previous one.
 
-The two preset options are matched to catalogues **by the catalogue's `Kind` field**
-(`SixLensSet`/`NineLensSet` — see §4.6), not by name. If no catalogue holds a given `Kind`, or the
-matching catalogue isn't assigned to the technician's retail point, the option is suffixed "(not
-available)" and choosing it shows "This preset isn't assigned to your retail point."
+- **A Sale has no default.** Saving without choosing shows "Choose a lens range." against the
+  dropdown.
+- **No lens sets reach the retail point:** only *Custom prescription* is offered, with the note
+  "No lens sets are assigned to this retail point — ask your administrator."
+- **A converted Lead's lens set that no longer reaches the retail point** (retired or unassigned
+  since) carries over as-is and shows "This lens set isn't available at your retail point — choose
+  another lens range." Nothing is substituted silently.
+- **The server enforces the same rule.** A Test, Lead or Sale naming a lens set that isn't
+  assigned at or above the record's own location is refused against `PresetCatalogueId` ("This
+  lens set isn't available at this retail point — choose another lens range."). The location is
+  the caller's for the API, and the Lead's for an Admin Portal conversion. In practice this
+  catches a record queued offline while an admin unassigned the set; it lands on Failed records
+  against the lens range control. The Field App's list and the server's check share one
+  definition of "reaches", `ReferenceDataSnapshot.ReachesLocation`.
 
-**Preset range** →
+The Admin Portal's Lead→Sale conversion screen offers the same choice for a Lead that recorded no
+lens preference — the lens sets reaching the *Lead's* retail point, then *Custom prescription* —
+and asks "Choose a lens range." if it is left empty. A Lead whose lens set no longer reaches its
+retail point gets the same choice, under a note naming the lens set and saying it isn't available
+there any more; its other lens preferences don't carry over either, since they belonged to that set.
+
+**Lens set** →
 - *Lens power — left eye* and *— right eye*: selects listing the catalogue's lens options in sort
   order.
 - *Pupil distance (0–4)*: a coarse frame-fit bucket, **not** millimetres. Drops to 0–2 when the
   children's-frame box is ticked, and a previously chosen out-of-range value is cleared.
 - *Coating*: appears once a left lens is chosen, listing **only** the coatings configured for that
   lens strength. If none are configured it is replaced by: "No coatings are configured for this
-  lens yet — it can't be sold on a preset range until DGI configures one in Reference Data."
+  lens yet — it can't be sold on a lens set until DGI configures one in Reference Data."
   Changing the left lens clears any coating already picked.
 
 **Custom range** → per eye (left and right):
@@ -875,7 +911,7 @@ Versioned at `v1`, with Swagger exposed in development only.
 | `GET /api/v1/leads/match?fullName=&phoneNumber=` | JWT | Any authenticated user | An open Lead matching the given name+phone, or 204 — backs the Sale form's automatic conversion prompt. |
 | `GET/POST /api/v1/sales`, `/api/v1/sales/{id}` | JWT | Any authenticated user | As above. `SourceLeadId` on create atomically links and marks the source Lead converted; a second attempt against an already-converted Lead is rejected, as is one naming a Lead the caller can't see. |
 | `GET /api/v1/reference-data` | JWT | Any authenticated user | All **active** reference items across all categories. Not hierarchy-scoped. |
-| `GET /api/v1/preset-catalogues` | JWT | Any authenticated user | Catalogues assigned at or above the caller's org, with each lens's available coatings and the catalogue's `Kind`. 400 if the caller has no org. |
+| `GET /api/v1/preset-catalogues` | JWT | Any authenticated user | Catalogues assigned at or above the caller's org, with each lens's available coatings — non-empty lens sets only, alphabetically. 400 if the caller has no org. |
 | `POST /api/v1/client-logs` | JWT | Any authenticated user | Accepts a batch of client log entries with a correlation ID; writes them to the server log. |
 
 **Capabilities reachable through the API that no UI exposes:**
@@ -926,9 +962,9 @@ but no screen displays them.
 server-side can push to it.
 
 **Search and paging are now present on most list screens** (Event History's Leads tab, User
-Directory, Preset Catalogues) but not uniformly — Organisations' tree, Custom Orders' grouped queue
+Directory, Lens Sets) but not uniformly — Organisations' tree, Custom Orders' grouped queue
 and Dashboard's top-N lists have neither, and only Event History/User Directory support true
-server-side paging (Preset Catalogues' search filters an already-fully-loaded list, proportionate
+server-side paging (Lens Sets' search filters an already-fully-loaded list, proportionate
 to its small size).
 
 **A user whose `HierarchyPath` is blank would match the visibility filter's prefix test against

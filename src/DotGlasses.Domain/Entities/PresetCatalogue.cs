@@ -23,15 +23,7 @@ public class PresetCatalogue : IAuditable, ISoftDeletable
     /// alongside real catalogue create/edit.</summary>
     public string? Description { get; set; }
 
-    /// <summary>Free-text summary of the dioptre/strength span (e.g. "+2.50 to -4.50") — display
-    /// only, not derived from the actual LensOption roster or validated against it.</summary>
-    public string? RangeDescription { get; set; }
-
     public Guid OwningOrgNodeId { get; set; }
-
-    /// <summary>Other by default. At most one catalogue may hold SixLensSet, and at most one may
-    /// hold NineLensSet — enforced in PresetCatalogueAdminService, not here.</summary>
-    public PresetCatalogueKind Kind { get; set; } = PresetCatalogueKind.Other;
 
     public DateTimeOffset CreatedAtUtc { get; set; }
     public string? CreatedBy { get; set; }

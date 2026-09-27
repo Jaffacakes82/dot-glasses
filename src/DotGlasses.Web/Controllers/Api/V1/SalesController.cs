@@ -50,7 +50,9 @@ public class SalesController(
         // One reference-data read for the whole request, then every rule answered in memory —
         // ADR-0002. A preset-range Sale used to cost 7 + 3n + n(n-1)/2 sequential lookups; the
         // provider is scoped and memoized, so this is the request's only load.
-        var snapshot = await snapshots.GetAsync(cancellationToken);
+        // Placed where the record will be stamped, so a lens set is checked against the caller's own
+        // retail point (ADR-0005).
+        var snapshot = (await snapshots.GetAsync(cancellationToken)).AtLocation(currentUser.HierarchyPathPrefix);
         var modelState = ConsultationRules.Check(request, snapshot).ToModelStateDictionary();
         await AddSourceLeadFailureAsync(request, modelState, cancellationToken);
 

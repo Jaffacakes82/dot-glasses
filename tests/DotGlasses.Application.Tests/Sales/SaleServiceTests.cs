@@ -38,7 +38,7 @@ public class SaleServiceTests
         Guid? sourceLeadId = null,
         string fullName = "Amina Okoro",
         string? phoneNumber = "0700111222",
-        LensRangeType lensRangeType = LensRangeType.SixLensSet,
+        LensRangeType lensRangeType = LensRangeType.LensSet,
         bool orderFromDotGlasses = false,
         List<Guid>? coatingRefIds = null) => new()
         {
@@ -217,7 +217,7 @@ public class SaleServiceTests
         var sut = CreateSut(out var sales, out _, out _, out _);
 
         var sale = await sut.CreateAsync(
-            ARecordedSale(lensRangeType: LensRangeType.SixLensSet), Guid.NewGuid(), RetailPoint);
+            ARecordedSale(lensRangeType: LensRangeType.LensSet), Guid.NewGuid(), RetailPoint);
 
         Assert.Null(sales.Inspect(sale.Id)!.FulfilmentStatus);
     }

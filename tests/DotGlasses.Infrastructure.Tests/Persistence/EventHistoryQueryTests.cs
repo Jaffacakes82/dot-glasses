@@ -258,7 +258,7 @@ public class EventHistoryQueryTests(PostgresContainerFixture postgres)
             FakeHttpContextAccessor.Create(isAuthenticated: true, hierarchyPathPrefix));
 
     private static EventHistoryQueryService CreateService(DotGlassesDbContext context) =>
-        new(context, new ReferenceDataSnapshotProvider(context), new UnscopedReportQueryService(context));
+        new(context, new ReferenceDataSnapshotProvider(context, new UnscopedReportQueryService(context)), new UnscopedReportQueryService(context));
 
     private static PageRequest Paged(int page = 1, int pageSize = 25) => new(page, pageSize);
 

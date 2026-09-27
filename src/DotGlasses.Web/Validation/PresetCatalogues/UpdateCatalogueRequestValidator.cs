@@ -9,17 +9,10 @@ public class UpdateCatalogueRequestValidator : AbstractValidator<UpdateCatalogue
     public UpdateCatalogueRequestValidator(IPresetCatalogueAdminService catalogueAdminService)
     {
         RuleFor(x => x.Id).NotEmpty();
-        RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
+        // Cascade stop: the uniqueness check has nothing to look up on a blank or overlong name.
+        RuleFor(x => x.Name).Cascade(CascadeMode.Stop).NotEmpty().MaximumLength(200)
+            .MustAsync(async (request, name, cancellationToken) => !await catalogueAdminService.IsNameTakenAsync(name, request.Id, cancellationToken))
+            .WithMessage(LensSetNameMessages.Taken);
         RuleFor(x => x.Description).MaximumLength(500);
-        RuleFor(x => x.RangeDescription).MaximumLength(100);
-        RuleFor(x => x.Kind).IsInEnum();
-
-        RuleFor(x => x).CustomAsync(async (request, context, cancellationToken) =>
-        {
-            if (await catalogueAdminService.HasCatalogueWithKindAsync(request.Kind, request.Id, cancellationToken))
-            {
-                context.AddFailure(nameof(request.Kind), $"Another catalogue is already set as {request.Kind} — only one catalogue may hold that kind.");
-            }
-        });
     }
 }
