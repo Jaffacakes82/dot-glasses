@@ -49,6 +49,12 @@ public class AuthTokenStore(IJSRuntime jsRuntime)
 
     public bool IsAuthenticated => AccessToken is not null && ExpiresAtUtc is { } expires && expires > DateTimeOffset.UtcNow;
 
+    /// <summary>Fires whenever the token (and so possibly CurrentLocationName) changes — sign-in,
+    /// switch-org, or sign-out. MainLayout's persistent location line is the reason this exists: it
+    /// renders outside any page's own lifecycle, so it needs a push rather than relying on the next
+    /// unrelated render to happen to pick up a stale value after a switch.</summary>
+    public event Action? Changed;
+
     /// <summary>
     /// Rehydrates a previously persisted token. Called once at start-up, before the host runs, so
     /// the very first render already knows whether the user is signed in — otherwise Home would
@@ -133,6 +139,8 @@ public class AuthTokenStore(IJSRuntime jsRuntime)
             LastKnownLocationId = id;
             await jsRuntime.InvokeVoidAsync("dotGlassesIdb.kvSet", LastLocationStorageKey, JsonSerializer.Serialize(id, JsonOptions));
         }
+
+        Changed?.Invoke();
     }
 
     public async Task ClearAsync()
@@ -144,6 +152,7 @@ public class AuthTokenStore(IJSRuntime jsRuntime)
         CurrentLocationName = null;
         // LastKnownLocationId is deliberately left alone — see LastLocationStorageKey's doc comment.
         await jsRuntime.InvokeVoidAsync("dotGlassesIdb.kvRemove", StorageKey);
+        Changed?.Invoke();
     }
 
     private sealed record PersistedToken(
