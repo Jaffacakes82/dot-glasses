@@ -157,7 +157,8 @@ are the record of *how* things got built; don't restate that here.
   `IAuthorizationHandler`/`[Authorize(Policy = ...)]` — role-dependent, never touches the
   query filter.
 - **There is no "primary" or "active" org.** `ApplicationUser` carries no org column and the
-  sign-in cookie/JWT carry no scope, level or role claim — a user's whole access is `UserAccess`
+  sign-in cookie/JWT carry no scope or level claim (the role claim Identity's default factory adds
+  is never read for access) — a user's whole access is `UserAccess`
   (`ScopePaths`, `HighestLevel`, `Role`, `IsSuspended`), loaded from the database by
   `IUserAccessLoader` and memoised in `HttpContext.Items` for the request (ADR-0006). Claims carry
   only identity, plus, on the Field App, the current location id. This is what makes access
@@ -293,10 +294,12 @@ across a refresh, with no connectivity. First-ever use still needs one online se
 Known accepted risk, not yet fixed: offline records are attributed to whoever is signed in
 *when they sync*, not when they were created (`TechnicianUserId`/`HierarchyPath` come from the
 JWT on the POST). Client-side mitigation blocks sign-out and location-switch while the outbox is
-non-empty; a token expiring mid-queue still slips through. Records are now also refused at sync
-if the queued location is no longer valid — no longer one of the technician's direct assignments,
-retired since, or never assigned at all — landing on `/failed-records` with the matching
-`CurrentLocationCheck` message instead of being silently mis-attributed. See `docs/open-issues.md`
+non-empty; a token expiring mid-queue still slips through. Records are also refused at sync if
+the token's location is no longer valid — no longer one of the technician's direct assignments,
+deactivated since, or never assigned at all — landing on `/failed-records` with the matching
+`CurrentLocationCheck` message instead of being silently mis-attributed. (This narrows the risk
+without closing it: a queued record can still sync under a different technician at a location
+they're validly assigned to.) See `docs/open-issues.md`
 before attempting a fix — the request DTOs deliberately omit these fields, so "accept them from
 the body" is not a safe shortcut.
 
