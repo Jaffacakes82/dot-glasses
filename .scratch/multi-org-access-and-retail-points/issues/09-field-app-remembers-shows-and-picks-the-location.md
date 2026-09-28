@@ -108,6 +108,61 @@ while the outbox holds unsent records.
 - **No deviations from Contracts/other-project scope.** Everything above is contained to
   `src/DotGlasses.App`; no design tokens were added, so `dot-glasses.css` needed no mirroring to
   `DotGlasses.Web`.
+- **Code-review follow-up, on `feat/multi-org-access-review-app` (off `feat/multi-org-access`,
+  9c6a259), Field App only.** Five findings from reviewing this ticket's work:
+  1. **Outlet picker bypassed the outbox block.** `OutletSelect.razor` had no outbox guard at all —
+     `SelectOutletAsync` (including the automatic single-org pick) switched regardless of queued
+     records, unlike Settings. Now injects `ISyncQueueStore`/`ISyncService`, disables every outlet
+     button (and the auto-pick) while `GetPendingAsync().Count > 0`, and offers the same "Send
+     now" action Settings/NoLocation use, with the guard also enforced inside `SelectOutletAsync`
+     itself (not just the disabled buttons), since the single-org auto-pick calls it directly.
+  2. **A lost location was never re-asked on a rehydrated session** (story 24). `Home.razor` only
+     ever called `RedirectedToLocationScreenAsync` when `TokenStore.CurrentLocationId` was null, so
+     a saved-but-now-invalid location (assignment revoked, retail point deactivated) was kept
+     forever. `RedirectedToLocationScreenAsync` now runs on every launch and, when online, treats
+     "the saved location isn't in `GetMyOrgsAsync()`'s response with `IsActive: true`" the same as
+     "no location yet" — routing to `/outlet-select` or `/no-location` exactly as the no-location
+     case already did. Deliberately skipped while offline (checked via the same
+     `dotGlassesIdb.isOnline` JS call `RefreshAsync` already used) — no live answer to check a
+     saved location against, so it's kept rather than bounced.
+  3. **Offline showed the wrong screen.** Previously, `TokenStore.CurrentLocationId is null` plus a
+     `GetMyOrgsAsync()` call that failed with no cache (`LoadError` set, empty list returned) fell
+     through to the `orgs.Count == 0` branch and navigated to `/no-location` — "can't record here"
+     for a technician who's simply offline on a first-ever launch, misreading lost connectivity as
+     a lost assignment. `Home.razor` now renders its own inline offline/retry state
+     (`_showOfflineLocationState`) for that specific case — no saved location and `LoadError` set —
+     reusing the same `LoadError`-vs-genuine-zero distinction `OutletSelect.razor` already drew.
+  4. **The current location wasn't visible outside Home/the consultation forms.** `MainLayout.razor`
+     was `@Body` only, so Leads/Settings/Failed records/etc. showed nothing. Added a small
+     `.dg-location-bar` line, shown in `MainLayout` whenever `TokenStore.CurrentLocationName` is
+     non-null and the route isn't `login`/`no-location`/`outlet-select` (those three either have no
+     current location yet or are the screen actively resolving one). `AuthTokenStore` gained a
+     `Changed` event (fired from `SetTokenAsync`/`ClearAsync`) so the bar updates immediately after
+     a Settings location switch rather than waiting on an unrelated re-render; `MainLayout`
+     subscribes to it and to `NavigationManager.LocationChanged` (to re-evaluate the per-route
+     hide-list on navigation), unsubscribing both in `Dispose`. `.dg-location-bar` is a plain class
+     built from existing tokens (`--space-*`, `--dot-*` colors) — no new custom property, so per
+     CLAUDE.md's UI rule it needed no hand-mirroring into `DotGlasses.Web`'s copy of
+     `dot-glasses.css`.
+  5. **`FormErrors` regression.** This ticket's `Attribute()` change dropped every `""`-keyed error
+     outright to stop `ConsultationForm` printing a whole-record rejection twice (once as
+     `_summaryMessage`, once as a bare `": <message>"` bullet — see the Comments entry above). That
+     fixed `ConsultationForm` but broke `Settings.razor`'s change-password path, which has no
+     `Unattributed` summary UI at all: a `""`-keyed rejection (e.g. wrong current password) now
+     showed nothing, because `Merge` returned a non-empty `Errors` bag so the method's own
+     "couldn't change password" fallback was skipped. Fixed at the root instead of re-dropping:
+     `FormErrors.Attribute` puts `""`-keyed messages back into `Unattributed` (unprefixed, to avoid
+     the leading-colon bug) so no caller loses one; `ConsultationForm.SubmitAsync` now removes the
+     exact duplicate from `Unattributed` itself right after `Merge` (it already shows the same text
+     via `_summaryMessage`); `Settings.razor`'s `ChangePasswordAsync` now sets `_passwordMessage`
+     from `Unattributed` when present, reusing its existing single-line message slot rather than
+     adding new UI. Checked every other `FormErrors`/`Merge`/`AddRuleFailures` caller
+     (`CoatingMultiSelector.razor`, `FieldError.razor`, `LensRangeSelector.razor`,
+     `ReferenceDataDropdown.razor`) — they only read the per-field indexer, not `Unattributed`, so
+     none of them are affected either way.
+  - `dotnet build DotGlasses.sln` — succeeds, 0 errors, 1 pre-existing unrelated EF1002 warning in
+    `Infrastructure.Tests` (same warning ticket 09's own build already had). No server-side files
+    touched; no Field App test project exists, so no automated tests were run.
 
 ### Manual browser checklist — unverified, to be confirmed by a human (no Field App test project;
   running the app needs AppHost + Docker + seeded dev secrets, which this session didn't attempt)
@@ -143,3 +198,44 @@ while the outbox holds unsent records.
       location buttons are disabled and sign-out is replaced with a forced "Send now" — unchanged
       code path (`Settings.razor`), not touched by this ticket, but worth re-confirming nothing
       here regressed it.
+
+#### Added by the code-review follow-up (`feat/multi-org-access-review-app`) — also unverified
+
+- [ ] **Outlet picker blocks switching with unsent records.** With the outbox non-empty, open
+      `/outlet-select` (e.g. via Settings after a location's been lost, or directly) with several
+      eligible locations: every outlet button is disabled, a "Send unsent records..." message and
+      a "Send now (N)" button appear, and tapping an outlet does nothing until the queue is
+      cleared. With exactly one eligible location and a non-empty outbox, confirm it does *not*
+      auto-pick — the picker/Send-now UI shows instead, and auto-pick only fires once the queue is
+      empty (either arriving that way or via "Send now" draining it to zero).
+- [ ] **A lost assignment is re-asked, not silently kept, online.** Sign in and land on a location,
+      then (as an admin, in another session/tab) remove that technician's assignment to that retail
+      point while still online. Reload/relaunch the Field App: confirm it does *not* silently stay
+      on the stale location — it routes to `/outlet-select` (other locations remain) or
+      `/no-location` (none remain), matching the already-verified "picker appears"/"can't record
+      here appears" checks above.
+- [ ] **A lost assignment is NOT re-asked while offline.** Same setup, but go offline (or simulate
+      via devtools) before relaunching: confirm the Field App keeps the last-known location and
+      renders the normal dashboard rather than bouncing to the picker or "can't record here" — a
+      technician who's simply lost connectivity must keep working.
+- [ ] **First-ever offline launch (no saved location, no cache) shows retry, not "can't record
+      here".** On a brand-new device/profile with no cached `my-orgs` response and no connectivity,
+      sign in (or land on Home with a rehydrated token that never picked a location) and confirm
+      Home shows an inline "Couldn't reach the server..." message with a Retry button — not
+      `/no-location`'s "you're not set up to record here" screen. Tapping Retry once connectivity
+      is restored should proceed to the picker/dashboard as normal.
+- [ ] **Current location is visible on every signed-in screen.** Visit Leads, Settings, and Failed
+      records (and any consultation form) and confirm a small location line is visible on each,
+      showing the same name as Home's own location line. Confirm it is *not* shown on Login,
+      `/no-location`, or `/outlet-select`.
+- [ ] **The location line updates immediately after a switch.** From Settings, switch to a
+      different location; confirm the persistent location line (visible on Settings itself, and on
+      Home/Leads/etc. after navigating there) reflects the new location immediately, with no stale
+      value on the first render after the switch.
+- [ ] **Change-password shows a whole-record rejection.** On Settings, trigger a change-password
+      rejection that has no specific field to blame (e.g. submit the current password wrong, if the
+      server keys that failure on `""` rather than `CurrentPassword`) and confirm a message appears
+      under the button (not silence) — this is the regression the `FormErrors` fix targets.
+      Separately, re-confirm ticket 09's original "Failed records" `""`-message check above still
+      shows the message exactly once on ConsultationForm (no duplicate, no stray leading colon)
+      now that `Attribute()` no longer drops `""` outright.

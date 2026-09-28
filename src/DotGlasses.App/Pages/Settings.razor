@@ -196,6 +196,17 @@
             if (problem?.Errors is { Count: > 0 } errors)
             {
                 _passwordErrors.Merge(errors, PasswordKnownFields);
+
+                // A whole-record ("") rejection — e.g. the current password being wrong, which
+                // isn't a per-field shape mismatch — has no control to attribute to and lands in
+                // Unattributed (FormErrors.Attribute). This screen has no summary-band UI for
+                // Unattributed the way ConsultationForm does, so without this it would show
+                // nothing at all even though Errors came back non-empty. Surface it the same way
+                // this method already surfaces every other failure here — as _passwordMessage.
+                if (_passwordErrors.Unattributed.Count > 0)
+                {
+                    _passwordMessage = string.Join(" ", _passwordErrors.Unattributed);
+                }
             }
             else
             {
