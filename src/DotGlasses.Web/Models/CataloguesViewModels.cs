@@ -76,3 +76,13 @@ public class AssignCataloguesRequest
     public Guid OrgNodeId { get; set; }
     public List<Guid> CatalogueIds { get; set; } = [];
 }
+
+/// <summary>The Lens powers page (ticket 08): each value already formatted by
+/// <see cref="LensPowerValues.FormatPower"/> (sphere, cylinder, add) or as a plain whole-degree
+/// string (axis), in the shop's order — the view renders these lists as given and states no
+/// bound of its own.</summary>
+public record LensPowersViewModel(
+    IReadOnlyList<string> Sphere,
+    IReadOnlyList<string> Cylinder,
+    IReadOnlyList<string> Axis,
+    IReadOnlyList<string> Add);

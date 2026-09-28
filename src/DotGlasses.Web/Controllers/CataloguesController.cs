@@ -1,9 +1,11 @@
+using System.Globalization;
 using DotGlasses.Application.Common;
 using DotGlasses.Application.Organisations;
 using DotGlasses.Application.PresetCatalogues;
 using DotGlasses.Application.Reporting;
 using DotGlasses.Application.Users;
 using DotGlasses.Domain.Enums;
+using DotGlasses.Rules.LensPowers;
 using DotGlasses.Web.Authorization;
 using DotGlasses.Web.Models;
 using FluentValidation;
@@ -27,6 +29,16 @@ public class CataloguesController(
 {
     public async Task<IActionResult> Index(string? search, CancellationToken cancellationToken) =>
         View(await BuildViewModelAsync(search, cancellationToken));
+
+    /// <summary>The read-only Lens powers page (ticket 08), behind the same policy as the rest of
+    /// this screen: every value list and the display format come from
+    /// <see cref="LensPowerValues"/> — the single definition the Field App, the Add lens dialog
+    /// and the server all read (ADR-0007). The view holds none of these bounds itself.</summary>
+    public IActionResult LensPowers() => View(new LensPowersViewModel(
+        LensPowerValues.Sphere.Select(LensPowerValues.FormatPower).ToList(),
+        LensPowerValues.Cylinder.Select(LensPowerValues.FormatPower).ToList(),
+        LensPowerValues.Axis.Select(a => a.ToString("0", CultureInfo.InvariantCulture)).ToList(),
+        LensPowerValues.Add.Select(LensPowerValues.FormatPower).ToList()));
 
     [HttpPost]
     [ValidateAntiForgeryToken]
@@ -113,6 +125,7 @@ public class CataloguesController(
             await catalogueAdminService.AssignCatalogueToOrgAsync(catalogueId, request.OrgNodeId, cancellationToken);
         }
 
+        TempData["Info"] = request.CatalogueIds.Count == 1 ? "Lens set assigned." : $"{request.CatalogueIds.Count} lens sets assigned.";
         return RedirectToAction(nameof(Index));
     }
 
