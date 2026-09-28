@@ -105,6 +105,22 @@ public class DevUserSeederTests : IAsyncLifetime
         Assert.Single(await verifyAfter.Users.Where(u => u.UserName == AdminUserName).ToListAsync());
     }
 
+    [Fact]
+    public async Task SeedingWithAPasswordThatFailsIdentitysPolicy_ThrowsAndCreatesNoAccount()
+    {
+        // CreateAsync's IdentityResult used to be discarded, so a policy refusal here would just
+        // silently skip seeding — indistinguishable from "DevSeed options weren't set at all".
+        // Checking the result turns that into a loud startup failure instead, which is the whole
+        // point of the fix: better a hosted service that throws than a dev account nobody notices
+        // never got seeded.
+        await using var host = Host.Build(_postgres.GetConnectionString(), password: "weak");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => host.Seeder.StartAsync(CancellationToken.None));
+
+        await using var verify = CreateContext();
+        Assert.Empty(await verify.Users.Where(u => u.UserName == AdminUserName).ToListAsync());
+    }
+
     private async Task<List<Guid>> AdminAssignedOrgIdsAsync()
     {
         await using var context = CreateContext();
@@ -116,7 +132,7 @@ public class DevUserSeederTests : IAsyncLifetime
         new(new DbContextOptionsBuilder<DotGlassesDbContext>().UseNpgsql(_postgres.GetConnectionString()).Options,
             new NullHttpContextAccessor());
 
-    private Host BuildHost() => Host.Build(_postgres.GetConnectionString());
+    private Host BuildHost() => Host.Build(_postgres.GetConnectionString(), AdminPassword);
 
     private sealed class NullHttpContextAccessor : IHttpContextAccessor
     {
@@ -145,7 +161,7 @@ public class DevUserSeederTests : IAsyncLifetime
 
         public UserManager<ApplicationUser> UserManager { get; }
 
-        public static Host Build(string connectionString)
+        public static Host Build(string connectionString, string password)
         {
             var services = new ServiceCollection();
             services.AddLogging();
@@ -163,7 +179,7 @@ public class DevUserSeederTests : IAsyncLifetime
             var scope = provider.CreateScope();
             var seeder = new DevUserSeeder(
                 provider.GetRequiredService<IServiceScopeFactory>(),
-                Options.Create(new DevSeedOptions { AdminUserName = AdminUserName, AdminPassword = AdminPassword }));
+                Options.Create(new DevSeedOptions { AdminUserName = AdminUserName, AdminPassword = password }));
 
             return new Host(provider, scope, seeder);
         }

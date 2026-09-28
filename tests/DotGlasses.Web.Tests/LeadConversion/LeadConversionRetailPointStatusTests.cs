@@ -1,3 +1,4 @@
+using System.Net;
 using DotGlasses.Domain.Entities;
 using DotGlasses.Infrastructure.Persistence;
 using DotGlasses.Infrastructure.Persistence.Configurations;
@@ -63,6 +64,58 @@ public class LeadConversionRetailPointStatusTests(AdminPortalFactory factory) : 
         var lead = Query(db => db.Leads.IgnoreQueryFilters().Single(l => l.Id == leadId));
         Assert.False(lead.ConvertedFlag);
         Assert.Null(lead.SaleId);
+    }
+
+    /// <summary>
+    /// A Lead whose HierarchyPath matches no OrganisationNode at all — no node is "found and
+    /// deactivated", so this ground for refusal doesn't apply and conversion proceeds exactly as
+    /// it did before ticket 07. This stands in for the two real-world shapes the spec calls out
+    /// (a record stamped above retail-point level, and a legacy row with no exact org such as
+    /// ""): an outright-empty HierarchyPath isn't reachable here because it wouldn't match the
+    /// admin's own scope prefix ("/1/") and so the scoped Lead query would hide it before this
+    /// check ever ran — this fabricated-but-in-scope path is the reachable version of the same
+    /// "no node found" case.
+    /// </summary>
+    [Fact]
+    public async Task ConvertingALeadWhoseHierarchyPathMatchesNoOrgNode_ProceedsAsBefore()
+    {
+        var customerId = Guid.NewGuid();
+        var leadId = Guid.NewGuid();
+        const string noMatchingNodePath = OrganisationSeedConfiguration.KenyaRetailerPath + "999/";
+        factory.Seed(db =>
+        {
+            db.Customers.Add(new Customer
+            {
+                Id = customerId,
+                FullName = "Akinyi Otieno",
+                PhoneNumber = "+254711000001",
+                HierarchyPath = noMatchingNodePath,
+            });
+            db.Leads.Add(new Lead
+            {
+                Id = leadId,
+                CustomerId = customerId,
+                TechnicianUserId = Guid.NewGuid(),
+                HierarchyPath = noMatchingNodePath,
+                ConsentGiven = true,
+            });
+        });
+
+        var client = factory.CreateAdminClient();
+        var token = await AdminPortalFactory.GetAntiforgeryTokenAsync(client, $"/Leads/Convert/{leadId}");
+
+        var response = await client.PostAsync(
+            $"/Leads/Convert/{leadId}",
+            AdminPortalFactory.Form(token, ("Form.ConsentGiven", "true")));
+
+        // Not refused on the "retail point deactivated" ground — the form comes back asking for a
+        // lens range instead (the Lead recorded none), which is the same 200-with-validation shape
+        // LeadConversionLensSetTests.SubmittingWithNoLensRangeChosenAsksForOne pins for an ordinary
+        // in-scope Lead, not a redirect-with-TempData domain rejection.
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var html = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("has been deactivated.", html);
+        Assert.Contains("Choose a lens range.", html);
     }
 
     private T Query<T>(Func<DotGlassesDbContext, T> query)

@@ -85,10 +85,15 @@ public class LeadConversionController(
         // the same way it stops a fresh Sale at the Field App API boundary (ticket 07, spec.md
         // "Recording"). Looked up by IgnoreQueryFilters() specifically because deactivation is
         // exactly what's being asked about — see IOrganisationNodeLookup's doc comment.
+        //
+        // Only refuse when a node is found *and* it's deactivated. A Lead stamped above retail-
+        // point level, or a legacy row whose HierarchyPath matches no org node at all (e.g. ""),
+        // has nothing here to be deactivated — FindByHierarchyPathAsync returning null means "no
+        // such node", not "the node is gone", so it must not be read as a refusal.
         var retailPoint = await organisationNodeLookup.FindByHierarchyPathAsync(lead.HierarchyPath, cancellationToken);
-        if (retailPoint is not { IsActive: true })
+        if (retailPoint is { IsActive: false })
         {
-            throw new DomainRuleViolationException($"{retailPoint?.Name ?? "This lead's retail point"} has been deactivated.");
+            throw new DomainRuleViolationException($"{retailPoint.Name} has been deactivated.");
         }
 
         // Placed at the *Lead's* location: the Sale inherits the Lead's attribution (ADR-0005).
