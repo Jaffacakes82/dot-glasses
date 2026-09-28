@@ -337,6 +337,36 @@ body {
     transform: rotate(180deg);
 }
 
+.dg-user-chip-info {
+    flex: 1;
+    /* The load-bearing part of the email-truncation fix: without min-width:0 a flex child never
+       shrinks below its content's natural width, so overflow/text-overflow below would have
+       nothing to clip against and the email would push the sidebar wider instead of eliding. */
+    min-width: 0;
+}
+
+.dg-user-chip-email {
+    font-weight: 600;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dg-user-chip-role {
+    font-size: 11px;
+    opacity: 0.7;
+    text-transform: uppercase;
+}
+
+.dg-user-chip-assignments {
+    font-size: 11px;
+    opacity: 0.6;
+    margin-top: var(--space-1);
+    line-height: 1.3;
+    overflow-wrap: break-word;
+}
+
 .dg-user-menu {
     min-width: 180px;
     padding: var(--space-2);

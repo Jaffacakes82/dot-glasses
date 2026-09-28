@@ -1,8 +1,10 @@
 @using DotGlasses.Application.Common
+@using DotGlasses.Application.Users
 @using DotGlasses.Web.Authorization
 @using Microsoft.AspNetCore.Authorization
 @inject ICurrentUserContext CurrentUser
 @inject IAuthorizationService AuthorizationService
+@inject IUserAssignmentsQueryService UserAssignmentsQuery
 @{
     var currentController = ViewContext.RouteData.Values["controller"]?.ToString();
 
@@ -15,6 +17,16 @@
             .Select(part => char.ToUpperInvariant(part[0])));
 
     var roleLabel = CurrentUser.Roles.FirstOrDefault() ?? "—";
+
+    // Sorted by level then name (UserAssignmentsQueryService), shortened to "+N more" past the
+    // cap so the sidebar footer stays tidy for an admin with many assignments (spec.md user
+    // stories 7-8).
+    const int assignmentDisplayCap = 3;
+    IReadOnlyList<UserAssignmentSummary> assignments = CurrentUser.IsAuthenticated && CurrentUser.UserId is { } currentUserId
+        ? await UserAssignmentsQuery.GetForUserAsync(currentUserId)
+        : [];
+    var visibleAssignmentNames = assignments.Select(a => a.Name).Take(assignmentDisplayCap).ToList();
+    var extraAssignmentCount = assignments.Count - visibleAssignmentNames.Count;
 
     // Dashboard/Organisations/Event History/User Directory carry a plain [Authorize] on their
     // controllers — visible to any authenticated role. These three have a real policy gate, so
@@ -92,9 +104,15 @@
                        at all. The caret is the discoverability cue; both destinations are named. *@
                     <button class="dg-user-chip-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Account menu">
                         <div class="dg-avatar">@initials</div>
-                        <div style="flex:1; min-width:0;">
-                            <div style="font-weight:600; font-size:13px;">@CurrentUser.UserName</div>
-                            <div style="font-size:11px; opacity:0.7; text-transform:uppercase;">@roleLabel</div>
+                        <div class="dg-user-chip-info">
+                            <div class="dg-user-chip-email" title="@CurrentUser.UserName">@CurrentUser.UserName</div>
+                            <div class="dg-user-chip-role">@roleLabel</div>
+                            @if (visibleAssignmentNames.Count > 0)
+                            {
+                                <div class="dg-user-chip-assignments">
+                                    @string.Join(", ", visibleAssignmentNames)@(extraAssignmentCount > 0 ? $" +{extraAssignmentCount} more" : "")
+                                </div>
+                            }
                         </div>
                         <span class="dg-caret">&#9662;</span>
                     </button>
