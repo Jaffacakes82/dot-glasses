@@ -34,6 +34,7 @@ where they qualify. This map is for planning only; nothing is implemented from i
 - [What a lens is: one lens database for lens sets and custom lenses](issues/06-what-a-lens-is.md) — a lens power is a value: sphere, cylinder, axis and add for one eye. Its allowed values copy the online shop and are fixed. Records store powers, not pointers to set entries. A lens-set entry is a power, a typed label and its coatings. Lens strength is retired. See ADR-0007.
 - [Which coatings each lens in a lens set can have, and where pairings live](issues/07-coatings-per-lens.md) — each lens-set entry lists its coatings (at least one) and its own pairings, and the server enforces them. Global pairings are gone, and exclusions stay global. A pair gets one coating set, offered from what both lenses come in. See ADR-0007 "Coatings".
 - [What happens to existing lens data](issues/09-migrate-existing-lens-data.md) — reset rather than convert. Old lens sets are retired and emptied, and lens strengths, the coating grid and global pairings are removed; exclusions stay. Old records keep their set name and show "—" for lens power. Staging and production start with no active lens sets, and example sets come from the dev-only seeder.
+- [The lens set admin screen for adding lenses](issues/08-lens-set-admin-screen.md) — prototyped, and variant A was chosen: an "Add lens" dialog laid out like the online shop, one lens at a time, with a typed label, coatings and per-lens pairings. There is no bulk add for now. The prototype is on branch `prototype/lens-set-admin-screen`.
 - [The lens option ranges the Dot Glasses e-commerce site offers](issues/05-custom-lens-option-ranges.md) — sphere (±10) and add (0 to 3) match the Field App. Cylinder doesn't: the site offers 0 to -6 only. The site also requires an axis of 0–180, asks lens type only when add is above 0, and has a different coating list.
 
 ## Not yet specified
@@ -43,14 +44,9 @@ where they qualify. This map is for planning only; nothing is implemented from i
     [`multi-org-access-and-retail-points/spec.md`](../multi-org-access-and-retail-points/spec.md),
     which is `ready-for-agent`.
   - Ticket 03's form work follows the rules that spec sets.
-  - Ticket 06 waits for tickets 07, 08 and 09 before it becomes a lens spec. Without them, a spec
-    couldn't replace the coating grid, choose between converting and rebuilding existing lens sets,
-    or define how an admin enters a lens.
-
-- **The Rules and the offline cache after the lens redesign.** `ReferenceDataSnapshot`,
-  `ConsultationRules` and the Field App's cached reference data all assume the current
-  `LensOption`/`LensStrength` shape. It's clear this needs reworking, but not how until the lens
-  identity and coating tickets settle.
+  - Tickets 06–09 are all resolved, so the lens spec can be written. It also absorbs the rework of
+    the Rules and the Field App's offline cache for the new lens shape. How the Field App form
+    looks (ticket 10) stays a separate decision.
 - **Custom Orders after the redesign.** If custom lenses come from the lens database and leads can
   order, the Custom Orders queue and its fulfilment status may need to change shape.
 - **MI that doesn't tally.** The call expects small reporting discrepancies after these changes.
@@ -65,3 +61,6 @@ Day 2, deprioritised for now. These come back only as a fresh effort.
 - Clicking an Event History record to see the full sale (the feedback doc says "maybe even Day 2").
 - Assigning lens sets while creating an org, or from the org page (the feedback doc says "maybe Day 2").
 - Changing the Field App's display name (the feedback doc says "no rush").
+- Adding many lenses at once, whether by an editable grid or CSV import. Both were prototyped and
+  set aside, 2026-09-28: few people set up lens sets, and rarely. See the lens set admin screen
+  ticket.

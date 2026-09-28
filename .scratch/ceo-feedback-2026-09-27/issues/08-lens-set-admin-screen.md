@@ -1,7 +1,7 @@
 # 08 — The lens set admin screen for adding lenses
 
 Type: prototype
-Status: open
+Status: resolved
 Blocked by: 06, 07
 
 ## Question
@@ -27,3 +27,36 @@ CSV import in a defined format? Prototype the screen to react to.
   - The admin can add pairings for that lens only, such as "Blue block → Photochromic".
   - Saving a pairing that contradicts a global exclusion is refused.
   - The old "Lens strength coating availability" grid goes.
+
+## Answer
+
+Prototyped and reviewed 2026-09-28. The prototype is on the throwaway branch
+`prototype/lens-set-admin-screen` (commit `709752f`), at
+`src/DotGlasses.Web/Views/Catalogues/prototype-lens-set-screen.html`. It is a single
+self-contained file: double-click it to open. It holds three variants, switched with `?variant=`
+or the floating bar.
+
+**Verdict: variant A, the configurator dialog. There is no bulk add for now.**
+
+- **Each lens set lists its lenses in a table.** The columns are label, lens power, lens type,
+  coatings and pairings, with Edit and Remove on each row.
+- **"Add lens" opens a dialog laid out like the online shop's configurator, one lens at a time.**
+  It has these fields:
+  - Spherical, Cylindrical, Axis and Add Near Vision Power dropdowns, with the shop's allowed values
+    in the shop's order.
+  - Axis is enabled only when cylinder isn't 0.
+  - Lens type (Bifocal, Progressive or Other, with free text for Other) appears only when there's an
+    add. Otherwise the dialog says the lens is single vision.
+  - A typed label, required and unique within the set.
+  - Coating checkboxes, with at least one required. A note lists the global exclusions that apply
+    at sale time.
+  - "Pairings for this lens": two dropdowns limited to the ticked coatings. A pairing that an
+    exclusion forbids, or a duplicate pairing, is refused inline.
+- **Edit reuses the same dialog.** Saving lists every problem at once, using the checks from
+  tickets 06 and 07.
+- **A read-only "Lens powers" tab** shows the allowed values and the validity rules.
+- **Rejected for now:** the spreadsheet grid (variant B) and CSV import (variant C). Few people set
+  up lens sets, and rarely, so bulk entry isn't needed yet. Both are recorded in the map's Out of
+  scope.
+- **Carried into the lens spec unchanged:** the feedback doc's request for a confirmation message
+  after assigning a lens set to an org. This needs no design choice.
