@@ -73,8 +73,8 @@ public static class SaleAssembly
         return CarriesLens(lead)
             ? seeded.WithLens(
                 lead.LensRangeType, lead.PresetCatalogueId, lead.LensOptionLeftId, lead.LensOptionRightId,
-                lead.CustomSphereLeft, lead.CustomCylinderLeft, lead.CustomAxisLeft, lead.CustomAddPowerLeft,
-                lead.CustomSphereRight, lead.CustomCylinderRight, lead.CustomAxisRight, lead.CustomAddPowerRight,
+                lead.SphereLeft, lead.CylinderLeft, lead.AxisLeft, lead.AddLeft,
+                lead.SphereRight, lead.CylinderRight, lead.AxisRight, lead.AddRight,
                 lead.LensTypeRefId, lead.LensTypeOtherText,
                 lead.PupilDistanceMm, lead.PresetPupilDistanceBucket, lead.ChildrensFrame)
             : seeded;
@@ -147,14 +147,14 @@ public static class SaleAssembly
         PresetCatalogueId = answers.PresetCatalogueId,
         LensOptionLeftId = answers.LensOptionLeftId,
         LensOptionRightId = answers.LensOptionRightId,
-        CustomSphereLeft = answers.CustomSphereLeft,
-        CustomCylinderLeft = answers.CustomCylinderLeft,
-        CustomAxisLeft = answers.CustomAxisLeft,
-        CustomAddPowerLeft = answers.CustomAddPowerLeft,
-        CustomSphereRight = answers.CustomSphereRight,
-        CustomCylinderRight = answers.CustomCylinderRight,
-        CustomAxisRight = answers.CustomAxisRight,
-        CustomAddPowerRight = answers.CustomAddPowerRight,
+        SphereLeft = answers.SphereLeft,
+        CylinderLeft = answers.CylinderLeft,
+        AxisLeft = answers.AxisLeft,
+        AddLeft = answers.AddLeft,
+        SphereRight = answers.SphereRight,
+        CylinderRight = answers.CylinderRight,
+        AxisRight = answers.AxisRight,
+        AddRight = answers.AddRight,
         LensTypeRefId = answers.LensTypeRefId,
         LensTypeOtherText = answers.LensTypeOtherText,
         OrderFromDotGlasses = answers.OrderFromDotGlasses,

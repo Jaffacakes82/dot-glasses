@@ -96,14 +96,14 @@
 
             <p style="font-size:12px; color:var(--text-muted-2); margin:8px 0 4px;">— or, for a Custom range —</p>
             <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8px;">
-                <div><label>Sphere (R)</label><input class="form-control" type="number" step="0.25" asp-for="Form.CustomSphereRight" /></div>
-                <div><label>Cylinder (R)</label><input class="form-control" type="number" step="0.25" asp-for="Form.CustomCylinderRight" /></div>
-                <div><label>Axis (R)</label><input class="form-control" type="number" step="1" asp-for="Form.CustomAxisRight" /></div>
-                <div><label>Add power (R)</label><input class="form-control" type="number" step="0.25" asp-for="Form.CustomAddPowerRight" /></div>
-                <div><label>Sphere (L)</label><input class="form-control" type="number" step="0.25" asp-for="Form.CustomSphereLeft" /></div>
-                <div><label>Cylinder (L)</label><input class="form-control" type="number" step="0.25" asp-for="Form.CustomCylinderLeft" /></div>
-                <div><label>Axis (L)</label><input class="form-control" type="number" step="1" asp-for="Form.CustomAxisLeft" /></div>
-                <div><label>Add power (L)</label><input class="form-control" type="number" step="0.25" asp-for="Form.CustomAddPowerLeft" /></div>
+                <div><label>Sphere (R)</label><input class="form-control" type="number" step="0.25" asp-for="Form.SphereRight" /></div>
+                <div><label>Cylinder (R)</label><input class="form-control" type="number" step="0.25" asp-for="Form.CylinderRight" /></div>
+                <div><label>Axis (R)</label><input class="form-control" type="number" step="1" asp-for="Form.AxisRight" /></div>
+                <div><label>Add power (R)</label><input class="form-control" type="number" step="0.25" asp-for="Form.AddRight" /></div>
+                <div><label>Sphere (L)</label><input class="form-control" type="number" step="0.25" asp-for="Form.SphereLeft" /></div>
+                <div><label>Cylinder (L)</label><input class="form-control" type="number" step="0.25" asp-for="Form.CylinderLeft" /></div>
+                <div><label>Axis (L)</label><input class="form-control" type="number" step="1" asp-for="Form.AxisLeft" /></div>
+                <div><label>Add power (L)</label><input class="form-control" type="number" step="0.25" asp-for="Form.AddLeft" /></div>
                 <div><label>Pupil distance (mm)</label><input class="form-control" type="number" min="54" max="74" asp-for="Form.PupilDistanceMm" /></div>
                 <div style="display:flex; align-items:flex-end;"><label><input type="checkbox" asp-for="Form.ChildrensFrame" style="width:auto; margin-right:6px;" />Children's frame</label></div>
                 <div>

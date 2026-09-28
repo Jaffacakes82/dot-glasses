@@ -366,7 +366,15 @@
     private Guid? _hardCaseColourRefId;
     private string? _hardCaseOtherColourText;
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    // PreRenameLensPowerNames: a Failed record queued before the lens power fields were renamed
+    // reloads with its prescription intact. It only reads the old names; enqueuing writes the new.
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver
+        {
+            Modifiers = { DotGlasses.Contracts.Common.PreRenameLensPowerNames.Accept },
+        },
+    };
 
     // Which server error keys this form has a control for. Anything outside these lands in the
     // summary band instead of being silently dropped — see FormErrors.Merge.
@@ -375,8 +383,8 @@
          "ReferredOrTreated", "ReferralReasonRefId", "ReferralOtherText", "ReferralLocationFreeText", "TreatedInFacility"];
 
     private static readonly string[] LensFields =
-        ["LensRangeType", "PresetCatalogueId", "LensOptionLeftId", "LensOptionRightId", "CustomSphereLeft", "CustomSphereRight",
-         "CustomCylinderLeft", "CustomCylinderRight", "CustomAxisLeft", "CustomAxisRight", "CustomAddPowerLeft", "CustomAddPowerRight",
+        ["LensRangeType", "PresetCatalogueId", "LensOptionLeftId", "LensOptionRightId", "SphereLeft", "SphereRight",
+         "CylinderLeft", "CylinderRight", "AxisLeft", "AxisRight", "AddLeft", "AddRight",
          "LensTypeRefId", "LensTypeOtherText", "PupilDistanceMm", "PresetPupilDistanceBucket"];
 
     private static readonly string[] LeadFields =
@@ -456,8 +464,8 @@
         _consentGiven = seeded.ConsentGiven;
         _coatingRefIds = seeded.CoatingRefIds;
         ApplyLensRange(seeded.LensRangeType, seeded.PresetCatalogueId, seeded.LensOptionLeftId, seeded.LensOptionRightId,
-            seeded.CustomSphereLeft, seeded.CustomCylinderLeft, seeded.CustomAxisLeft, seeded.CustomAddPowerLeft,
-            seeded.CustomSphereRight, seeded.CustomCylinderRight, seeded.CustomAxisRight, seeded.CustomAddPowerRight,
+            seeded.SphereLeft, seeded.CylinderLeft, seeded.AxisLeft, seeded.AddLeft,
+            seeded.SphereRight, seeded.CylinderRight, seeded.AxisRight, seeded.AddRight,
             seeded.PupilDistanceMm, seeded.PresetPupilDistanceBucket, seeded.ChildrensFrame);
     }
 
@@ -509,8 +517,8 @@
                     _coatingPreferenceRefId = lead.CoatingPreferenceRefId;
                     SourceTestId = lead.SourceTestId;
                     ApplyLensRange(lead.LensRangeType, lead.PresetCatalogueId, lead.LensOptionLeftId, lead.LensOptionRightId,
-                        lead.CustomSphereLeft, lead.CustomCylinderLeft, lead.CustomAxisLeft, lead.CustomAddPowerLeft,
-                        lead.CustomSphereRight, lead.CustomCylinderRight, lead.CustomAxisRight, lead.CustomAddPowerRight,
+                        lead.SphereLeft, lead.CylinderLeft, lead.AxisLeft, lead.AddLeft,
+                        lead.SphereRight, lead.CylinderRight, lead.AxisRight, lead.AddRight,
                         lead.PupilDistanceMm, lead.PresetPupilDistanceBucket, lead.ChildrensFrame);
                 }
 
@@ -535,8 +543,8 @@
                     _hardCaseColourRefId = sale.HardCaseColourRefId;
                     _hardCaseOtherColourText = sale.HardCaseOtherColourText;
                     ApplyLensRange(sale.LensRangeType, sale.PresetCatalogueId, sale.LensOptionLeftId, sale.LensOptionRightId,
-                        sale.CustomSphereLeft, sale.CustomCylinderLeft, sale.CustomAxisLeft, sale.CustomAddPowerLeft,
-                        sale.CustomSphereRight, sale.CustomCylinderRight, sale.CustomAxisRight, sale.CustomAddPowerRight,
+                        sale.SphereLeft, sale.CylinderLeft, sale.AxisLeft, sale.AddLeft,
+                        sale.SphereRight, sale.CylinderRight, sale.AxisRight, sale.AddRight,
                         sale.PupilDistanceMm, sale.PresetPupilDistanceBucket, sale.ChildrensFrame);
                 }
 
@@ -554,14 +562,14 @@
         _lensRange.PresetCatalogueId = catalogueId;
         _lensRange.LensOptionLeftId = leftId;
         _lensRange.LensOptionRightId = rightId;
-        _lensRange.CustomSphereLeft = sphereLeft;
-        _lensRange.CustomCylinderLeft = cylinderLeft;
-        _lensRange.CustomAxisLeft = axisLeft;
-        _lensRange.CustomAddPowerLeft = addLeft;
-        _lensRange.CustomSphereRight = sphereRight;
-        _lensRange.CustomCylinderRight = cylinderRight;
-        _lensRange.CustomAxisRight = axisRight;
-        _lensRange.CustomAddPowerRight = addRight;
+        _lensRange.SphereLeft = sphereLeft;
+        _lensRange.CylinderLeft = cylinderLeft;
+        _lensRange.AxisLeft = axisLeft;
+        _lensRange.AddLeft = addLeft;
+        _lensRange.SphereRight = sphereRight;
+        _lensRange.CylinderRight = cylinderRight;
+        _lensRange.AxisRight = axisRight;
+        _lensRange.AddRight = addRight;
         _lensRange.PupilDistanceMm = pupilDistanceMm;
         _lensRange.PresetPupilDistanceBucket = presetBucket;
         _lensRange.ChildrensFrame = childrensFrame;
@@ -600,7 +608,7 @@
         || _reasonNotPurchasedRefId is not null || _coatingPreferenceRefId is not null
         || _frameColourRefId is not null || _coatingRefIds.Count > 0 || _hardCaseSold
         || _lensRange.LensOptionLeftId is not null || _lensRange.LensOptionRightId is not null
-        || _lensRange.CustomSphereLeft is not null || _lensRange.CustomSphereRight is not null
+        || _lensRange.SphereLeft is not null || _lensRange.SphereRight is not null
         || _lensRange.PupilDistanceMm is not null || _lensRange.PresetPupilDistanceBucket is not null;
 
     /// <summary>Explicit in-app back control (see CLAUDE.md ticket 02) — steps back to Home via
@@ -794,14 +802,14 @@
             PresetCatalogueId = needsGlasses ? _lensRange.PresetCatalogueId : null,
             LensOptionLeftId = needsGlasses ? _lensRange.LensOptionLeftId : null,
             LensOptionRightId = needsGlasses ? _lensRange.LensOptionRightId : null,
-            CustomSphereLeft = needsGlasses ? _lensRange.CustomSphereLeft : null,
-            CustomCylinderLeft = needsGlasses ? _lensRange.CustomCylinderLeft : null,
-            CustomAxisLeft = needsGlasses ? _lensRange.CustomAxisLeft : null,
-            CustomAddPowerLeft = needsGlasses ? _lensRange.CustomAddPowerLeft : null,
-            CustomSphereRight = needsGlasses ? _lensRange.CustomSphereRight : null,
-            CustomCylinderRight = needsGlasses ? _lensRange.CustomCylinderRight : null,
-            CustomAxisRight = needsGlasses ? _lensRange.CustomAxisRight : null,
-            CustomAddPowerRight = needsGlasses ? _lensRange.CustomAddPowerRight : null,
+            SphereLeft = needsGlasses ? _lensRange.SphereLeft : null,
+            CylinderLeft = needsGlasses ? _lensRange.CylinderLeft : null,
+            AxisLeft = needsGlasses ? _lensRange.AxisLeft : null,
+            AddLeft = needsGlasses ? _lensRange.AddLeft : null,
+            SphereRight = needsGlasses ? _lensRange.SphereRight : null,
+            CylinderRight = needsGlasses ? _lensRange.CylinderRight : null,
+            AxisRight = needsGlasses ? _lensRange.AxisRight : null,
+            AddRight = needsGlasses ? _lensRange.AddRight : null,
             LensTypeRefId = needsGlasses ? _lensRange.LensTypeRefId : null,
             LensTypeOtherText = needsGlasses ? _lensRange.LensTypeOtherText : null,
             PupilDistanceMm = needsGlasses ? _lensRange.PupilDistanceMm : null,
@@ -833,14 +841,14 @@
         PresetCatalogueId = _lensRange.PresetCatalogueId,
         LensOptionLeftId = _lensRange.LensOptionLeftId,
         LensOptionRightId = _lensRange.LensOptionRightId,
-        CustomSphereLeft = _lensRange.CustomSphereLeft,
-        CustomCylinderLeft = _lensRange.CustomCylinderLeft,
-        CustomAxisLeft = _lensRange.CustomAxisLeft,
-        CustomAddPowerLeft = _lensRange.CustomAddPowerLeft,
-        CustomSphereRight = _lensRange.CustomSphereRight,
-        CustomCylinderRight = _lensRange.CustomCylinderRight,
-        CustomAxisRight = _lensRange.CustomAxisRight,
-        CustomAddPowerRight = _lensRange.CustomAddPowerRight,
+        SphereLeft = _lensRange.SphereLeft,
+        CylinderLeft = _lensRange.CylinderLeft,
+        AxisLeft = _lensRange.AxisLeft,
+        AddLeft = _lensRange.AddLeft,
+        SphereRight = _lensRange.SphereRight,
+        CylinderRight = _lensRange.CylinderRight,
+        AxisRight = _lensRange.AxisRight,
+        AddRight = _lensRange.AddRight,
         LensTypeRefId = _lensRange.LensTypeRefId,
         LensTypeOtherText = _lensRange.LensTypeOtherText,
         PupilDistanceMm = _lensRange.PupilDistanceMm,
@@ -890,8 +898,8 @@
         HardCaseOtherColourText = _hardCaseOtherColourText,
     }.WithLens(
         _lensRange.LensRangeType, _lensRange.PresetCatalogueId, _lensRange.LensOptionLeftId, _lensRange.LensOptionRightId,
-        _lensRange.CustomSphereLeft, _lensRange.CustomCylinderLeft, _lensRange.CustomAxisLeft, _lensRange.CustomAddPowerLeft,
-        _lensRange.CustomSphereRight, _lensRange.CustomCylinderRight, _lensRange.CustomAxisRight, _lensRange.CustomAddPowerRight,
+        _lensRange.SphereLeft, _lensRange.CylinderLeft, _lensRange.AxisLeft, _lensRange.AddLeft,
+        _lensRange.SphereRight, _lensRange.CylinderRight, _lensRange.AxisRight, _lensRange.AddRight,
         _lensRange.LensTypeRefId, _lensRange.LensTypeOtherText,
         _lensRange.PupilDistanceMm, _lensRange.PresetPupilDistanceBucket, _lensRange.ChildrensFrame);
 

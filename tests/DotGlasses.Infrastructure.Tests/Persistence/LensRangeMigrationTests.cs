@@ -1,4 +1,3 @@
-using DotGlasses.Domain.Entities;
 using DotGlasses.Domain.Enums;
 using DotGlasses.Infrastructure.Tests.Postgres;
 using DotGlasses.Infrastructure.Tests.TestDoubles;
@@ -31,13 +30,12 @@ public class LensRangeMigrationTests(PostgresContainerFixture postgres)
         var formerSix = Guid.NewGuid();
         var formerNine = Guid.NewGuid();
         var custom = Guid.NewGuid();
-        context.Sales.AddRange(
-            Sale(formerSix, LensRangeType.LensSet),
-            Sale(formerNine, FormerNineLensSet),
-            Sale(custom, LensRangeType.Custom));
-        context.Tests.Add(new Test { Id = formerNine, HierarchyPath = "/1/2/", TechnicianUserId = Guid.NewGuid(), LensRangeType = FormerNineLensSet });
-        context.Leads.Add(new Lead { Id = formerNine, HierarchyPath = "/1/2/", TechnicianUserId = Guid.NewGuid(), CustomerId = Guid.NewGuid(), LensRangeType = FormerNineLensSet });
-        await context.SaveChangesAsync();
+        // Raw SQL, not the model: later migrations rename these tables' columns (see PreMigrationRows).
+        await PreMigrationRows.InsertSaleAsync(context, formerSix, "/1/2/", (int)LensRangeType.LensSet);
+        await PreMigrationRows.InsertSaleAsync(context, formerNine, "/1/2/", (int)FormerNineLensSet);
+        await PreMigrationRows.InsertSaleAsync(context, custom, "/1/2/", (int)LensRangeType.Custom);
+        await PreMigrationRows.InsertTestAsync(context, formerNine, "/1/2/", Guid.NewGuid(), ("LensRangeType", (int)FormerNineLensSet));
+        await PreMigrationRows.InsertLeadAsync(context, formerNine, "/1/2/", ("LensRangeType", (int)FormerNineLensSet));
 
         await context.GetService<IMigrator>().MigrateAsync();
         context.ChangeTracker.Clear();
@@ -55,13 +53,4 @@ public class LensRangeMigrationTests(PostgresContainerFixture postgres)
             .SingleAsync();
         Assert.Equal(0, kindColumns);
     }
-
-    private static Sale Sale(Guid id, LensRangeType lensRangeType) => new()
-    {
-        Id = id,
-        HierarchyPath = "/1/2/",
-        TechnicianUserId = Guid.NewGuid(),
-        CustomerId = Guid.NewGuid(),
-        LensRangeType = lensRangeType,
-    };
 }
