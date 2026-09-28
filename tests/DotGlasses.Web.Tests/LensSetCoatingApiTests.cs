@@ -103,7 +103,7 @@ public class LensSetCoatingApiTests(CustomWebApplicationFactory factory)
         var errors = await ErrorsAsync(response);
         Assert.Equal([nameof(CreateSaleRequest.CoatingRefIds)], errors.Keys);
         Assert.Equal(
-            "Every coating must be configured as available for the chosen lens option (see Lens Sets).",
+            "Every coating must be configured as available for the chosen lenses (see Lens Sets).",
             errors[nameof(CreateSaleRequest.CoatingRefIds)].Single());
     }
 
