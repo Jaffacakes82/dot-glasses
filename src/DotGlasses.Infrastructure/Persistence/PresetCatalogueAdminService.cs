@@ -3,6 +3,8 @@ using DotGlasses.Application.ReferenceData;
 using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Entities;
 using DotGlasses.Domain.Enums;
+using DotGlasses.Rules.LensPowers;
+using DotGlasses.Rules.ReferenceData;
 using Microsoft.EntityFrameworkCore;
 
 namespace DotGlasses.Infrastructure.Persistence;
@@ -90,6 +92,7 @@ public class PresetCatalogueAdminService(DotGlassesDbContext dbContext, IReferen
                     l.Id, l.Label, l.Sphere, l.Cylinder, l.Axis, l.Add,
                     l.LensTypeRefId,
                     l.LensTypeRefId is null ? null : referenceData.ResolveLabel(l.LensTypeRefId, l.LensTypeOtherText),
+                    l.LensTypeOtherText,
                     l.CoatingIds.Select(id => new LensCoatingAdminDto(id, referenceData.ResolveLabel(id))).ToList(),
                     l.Pairings.Select(p => new LensCoatingPairingAdminDto(
                         p.TriggerCoatingRefId, referenceData.ResolveLabel(p.TriggerCoatingRefId),
@@ -125,6 +128,76 @@ public class PresetCatalogueAdminService(DotGlassesDbContext dbContext, IReferen
         var entity = await dbContext.PresetCatalogues.FirstAsync(x => x.Id == id, cancellationToken);
         entity.Name = name;
         entity.Description = description;
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<LensOptionSnapshot>> ListLensesForCheckAsync(Guid catalogueId, CancellationToken cancellationToken = default) =>
+        await dbContext.LensOptions
+            .Where(l => l.PresetCatalogueId == catalogueId)
+            .Select(l => new LensOptionSnapshot(l.Id, l.Label, l.Sphere, new List<Guid>(), l.Cylinder, l.Axis, l.Add, l.LensTypeRefId, l.LensTypeOtherText, null))
+            .ToListAsync(cancellationToken);
+
+    public async Task SaveLensAsync(Guid catalogueId, Guid? lensOptionId, LensSetLensInput lens, CancellationToken cancellationToken = default)
+    {
+        // The soft-delete filter hides a retired lens set; the screen never offers its lenses for
+        // editing, so this answers a stale page or a hand-built POST.
+        if (!await dbContext.PresetCatalogues.AnyAsync(c => c.Id == catalogueId, cancellationToken))
+        {
+            throw new DomainRuleViolationException("This lens set is retired — reactivate it before changing its lenses.");
+        }
+
+        LensOption entity;
+        List<LensOptionCoating> coatings = [];
+        List<LensOptionCoatingPairing> pairings = [];
+        if (lensOptionId is { } id)
+        {
+            entity = await dbContext.LensOptions.FirstAsync(l => l.Id == id && l.PresetCatalogueId == catalogueId, cancellationToken);
+            coatings = await dbContext.LensOptionCoatings.Where(c => c.LensOptionId == id).ToListAsync(cancellationToken);
+            pairings = await dbContext.LensOptionCoatingPairings.Where(p => p.LensOptionId == id).ToListAsync(cancellationToken);
+        }
+        else
+        {
+            entity = new LensOption { Id = Guid.NewGuid(), PresetCatalogueId = catalogueId };
+            dbContext.LensOptions.Add(entity);
+        }
+
+        // Stored the way LensPowerRules reads it, so the table, the snapshot and a record all see
+        // one shape: a 0.00 cylinder is none, an axis only goes with a cylinder, a 0.00 add is none,
+        // a lens type only goes with an add, and free text only with the "Other" lens type. A
+        // direct row read, not the memoised snapshot: this is a write (CLAUDE.md, ADR-0002).
+        var hasCylinder = LensPowerRules.HasCylinder(lens.Cylinder);
+        var hasAdd = LensPowerRules.HasAdd(lens.Add);
+        var lensTypeRefId = hasAdd ? lens.LensTypeRefId : null;
+        var isOtherLensType = lensTypeRefId is { } typeId && await dbContext.ReferenceDataItems
+            .AnyAsync(i => i.Id == typeId && i.Category == ReferenceDataCategory.LensType && i.IsOtherOption, cancellationToken);
+        entity.Label = lens.Label.Trim();
+        entity.Sphere = lens.Sphere;
+        entity.Cylinder = hasCylinder ? lens.Cylinder : null;
+        entity.Axis = hasCylinder ? lens.Axis : null;
+        entity.Add = hasAdd ? lens.Add : null;
+        entity.LensTypeRefId = lensTypeRefId;
+        entity.LensTypeOtherText = isOtherLensType && !string.IsNullOrWhiteSpace(lens.LensTypeOtherText) ? lens.LensTypeOtherText.Trim() : null;
+
+        // Coatings and pairings are replaced by difference rather than delete-all-then-insert, so
+        // an unchanged row is never deleted and re-inserted against its own unique index.
+        var wantedCoatings = lens.CoatingIds.Distinct().ToHashSet();
+        dbContext.LensOptionCoatings.RemoveRange(coatings.Where(c => !wantedCoatings.Contains(c.CoatingRefId)));
+        dbContext.LensOptionCoatings.AddRange(wantedCoatings
+            .Where(coatingId => coatings.All(c => c.CoatingRefId != coatingId))
+            .Select(coatingId => new LensOptionCoating { Id = Guid.NewGuid(), LensOptionId = entity.Id, CoatingRefId = coatingId }));
+
+        var wantedPairings = lens.Pairings.Distinct().ToHashSet();
+        dbContext.LensOptionCoatingPairings.RemoveRange(pairings.Where(p => !wantedPairings.Contains(new CoatingPairingRule(p.TriggerCoatingRefId, p.PairedCoatingRefId))));
+        dbContext.LensOptionCoatingPairings.AddRange(wantedPairings
+            .Where(w => !pairings.Any(p => p.TriggerCoatingRefId == w.TriggerCoatingRefId && p.PairedCoatingRefId == w.PairedCoatingRefId))
+            .Select(w => new LensOptionCoatingPairing
+            {
+                Id = Guid.NewGuid(),
+                LensOptionId = entity.Id,
+                TriggerCoatingRefId = w.TriggerCoatingRefId,
+                PairedCoatingRefId = w.PairedCoatingRefId,
+            }));
+
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 

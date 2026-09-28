@@ -2,8 +2,10 @@ using System.Globalization;
 using DotGlasses.Application.Common;
 using DotGlasses.Application.Organisations;
 using DotGlasses.Application.PresetCatalogues;
+using DotGlasses.Application.ReferenceData;
 using DotGlasses.Application.Reporting;
 using DotGlasses.Application.Users;
+using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Enums;
 using DotGlasses.Rules.LensPowers;
 using DotGlasses.Web.Authorization;
@@ -25,7 +27,9 @@ public class CataloguesController(
     IUnscopedReportQueryService unscopedReportQueryService,
     IValidator<CreateCatalogueRequest> createValidator,
     IValidator<UpdateCatalogueRequest> updateValidator,
-    IValidator<AssignCataloguesRequest> assignValidator) : Controller
+    IValidator<AssignCataloguesRequest> assignValidator,
+    IValidator<SaveLensRequest> saveLensValidator,
+    IReferenceDataSnapshotProvider referenceDataSnapshotProvider) : Controller
 {
     public async Task<IActionResult> Index(string? search, CancellationToken cancellationToken) =>
         View(await BuildViewModelAsync(search, cancellationToken));
@@ -87,6 +91,62 @@ public class CataloguesController(
         }
 
         await catalogueAdminService.UpdateAsync(request.Id, request.Name, request.Description, cancellationToken);
+        return RedirectToAction(nameof(Index));
+    }
+
+    /// <summary>
+    /// The Add lens dialog's save, for a new lens and for an edit alike (ADR-0007).
+    ///
+    /// <para>
+    /// The round trip. A save that passes is written and redirected back to Index with a banner
+    /// (POST-redirect-GET). A refused one comes back the way every other refused form on this
+    /// screen does (CreateCatalogue, UpdateCatalogue, AssignCatalogues): the screen is rendered
+    /// straight from this POST with the validator's failures in ModelState — no redirect. What
+    /// that adds here is the admin's own posted form, handed to the view as
+    /// <see cref="LensDialogViewModel.Reopen"/>, so _LensDialog renders open on their input with
+    /// each problem in the slot for the field it is keyed on (the request's property names are
+    /// the dialog's field names). Rendering rather than redirecting is deliberate: a redirect
+    /// would have to carry the whole form, pairing rows and every keyed message through TempData
+    /// to rebuild exactly this. Nothing has been written when it renders, so reading the memoised
+    /// snapshot for the page is safe.
+    /// </para>
+    ///
+    /// <para>
+    /// A business-rule rejection (the lens set retired, or the lens removed, since the page was
+    /// loaded) goes through DomainRuleViolationFilter's POST-redirect-GET like every other
+    /// screen's.
+    /// </para>
+    /// </summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> SaveLens(SaveLensRequest request, CancellationToken cancellationToken)
+    {
+        if (!await CanEditLensSetAsync(request.CatalogueId, cancellationToken))
+        {
+            return Forbid();
+        }
+
+        if (request.LensOptionId is { } lensOptionId)
+        {
+            // A lens is only ever edited through its own lens set — the permission above was
+            // checked against that set, not whichever one the lens really sits in.
+            var owningCatalogueId = await catalogueAdminService.FindCatalogueIdForLensOptionAsync(lensOptionId, cancellationToken)
+                ?? throw new DomainRuleViolationException("This lens is no longer in the lens set — it may have been removed. Add it again if it is still needed.");
+            if (owningCatalogueId != request.CatalogueId)
+            {
+                return Forbid();
+            }
+        }
+
+        var validationResult = await saveLensValidator.ValidateAsync(request, cancellationToken);
+        if (!validationResult.IsValid || !ModelState.IsValid)
+        {
+            validationResult.AddToModelState(ModelState);
+            return View(nameof(Index), await BuildViewModelAsync(null, cancellationToken, reopenLensDialog: request));
+        }
+
+        await catalogueAdminService.SaveLensAsync(request.CatalogueId, request.LensOptionId, request.ToInput(), cancellationToken);
+        TempData["Info"] = request.LensOptionId is null ? $"Lens \"{request.Label!.Trim()}\" added." : $"Lens \"{request.Label!.Trim()}\" saved.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -193,7 +253,7 @@ public class CataloguesController(
         (await unscopedReportQueryService.GetOrganisationNodePathsUnscopedAsync(cancellationToken))
             .ToDictionary(x => x.Id, x => x.HierarchyPath);
 
-    private async Task<CataloguesIndexViewModel> BuildViewModelAsync(string? search, CancellationToken cancellationToken)
+    private async Task<CataloguesIndexViewModel> BuildViewModelAsync(string? search, CancellationToken cancellationToken, SaveLensRequest? reopenLensDialog = null)
     {
         var catalogues = await catalogueAdminService.ListAsync(cancellationToken);
         if (!string.IsNullOrWhiteSpace(search))
@@ -247,6 +307,39 @@ public class CataloguesController(
             retired,
             assignableOrgs,
             owningOrgOptions,
-            search);
+            search,
+            await BuildLensDialogAsync(reopenLensDialog, catalogues, cancellationToken));
+    }
+
+    /// <summary>The dialog's choices come off the memoised snapshot: this is a page render, never
+    /// the write path (the validator reads its own rows).</summary>
+    private async Task<LensDialogViewModel> BuildLensDialogAsync(
+        SaveLensRequest? reopen, IEnumerable<PresetCatalogueAdminDto> catalogues, CancellationToken cancellationToken)
+    {
+        var referenceData = await referenceDataSnapshotProvider.GetAsync(cancellationToken);
+        IReadOnlyList<LensDialogChoice> Active(Contracts.Common.ReferenceDataCategory category) =>
+            referenceData.Items
+                .Where(i => i.Category == category && i.IsActive)
+                .Select(i => new LensDialogChoice(i.Id, i.Label, i.IsOtherOption))
+                .ToList();
+
+        var exclusions = referenceData.CoatingExclusions
+            .Select(e => $"{referenceData.ResolveLabel(e.CoatingRefIdA)} and {referenceData.ResolveLabel(e.CoatingRefIdB)}")
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        string? title = null;
+        if (reopen is not null)
+        {
+            var lensSetName = catalogues.FirstOrDefault(c => c.Id == reopen.CatalogueId)?.Name;
+            title = reopen.LensOptionId is null ? $"Add lens to {lensSetName}" : $"Edit lens in {lensSetName}";
+        }
+
+        return new LensDialogViewModel(
+            Active(Contracts.Common.ReferenceDataCategory.Coating),
+            Active(Contracts.Common.ReferenceDataCategory.LensType),
+            exclusions,
+            reopen,
+            title);
     }
 }

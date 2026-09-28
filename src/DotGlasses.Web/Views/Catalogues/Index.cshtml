@@ -21,7 +21,8 @@
     <div class="alert alert-success" style="border-radius:var(--radius-md); margin-bottom:var(--space-4);">@info</div>
 }
 
-@if (!ViewData.ModelState.IsValid)
+@* A refused lens is reported inside the Add lens dialog, which reopens on it — not repeated here. *@
+@if (!ViewData.ModelState.IsValid && Model.LensDialog.Reopen is null)
 {
     <div class="alert alert-danger" style="border-radius:var(--radius-md); margin-bottom:var(--space-4);" asp-validation-summary="All"></div>
 }
@@ -78,14 +79,21 @@
                 </div>
             }
 
+            @if (catalogue.CanEdit)
+            {
+                <div style="display:flex; justify-content:flex-end; margin-top:var(--space-3);">
+                    <button class="dg-btn dg-btn-primary" style="padding:6px 14px; font-size:12px;" type="button"
+                            data-lens-add data-catalogue-id="@catalogue.Id" data-catalogue-name="@catalogue.Name">Add lens</button>
+                </div>
+            }
             @if (!catalogue.LensOptions.Any())
             {
                 <p style="font-size:13px; color:#999; margin:var(--space-3) 0;">No lenses yet.</p>
             }
             else
             {
-                @* Read-only for now: adding and editing a lens (its power, lens type, coatings and
-                   pairings) is the Add lens dialog, which comes next (lens-power ticket 07). *@
+                @* In the fixed Rules order (LensSetLenses.InDisplayOrder, applied where the snapshot
+                   is built); Edit opens the one Add lens dialog below on this lens. *@
                 <div style="overflow-x:auto; margin:var(--space-3) 0;">
                     <table class="dg-table" aria-label="Lenses in @catalogue.Name">
                         <thead>
@@ -112,11 +120,17 @@
                                     <td>@(lens.Pairings.Any() ? string.Join(", ", lens.Pairings) : "—")</td>
                                     @if (catalogue.CanEdit)
                                     {
-                                        <td>
+                                        <td style="white-space:nowrap;">
+                                            <button type="button" class="dg-btn dg-btn-ghost" style="padding:2px 10px; font-size:12px;"
+                                                    data-lens-edit data-catalogue-id="@catalogue.Id" data-catalogue-name="@catalogue.Name"
+                                                    data-lens="@Json.Serialize(lens.Edit).ToString()"
+                                                    aria-label="Edit @lens.Label">Edit</button>
                                             <form asp-action="RemoveLensOption" method="post" style="display:inline;">
                                                 <input type="hidden" name="lensOptionId" value="@lens.Id" />
                                                 <button type="submit" class="dg-btn dg-btn-ghost" style="padding:2px 10px; font-size:12px;"
-                                                        aria-label="Remove @lens.Label">Remove</button>
+                                                        aria-label="Remove @lens.Label"
+                                                        data-confirm="Remove @lens.Label from @catalogue.Name? Records that used it keep their own copy of the lens."
+                                                        onclick="return confirm(this.dataset.confirm);">Remove</button>
                                             </form>
                                         </td>
                                     }
@@ -168,6 +182,8 @@
         }
     }
 </div>
+
+<partial name="_LensDialog" model="Model.LensDialog" />
 
 @if (Model.RetiredCatalogues.Any())
 {
@@ -262,3 +278,7 @@
         </div>
     </div>
 </div>
+
+@section Scripts {
+    <script src="~/js/lens-dialog.js" asp-append-version="true"></script>
+}
