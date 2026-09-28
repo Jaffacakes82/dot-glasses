@@ -30,8 +30,16 @@ public class PresetCatalogueQueryService(IReferenceDataSnapshotProvider referenc
                 {
                     Id = l.Id,
                     Label = l.Label,
-                    SortOrder = l.SortOrder,
-                    AvailableCoatingIds = l.AvailableCoatingIds,
+                    Sphere = l.Sphere,
+                    Cylinder = l.Cylinder,
+                    Axis = l.Axis,
+                    Add = l.Add,
+                    LensTypeRefId = l.LensTypeRefId,
+                    LensTypeOtherText = l.LensTypeOtherText,
+                    CoatingIds = l.CoatingIds,
+                    Pairings = l.Pairings
+                        .Select(p => new LensCoatingPairingDto { TriggerCoatingRefId = p.TriggerCoatingRefId, PairedCoatingRefId = p.PairedCoatingRefId })
+                        .ToList(),
                 }).ToList(),
             })
             .ToList();

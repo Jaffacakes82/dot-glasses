@@ -63,6 +63,10 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
         await using var context = new DotGlassesDbContext(options, new NullHttpContextAccessor());
         await context.Database.MigrateAsync();
 
+        // Migrations leave no active lens set (ADR-0007: DGI builds the real ones), so the tests get
+        // the same example 6-Lens and 9-Lens sets local dev does.
+        await ExampleLensSets.EnsureSeededAsync(context);
+
         NpgsqlConnection.ClearAllPools();
     }
 

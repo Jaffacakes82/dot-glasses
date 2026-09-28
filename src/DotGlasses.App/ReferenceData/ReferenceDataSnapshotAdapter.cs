@@ -11,5 +11,5 @@ namespace DotGlasses.App.ReferenceData;
 public static class ReferenceDataSnapshotAdapter
 {
     public static ReferenceDataSnapshot ToSnapshot(this IReferenceDataClient client) =>
-        ReferenceDataSnapshot.FromCachedReferenceData(client.AllItems, client.Catalogues, client.CoatingPairings, client.CoatingExclusions);
+        ReferenceDataSnapshot.FromCachedReferenceData(client.AllItems, client.Catalogues, client.CoatingExclusions);
 }

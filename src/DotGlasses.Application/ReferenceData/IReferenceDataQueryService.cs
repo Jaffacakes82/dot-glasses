@@ -10,9 +10,10 @@ public interface IReferenceDataQueryService
     /// caching than a round trip per category.</summary>
     Task<IReadOnlyList<ReferenceDataItemDto>> ListActiveAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>Every Coating pairing/exclusion rule (see ADR-0001) — fetched/cached by the Field
-    /// App alongside reference data so live pairing/exclusion enforcement works offline. No
-    /// active-item filtering here: a rule referencing a since-retired Coating is harmless (that
-    /// Coating can no longer be selected in the first place) and simpler to just return as-is.</summary>
+    /// <summary>Every Coating exclusion (see ADR-0001) — fetched/cached by the Field App alongside
+    /// reference data so exclusion enforcement works offline. Pairings are not global any more:
+    /// each lens set lens carries its own (ADR-0007), in the lens-set payload. No active-item
+    /// filtering here: a rule referencing a since-retired Coating is harmless (that Coating can no
+    /// longer be selected in the first place) and simpler to just return as-is.</summary>
     Task<CoatingRulesDto> GetCoatingRulesAsync(CancellationToken cancellationToken = default);
 }

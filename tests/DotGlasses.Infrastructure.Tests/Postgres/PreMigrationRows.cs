@@ -44,7 +44,10 @@ public static class PreMigrationRows
             .. extra,
         ]);
 
-    private static async Task InsertAsync(DotGlassesDbContext context, string table, (string Column, object? Value)[] values)
+    /// <summary>Any other table's row, for a table the current model no longer maps or maps
+    /// differently (lens-power ticket 03 removed LensStrengthCoatingOptions and CoatingPairings, and
+    /// reshaped LensOptions). Every NOT NULL column must be given.</summary>
+    public static async Task InsertAsync(DotGlassesDbContext context, string table, params (string Column, object? Value)[] values)
     {
         var columns = string.Join(", ", values.Select(v => $"\"{v.Column}\""));
         var placeholders = string.Join(", ", values.Select((_, i) => $"{{{i}}}"));

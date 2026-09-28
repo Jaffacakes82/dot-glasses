@@ -311,10 +311,9 @@ public class FieldAppCurrentLocationApiTests(CustomWebApplicationFactory factory
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DotGlassesDbContext>();
-        var sellable = db.LensStrengthCoatingOptions.First();
         var lensSet = new PresetCatalogue { Id = Guid.NewGuid(), Name = $"Location Readers {Guid.NewGuid():N}", OwningOrgNodeId = OrganisationSeedConfiguration.DgiId };
         db.PresetCatalogues.Add(lensSet);
-        db.LensOptions.Add(new LensOption { Id = Guid.NewGuid(), PresetCatalogueId = lensSet.Id, LensStrengthRefId = sellable.LensStrengthRefId, SortOrder = 0 });
+        LensSetTestData.AddSellableLens(db, lensSet.Id);
         db.PresetCatalogueAssignments.Add(new PresetCatalogueAssignment { Id = Guid.NewGuid(), PresetCatalogueId = lensSet.Id, OrgNodeId = orgNodeId });
         db.SaveChanges();
         return lensSet.Id;

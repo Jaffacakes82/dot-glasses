@@ -223,6 +223,11 @@ if (app.Environment.IsDevelopment())
     if (dbContext.Database.IsRelational())
     {
         await dbContext.Database.MigrateAsync();
+
+        // Example 6-Lens and 9-Lens sets in the lens-power shape, so local dev has lenses to sell.
+        // Development only, on purpose: staging and production get no active lens sets until DGI
+        // builds the real ones (ADR-0007) — see ExampleLensSets.
+        await ExampleLensSets.EnsureSeededAsync(dbContext);
     }
 }
 

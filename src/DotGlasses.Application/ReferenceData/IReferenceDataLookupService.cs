@@ -12,14 +12,15 @@ namespace DotGlasses.Application.ReferenceData;
 /// ticket 10; IsCoatingAvailableForLensOptionAsync and AreCoatingsExcludedAsync left with
 /// ticket 11, whose Coating rules were their only callers.
 ///
-/// <b>The interface itself was expected to go with them and did not.</b> Its two remaining callers
-/// are Admin Portal validators — AddLensOptionRequestValidator and
-/// SetCoatingAvailabilityBatchRequestValidator, on the Preset Catalogues screen — and they are a
-/// genuinely different case from a consultation rule: both run inside a <em>write</em> to the
-/// reference-data library, where the per-request memoized snapshot is the one thing that must not
-/// be consulted (it may predate the write; see ADR-0002 and CLAUDE.md). A direct row read is
-/// correct there, so this survives as an Admin-Portal-write concern rather than a validation one.
-/// Don't add a method here for a consultation rule — add it to the snapshot.
+/// <b>The interface itself was expected to go with them and did not.</b> It serves Admin Portal
+/// validators that run inside a <em>write</em> to the reference-data library, where the per-request
+/// memoized snapshot is the one thing that must not be consulted (it may predate the write; see
+/// ADR-0002 and CLAUDE.md). A direct row read is correct there, so this survives as an
+/// Admin-Portal-write concern rather than a validation one. Its two callers
+/// (AddLensOptionRequestValidator and SetCoatingAvailabilityBatchRequestValidator) went with the
+/// Lens strength flow and the global coating grid (ADR-0007); it has none until the Add lens
+/// dialog's validator (lens-power ticket 07), which the spec says must use it. Don't add a method
+/// here for a consultation rule — add it to the snapshot.
 /// </summary>
 public interface IReferenceDataLookupService
 {

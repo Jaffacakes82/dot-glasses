@@ -535,9 +535,11 @@ public static class ConsultationRules
     /// <summary>
     /// The Coatings on a <b>Sale</b>'s lens — a set, per <c>CONTEXT.md</c> and ADR-0001, because
     /// one lens can carry more than one at once. Which Coatings are allowed depends on the lens
-    /// branch: a lens set narrows them to those configured as available for the left lens
-    /// option's strength, while a Custom prescription accepts any active Coating. Pairing and
-    /// exclusion rules apply universally to both.
+    /// branch: a lens set narrows them to those the left lens set lens comes in (its own coatings,
+    /// ADR-0007 — like-for-like with the check this made against the old global grid; ticket 06 of
+    /// the lens-power spec widens it to both lenses and their pairings), while a Custom
+    /// prescription accepts any active Coating. Exclusions apply to both. No pairing is enforced
+    /// here: global pairings were removed with ADR-0007.
     ///
     /// The preset arm re-tests all three preset ids because <see cref="PresetBranch"/>
     /// short-circuits without them, and this rule has to stay silent in exactly the same cases:
@@ -546,14 +548,13 @@ public static class ConsultationRules
     /// the enum reaches neither arm and so says nothing here — the validators' RuleFor.IsInEnum is
     /// what reports that.
     ///
-    /// <b>A lens whose strength has no Coatings configured at all is reported against the lens</b>,
-    /// not the set (ticket 11). <see cref="ReferenceDataSnapshot.IsCoatingAvailableForLensOption"/>
-    /// returns false rather than throwing in that case, so it used to surface as "every coating
-    /// must be configured as available for the chosen lens option" against CoatingRefIds — advice
-    /// no choice of coating can satisfy, because none is available. It is a common state rather
-    /// than an edge case (12 of the 16 seeded LensStrength items ship with none; see
-    /// <c>docs/open-issues.md</c>), and the Field App's own pre-submit check already keys it to
-    /// LensOptionLeftId with this same sentence. The server now agrees with it.
+    /// <b>A lens with no Coatings at all is reported against the lens</b>, not the set (ticket 11).
+    /// <see cref="ReferenceDataSnapshot.IsCoatingAvailableForLensOption"/> returns false rather
+    /// than throwing in that case, so it used to surface as "every coating must be configured as
+    /// available for the chosen lens option" against CoatingRefIds — advice no choice of coating
+    /// can satisfy, because none is available. The Field App's own pre-submit check keys it to
+    /// LensOptionLeftId with this same sentence. A lens set lens is meant to carry at least one
+    /// coating (ADR-0007), so this is now a guard rather than a common state.
     /// </summary>
     private static IEnumerable<RuleFailure> CoatingSet(
         IReadOnlyList<Guid> coatingRefIds,
@@ -574,7 +575,7 @@ public static class ConsultationRules
                 // technician to a picker with no options in it. A left lens id that resolves to
                 // nothing at all is a different failure and PresetBranch has already reported it,
                 // so this stays out of its way and lets the per-coating check below speak.
-                if (snapshot.FindLensOption(leftId) is { AvailableCoatingIds.Count: 0 })
+                if (snapshot.FindLensOption(leftId) is { CoatingIds.Count: 0 })
                 {
                     return [new RuleFailure(LensOptionLeftIdKey, "This lens has no coatings configured yet, so it can't be sold on a lens set.")];
                 }
@@ -591,8 +592,8 @@ public static class ConsultationRules
 
     /// <summary>
     /// The set itself, once the branch has settled what "available" means.
-    /// <paramref name="restrictToLensOptionId"/> narrows to the Coatings configured for that lens
-    /// option's strength (lens set); null accepts any active Coating (Custom).
+    /// <paramref name="restrictToLensOptionId"/> narrows to the Coatings that lens set lens comes in
+    /// (lens set); null accepts any active Coating (Custom).
     ///
     /// One failure at a time, deliberately: each check returns rather than accumulating, so a set
     /// that is both duplicated and mutually excluding reports the duplicate first and the
@@ -621,7 +622,7 @@ public static class ConsultationRules
 
             if (restrictToLensOptionId is { } lensOptionId && !snapshot.IsCoatingAvailableForLensOption(lensOptionId, coatingRefId))
             {
-                return [new RuleFailure(CoatingRefIdsKey, "Every coating must be configured as available for the chosen lens option (see Reference Data > Lens Strength).")];
+                return [new RuleFailure(CoatingRefIdsKey, "Every coating must be configured as available for the chosen lens option (see Lens Sets).")];
             }
         }
 
@@ -681,7 +682,7 @@ public static class ConsultationRules
             && !snapshot.IsCoatingAvailableForLensOption(leftId, coatingRefId);
 
         IEnumerable<RuleFailure> availability = unavailableForTheChosenLens
-            ? [new RuleFailure(CoatingPreferenceRefIdKey, "CoatingPreferenceRefId is not configured as available for the chosen lens option (see Reference Data > Lens Strength).")]
+            ? [new RuleFailure(CoatingPreferenceRefIdKey, "CoatingPreferenceRefId is not configured as available for the chosen lens option (see Lens Sets).")]
             : [];
 
         IEnumerable<RuleFailure> activeItem = snapshot.IsActiveItem(coatingRefId, ReferenceDataCategory.Coating)
