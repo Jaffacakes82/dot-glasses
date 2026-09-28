@@ -3,6 +3,7 @@
 @using DotGlasses.Contracts.Common
 @using DotGlasses.Contracts.PresetCatalogues
 @using DotGlasses.Contracts.ReferenceData
+@using DotGlasses.Rules.LensPowers
 @using DotGlasses.Rules.LensRanges
 
 <div class="dg-field">
@@ -90,38 +91,48 @@
 }
 else if (Model.LensRangeType == LensRangeType.Custom)
 {
+    @* Every value list below is LensPowerValues' (ADR-0007) — the shop's values, in its order. The
+       axis box shows only while that eye has a cylinder, because the rules refuse an axis without
+       one (OnCylinderChanged clears it when the cylinder goes back to 0.00). Every field carries
+       its own FieldError so a server rejection — e.g. a positive cylinder queued before the shop's
+       values applied — lands against the control it's about. *@
     <div style="display:flex; gap:8px;">
         <div class="dg-field" style="flex:1;">
             <label>Sphere — left</label>
             <select value="@Model.SphereLeft" @onchange="e => Model.SphereLeft = ParseDecimal(e.Value)">
                 <option value="">Select...</option>
-                @foreach (var v in SphereSteps)
+                @foreach (var v in LensPowerValues.Sphere)
                 {
-                    <option value="@v">@FormatPower(v)</option>
+                    <option value="@v">@LensPowerValues.FormatPower(v)</option>
                 }
             </select>
             <FieldError Errors="Errors" For="SphereLeft" />
         </div>
         <div class="dg-field" style="flex:1;">
             <label>Cylinder — left</label>
-            <select value="@Model.CylinderLeft" @onchange="e => Model.CylinderLeft = ParseDecimal(e.Value)">
+            <select value="@Model.CylinderLeft" @onchange="e => OnCylinderChanged(left: true, ParseDecimal(e.Value))">
                 <option value="">Select...</option>
-                @foreach (var v in CylinderSteps)
+                @foreach (var v in LensPowerValues.Cylinder)
                 {
-                    <option value="@v">@FormatPower(v)</option>
+                    <option value="@v">@LensPowerValues.FormatPower(v)</option>
                 }
             </select>
+            <FieldError Errors="Errors" For="CylinderLeft" />
         </div>
-        <div class="dg-field" style="flex:1;"><label>Axis — left</label><input type="number" min="0" max="180" step="1" @bind="Model.AxisLeft" /><FieldError Errors="Errors" For="AxisLeft" /></div>
+        @if (LensPowerRules.HasCylinder(Model.CylinderLeft) || Model.AxisLeft is not null)
+        {
+            <div class="dg-field" style="flex:1;"><label>Axis — left</label><input type="number" min="@LensPowerValues.AxisRange.Min" max="@LensPowerValues.AxisRange.Max" step="@LensPowerValues.AxisRange.Step" @bind="Model.AxisLeft" /><FieldError Errors="Errors" For="AxisLeft" /></div>
+        }
         <div class="dg-field" style="flex:1;">
             <label>Add power — left</label>
             <select value="@Model.AddLeft" @onchange="e => OnAddPowerChanged(left: true, ParseDecimal(e.Value))">
                 <option value="">Select...</option>
-                @foreach (var v in AddPowerSteps)
+                @foreach (var v in LensPowerValues.Add)
                 {
-                    <option value="@v">@FormatPower(v)</option>
+                    <option value="@v">@LensPowerValues.FormatPower(v)</option>
                 }
             </select>
+            <FieldError Errors="Errors" For="AddLeft" />
         </div>
     </div>
     <div style="display:flex; gap:8px;">
@@ -129,36 +140,42 @@ else if (Model.LensRangeType == LensRangeType.Custom)
             <label>Sphere — right</label>
             <select value="@Model.SphereRight" @onchange="e => Model.SphereRight = ParseDecimal(e.Value)">
                 <option value="">Select...</option>
-                @foreach (var v in SphereSteps)
+                @foreach (var v in LensPowerValues.Sphere)
                 {
-                    <option value="@v">@FormatPower(v)</option>
+                    <option value="@v">@LensPowerValues.FormatPower(v)</option>
                 }
             </select>
             <FieldError Errors="Errors" For="SphereRight" />
         </div>
         <div class="dg-field" style="flex:1;">
             <label>Cylinder — right</label>
-            <select value="@Model.CylinderRight" @onchange="e => Model.CylinderRight = ParseDecimal(e.Value)">
+            <select value="@Model.CylinderRight" @onchange="e => OnCylinderChanged(left: false, ParseDecimal(e.Value))">
                 <option value="">Select...</option>
-                @foreach (var v in CylinderSteps)
+                @foreach (var v in LensPowerValues.Cylinder)
                 {
-                    <option value="@v">@FormatPower(v)</option>
+                    <option value="@v">@LensPowerValues.FormatPower(v)</option>
                 }
             </select>
+            <FieldError Errors="Errors" For="CylinderRight" />
         </div>
-        <div class="dg-field" style="flex:1;"><label>Axis — right</label><input type="number" min="0" max="180" step="1" @bind="Model.AxisRight" /><FieldError Errors="Errors" For="AxisRight" /></div>
+        @if (LensPowerRules.HasCylinder(Model.CylinderRight) || Model.AxisRight is not null)
+        {
+            <div class="dg-field" style="flex:1;"><label>Axis — right</label><input type="number" min="@LensPowerValues.AxisRange.Min" max="@LensPowerValues.AxisRange.Max" step="@LensPowerValues.AxisRange.Step" @bind="Model.AxisRight" /><FieldError Errors="Errors" For="AxisRight" /></div>
+        }
         <div class="dg-field" style="flex:1;">
             <label>Add power — right</label>
             <select value="@Model.AddRight" @onchange="e => OnAddPowerChanged(left: false, ParseDecimal(e.Value))">
                 <option value="">Select...</option>
-                @foreach (var v in AddPowerSteps)
+                @foreach (var v in LensPowerValues.Add)
                 {
-                    <option value="@v">@FormatPower(v)</option>
+                    <option value="@v">@LensPowerValues.FormatPower(v)</option>
                 }
             </select>
+            <FieldError Errors="Errors" For="AddRight" />
         </div>
     </div>
-    @if (Model.AddLeft is not null || Model.AddRight is not null)
+    @* An add of 0.00 is no add (LensPowerRules.HasAdd), so it doesn't ask for a lens type. *@
+    @if (LensPowerRules.HasAdd(Model.AddLeft) || LensPowerRules.HasAdd(Model.AddRight) || Model.LensTypeRefId is not null)
     {
         <ReferenceDataDropdown Label="Lens type" Items="LensTypes"
                                 SelectedId="Model.LensTypeRefId" SelectedIdChanged="v => Model.LensTypeRefId = v"
@@ -166,10 +183,10 @@ else if (Model.LensRangeType == LensRangeType.Custom)
                                 Errors="Errors" Field="LensTypeRefId" OtherField="LensTypeOtherText" />
     }
     <div class="dg-field">
-        <label>Pupil distance (mm, 54–74)</label>
+        <label>Pupil distance (mm, @LensPowerValues.PupilDistanceMmRange.Min–@LensPowerValues.PupilDistanceMmRange.Max)</label>
         <select value="@Model.PupilDistanceMm" @onchange="e => Model.PupilDistanceMm = ParseDecimal(e.Value)">
             <option value="">Select...</option>
-            @foreach (var mm in Enumerable.Range(54, 21))
+            @foreach (var mm in LensPowerValues.PupilDistanceMm)
             {
                 <option value="@mm">@mm</option>
             }
@@ -186,8 +203,8 @@ else if (Model.LensRangeType == LensRangeType.Custom)
     [Parameter, EditorRequired] public LensRangeSelection Model { get; set; } = null!;
     [Parameter, EditorRequired] public IReadOnlyList<PresetCatalogueDto> Catalogues { get; set; } = [];
 
-    /// <summary>Only offered once either eye's Custom prescription carries an add power (two
-    /// distinct powers on that eye) — see the conditional dropdown below.</summary>
+    /// <summary>Only offered once either eye's Custom prescription carries an add above 0.00 (two
+    /// distinct powers on that eye) — see the conditional dropdown above.</summary>
     [Parameter] public IReadOnlyList<ReferenceDataItemDto> LensTypes { get; set; } = [];
 
     /// <summary>A Lead can carry no product preference at all; a Sale must always have one.</summary>
@@ -276,8 +293,8 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         }
     }
 
-    /// <summary>Clears the now-hidden LensType pick the moment neither eye carries an add power
-    /// any more — the dropdown itself disappears immediately (see the @if above), so a stale
+    /// <summary>Clears the now-hidden LensType pick the moment neither eye carries an add above
+    /// 0.00 any more — the dropdown itself disappears immediately (see the @if above), so a stale
     /// value the technician can no longer see or change must not linger to fail validation on
     /// submit.</summary>
     private void OnAddPowerChanged(bool left, decimal? value)
@@ -291,10 +308,33 @@ else if (Model.LensRangeType == LensRangeType.Custom)
             Model.AddRight = value;
         }
 
-        if (Model.AddLeft is null && Model.AddRight is null)
+        if (!LensPowerRules.HasAdd(Model.AddLeft) && !LensPowerRules.HasAdd(Model.AddRight))
         {
             Model.LensTypeRefId = null;
             Model.LensTypeOtherText = null;
+        }
+    }
+
+    /// <summary>Same reasoning for the axis: it is only asked while that eye has a cylinder, so
+    /// going back to 0.00 (or blank) clears it rather than leaving a hidden value the rules
+    /// refuse.</summary>
+    private void OnCylinderChanged(bool left, decimal? value)
+    {
+        if (left)
+        {
+            Model.CylinderLeft = value;
+            if (!LensPowerRules.HasCylinder(value))
+            {
+                Model.AxisLeft = null;
+            }
+        }
+        else
+        {
+            Model.CylinderRight = value;
+            if (!LensPowerRules.HasCylinder(value))
+            {
+                Model.AxisRight = null;
+            }
         }
     }
 
@@ -308,17 +348,4 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         await SelectionChanged.InvokeAsync();
     }
 
-    private static IEnumerable<decimal> SphereSteps => Steps(-10m, 10m, 0.25m);
-    private static IEnumerable<decimal> CylinderSteps => Steps(-10m, 10m, 0.25m);
-    private static IEnumerable<decimal> AddPowerSteps => Steps(0m, 3m, 0.25m);
-
-    private static IEnumerable<decimal> Steps(decimal min, decimal max, decimal step)
-    {
-        for (var v = min; v <= max; v += step)
-        {
-            yield return v;
-        }
-    }
-
-    private static string FormatPower(decimal v) => v >= 0 ? $"+{v:0.00}" : v.ToString("0.00");
 }

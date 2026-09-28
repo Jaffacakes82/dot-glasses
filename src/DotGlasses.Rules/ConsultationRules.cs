@@ -2,6 +2,7 @@ using DotGlasses.Contracts.Common;
 using DotGlasses.Contracts.Leads;
 using DotGlasses.Contracts.Sales;
 using DotGlasses.Contracts.Tests;
+using DotGlasses.Rules.LensPowers;
 using DotGlasses.Rules.ReferenceData;
 
 namespace DotGlasses.Rules;
@@ -452,10 +453,14 @@ public static class ConsultationRules
     }
 
     /// <summary>
-    /// A prescription typed out in full. Both spheres are required — one eye's prescription is not
-    /// a prescription — while cylinder, axis and add power are each optional but constrained if
-    /// given. Note that the missing-sphere failure reports against LensRangeType rather than the
-    /// sphere fields: the branch as a whole is what is incomplete.
+    /// A prescription typed out in full, with the shop's values (ADR-0007). Both spheres are
+    /// required — one eye's prescription is not a prescription. Note that the missing-sphere
+    /// failure reports against LensRangeType rather than the sphere fields: the branch as a whole
+    /// is what is incomplete, and that client-visible message predates the per-eye helper, which is
+    /// why this calls <see cref="LensPowerRules.CheckValues"/> rather than its sphere-requiring
+    /// sibling. Everything else about each eye's power — allowed values, the axis agreeing with the
+    /// cylinder, an add of 0.00 being no add — is <see cref="LensPowerRules"/>'s, keyed on this
+    /// request's own property names.
     /// </summary>
     private static IEnumerable<RuleFailure> CustomBranch(
         bool presetFieldsSet,
@@ -475,15 +480,11 @@ public static class ConsultationRules
             yield return new RuleFailure(LensRangeTypeKey, "SphereLeft and SphereRight are required for a Custom LensRangeType.");
         }
 
-        var powers = CustomPower(sphereLeft, SphereLeftKey, -10m, 10m, 0.25m)
-            .Concat(CustomPower(sphereRight, SphereRightKey, -10m, 10m, 0.25m))
-            .Concat(CustomPower(cylinderLeft, CylinderLeftKey, -10m, 10m, 0.25m))
-            .Concat(CustomPower(cylinderRight, CylinderRightKey, -10m, 10m, 0.25m))
-            .Concat(CustomPower(addLeft, AddLeftKey, 0m, 3m, 0.25m))
-            .Concat(CustomPower(addRight, AddRightKey, 0m, 3m, 0.25m))
-            .Concat(CustomAxis(axisLeft, AxisLeftKey))
-            .Concat(CustomAxis(axisRight, AxisRightKey))
-            .Concat(LensType(addLeft, addRight, lensTypeRefId, lensTypeOtherText, snapshot));
+        var powers = LensPowerRules.CheckValues(sphereLeft, cylinderLeft, axisLeft, addLeft, LeftEyeNames)
+            .Concat(LensPowerRules.CheckValues(sphereRight, cylinderRight, axisRight, addRight, RightEyeNames))
+            .Concat(LensPowerRules.LensType(
+                LensPowerRules.HasAdd(addLeft) || LensPowerRules.HasAdd(addRight),
+                lensTypeRefId, lensTypeOtherText, snapshot, LensTypeRefIdKey, LensTypeOtherTextKey));
 
         foreach (var failure in powers)
         {
@@ -501,58 +502,18 @@ public static class ConsultationRules
         }
     }
 
-    /// <summary>Sphere/Cylinder/Add-power are physical lens-grinding constraints, not
-    /// admin-curated reference data — checked in code against the ground ranges, not a lookup
-    /// table. The increment is the rule most easily got wrong: a value inside the range but off
-    /// the quarter-dioptre step is not grindable, so range and step are one question with one
-    /// message.</summary>
-    private static IEnumerable<RuleFailure> CustomPower(decimal? value, string propertyName, decimal min, decimal max, decimal step) =>
-        value is { } v && (v < min || v > max || (v - min) % step != 0)
-            ? [new RuleFailure(propertyName, $"{propertyName} must be between {min} and {max} in {step} increments.")]
-            : [];
-
-    /// <summary>Axis is a bearing in whole degrees; 180 is in range and 180.5 is not a bearing
-    /// anyone can grind.</summary>
-    private static IEnumerable<RuleFailure> CustomAxis(decimal? value, string propertyName) =>
-        value is { } v && (v < 0 || v > 180 || v != Math.Truncate(v))
-            ? [new RuleFailure(propertyName, $"{propertyName} must be a whole number of degrees between 0 and 180.")]
-            : [];
-
-    /// <summary>Asked exactly once an eye carries two distinct powers — a base sphere plus an add
-    /// power, which is what makes the lens bifocal or progressive and so needs naming. Required in
-    /// that case; both lens-type fields must stay empty otherwise.</summary>
-    private static IEnumerable<RuleFailure> LensType(
-        decimal? addLeft, decimal? addRight,
-        Guid? lensTypeRefId, string? lensTypeOtherText, ReferenceDataSnapshot snapshot)
-    {
-        var hasTwoPowers = addLeft is not null || addRight is not null;
-        if (!hasTwoPowers)
-        {
-            return lensTypeRefId is not null || lensTypeOtherText is not null
-                ? [new RuleFailure(LensTypeRefIdKey, "LensTypeRefId/LensTypeOtherText must be empty unless an add power is set.")]
-                : [];
-        }
-
-        if (lensTypeRefId is null)
-        {
-            return [new RuleFailure(LensTypeRefIdKey, "LensTypeRefId is required when an add power is set (two distinct powers on that eye).")];
-        }
-
-        return ChosenItem(
-            lensTypeRefId, lensTypeOtherText, ReferenceDataCategory.LensType, snapshot,
-            LensTypeRefIdKey, "LensTypeRefId must reference an existing, active LensType reference-data item.",
-            LensTypeOtherTextKey, "LensTypeOtherText is required when LensType is \"Other\".");
-    }
-
     /// <summary>The Custom branch's pupil distance: required on a Sale, optional elsewhere (see
-    /// <see cref="LensRange"/>), and in either case a whole millimetre inside the sellable
-    /// 54-74mm range. Out-of-range and non-whole are separate messages and only ever one at a
-    /// time — a technician correcting 53.5 has one thing to fix, not two.</summary>
+    /// <see cref="LensRange"/>), and in either case a whole millimetre inside the sellable range
+    /// <see cref="LensPowerValues.PupilDistanceMmRange"/> defines. Out-of-range and non-whole are
+    /// separate messages and only ever one at a time — a technician correcting 53.5 has one thing
+    /// to fix, not two.</summary>
     private static IEnumerable<RuleFailure> CustomPupilDistance(decimal? pupilDistanceMm, bool required)
     {
+        var range = LensPowerValues.PupilDistanceMmRange;
+        var bounds = $"{range.Min:0}-{range.Max:0}mm";
         var rangeMessage = required
-            ? "PupilDistanceMm is required and must be within the standard 54-74mm range for a Custom LensRangeType (manual override outside this range is a Day 2 feature)."
-            : "PupilDistanceMm must be within the standard 54-74mm range for a Custom LensRangeType (manual override outside this range is a Day 2 feature).";
+            ? $"PupilDistanceMm is required and must be within the standard {bounds} range for a Custom LensRangeType (manual override outside this range is a Day 2 feature)."
+            : $"PupilDistanceMm must be within the standard {bounds} range for a Custom LensRangeType (manual override outside this range is a Day 2 feature).";
 
         if (pupilDistanceMm is not { } pd)
         {
@@ -561,11 +522,11 @@ public static class ConsultationRules
                 yield return new RuleFailure(PupilDistanceMmKey, rangeMessage);
             }
         }
-        else if (pd < 54 || pd > 74)
+        else if (pd < range.Min || pd > range.Max)
         {
             yield return new RuleFailure(PupilDistanceMmKey, rangeMessage);
         }
-        else if (pd != Math.Truncate(pd))
+        else if (!range.Allows(pd))
         {
             yield return new RuleFailure(PupilDistanceMmKey, "PupilDistanceMm must be a whole millimetre value.");
         }
@@ -792,6 +753,8 @@ public static class ConsultationRules
     private const string AddRightKey = nameof(CreateTestRequest.AddRight);
     private const string AxisLeftKey = nameof(CreateTestRequest.AxisLeft);
     private const string AxisRightKey = nameof(CreateTestRequest.AxisRight);
+    private static readonly LensPowerNames LeftEyeNames = new(SphereLeftKey, CylinderLeftKey, AxisLeftKey, AddLeftKey);
+    private static readonly LensPowerNames RightEyeNames = new(SphereRightKey, CylinderRightKey, AxisRightKey, AddRightKey);
     private const string LensTypeRefIdKey = nameof(CreateTestRequest.LensTypeRefId);
     private const string LensTypeOtherTextKey = nameof(CreateTestRequest.LensTypeOtherText);
     private const string PupilDistanceMmKey = nameof(CreateTestRequest.PupilDistanceMm);
