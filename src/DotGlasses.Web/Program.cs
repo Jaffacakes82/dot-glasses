@@ -146,12 +146,14 @@ builder.Services.AddAuthorizationBuilder()
     // org, AssignInScope against the org being assigned to. Two names so each call site says which.
     .AddPolicy(AuthorizationPolicies.PresetCatalogueEditInScope, PresetCatalogueManageInScope)
     .AddPolicy(AuthorizationPolicies.PresetCatalogueAssignInScope, PresetCatalogueManageInScope)
+    // Against a whole user: every one of their org assignments must be in the caller's scope.
     .AddPolicy(AuthorizationPolicies.ManageUsersInScope, policy =>
-        policy.Requirements.Add(new HierarchyDescendantRequirement(RoleNames.Admin)))
+        policy.Requirements.Add(new AllAssignmentsInScopeRequirement(RoleNames.Admin)))
     .AddPolicy(AuthorizationPolicies.ManageOrgInScope, policy =>
         policy.Requirements.Add(new HierarchyDescendantRequirement(RoleNames.Admin)));
 builder.Services.AddScoped<IAuthorizationHandler, OrgLevelAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, HierarchyDescendantAuthorizationHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, AllAssignmentsInScopeAuthorizationHandler>();
 
 // --- Validation --------------------------------------------------------------------------
 // Contracts assembly: validators with no Infrastructure/Application dependency (e.g.
