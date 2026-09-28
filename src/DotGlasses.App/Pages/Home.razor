@@ -42,7 +42,7 @@
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: var(--space-4);">
             <div>
                 <div style="font-weight:700;">@(string.IsNullOrEmpty(TokenStore.DisplayName) ? "Signed in" : TokenStore.DisplayName)</div>
-                <div style="font-size:13px; color:#666;">@(_activeOrgName ?? "Field agent")</div>
+                <div style="font-size:13px; color:#666;">@(TokenStore.CurrentLocationName ?? "Field agent")</div>
             </div>
             <div style="display:flex; gap:8px;">
                 <a class="dg-btn dg-btn-ghost" style="padding:8px 16px; font-size:13px;" href="messages">Messages</a>
@@ -89,7 +89,6 @@
     private int _pendingCount;
     private bool _isSyncing;
     private int _failedCount;
-    private string? _activeOrgName;
 
     protected override async Task OnInitializedAsync()
     {
@@ -99,12 +98,32 @@
             return;
         }
 
+        // Home is the landing point after both sign-in and a token rehydrated from a previous
+        // session, so it's the one place that owns "does this session have a current location yet"
+        // — Login.razor deliberately always navigates here rather than deciding itself. A token
+        // that already carries a location (the common case) skips this entirely.
+        if (TokenStore.CurrentLocationId is null && await RedirectedToLocationScreenAsync())
+        {
+            return;
+        }
+
         ConnectivityTrigger.ConnectivityChanged += OnConnectivityChanged;
 
         await RefreshAsync();
+    }
 
+    /// <summary>
+    /// Resolves "no current location yet" against the caller's eligible locations and routes
+    /// accordingly: none eligible goes to the "can't record here" screen (stories 31/32), several
+    /// goes to the outlet picker (which itself auto-picks if it turns out there's really only one —
+    /// see OutletSelect.razor). Returns true once a navigation has been issued, so the caller knows
+    /// not to render the dashboard this pass.
+    /// </summary>
+    private async Task<bool> RedirectedToLocationScreenAsync()
+    {
         var orgs = await LocationClient.GetMyOrgsAsync();
-        _activeOrgName = orgs.FirstOrDefault(o => o.IsActive)?.Name;
+        Navigation.NavigateTo(orgs.Count == 0 ? "no-location" : "outlet-select");
+        return true;
     }
 
     private async Task RefreshAsync()

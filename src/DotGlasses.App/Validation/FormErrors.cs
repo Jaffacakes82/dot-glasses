@@ -81,6 +81,19 @@ public class FormErrors
             return;
         }
 
+        if (string.IsNullOrEmpty(field))
+        {
+            // DomainRuleViolationFilter and the recording-location refusal (CLAUDE.md) key a
+            // whole-record rejection on "" — e.g. one of the three current-location messages from
+            // ticket 07. That key has no control to attribute to, but it isn't a generic
+            // "unattributable" failure either: every caller that can receive one (ConsultationForm.
+            // SubmitAsync) already surfaces that exact text as its own summary message before
+            // calling Merge, so folding it into Unattributed too printed the same sentence twice —
+            // the second time as ": <message>" with a bare leading colon. Dropped here rather than
+            // shown a second time.
+            return;
+        }
+
         if (knownFields.Contains(field, StringComparer.OrdinalIgnoreCase))
         {
             Add(field, message);
