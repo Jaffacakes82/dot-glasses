@@ -71,13 +71,12 @@ while the outbox holds unsent records.
   copy), with a Retry button, rather than silently rendering nothing.
 - **The "can't record here" screen**: new `Pages/NoLocation.razor` (`/no-location`), explaining the
   technician has no retail-point assignment and needs one from their admin, with the same
-  confirm-then-sign-out pattern Settings.razor already uses. Deliberately **not** gated on the
-  outbox-pending count the way Settings' sign-out is: a technician here has zero eligible
-  locations, so nothing queued could ever sync from this account until an admin restores an
-  assignment — blocking sign-out would strand them with no way off the screen, which is what story
-  32 ("so that I'm not stuck") is asking not to happen. Noted as a deliberate deviation from
-  Settings' otherwise-identical guard, called out here per the ticket's "Don't 'unify' it"-style
-  instruction to record such calls rather than silently diverge.
+  confirm-then-sign-out pattern Settings.razor already uses, including its outbox guard (sign-out
+  blocked behind "Send now" while records are queued). The first cut left that guard off here;
+  the orchestrator restored it on merge. Signing out with records queued would file them under the
+  next person to sign in, and the guard doesn't strand anyone: once online, sending drains the
+  queue, because the server refuses each record with its reason and that moves it to Failed
+  records.
 - **Showing the location.** Home's existing name/org line under the display name now reads
   `TokenStore.CurrentLocationName` directly (was a second `my-orgs` fetch computing
   `_activeOrgName` — redundant now that the token itself carries the name, and removed to keep one
