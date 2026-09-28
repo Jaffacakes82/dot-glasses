@@ -9,7 +9,7 @@ longer says the first ticked org becomes primary.
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **Model:** Opus 5.5 — a new permission rule (all of the target's assignments in scope) plus atomic
 Identity writes.
@@ -41,3 +41,26 @@ carefully if they overlap).
   Directory form redesign is map ticket 03 and out of scope.
 - Prior art: `AccessControlPolicyTests`, `InviteAtomicityTests`, `DomainRuleViolationScreenTests`.
 - Skills: `/implement` (with `/tdd`), then `/code-review`.
+
+## Comments
+
+- 2026-09-28 — Done on `feat/multi-org-access-03-user-directory`. `Users.ManageInScope` is now
+  `AllAssignmentsInScopeRequirement` against a `UserAssignments` resource (every assignment path
+  of the target; none → refused). Invite is checked the same way against every org being
+  assigned. `UserAdminService.ListAsync` lists a user when any assignment's org path is
+  `LIKE ANY` scope path (orgs read unscoped, deactivated included, scope applied by hand);
+  out-of-scope assignments render as "Outside your scope". Last-assignment removal throws
+  `DomainRuleViolationException`; the primary-org refusal is gone. Status "Suspended" now uses
+  `UserSuspension`. Tests: `UserDirectoryScopeTests` (new), the primary-org screen test rewritten
+  for the last-assignment copy.
+  - **Change role** had no endpoint, so a server-side-only `UserDirectory/ChangeRole` POST was
+    added (transaction via the execution strategy, `IdentityResult`s checked). Its form is map
+    ticket 03.
+  - **Transitional, for ticket 08 to remove:** the old active org still counts as an assignment
+    in the listing and in the all-assignments check (matching `UserAccessLoader`). Invite fills
+    the active-org columns from the most specific org (not tick order). Un-assigning the org the
+    active org points at moves it onto a remaining assignment in the same `SaveChanges`, else the
+    loader would keep that scope alive.
+  - Not done: CLAUDE.md's RBAC row for `Users.ManageInScope` still says "target user at/below
+    caller" — left to ticket 10 like ticket 01's doc changes. Two admins concurrently removing a
+    user's last two assignments could still leave none (no locking); accepted as unlikely.
