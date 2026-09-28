@@ -775,7 +775,7 @@ public static class ConsultationRules
 
             if (lensSetPair is { } offeredOnThePair && !offeredOnThePair.Offered.Contains(coatingRefId))
             {
-                return [new RuleFailure(CoatingRefIdsKey, "Every coating must be configured as available for the chosen lens option (see Lens Sets).")];
+                return [new RuleFailure(CoatingRefIdsKey, "Every coating must be configured as available for the chosen lenses (see Lens Sets).")];
             }
         }
 
@@ -846,7 +846,7 @@ public static class ConsultationRules
             && !offeredOnThePair.Offered.Contains(coatingRefId);
 
         IEnumerable<RuleFailure> availability = unavailableForTheChosenLenses
-            ? [new RuleFailure(CoatingPreferenceRefIdKey, "CoatingPreferenceRefId is not configured as available for the chosen lens option (see Lens Sets).")]
+            ? [new RuleFailure(CoatingPreferenceRefIdKey, "CoatingPreferenceRefId is not configured as available for the chosen lenses (see Lens Sets).")]
             : [];
 
         IEnumerable<RuleFailure> activeItem = snapshot.IsActiveItem(coatingRefId, ReferenceDataCategory.Coating)
