@@ -30,14 +30,6 @@ public class CurrentUserContext(IHttpContextAccessor httpContextAccessor) : ICur
 
     public CurrentLocationCheck CurrentLocation => Access.CurrentLocation;
 
-    public Guid? OrgNodeId =>
-        Guid.TryParse(Principal?.FindFirstValue(DotGlassesClaimTypes.OrgNodeId), out var id) ? id : null;
-
-    public string HierarchyPathPrefix => Principal?.FindFirstValue(DotGlassesClaimTypes.HierarchyPath) ?? string.Empty;
-
-    public OrganisationLevel? OrgLevel =>
-        Enum.TryParse<OrganisationLevel>(Principal?.FindFirstValue(DotGlassesClaimTypes.OrgLevel), out var level) ? level : null;
-
     internal static Guid? ReadUserId(ClaimsPrincipal? principal) =>
         Guid.TryParse(principal?.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
 }

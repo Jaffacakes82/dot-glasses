@@ -10,8 +10,8 @@ namespace DotGlasses.Infrastructure.Tests.Persistence;
 /// <summary>
 /// The global hierarchy query filter (DotGlassesDbContext.BuildQueryFilterGeneric) against a real
 /// Postgres StartsWith translation — specifically the empty-prefix edge case. "anything".StartsWith("")
-/// is always true in .NET, so a caller whose HierarchyPath claim is "" (an authenticated user with
-/// no org assignment — see DevUserSeeder's documented legacy-account case) would otherwise match
+/// is always true in .NET, so a caller with no scope path (an authenticated user with no org
+/// assignment) would otherwise match
 /// every row instead of none, turning an unassigned account into one that can read every outlet's
 /// data. The filter must fail closed instead.
 /// </summary>

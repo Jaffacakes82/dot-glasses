@@ -44,7 +44,6 @@ public static class DependencyInjection
         services.AddScoped<IDashboardQueryService, DashboardQueryService>();
         services.AddEmailSender();
         services.AddScoped<IUserAdminService, UserAdminService>();
-        services.AddScoped<IUserOrgAssignmentService, UserOrgAssignmentService>();
         services.AddScoped<IUserAssignmentsQueryService, UserAssignmentsQueryService>();
 
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<DotGlassesDbContext>());

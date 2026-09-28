@@ -62,9 +62,8 @@ public class UserAccessLoader(DotGlassesDbContext dbContext, IHttpContextAccesso
     /// It also keeps deactivated (soft-deleted) orgs, which the scope leaves out by hand and the
     /// current-location check reports as deactivated.
     ///
-    /// Transitional: the account's old active org (ApplicationUser.OrgNodeId) counts as one of
-    /// its assignments, so no one loses access before the migration that removes that column
-    /// backfills an assignment row for it.</summary>
+    /// The UserOrgAssignment rows are the only source of access: an account with none gets an
+    /// empty scope, no level and no eligible location — fail closed.</summary>
     private async Task<AccessRow?> ReadAsync(Guid userId, Guid? locationId, CancellationToken cancellationToken) =>
         await dbContext.Users
             .IgnoreQueryFilters()
@@ -81,7 +80,7 @@ public class UserAccessLoader(DotGlassesDbContext dbContext, IHttpContextAccesso
                     .Select(o => new
                     {
                         Org = o,
-                        IsAssigned = o.Id == u.OrgNodeId || dbContext.UserOrgAssignments.Any(a => a.UserId == u.Id && a.OrgNodeId == o.Id),
+                        IsAssigned = dbContext.UserOrgAssignments.Any(a => a.UserId == u.Id && a.OrgNodeId == o.Id),
                     })
                     .Where(x => x.IsAssigned || x.Org.Id == locationId)
                     .Select(x => new AccessOrg(x.Org.Id, x.Org.HierarchyPath, x.Org.Name, x.Org.Level, x.Org.IsDeleted, x.IsAssigned))
