@@ -99,10 +99,18 @@ public class DevUserSeeder(IServiceScopeFactory scopeFactory, IOptions<DevSeedOp
             var createResult = await userManager.CreateAsync(user, account.Password);
             if (!createResult.Succeeded)
             {
-                return;
+                throw new InvalidOperationException(
+                    $"Dev seeding couldn't create account '{account.UserName}': "
+                    + string.Join("; ", createResult.Errors.Select(e => e.Description)));
             }
 
-            await userManager.AddToRoleAsync(user, account.Role);
+            var roleResult = await userManager.AddToRoleAsync(user, account.Role);
+            if (!roleResult.Succeeded)
+            {
+                throw new InvalidOperationException(
+                    $"Dev seeding created account '{account.UserName}' but couldn't give it the {account.Role} role: "
+                    + string.Join("; ", roleResult.Errors.Select(e => e.Description)));
+            }
         }
 
         foreach (var orgNodeId in account.OrgNodeIds)

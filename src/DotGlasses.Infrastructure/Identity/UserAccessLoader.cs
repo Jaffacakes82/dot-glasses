@@ -74,8 +74,7 @@ public class UserAccessLoader(DotGlassesDbContext dbContext, IHttpContextAccesso
                 dbContext.UserRoles
                     .Where(ur => ur.UserId == u.Id)
                     .Join(dbContext.Roles, ur => ur.RoleId, r => r.Id, (_, r) => r.Name)
-                    .OrderBy(name => name)
-                    .FirstOrDefault(),
+                    .ToList(),
                 dbContext.OrganisationNodes
                     .Select(o => new
                     {
@@ -89,7 +88,7 @@ public class UserAccessLoader(DotGlassesDbContext dbContext, IHttpContextAccesso
 
     private static UserAccess FromAssignments(AccessRow row) => UserAccess.FromAssignments(
         row.Orgs.Where(o => o.IsAssigned && !o.IsDeleted).Select(o => (HierarchyPath.Parse(o.HierarchyPath), o.Level)),
-        row.Role,
+        RoleNames.Primary(row.Roles.OfType<string>()),
         UserSuspension.IsSuspended(row.LockoutEnd));
 
     private static LocationCandidate ToCandidate(AccessOrg org) =>
@@ -105,7 +104,7 @@ public class UserAccessLoader(DotGlassesDbContext dbContext, IHttpContextAccesso
         return access;
     }
 
-    private sealed record AccessRow(DateTimeOffset? LockoutEnd, string? Role, List<AccessOrg> Orgs);
+    private sealed record AccessRow(DateTimeOffset? LockoutEnd, List<string?> Roles, List<AccessOrg> Orgs);
 
     private sealed record AccessOrg(Guid Id, string HierarchyPath, string Name, OrganisationLevel Level, bool IsDeleted, bool IsAssigned);
 }
