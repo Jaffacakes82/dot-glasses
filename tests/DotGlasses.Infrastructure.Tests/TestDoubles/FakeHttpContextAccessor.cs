@@ -9,8 +9,8 @@ namespace DotGlasses.Infrastructure.Tests.TestDoubles;
 /// <summary>Builds an IHttpContextAccessor carrying what DotGlassesDbContext's global query filter
 /// reads — mirrors how DotGlasses.Web actually populates it: the user's identity in the claims,
 /// and their access (here, a scope of the one given path) memoised on the request, the way the
-/// per-request recheck leaves it after reading the database (ADR-0006). The HierarchyPath claim is
-/// still stamped for the single-org consumers that read it.</summary>
+/// per-request recheck leaves it after reading the database (ADR-0006). hierarchyPathPrefix is
+/// that one scope path; "" (or anything unparseable) means no scope at all.</summary>
 public static class FakeHttpContextAccessor
 {
     public static IHttpContextAccessor Create(bool isAuthenticated = true, string hierarchyPathPrefix = "", string userName = "test-user")
@@ -25,7 +25,6 @@ public static class FakeHttpContextAccessor
         [
             new(ClaimTypes.NameIdentifier, userId.ToString()),
             new(ClaimTypes.Name, userName),
-            new(DotGlassesClaimTypes.HierarchyPath, hierarchyPathPrefix),
         ];
         var identity = new ClaimsIdentity(claims, authenticationType: "Test");
         var httpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) };

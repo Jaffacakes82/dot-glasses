@@ -1,6 +1,5 @@
 using DotGlasses.Application.Common;
 using DotGlasses.Application.Users;
-using DotGlasses.Domain.Enums;
 using DotGlasses.Infrastructure.Identity;
 using DotGlasses.Infrastructure.Persistence.Configurations;
 using Microsoft.AspNetCore.Identity;
@@ -48,22 +47,21 @@ public class DevUserSeeder(IServiceScopeFactory scopeFactory, IOptions<DevSeedOp
             return;
         }
 
+        // DGI plus a retail point beneath it: nested assignments (the retail point adds nothing to
+        // the Admin Portal scope, but makes it somewhere this account can record from the Field
+        // App — a DGI assignment alone never is, ADR-0006).
         await CreateOrUpdateAsync(
             userManager, userAdminService,
             new DevSeedAccount(
-                seed.AdminUserName, seed.AdminPassword,
-                OrganisationSeedConfiguration.DgiId, OrganisationSeedConfiguration.DgiPath, OrganisationLevel.Dgi,
-                RoleNames.Admin),
+                seed.AdminUserName, seed.AdminPassword, RoleNames.Admin,
+                [OrganisationSeedConfiguration.DgiId, OrganisationSeedConfiguration.KenyaRetailPointId]),
             cancellationToken);
 
         if (!string.IsNullOrEmpty(seed.KenyaManagerPassword))
         {
             await CreateOrUpdateAsync(
                 userManager, userAdminService,
-                new DevSeedAccount(
-                    KenyaManagerUserName, seed.KenyaManagerPassword,
-                    OrganisationSeedConfiguration.KenyaId, OrganisationSeedConfiguration.KenyaPath, OrganisationLevel.Country,
-                    RoleNames.Admin),
+                new DevSeedAccount(KenyaManagerUserName, seed.KenyaManagerPassword, RoleNames.Admin, [OrganisationSeedConfiguration.KenyaId]),
                 cancellationToken);
         }
 
@@ -71,70 +69,51 @@ public class DevUserSeeder(IServiceScopeFactory scopeFactory, IOptions<DevSeedOp
         {
             await CreateOrUpdateAsync(
                 userManager, userAdminService,
-                new DevSeedAccount(
-                    RetailPointUserUserName, seed.RetailPointUserPassword,
-                    OrganisationSeedConfiguration.KenyaRetailPointId, OrganisationSeedConfiguration.KenyaRetailPointPath, OrganisationLevel.RetailPoint,
-                    RoleNames.User),
+                new DevSeedAccount(RetailPointUserUserName, seed.RetailPointUserPassword, RoleNames.User, [OrganisationSeedConfiguration.KenyaRetailPointId]),
                 cancellationToken);
         }
     }
 
     /// <summary>
-    /// Creates the dev account if missing, or backfills its org fields if it already exists —
-    /// the local Postgres data volume is deliberately persisted across sessions (see CLAUDE.md's
-    /// Deployment section), so an account created before OrgNodeId/OrgLevel existed on
-    /// ApplicationUser would otherwise stay stuck with nulls forever and silently fail every
-    /// OrgLevelRequirement check. Password is only set on first creation, never reset here.
-    ///
-    /// Also ensures a matching UserOrgAssignment row exists for the primary org — every other
-    /// writer of ApplicationUser.OrgNodeId (UserAdminService.InviteAsync/SwitchActiveOrgAsync)
-    /// keeps that table in sync as the "assignable set" behind it, but this seeder used to set
-    /// only the denormalized OrgNodeId/HierarchyPath/OrgLevel fields directly. That let a dev
-    /// account write records under its assigned org (those fields alone drive the JWT claims and
-    /// hierarchy scoping) while the Field App's location picker — which reads UserOrgAssignments,
-    /// not ApplicationUser — showed no org at all. AssignUserToOrgAsync is a no-op if the row
-    /// already exists, so this also backfills any pre-existing seeded account stuck without one.
+    /// Creates the dev account if missing, and in either case makes sure it holds every one of its
+    /// org assignments — the local Postgres data volume is deliberately persisted across sessions
+    /// (see CLAUDE.md's Deployment section), so an account seeded before an assignment was added
+    /// here gets it on the next start. An account's access is exactly its UserOrgAssignment rows
+    /// (ADR-0006), so these rows are the whole of the seeding. AssignUserToOrgAsync is a no-op for
+    /// a row that already exists, and nothing is ever removed. Password is only set on first
+    /// creation, never reset here.
     /// </summary>
     private static async Task CreateOrUpdateAsync(
         UserManager<ApplicationUser> userManager, IUserAdminService userAdminService, DevSeedAccount account, CancellationToken cancellationToken)
     {
-        var existing = await userManager.FindByNameAsync(account.UserName);
-        if (existing is not null)
+        var user = await userManager.FindByNameAsync(account.UserName);
+        if (user is null)
         {
-            if (existing.OrgNodeId != account.OrgNodeId || existing.HierarchyPath != account.HierarchyPath || existing.OrgLevel != account.OrgLevel)
+            user = new ApplicationUser
             {
-                existing.OrgNodeId = account.OrgNodeId;
-                existing.HierarchyPath = account.HierarchyPath;
-                existing.OrgLevel = account.OrgLevel;
-                await userManager.UpdateAsync(existing);
+                UserName = account.UserName,
+                Email = account.UserName,
+                EmailConfirmed = true,
+            };
+
+            var createResult = await userManager.CreateAsync(user, account.Password);
+            if (!createResult.Succeeded)
+            {
+                return;
             }
 
-            await userAdminService.AssignUserToOrgAsync(existing.Id, account.OrgNodeId, cancellationToken);
-            return;
+            await userManager.AddToRoleAsync(user, account.Role);
         }
 
-        var user = new ApplicationUser
+        foreach (var orgNodeId in account.OrgNodeIds)
         {
-            UserName = account.UserName,
-            Email = account.UserName,
-            EmailConfirmed = true,
-            OrgNodeId = account.OrgNodeId,
-            HierarchyPath = account.HierarchyPath,
-            OrgLevel = account.OrgLevel,
-        };
-
-        var createResult = await userManager.CreateAsync(user, account.Password);
-        if (createResult.Succeeded)
-        {
-            await userManager.AddToRoleAsync(user, account.Role);
-            await userAdminService.AssignUserToOrgAsync(user.Id, account.OrgNodeId, cancellationToken);
+            await userAdminService.AssignUserToOrgAsync(user.Id, orgNodeId, cancellationToken);
         }
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-    private sealed record DevSeedAccount(
-        string UserName, string Password, Guid OrgNodeId, string HierarchyPath, OrganisationLevel OrgLevel, string Role);
+    private sealed record DevSeedAccount(string UserName, string Password, string Role, IReadOnlyList<Guid> OrgNodeIds);
 }
 
 public class DevSeedOptions

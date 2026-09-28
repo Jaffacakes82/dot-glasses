@@ -113,7 +113,6 @@ public class ChangePasswordApiTests(CustomWebApplicationFactory factory)
             UserName = userName,
             Email = userName,
             EmailConfirmed = true,
-            HierarchyPath = "/1/",
         };
         var created = await users.CreateAsync(user, Password);
         Assert.True(created.Succeeded, string.Join("; ", created.Errors.Select(e => e.Description)));

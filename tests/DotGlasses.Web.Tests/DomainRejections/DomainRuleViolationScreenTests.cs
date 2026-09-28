@@ -59,15 +59,7 @@ public class DomainRuleViolationScreenTests(AdminPortalFactory factory) : IClass
     {
         var user = await factory.SeedUserAsync(
             $"last-org-{Guid.NewGuid():N}@example.test",
-            OrganisationSeedConfiguration.KenyaRetailPointId,
-            OrganisationSeedConfiguration.KenyaRetailPointPath);
-        factory.Seed(db => db.UserOrgAssignments.Add(new UserOrgAssignment
-        {
-            Id = Guid.NewGuid(),
-            UserId = user.Id,
-            OrgNodeId = OrganisationSeedConfiguration.KenyaRetailPointId,
-            CreatedAtUtc = DateTimeOffset.UtcNow,
-        }));
+            OrganisationSeedConfiguration.KenyaRetailPointId);
 
         var client = factory.CreateAdminClient();
         var token = await AdminPortalFactory.GetAntiforgeryTokenAsync(client, "/Organisations");

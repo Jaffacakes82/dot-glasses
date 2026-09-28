@@ -23,10 +23,13 @@ public class OrganisationAdminService(DotGlassesDbContext dbContext, ICurrentUse
 
     public async Task<IReadOnlyList<OrganisationAdminNode>> ListDeactivatedAsync(CancellationToken cancellationToken = default)
     {
-        var prefix = currentUserContext.HierarchyPathPrefix;
+        // The global filter hides soft-deleted rows, so it is ignored and the caller's scope
+        // re-applied by hand — the same LIKE ANY shape as the filter (ADR-0004/0006). No scope
+        // paths, no patterns, no rows.
+        var patterns = currentUserContext.ScopePaths.Select(p => p.Value + "%").ToArray();
         var nodes = await dbContext.OrganisationNodes
             .IgnoreQueryFilters()
-            .Where(x => x.IsDeleted && x.HierarchyPath.StartsWith(prefix))
+            .Where(x => x.IsDeleted && patterns.Any(p => EF.Functions.Like(x.HierarchyPath, p)))
             .OrderBy(x => x.HierarchyPath)
             .ToListAsync(cancellationToken);
 

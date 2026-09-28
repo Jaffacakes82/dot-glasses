@@ -1,26 +1,12 @@
-using DotGlasses.Domain.Enums;
 using Microsoft.AspNetCore.Identity;
 
 namespace DotGlasses.Infrastructure.Identity;
 
+/// <summary>An account. It carries no org of its own: where a user has access is entirely their
+/// UserOrgAssignment rows, re-read on every request (ADR-0006), and the Field App's current
+/// location lives in its token, never here.</summary>
 public class ApplicationUser : IdentityUser<Guid>
 {
-    /// <summary>The old single "active org". It no longer decides scope or permissions — those come
-    /// from the user's org assignments, re-read every request (ADR-0006) — but it still counts as
-    /// one of those assignments until the migration that removes these three columns backfills an
-    /// assignment row for it, and the consumers not yet moved onto the combined scope still read
-    /// it (via the claims below).</summary>
-    public Guid? OrgNodeId { get; set; }
-
-    /// <summary>Materialized path of OrgNodeId, e.g. "/1/4/", copied onto the HierarchyPath claim
-    /// at sign-in. Read only by the single-org consumers (see OrgNodeId).</summary>
-    public string HierarchyPath { get; set; } = string.Empty;
-
-    /// <summary>Denormalized OrganisationNode.Level of OrgNodeId, copied onto the OrgLevel claim at
-    /// sign-in. Read only by the single-org consumers (see OrgNodeId); level-gated policies use
-    /// the highest assigned level instead.</summary>
-    public OrganisationLevel? OrgLevel { get; set; }
-
     /// <summary>Stamped on every successful sign-in, both the MVC cookie path (AccountController)
     /// and the API JWT path (AuthController) — a RetailPoint User almost never touches the Admin
     /// Portal, so only stamping the cookie path would leave this permanently null for most users.</summary>

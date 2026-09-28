@@ -34,10 +34,7 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
             .Select(o => o.Id);
 
         var users = await userManager.Users
-            .Where(u => dbContext.UserOrgAssignments.Any(a => a.UserId == u.Id && inScopeOrgIds.Contains(a.OrgNodeId)) ||
-                // Transitional, until ticket 08 removes the column: the old active org counts as
-                // one of the user's assignments, exactly as UserAccessLoader counts it.
-                (u.OrgNodeId != null && inScopeOrgIds.Contains(u.OrgNodeId.Value)))
+            .Where(u => dbContext.UserOrgAssignments.Any(a => a.UserId == u.Id && inScopeOrgIds.Contains(a.OrgNodeId)))
             .OrderBy(u => u.UserName)
             .ToListAsync(cancellationToken);
 
@@ -53,10 +50,7 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
             .Where(a => userIds.Contains(a.UserId))
             .ToListAsync(cancellationToken);
 
-        var orgIds = assignments.Select(a => a.OrgNodeId)
-            .Concat(users.Where(u => u.OrgNodeId.HasValue).Select(u => u.OrgNodeId!.Value))
-            .Distinct()
-            .ToList();
+        var orgIds = assignments.Select(a => a.OrgNodeId).Distinct().ToList();
         var orgs = await dbContext.OrganisationNodes
             .IgnoreQueryFilters()
             .Where(o => orgIds.Contains(o.Id))
@@ -71,7 +65,6 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
                 .Select(id => orgs.TryGetValue(id, out var org) && InScope(org.Path) ? org.Name : OutsideScopeOrgName)
                 .ToList();
             var assignmentPaths = assignedOrgIds
-                .Concat(user.OrgNodeId is { } activeOrgId ? [activeOrgId] : []) // transitional — see the listing query above
                 .Where(orgs.ContainsKey)
                 .Select(id => orgs[id].Path)
                 .Distinct()
@@ -148,6 +141,13 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
     /// </summary>
     public async Task<InviteUserResult> InviteAsync(string email, string fullName, string role, IReadOnlyList<Guid> orgNodeIds, CancellationToken cancellationToken = default)
     {
+        // InviteUserRequestValidator already requires one; this keeps the invariant — a user
+        // always has at least one assignment — true for any other caller too.
+        if (orgNodeIds.Count == 0)
+        {
+            throw new DomainRuleViolationException("At least one location must be assigned.");
+        }
+
         // Routed through the execution strategy rather than calling BeginTransactionAsync
         // directly: Aspire's AddAzureNpgsqlDbContext turns connection retries on by default
         // (NpgsqlEntityFrameworkCorePostgreSQLSettings.DisableRetry defaults to false), and a
@@ -168,21 +168,12 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
             // check) has only read.
             dbContext.ChangeTracker.Clear();
 
-            // Transitional, until ticket 08 removes the columns: the account still needs an old
-            // "active org" for the Field App's token. It is picked by level, most specific first,
-            // so the order the orgs were ticked in means nothing — no assignment is special.
-            var activeOrg = TransitionalActiveOrg(
-                await dbContext.OrganisationNodes.Where(o => orgNodeIds.Contains(o.Id)).ToListAsync(cancellationToken));
-
             var invitee = new ApplicationUser
             {
                 UserName = email,
                 Email = email,
                 EmailConfirmed = false,
                 FullName = fullName,
-                OrgNodeId = activeOrg.Id,
-                HierarchyPath = activeOrg.HierarchyPath,
-                OrgLevel = activeOrg.Level,
             };
 
             await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
@@ -315,8 +306,12 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
 
     public async Task UnassignUserFromOrgAsync(Guid userId, Guid orgNodeId, CancellationToken cancellationToken = default)
     {
-        var user = await dbContext.Users.SingleOrDefaultAsync(u => u.Id == userId, cancellationToken)
-            ?? throw new InvalidOperationException("User not found.");
+        // A missing user is a tampered form or a bug, not a no-op — left a 500 (ADR-0003).
+        if (!await dbContext.Users.AnyAsync(u => u.Id == userId, cancellationToken))
+        {
+            throw new InvalidOperationException("User not found.");
+        }
+
         var assignments = await dbContext.UserOrgAssignments
             .Where(a => a.UserId == userId)
             .ToListAsync(cancellationToken);
@@ -327,40 +322,15 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
             return;
         }
 
-        var remainingOrgIds = assignments.Where(a => a != removed).Select(a => a.OrgNodeId).ToList();
-        if (remainingOrgIds.Count == 0)
+        if (assignments.Count == 1)
         {
             throw new DomainRuleViolationException(
                 "This is the user's last org assignment, so it can't be removed. To take away all of their access, suspend them instead.");
         }
 
         dbContext.UserOrgAssignments.Remove(removed);
-
-        // Transitional, until ticket 08 removes the columns: UserAccessLoader still counts the old
-        // active org as an assignment, so removing the assignment it points at would leave that
-        // org's scope standing. Move it onto one the user keeps. Plain EF rather than UserManager,
-        // so the removal and the move are one SaveChanges — one transaction, never half-applied.
-        if (user.OrgNodeId == orgNodeId)
-        {
-            var next = TransitionalActiveOrg(await dbContext.OrganisationNodes
-                .IgnoreQueryFilters()
-                .Where(o => remainingOrgIds.Contains(o.Id))
-                .ToListAsync(cancellationToken));
-
-            user.OrgNodeId = next.Id;
-            user.HierarchyPath = next.HierarchyPath;
-            user.OrgLevel = next.Level;
-        }
-
         await dbContext.SaveChangesAsync(cancellationToken);
     }
-
-    /// <summary>Transitional, until ticket 08 removes ApplicationUser's active-org columns: which
-    /// of a user's orgs fills them. The most specific one — so a technician's retail point wins
-    /// over their country for the Field App's token — then by path, so the choice never depends on
-    /// the order orgs were ticked or assigned in.</summary>
-    private static OrganisationNode TransitionalActiveOrg(IEnumerable<OrganisationNode> orgs) =>
-        orgs.OrderByDescending(o => o.Level).ThenBy(o => o.HierarchyPath, StringComparer.Ordinal).First();
 
     /// <summary>Identity's own error descriptions are already English sentences ("Username 'x' is
     /// already taken."), but on their own they don't say which step of the invite refused —

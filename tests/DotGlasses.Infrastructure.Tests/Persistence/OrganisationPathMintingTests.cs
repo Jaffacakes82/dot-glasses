@@ -1,3 +1,4 @@
+using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Entities;
 using DotGlasses.Domain.Enums;
 using DotGlasses.Infrastructure.Persistence;
@@ -24,7 +25,7 @@ public class OrganisationPathMintingTests(PostgresContainerFixture postgres)
 {
     private static DotGlassesDbContext CreateContext(string connectionString)
     {
-        var currentUser = new FakeCurrentUserContext { HierarchyPathPrefix = OrganisationSeedConfiguration.DgiPath };
+        var currentUser = new FakeCurrentUserContext { ScopePaths = [HierarchyPath.Parse(OrganisationSeedConfiguration.DgiPath)] };
         return PostgresContainerFixture.CreateContext(
             connectionString,
             FakeHttpContextAccessor.Create(isAuthenticated: true, OrganisationSeedConfiguration.DgiPath),
@@ -32,7 +33,7 @@ public class OrganisationPathMintingTests(PostgresContainerFixture postgres)
     }
 
     private static OrganisationAdminService CreateService(DotGlassesDbContext context) =>
-        new(context, new FakeCurrentUserContext { HierarchyPathPrefix = OrganisationSeedConfiguration.DgiPath });
+        new(context, new FakeCurrentUserContext { ScopePaths = [HierarchyPath.Parse(OrganisationSeedConfiguration.DgiPath)] });
 
     [Fact]
     public async Task ADeactivatedNodesPathIsNeverHandedToANewNode()
