@@ -13,8 +13,10 @@ Block, Clear, Sunglasses). How many Coatings a record carries depends on the rec
 
 **Coating set**:
 The Coatings applied to the lens on a **Sale** — a set, not a single value, because one lens can
-carry more than one at once (e.g. Blue Block + Photochromic together). Pairing and exclusion
-rules govern which combinations are valid.
+carry more than one at once (e.g. Blue Block + Photochromic together). There is one set for the
+pair of glasses, not one per eye. On a **Lens set**, only Coatings that both chosen lenses come in
+are offered, and both lenses' pairings apply. On a **Custom prescription**, any active Coating is
+offered. Exclusions apply to both (2026-09-28).
 _Avoid_: treating a Sale's Coating as a single-select field — that was the pre-2026-08-13 model.
 
 **Coating preference**:
@@ -25,15 +27,19 @@ _Avoid_: calling this a Coating set, or assuming ADR-0001's set model extends to
 describes the Sale only (2026-09-04).
 
 **Coating pairing**:
-A directional rule: selecting one Coating automatically adds a second Coating to the set (e.g.
-selecting Blue Block auto-adds Photochromic). Not symmetric — the reverse selection does not
-auto-pair back.
+A directional rule on one lens in a **Lens set**: selecting one Coating automatically adds a
+second (e.g. selecting Blue Block auto-adds Photochromic). It records what DGI manufactures for that
+lens, so the partner can't be removed. Not symmetric — the reverse selection does not auto-pair
+back. Pairings belong to lens-set entries only. There are no global pairings, and a **Custom
+prescription** has none (2026-09-28).
 _Avoid_: "coating combination", "coating bundle" — pairing specifically means the one-directional
 auto-add behavior, not just "these look good together."
 
 **Coating exclusion**:
 A symmetric rule: two Coatings cannot both be present in the same set at once (e.g. Clear
-excludes Photochromic and Sunglasses; Photochromic and Sunglasses exclude each other).
+excludes Photochromic and Sunglasses; Photochromic and Sunglasses exclude each other). Exclusions
+are global. They apply to lens sets and custom prescriptions alike, and no lens-set pairing may
+contradict one.
 _Avoid_: "incompatible coatings" as a stand-alone term without reference to this rule — exclusion
 is the canonical name for this relationship.
 

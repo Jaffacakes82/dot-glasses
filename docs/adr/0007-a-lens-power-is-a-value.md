@@ -20,6 +20,24 @@ with a release. The Admin Portal shows them on a read-only page.
   range. It holds no pointer to the lens-set entry.
 - **The "Lens strength" reference data category is retired.**
 
+**Coatings** (decided the same day; refines ADR-0001):
+- **Each lens-set entry lists the coatings it comes in.** At least one is required. The global
+  "Lens strength coating availability" grid is removed.
+- **An entry may carry its own pairings**, for example "Blue block → Photochromic". A pairing
+  records what DGI manufactures for that lens. The server enforces it on lens-set records, so on a
+  lens set the paired coating can't be unticked. Under ADR-0001 it was a default the technician
+  could remove.
+- **Global pairings are removed.** A custom prescription has none.
+- **Exclusions stay global** and apply everywhere. Saving a lens-set pairing that contradicts an
+  exclusion is refused.
+- **A record has one coating set for the pair.** On a lens set, only coatings that both chosen
+  lenses come in are offered, and both lenses' pairings apply. A Test or Lead's coating preference
+  is limited to the same list.
+
+We rejected listing exact *combinations* per entry (for example "Blue block + Photochromic" as one
+option). It would replace checkboxes with a single choice, and the admin would have to type out
+every allowed combination for every lens.
+
 **Considered and rejected:**
 - **Stored lens rows**, found or created on first use and referenced by sets and records. A row
   would carry nothing but the numbers it is keyed on. It adds find-or-create bookkeeping, and makes

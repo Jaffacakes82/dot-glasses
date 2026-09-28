@@ -20,6 +20,9 @@ where they qualify. This map is for planning only; nothing is implemented from i
   write ADRs sparingly. ADR-0005 (lens sets are data-driven) is partly revisited by the lens tickets.
 - Order: multi-org access first, then the lens model, then everything else.
 - Day 2 items are deprioritised (see Out of scope).
+- **Before go-live (for the handover):** production will have no active lens sets after the lens
+  redesign ships (ticket 09). DGI must build the real ones on the new screen first. The same
+  handover should ask DGI to review the coating list against the online shop's (ticket 07).
 - The shared checkout is used by other sessions, so map edits happen on a branch in a worktree.
 
 ## Decisions so far
@@ -29,6 +32,8 @@ where they qualify. This map is for planning only; nothing is implemented from i
 - [How several org assignments combine into one user's access](issues/01-multi-org-access-model.md) — the Admin Portal uses the union of all assignments, and the Field App records at one remembered current location. "Primary org" is gone, and access is rechecked on every request. See ADR-0006.
 - [Recording tests, leads and sales only at retail points](issues/02-record-only-at-retail-points.md) — a current location must be an active retail point the user is *directly* assigned to, and the server enforces it. No new records at a deactivated retail point. A user with no retail point sees a "can't record here" screen. Dummy retail points need no marker.
 - [What a lens is: one lens database for lens sets and custom lenses](issues/06-what-a-lens-is.md) — a lens power is a value: sphere, cylinder, axis and add for one eye. Its allowed values copy the online shop and are fixed. Records store powers, not pointers to set entries. A lens-set entry is a power, a typed label and its coatings. Lens strength is retired. See ADR-0007.
+- [Which coatings each lens in a lens set can have, and where pairings live](issues/07-coatings-per-lens.md) — each lens-set entry lists its coatings (at least one) and its own pairings, and the server enforces them. Global pairings are gone, and exclusions stay global. A pair gets one coating set, offered from what both lenses come in. See ADR-0007 "Coatings".
+- [What happens to existing lens data](issues/09-migrate-existing-lens-data.md) — reset rather than convert. Old lens sets are retired and emptied, and lens strengths, the coating grid and global pairings are removed; exclusions stay. Old records keep their set name and show "—" for lens power. Staging and production start with no active lens sets, and example sets come from the dev-only seeder.
 - [The lens option ranges the Dot Glasses e-commerce site offers](issues/05-custom-lens-option-ranges.md) — sphere (±10) and add (0 to 3) match the Field App. Cylinder doesn't: the site offers 0 to -6 only. The site also requires an axis of 0–180, asks lens type only when add is above 0, and has a different coating list.
 
 ## Not yet specified
