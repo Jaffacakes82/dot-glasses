@@ -17,12 +17,10 @@ namespace DotGlasses.Application.ReferenceData;
 /// validators that run inside a <em>write</em> to the reference-data library, where the per-request
 /// memoized snapshot is the one thing that must not be consulted (it may predate the write; see
 /// ADR-0002 and CLAUDE.md). A direct row read is correct there, so this survives as an
-/// Admin-Portal-write concern rather than a validation one. Its two earlier callers
-/// (AddLensOptionRequestValidator and SetCoatingAvailabilityBatchRequestValidator) went with the
-/// Lens strength flow and the global coating grid (ADR-0007); its caller now is the Add lens
+/// Admin-Portal-write concern rather than a validation one. Its caller is the Add lens
 /// dialog's SaveLensRequestValidator, which builds a small literal ReferenceDataSnapshot from these
-/// reads so it can reuse the Rules helpers without touching the memoised one. Don't add a method
-/// here for a consultation rule — add it to the snapshot.
+/// reads so it can reuse the Rules helpers without touching the memoised one (ADR-0007). Don't add
+/// a method here for a consultation rule — add it to the snapshot.
 /// </summary>
 public interface IReferenceDataLookupService
 {

@@ -1697,7 +1697,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("CoatingRefIds", failure.Key);
-        Assert.Equal("Every coating must be configured as available for the chosen lens option (see Lens Sets).", failure.Message);
+        Assert.Equal("Every coating must be configured as available for the chosen lenses (see Lens Sets).", failure.Message);
     }
 
     [Fact]
@@ -1725,7 +1725,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("CoatingRefIds", failure.Key);
-        Assert.Equal("Every coating must be configured as available for the chosen lens option (see Lens Sets).", failure.Message);
+        Assert.Equal("Every coating must be configured as available for the chosen lenses (see Lens Sets).", failure.Message);
 
         request.CoatingRefIds = [ActiveCoating];
         Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
@@ -1784,7 +1784,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("CoatingRefIds", failure.Key);
-        Assert.Equal("Every coating must be configured as available for the chosen lens option (see Lens Sets).", failure.Message);
+        Assert.Equal("Every coating must be configured as available for the chosen lenses (see Lens Sets).", failure.Message);
 
         request.CoatingRefIds = [ExcludingCoating];
         Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
@@ -2027,7 +2027,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(test, Snapshot()));
 
         Assert.Equal("CoatingPreferenceRefId", failure.Key);
-        Assert.Equal("CoatingPreferenceRefId is not configured as available for the chosen lens option (see Lens Sets).", failure.Message);
+        Assert.Equal("CoatingPreferenceRefId is not configured as available for the chosen lenses (see Lens Sets).", failure.Message);
     }
 
     [Theory]
@@ -2049,7 +2049,7 @@ public class ConsultationRulesTests
         {
             var failure = AssertSingleFailure(result);
             Assert.Equal("CoatingPreferenceRefId", failure.Key);
-            Assert.Equal("CoatingPreferenceRefId is not configured as available for the chosen lens option (see Lens Sets).", failure.Message);
+            Assert.Equal("CoatingPreferenceRefId is not configured as available for the chosen lenses (see Lens Sets).", failure.Message);
         }
 
         test.CoatingPreferenceRefId = ActiveCoating;
@@ -2119,12 +2119,12 @@ public class ConsultationRulesTests
         var leadFailures = ConsultationRules.Check(lead, Snapshot()).Failures;
 
         Assert.Equal(
-            ["CoatingPreferenceRefId is not configured as available for the chosen lens option (see Lens Sets).",
+            ["CoatingPreferenceRefId is not configured as available for the chosen lenses (see Lens Sets).",
              "CoatingPreferenceRefId must reference an existing, active Coating reference-data item."],
             testFailures.Select(f => f.Message));
         Assert.Equal(
             ["CoatingPreferenceRefId must reference an existing, active Coating reference-data item.",
-             "CoatingPreferenceRefId is not configured as available for the chosen lens option (see Lens Sets)."],
+             "CoatingPreferenceRefId is not configured as available for the chosen lenses (see Lens Sets)."],
             leadFailures.Select(f => f.Message));
     }
 

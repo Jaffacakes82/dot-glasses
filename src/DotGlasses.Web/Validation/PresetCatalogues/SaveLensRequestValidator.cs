@@ -13,8 +13,8 @@ namespace DotGlasses.Web.Validation.PresetCatalogues;
 
 /// <summary>
 /// Everything the Add lens dialog checks when a lens is saved (ADR-0007; spec "Admin Portal"),
-/// reported together so the admin can fix it all in one go. Replaces the Lens strength flow's
-/// AddLensOptionRequestValidator.
+/// reported together so the admin can fix it all in one go. It is the only validator of a lens
+/// set's lenses; a lens is a lens power with its own coatings, not a pick from a reference list.
 ///
 /// <list type="bullet">
 /// <item>The label is required, and unique within the set ignoring case.</item>
