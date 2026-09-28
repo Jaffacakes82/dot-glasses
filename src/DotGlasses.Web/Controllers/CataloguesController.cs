@@ -5,6 +5,7 @@ using DotGlasses.Application.PresetCatalogues;
 using DotGlasses.Application.ReferenceData;
 using DotGlasses.Application.Reporting;
 using DotGlasses.Application.Users;
+using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Enums;
 using DotGlasses.Rules.LensPowers;
 using DotGlasses.Web.Authorization;
@@ -97,30 +98,44 @@ public class CataloguesController(
     /// The Add lens dialog's save, for a new lens and for an edit alike (ADR-0007).
     ///
     /// <para>
-    /// A refusal comes back the way every other refused form on this screen does (CreateCatalogue,
-    /// UpdateCatalogue, AssignCatalogues): the screen is rendered straight from this POST with the
-    /// validator's failures in ModelState — no redirect. What that adds here is the admin's own
-    /// posted form, handed to the view as <see cref="LensDialogViewModel.Reopen"/> so the dialog is
-    /// rendered open, on their input, with each problem under the field it is keyed on. Rendering
-    /// rather than redirecting is what keeps it simple: a PRG round trip would have to carry the
-    /// whole form and every keyed message through TempData to rebuild the same thing. Nothing has
-    /// been written when this renders, so reading the memoised snapshot for the page is safe.
+    /// The round trip. A save that passes is written and redirected back to Index with a banner
+    /// (POST-redirect-GET). A refused one comes back the way every other refused form on this
+    /// screen does (CreateCatalogue, UpdateCatalogue, AssignCatalogues): the screen is rendered
+    /// straight from this POST with the validator's failures in ModelState — no redirect. What
+    /// that adds here is the admin's own posted form, handed to the view as
+    /// <see cref="LensDialogViewModel.Reopen"/>, so _LensDialog renders open on their input with
+    /// each problem in the slot for the field it is keyed on (the request's property names are
+    /// the dialog's field names). Rendering rather than redirecting is deliberate: a redirect
+    /// would have to carry the whole form, pairing rows and every keyed message through TempData
+    /// to rebuild exactly this. Nothing has been written when it renders, so reading the memoised
+    /// snapshot for the page is safe.
     /// </para>
     ///
     /// <para>
-    /// A business-rule rejection from the service (a lens set retired in the meantime) still goes
-    /// through DomainRuleViolationFilter's POST-redirect-GET like every other screen's.
+    /// A business-rule rejection (the lens set retired, or the lens removed, since the page was
+    /// loaded) goes through DomainRuleViolationFilter's POST-redirect-GET like every other
+    /// screen's.
     /// </para>
     /// </summary>
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> SaveLens(SaveLensRequest request, CancellationToken cancellationToken)
     {
-        if (!await CanEditLensSetAsync(request.CatalogueId, cancellationToken)
-            || (request.LensOptionId is { } lensOptionId
-                && await catalogueAdminService.FindCatalogueIdForLensOptionAsync(lensOptionId, cancellationToken) != request.CatalogueId))
+        if (!await CanEditLensSetAsync(request.CatalogueId, cancellationToken))
         {
             return Forbid();
+        }
+
+        if (request.LensOptionId is { } lensOptionId)
+        {
+            // A lens is only ever edited through its own lens set — the permission above was
+            // checked against that set, not whichever one the lens really sits in.
+            var owningCatalogueId = await catalogueAdminService.FindCatalogueIdForLensOptionAsync(lensOptionId, cancellationToken)
+                ?? throw new DomainRuleViolationException("This lens is no longer in the lens set — it may have been removed. Add it again if it is still needed.");
+            if (owningCatalogueId != request.CatalogueId)
+            {
+                return Forbid();
+            }
         }
 
         var validationResult = await saveLensValidator.ValidateAsync(request, cancellationToken);

@@ -163,16 +163,20 @@ public class PresetCatalogueAdminService(DotGlassesDbContext dbContext, IReferen
 
         // Stored the way LensPowerRules reads it, so the table, the snapshot and a record all see
         // one shape: a 0.00 cylinder is none, an axis only goes with a cylinder, a 0.00 add is none,
-        // and a lens type (and its "Other" text) only goes with an add.
+        // a lens type only goes with an add, and free text only with the "Other" lens type. A
+        // direct row read, not the memoised snapshot: this is a write (CLAUDE.md, ADR-0002).
         var hasCylinder = LensPowerRules.HasCylinder(lens.Cylinder);
         var hasAdd = LensPowerRules.HasAdd(lens.Add);
+        var lensTypeRefId = hasAdd ? lens.LensTypeRefId : null;
+        var isOtherLensType = lensTypeRefId is { } typeId && await dbContext.ReferenceDataItems
+            .AnyAsync(i => i.Id == typeId && i.Category == ReferenceDataCategory.LensType && i.IsOtherOption, cancellationToken);
         entity.Label = lens.Label.Trim();
         entity.Sphere = lens.Sphere;
         entity.Cylinder = hasCylinder ? lens.Cylinder : null;
         entity.Axis = hasCylinder ? lens.Axis : null;
         entity.Add = hasAdd ? lens.Add : null;
-        entity.LensTypeRefId = hasAdd ? lens.LensTypeRefId : null;
-        entity.LensTypeOtherText = hasAdd && !string.IsNullOrWhiteSpace(lens.LensTypeOtherText) ? lens.LensTypeOtherText.Trim() : null;
+        entity.LensTypeRefId = lensTypeRefId;
+        entity.LensTypeOtherText = isOtherLensType && !string.IsNullOrWhiteSpace(lens.LensTypeOtherText) ? lens.LensTypeOtherText.Trim() : null;
 
         // Coatings and pairings are replaced by difference rather than delete-all-then-insert, so
         // an unchanged row is never deleted and re-inserted against its own unique index.
