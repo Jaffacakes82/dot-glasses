@@ -13,8 +13,8 @@ namespace DotGlasses.Infrastructure.Identity;
 ///
 /// Only the identity claims decide anything on the Admin Portal: scope, level, role and
 /// suspension are re-read from the database every request (IUserAccessLoader, ADR-0006). The org
-/// claims describe the old active org, still read by the single-org consumers and — for now — as
-/// the Field App's scope.
+/// claims describe the old active org, still read by the Admin Portal's single-org consumers; the
+/// Field App's token leaves them out and carries its current location instead (AuthController).
 /// </summary>
 public class ApplicationUserClaimsPrincipalFactory(
     UserManager<ApplicationUser> userManager,

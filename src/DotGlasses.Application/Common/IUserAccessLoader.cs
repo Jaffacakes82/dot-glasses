@@ -19,6 +19,13 @@ public interface IUserAccessLoader
     Task<UserAccess?> LoadForAdminPortalAsync(ClaimsPrincipal principal, CancellationToken cancellationToken = default);
 
     /// <summary>Field App (JWT) requests: role, level and suspension come from the database like
-    /// the Admin Portal's, but the scope stays the token's own org for now.</summary>
+    /// the Admin Portal's, but the scope is the token's current location alone — and only once it
+    /// has been re-validated (see <see cref="CurrentLocationCheck.Of"/>). An invalid location
+    /// leaves the scope empty rather than failing the request.</summary>
     Task<UserAccess?> LoadForFieldAppAsync(ClaimsPrincipal principal, CancellationToken cancellationToken = default);
+
+    /// <summary>The user's <b>eligible locations</b> — the active retail points they are directly
+    /// assigned to — by name. What the Field App may choose from at sign-in and when switching,
+    /// and what "my orgs" lists. Not memoised: sign-in has no request user yet.</summary>
+    Task<IReadOnlyList<CurrentLocation>> ListEligibleLocationsAsync(Guid userId, CancellationToken cancellationToken = default);
 }

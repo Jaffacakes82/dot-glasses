@@ -19,8 +19,9 @@ public interface ICurrentUserContext
 
     /// <summary>The request's scope: every row whose HierarchyPath starts with one of these is
     /// visible, and nothing else is. On the Admin Portal, the user's org assignments combined
-    /// (nested ones removed); on the Field App, the token's org. Empty when the user's access was
-    /// never loaded — which the filter and the permission checks treat as "nothing".</summary>
+    /// (nested ones removed); on the Field App, the valid current location alone. Empty when the
+    /// user's access was never loaded, or a Field App request has no valid current location —
+    /// which the filter and the permission checks treat as "nothing".</summary>
     IReadOnlyList<HierarchyPath> ScopePaths { get; }
 
     /// <summary>The highest (numerically lowest) level among the user's org assignments — drives
@@ -34,10 +35,17 @@ public interface ICurrentUserContext
 
     IReadOnlyCollection<string> Roles { get; }
 
+    /// <summary>Field App (JWT) requests only: the current location the token names, re-validated
+    /// on this request — still a direct assignment, Retail Point level, active. Its Status says
+    /// why when it isn't valid, and its Location names the org whenever the token names a real
+    /// one, so a refusal can name it. Always NoLocation on Admin Portal requests. Read this, never
+    /// HierarchyPathPrefix, for anything the Field App records or reads.</summary>
+    CurrentLocationCheck CurrentLocation { get; }
+
     // --- Single-org members (the old "active org", read from claims) ------------------------
-    // Still read by the consumers not yet moved onto the combined scope: the Organisations tree,
-    // User Directory, lens-set creation and the Field App API. Scope and permission decisions
-    // must not use them.
+    // Still read by the Admin Portal consumers not yet moved onto the combined scope: the
+    // Organisations tree, User Directory and lens-set creation. Scope and permission decisions
+    // must not use them, and a Field App token no longer carries them.
 
     Guid? OrgNodeId { get; }
 

@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using DotGlasses.Application.Common;
+using DotGlasses.Domain.Entities;
 using DotGlasses.Infrastructure.Identity;
 using DotGlasses.Infrastructure.Persistence;
 using DotGlasses.Web.Auth;
@@ -93,19 +94,23 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
     }
 
     /// <summary>
-    /// A Field App client: a freshly created technician account (role User) holding a JWT whose
-    /// org is <paramref name="hierarchyPath"/>. The account is a real row because every JWT request
-    /// re-reads its user from the database (ADR-0006) — a token for a user that doesn't exist is
-    /// refused with a 401 however well it is signed.
+    /// A Field App client: a freshly created technician account (role User), directly assigned to
+    /// the org at <paramref name="hierarchyPath"/>, holding a JWT whose current location is that
+    /// org. The account and its assignment are real rows because every JWT request re-reads them
+    /// from the database (ADR-0006) — a token for a user that doesn't exist is refused with a 401
+    /// however well it is signed, and a current location the user isn't assigned to scopes the
+    /// request to nothing.
     /// </summary>
     public HttpClient CreateTechnicianClient(string hierarchyPath)
     {
         var userId = Guid.NewGuid();
         var userName = $"technician-{userId:N}@test.local";
+        Guid locationId;
 
         using (var scope = Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<DotGlassesDbContext>();
+            locationId = db.OrganisationNodes.IgnoreQueryFilters().Single(o => o.HierarchyPath == hierarchyPath).Id;
             db.Users.Add(new ApplicationUser
             {
                 Id = userId,
@@ -116,6 +121,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
                 SecurityStamp = Guid.NewGuid().ToString(),
             });
             db.UserRoles.Add(new IdentityUserRole<Guid> { UserId = userId, RoleId = db.Roles.Single(r => r.Name == RoleNames.User).Id });
+            db.UserOrgAssignments.Add(new UserOrgAssignment { Id = Guid.NewGuid(), UserId = userId, OrgNodeId = locationId, CreatedAtUtc = DateTimeOffset.UtcNow });
             db.SaveChanges();
         }
 
@@ -123,7 +129,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
         [
             new(ClaimTypes.NameIdentifier, userId.ToString()),
             new(ClaimTypes.Name, "technician"),
-            new(DotGlassesClaimTypes.HierarchyPath, hierarchyPath),
+            new(DotGlassesClaimTypes.CurrentLocationId, locationId.ToString()),
             new(ClaimTypes.Role, RoleNames.User),
         ];
 
