@@ -1,8 +1,11 @@
 using System.Text.RegularExpressions;
 using DotGlasses.Application.Common;
+using DotGlasses.Domain.Entities;
 using DotGlasses.Domain.Enums;
 using DotGlasses.Infrastructure.Identity;
 using DotGlasses.Infrastructure.Persistence;
+using DotGlasses.Infrastructure.Persistence.Configurations;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
@@ -39,22 +42,53 @@ public class AdminPortalFactory : CustomWebApplicationFactory
         });
     }
 
-    /// <summary>A client acting as an Admin at the given org level, whose scope is "/1/" (the
-    /// whole seeded tree). Redirects are followed by hand so a test can assert on the 302 the
-    /// rejection filter produces as well as on the page it lands on.</summary>
-    public HttpClient CreateAdminClient(OrganisationLevel orgLevel = OrganisationLevel.Dgi, Guid? orgNodeId = null)
+    /// <summary>A client acting as a freshly created Admin assigned to the seeded org at the given
+    /// level (DGI → Kenya → Kangemi Vision Centre → Outreach Post). activeOrgNodeId sets the
+    /// account's old single "active org", which the consumers not yet on the combined scope still
+    /// read; it defaults to the assigned org, and when it differs it counts as a second
+    /// assignment. Redirects are followed by hand so a test can assert on the 302 the rejection
+    /// filter produces as well as on the page it lands on.</summary>
+    public HttpClient CreateAdminClient(OrganisationLevel orgLevel = OrganisationLevel.Dgi, Guid? activeOrgNodeId = null)
     {
-        var client = CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-        client.DefaultRequestHeaders.Add(AdminPortalTestAuthenticationHandler.UserIdHeader, Guid.NewGuid().ToString());
-        client.DefaultRequestHeaders.Add(AdminPortalTestAuthenticationHandler.RoleHeader, RoleNames.Admin);
-        client.DefaultRequestHeaders.Add(AdminPortalTestAuthenticationHandler.HierarchyPathHeader, "/1/");
-        client.DefaultRequestHeaders.Add(AdminPortalTestAuthenticationHandler.OrgLevelHeader, orgLevel.ToString());
-
-        if (orgNodeId is { } id)
+        var assignedOrgId = orgLevel switch
         {
-            client.DefaultRequestHeaders.Add(AdminPortalTestAuthenticationHandler.OrgNodeIdHeader, id.ToString());
-        }
+            OrganisationLevel.Dgi => OrganisationSeedConfiguration.DgiId,
+            OrganisationLevel.Country => OrganisationSeedConfiguration.KenyaId,
+            OrganisationLevel.Intermediate => OrganisationSeedConfiguration.KenyaRetailerId,
+            _ => OrganisationSeedConfiguration.KenyaRetailPointId,
+        };
+        var userId = Guid.NewGuid();
 
+        Seed(db =>
+        {
+            var activeOrg = db.OrganisationNodes.IgnoreQueryFilters().Single(o => o.Id == (activeOrgNodeId ?? assignedOrgId));
+            var userName = $"admin-{userId:N}@test.local";
+
+            db.Users.Add(new ApplicationUser
+            {
+                Id = userId,
+                UserName = userName,
+                NormalizedUserName = userName.ToUpperInvariant(),
+                Email = userName,
+                NormalizedEmail = userName.ToUpperInvariant(),
+                EmailConfirmed = true,
+                SecurityStamp = Guid.NewGuid().ToString(),
+                OrgNodeId = activeOrg.Id,
+                HierarchyPath = activeOrg.HierarchyPath,
+                OrgLevel = activeOrg.Level,
+            });
+            db.UserRoles.Add(new IdentityUserRole<Guid> { UserId = userId, RoleId = db.Roles.Single(r => r.Name == RoleNames.Admin).Id });
+            db.UserOrgAssignments.Add(new UserOrgAssignment
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                OrgNodeId = assignedOrgId,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            });
+        });
+
+        var client = CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        client.DefaultRequestHeaders.Add(AdminPortalTestAuthenticationHandler.UserIdHeader, userId.ToString());
         return client;
     }
 

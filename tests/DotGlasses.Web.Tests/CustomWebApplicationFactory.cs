@@ -1,8 +1,15 @@
+using System.Net.Http.Headers;
+using System.Security.Claims;
+using DotGlasses.Application.Common;
+using DotGlasses.Infrastructure.Identity;
 using DotGlasses.Infrastructure.Persistence;
+using DotGlasses.Web.Auth;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Testcontainers.PostgreSql;
 
@@ -83,6 +90,47 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
                 ["Jwt:AccessTokenLifetimeMinutes"] = "60",
             });
         });
+    }
+
+    /// <summary>
+    /// A Field App client: a freshly created technician account (role User) holding a JWT whose
+    /// org is <paramref name="hierarchyPath"/>. The account is a real row because every JWT request
+    /// re-reads its user from the database (ADR-0006) — a token for a user that doesn't exist is
+    /// refused with a 401 however well it is signed.
+    /// </summary>
+    public HttpClient CreateTechnicianClient(string hierarchyPath)
+    {
+        var userId = Guid.NewGuid();
+        var userName = $"technician-{userId:N}@test.local";
+
+        using (var scope = Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<DotGlassesDbContext>();
+            db.Users.Add(new ApplicationUser
+            {
+                Id = userId,
+                UserName = userName,
+                NormalizedUserName = userName.ToUpperInvariant(),
+                Email = userName,
+                NormalizedEmail = userName.ToUpperInvariant(),
+                SecurityStamp = Guid.NewGuid().ToString(),
+            });
+            db.UserRoles.Add(new IdentityUserRole<Guid> { UserId = userId, RoleId = db.Roles.Single(r => r.Name == RoleNames.User).Id });
+            db.SaveChanges();
+        }
+
+        List<Claim> claims =
+        [
+            new(ClaimTypes.NameIdentifier, userId.ToString()),
+            new(ClaimTypes.Name, "technician"),
+            new(DotGlassesClaimTypes.HierarchyPath, hierarchyPath),
+            new(ClaimTypes.Role, RoleNames.User),
+        ];
+
+        var (token, _) = Services.GetRequiredService<IJwtTokenService>().CreateToken(claims);
+        var client = CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
     }
 
     /// <summary>

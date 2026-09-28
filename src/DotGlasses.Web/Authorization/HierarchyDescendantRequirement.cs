@@ -1,11 +1,14 @@
 using DotGlasses.Application.Common;
+using DotGlasses.Domain.Common;
 using Microsoft.AspNetCore.Authorization;
 
 namespace DotGlasses.Web.Authorization;
 
 /// <summary>
-/// Resource-based: role membership AND the target's HierarchyPath starts with the acting user's
-/// own HierarchyPathPrefix (target is at/below the actor's node). Backs
+/// Resource-based: role membership AND the target's HierarchyPath sits at/below *any* of the
+/// acting user's scope paths — their org assignments combined (ADR-0006). Role and scope come from
+/// ICurrentUserContext, read from the database on every request, never from the sign-in claims.
+/// Backs
 /// AuthorizationPolicies.ManageUsersInScope/ManageOrgInScope — call via
 /// `AuthorizeAsync(User, targetHierarchyPath, policyName)`.
 ///
@@ -31,9 +34,10 @@ public class HierarchyDescendantAuthorizationHandler(ICurrentUserContext current
     protected override Task HandleRequirementAsync(
         AuthorizationHandlerContext context, HierarchyDescendantRequirement requirement, string targetHierarchyPath)
     {
-        if (requirement.AllowedRoles.Any(context.User.IsInRole) &&
-            !string.IsNullOrEmpty(currentUser.HierarchyPathPrefix) &&
-            targetHierarchyPath.StartsWith(currentUser.HierarchyPathPrefix, StringComparison.Ordinal))
+        if (currentUser.Role is { } role &&
+            requirement.AllowedRoles.Contains(role) &&
+            HierarchyPath.TryParse(targetHierarchyPath, out var target) &&
+            currentUser.ScopePaths.Any(target.IsSelfOrDescendantOf))
         {
             context.Succeed(requirement);
         }
