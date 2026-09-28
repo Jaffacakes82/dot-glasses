@@ -5,6 +5,7 @@
 @using DotGlasses.Contracts.ReferenceData
 @using DotGlasses.Rules.LensPowers
 @using DotGlasses.Rules.LensRanges
+@using DotGlasses.Rules.ReferenceData
 
 <div class="dg-field">
     <label>Lens range</label>
@@ -44,27 +45,32 @@
     }
     else
     {
+        @* A record holds each eye's lens power and the pair's lens type, not the lens (ADR-0007):
+           choosing a lens records its power (LensRangeSelection.ChooseLenses), so a rejection
+           about a lens comes back keyed on that eye's sphere, and a lens type mismatch on the lens
+           type — both rendered here, since this branch shows no power or lens type controls. *@
         <div class="dg-field">
             <label>Lens power — left eye</label>
-            <select value="@Model.LensOptionLeftId" @onchange="OnLeftLensChanged">
+            <select value="@Model.LensLeftId" @onchange="OnLeftLensChanged">
                 <option value="">Select...</option>
                 @foreach (var option in catalogue.LensOptions)
                 {
                     <option value="@option.Id">@option.Label</option>
                 }
             </select>
-            <FieldError Errors="Errors" For="LensOptionLeftId" />
+            <FieldError Errors="Errors" For="SphereLeft" />
         </div>
         <div class="dg-field">
             <label>Lens power — right eye</label>
-            <select value="@Model.LensOptionRightId" @onchange="e => Model.LensOptionRightId = ParseGuid(e.Value)">
+            <select value="@Model.LensRightId" @onchange="OnRightLensChanged">
                 <option value="">Select...</option>
                 @foreach (var option in catalogue.LensOptions)
                 {
                     <option value="@option.Id">@option.Label</option>
                 }
             </select>
-            <FieldError Errors="Errors" For="LensOptionRightId" />
+            <FieldError Errors="Errors" For="SphereRight" />
+            <FieldError Errors="Errors" For="LensTypeRefId" />
         </div>
 
         <div class="dg-field">
@@ -79,9 +85,9 @@
             <FieldError Errors="Errors" For="PresetPupilDistanceBucket" />
         </div>
 
-        @if (Model.LensOptionLeftId is not null)
+        @if (Model.LensLeftId is not null)
         {
-            var leftOption = catalogue.LensOptions.FirstOrDefault(o => o.Id == Model.LensOptionLeftId);
+            var leftOption = catalogue.LensOptions.FirstOrDefault(o => o.Id == Model.LensLeftId);
             @if ((leftOption?.CoatingIds ?? []).Count == 0)
             {
                 <p style="color:#c00; font-size:12px;">No coatings are configured for this lens yet — it can't be sold on a lens set until DGI adds one on Lens Sets.</p>
@@ -212,7 +218,11 @@ else if (Model.LensRangeType == LensRangeType.Custom)
 
     [Parameter] public FormErrors? Errors { get; set; }
 
-    /// <summary>Fired whenever Model.LensRangeType or Model.LensOptionLeftId changes. Model is a
+    /// <summary>The same catalogues as <see cref="Catalogues"/>, as the shared rules read them —
+    /// choosing a lens records its power through the Rules (LensRangeSelection.ChooseLenses).</summary>
+    [Parameter, EditorRequired] public ReferenceDataSnapshot ReferenceData { get; set; } = ReferenceDataSnapshot.Empty;
+
+    /// <summary>Fired whenever Model.LensRangeType or the left lens changes. Model is a
     /// shared reference-type object, so mutating its properties here doesn't by itself make the
     /// parent re-render — without this, anything the parent conditionally shows/restricts based on
     /// these fields (the coating picker, restricted to the left lens's configured coatings) only
@@ -249,8 +259,7 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         // Switching range type invalidates whichever fields belonged to the previous one — the
         // validator rejects preset+custom fields being set together.
         Model.PresetCatalogueId = null;
-        Model.LensOptionLeftId = null;
-        Model.LensOptionRightId = null;
+        Model.ForgetChosenLenses();
         Model.SphereLeft = null;
         Model.CylinderLeft = null;
         Model.AxisLeft = null;
@@ -338,14 +347,20 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         }
     }
 
+    private IReadOnlyList<LensOptionSnapshot> SelectedLensSetLenses =>
+        ReferenceData.FindCatalogue(Model.PresetCatalogueId)?.LensOptions ?? [];
+
     private async Task OnLeftLensChanged(ChangeEventArgs e)
     {
-        Model.LensOptionLeftId = ParseGuid(e.Value);
+        Model.ChooseLenses(SelectedLensSetLenses, ParseGuid(e.Value), Model.LensRightId);
         // Available coatings are keyed off the left-eye lens ("left eye wins" — see SaleService's
         // historical single-CoatingRefId simplification, still true for which lens drives
         // availability now that Coating is a set) — the parent must re-derive/clear its own
         // coating selection since any prior pick may no longer be valid.
         await SelectionChanged.InvokeAsync();
     }
+
+    private void OnRightLensChanged(ChangeEventArgs e) =>
+        Model.ChooseLenses(SelectedLensSetLenses, Model.LensLeftId, ParseGuid(e.Value));
 
 }

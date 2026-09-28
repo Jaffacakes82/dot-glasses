@@ -58,8 +58,6 @@ public class Sale : IAuditable, ISoftDeletable, IHierarchyScoped
     public LensRangeType LensRangeType { get; set; }
 
     public Guid? PresetCatalogueId { get; set; }
-    public Guid? LensOptionLeftId { get; set; }
-    public Guid? LensOptionRightId { get; set; }
 
     // Custom-range prescription, set only when LensRangeType == Custom.
     public decimal? SphereLeft { get; set; }

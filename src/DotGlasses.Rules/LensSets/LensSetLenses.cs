@@ -5,7 +5,7 @@ using DotGlasses.Rules.ReferenceData;
 namespace DotGlasses.Rules.LensSets;
 
 /// <summary>
-/// How every screen lists, matches and offers coatings for a lens set's lenses (ADR-0007) — one
+/// How every screen lists, matches, records and offers coatings for a lens set's lenses (ADR-0007) — one
 /// definition shared by the Field App, the Admin Portal and the server, so a lens set looks and
 /// behaves the same wherever it is shown. Pure functions over <see cref="LensOptionSnapshot"/>,
 /// the lens shape both of the snapshot's fillings already carry (the server's from the database,
@@ -113,6 +113,29 @@ public static class LensSetLenses
         new(
             left.CoatingIds.Where(right.CoatingIds.Contains).Distinct().ToList(),
             left.Pairings.Concat(right.Pairings).Distinct().ToList());
+
+    /// <summary>
+    /// What a record stores for a chosen pair of lens set lenses (ADR-0007): each eye's lens power,
+    /// copied off its lens, and one lens type for the pair — the same fields a Custom prescription
+    /// fills, and no pointer to either lens. The Field App and the Admin Portal both record a lens
+    /// set choice through this, so they can't disagree about it.
+    ///
+    /// <para>
+    /// The left lens decides the pair's lens type (the right's when no left lens is chosen yet).
+    /// A mixed pair is recorded as it was chosen rather than silently "fixed": the consultation
+    /// rules then find no right-eye lens of the left lens's type and refuse it against the right
+    /// eye. An eye with no lens chosen records no power, which the rules ask the technician to
+    /// choose.
+    /// </para>
+    /// </summary>
+    public static LensPairPowers RecordedAs(LensOptionSnapshot? left, LensOptionSnapshot? right)
+    {
+        var lensTypeFrom = left ?? right;
+        return new LensPairPowers(
+            left?.Sphere, left?.Cylinder, left?.Axis, left?.Add,
+            right?.Sphere, right?.Cylinder, right?.Axis, right?.Add,
+            lensTypeFrom?.LensTypeRefId, lensTypeFrom?.LensTypeOtherText);
+    }
 
     /// <summary>One eye's lens power reduced to what makes it the same lens: blank cylinder as
     /// 0.00, no axis without a cylinder, a 0.00 add as none. Decimal equality ignores trailing

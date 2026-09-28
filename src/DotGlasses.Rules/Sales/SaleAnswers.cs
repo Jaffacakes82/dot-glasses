@@ -52,9 +52,9 @@ public sealed record SaleAnswers
     /// <summary>Null until a range is chosen — see the class summary.</summary>
     public LensRangeType? LensRangeType { get; init; }
 
+    /// <summary>Which lens set, on a LensSet range. The lenses are the per-eye powers and the lens
+    /// type below on both ranges — no lens ids (ADR-0007).</summary>
     public Guid? PresetCatalogueId { get; init; }
-    public Guid? LensOptionLeftId { get; init; }
-    public Guid? LensOptionRightId { get; init; }
 
     public decimal? SphereLeft { get; init; }
     public decimal? CylinderLeft { get; init; }
@@ -113,7 +113,7 @@ public sealed record SaleAnswers
     /// (<see cref="SaleAssembly.CarriesLens"/>).
     /// </summary>
     public SaleAnswers WithLens(
-        LensRangeType? lensRangeType, Guid? presetCatalogueId, Guid? lensOptionLeftId, Guid? lensOptionRightId,
+        LensRangeType? lensRangeType, Guid? presetCatalogueId,
         decimal? sphereLeft, decimal? cylinderLeft, decimal? axisLeft, decimal? addLeft,
         decimal? sphereRight, decimal? cylinderRight, decimal? axisRight, decimal? addRight,
         Guid? lensTypeRefId, string? lensTypeOtherText,
@@ -122,8 +122,6 @@ public sealed record SaleAnswers
         {
             LensRangeType = lensRangeType,
             PresetCatalogueId = presetCatalogueId,
-            LensOptionLeftId = lensOptionLeftId,
-            LensOptionRightId = lensOptionRightId,
             SphereLeft = sphereLeft,
             CylinderLeft = cylinderLeft,
             AxisLeft = axisLeft,

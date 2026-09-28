@@ -194,4 +194,42 @@ public class LensSetLensesTests
         Assert.Equal([blueBlockNeedsPhotochromic], LensSetLenses.CoatingsFor(withoutPairings, left).RequiredPairings);
         Assert.Empty(LensSetLenses.CoatingsFor(withoutPairings, withoutPairings).RequiredPairings);
     }
+
+    [Fact]
+    public void RecordedAs_CopiesEachChosenLenssPowerOntoItsEye()
+    {
+        var left = Lens("+2.50 astig", 2.50m, cylinder: -0.75m, axis: 90m);
+        var right = Lens("Bifocal +2.00", 0.00m, add: 2.00m, lensType: Bifocal);
+
+        var recorded = LensSetLenses.RecordedAs(left, right);
+
+        Assert.Equal((2.50m, (decimal?)-0.75m, (decimal?)90m, (decimal?)null), (recorded.SphereLeft!.Value, recorded.CylinderLeft, recorded.AxisLeft, recorded.AddLeft));
+        Assert.Equal((0.00m, (decimal?)null, (decimal?)null, (decimal?)2.00m), (recorded.SphereRight!.Value, recorded.CylinderRight, recorded.AxisRight, recorded.AddRight));
+    }
+
+    [Fact]
+    public void RecordedAs_TheLeftLensDecidesThePairsOneLensType_OrTheRightWhenNoLeftIsChosen()
+    {
+        // One lens type per pair (ADR-0007). A mixed pair is recorded with the left lens's type, so
+        // the rules then find the right eye matching no lens of that type — the mixed-pair refusal,
+        // against the right eye.
+        var otherLens = new LensOptionSnapshot(Guid.NewGuid(), "Varifocal +1.00", 0.00m, [Clear], Add: 1.00m, LensTypeRefId: Other, LensTypeOtherText: "Varifocal");
+        var singleVision = Lens("+1.00", 1.00m);
+
+        Assert.Equal((Other, "Varifocal"), Types(LensSetLenses.RecordedAs(otherLens, singleVision)));
+        Assert.Equal(((Guid?)null, (string?)null), Types(LensSetLenses.RecordedAs(singleVision, otherLens)));
+        Assert.Equal((Other, "Varifocal"), Types(LensSetLenses.RecordedAs(null, otherLens)));
+
+        static (Guid?, string?) Types(LensPairPowers powers) => (powers.LensTypeRefId, powers.LensTypeOtherText);
+    }
+
+    [Fact]
+    public void RecordedAs_AnEyeWithNoLensChosen_RecordsNoPower()
+    {
+        var recorded = LensSetLenses.RecordedAs(Lens("+2.50", 2.50m), null);
+
+        Assert.Equal(2.50m, recorded.SphereLeft);
+        Assert.Equal(new decimal?[] { null, null, null, null }, [recorded.SphereRight, recorded.CylinderRight, recorded.AxisRight, recorded.AddRight]);
+        Assert.Equal(new LensPairPowers(null, null, null, null, null, null, null, null, null, null), LensSetLenses.RecordedAs(null, null));
+    }
 }

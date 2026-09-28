@@ -53,8 +53,6 @@ public class Test : IAuditable, ISoftDeletable, IHierarchyScoped
     public LensRangeType? LensRangeType { get; set; }
 
     public Guid? PresetCatalogueId { get; set; }
-    public Guid? LensOptionLeftId { get; set; }
-    public Guid? LensOptionRightId { get; set; }
 
     public decimal? SphereLeft { get; set; }
     public decimal? CylinderLeft { get; set; }
