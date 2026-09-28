@@ -89,7 +89,8 @@ public class InviteAtomicityTests(PostgresContainerFixture postgres)
         Assert.Equal(InviteeName, user.FullName);
         Assert.Null(user.PasswordHash);
 
-        // The first location listed becomes the primary, denormalized onto the account.
+        // No assignment is special, but until ticket 08 removes the old active-org columns they
+        // are still filled — from the most specific org, whatever order the orgs came in.
         Assert.Equal(OrganisationSeedConfiguration.KenyaRetailPointId, user.OrgNodeId);
         Assert.Equal(OrganisationSeedConfiguration.KenyaRetailPointPath, user.HierarchyPath);
         Assert.Equal(OrganisationLevel.RetailPoint, user.OrgLevel);
