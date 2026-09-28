@@ -1,5 +1,9 @@
 # Lens sets are data-driven; a lens range is "a lens set" or "Custom prescription"
 
+> Refined by [ADR-0007](0007-a-lens-power-is-a-value.md) (2026-09-28). What is *inside* a lens set
+> changed: an entry is now a lens power with a typed label, not a "Lens strength" reference item.
+> Everything below about lens sets being data-driven still stands.
+
 The Field App used to offer exactly three lens ranges: 6-Lens Set, 9-Lens Set and Custom
 prescription. The original lens powers came from two separate lists, one for six lenses and one for
 nine. Each preset catalogue carried a `Kind`, and at most one catalogue system-wide could hold each
