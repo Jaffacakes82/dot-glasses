@@ -18,6 +18,14 @@
     {
         <p style="font-size:13px; color:#666;">Loading your assigned locations…</p>
     }
+    else if (_orgs.Count == 0)
+    {
+        @* Reached directly (not via Home's redirect) with nothing eligible — e.g. connectivity
+           failed and this device has no cached copy. Distinguish that from a genuine zero, which
+           Home already sends to the dedicated "can't record here" screen rather than here. *@
+        <p style="font-size:13px; color:#c00;">@(LocationClient.LoadError ?? "No locations assigned yet — contact your admin.")</p>
+        <button class="dg-btn dg-btn-ghost" type="button" @onclick="RetryAsync">Retry</button>
+    }
     else
     {
         @foreach (var org in _orgs)
@@ -41,6 +49,28 @@
     {
         _orgs = await LocationClient.GetMyOrgsAsync();
         _loading = false;
+
+        // Defensive, not the common path: sign-in already auto-picks a single eligible location
+        // server-side (AuthController.Login), so this page is normally only reached with several.
+        // It can still happen — e.g. a location lost mid-session leaves exactly one remaining, or
+        // this page is reached directly — and a technician with one true answer shouldn't be asked
+        // a question (story 25).
+        if (_orgs.Count == 1)
+        {
+            await SelectOutletAsync(_orgs[0].OrgNodeId);
+        }
+    }
+
+    private async Task RetryAsync()
+    {
+        _loading = true;
+        _orgs = await LocationClient.GetMyOrgsAsync();
+        _loading = false;
+
+        if (_orgs.Count == 1)
+        {
+            await SelectOutletAsync(_orgs[0].OrgNodeId);
+        }
     }
 
     private async Task SelectOutletAsync(Guid orgNodeId)

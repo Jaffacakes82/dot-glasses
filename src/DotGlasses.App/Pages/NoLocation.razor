@@ -1,0 +1,50 @@
+@page "/no-location"
+@using DotGlasses.App.Auth
+@inject AuthTokenStore TokenStore
+@inject NavigationManager Navigation
+
+<PageTitle>Can't record here</PageTitle>
+
+<div class="dg-screen" style="justify-content:center; align-items:center; text-align:center;">
+    <div style="width:100%; max-width:320px;">
+        <p style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; font-size:18px; margin-bottom:var(--space-3);">
+            You're not set up to record here
+        </p>
+        <p style="color:#555; font-size:14px;">
+            Your account isn't assigned to a retail point, so there's nowhere for the Field App to
+            attribute a record to. Ask your admin to assign you to a retail point, then sign in
+            again.
+        </p>
+
+        @if (_confirmingSignOut)
+        {
+            <p style="font-size:13px; color:#555; margin-top:var(--space-4);">Sign out on this device?</p>
+            <div style="display:flex; gap:8px;">
+                <button class="dg-btn dg-btn-ghost" style="flex:1;" type="button" @onclick="() => _confirmingSignOut = false">Cancel</button>
+                <button class="dg-btn dg-btn-primary" style="flex:1;" type="button" @onclick="SignOutAsync">Sign out</button>
+            </div>
+        }
+        else
+        {
+            <button class="dg-btn dg-btn-primary" style="width:100%; margin-top:var(--space-4);" type="button" @onclick="() => _confirmingSignOut = true">Sign out</button>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _confirmingSignOut;
+
+    /// <summary>
+    /// Unlike Settings' sign-out, this is deliberately not blocked on unsent outbox records: a
+    /// technician who lands here has no eligible location at all, so nothing in the queue could
+    /// ever be sent from this account until an admin restores an assignment — blocking sign-out
+    /// here would just strand them with no way off the screen (story 32). Any genuinely unsent
+    /// records stay queued on the device and are unaffected by signing out (see
+    /// Settings.razor.SignOutAsync's own doc comment).
+    /// </summary>
+    private async Task SignOutAsync()
+    {
+        await TokenStore.ClearAsync();
+        Navigation.NavigateTo("login");
+    }
+}
