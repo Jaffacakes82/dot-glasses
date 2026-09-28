@@ -26,6 +26,16 @@ How to hand the tickets in `issues/` here and in `../lens-power-and-lens-sets/is
   "can't record here" sign-out was given Settings' outbox guard. A09's manual browser checklist
   (in its ticket) still needs a human. **Next:** wave 5 (A10 with B01; `feat/lens-power` cut from
   here), then `/code-review` and Spec A's PR.
+- 2026-09-28 (later): Spec A complete (A10 merged, `9c6a259`). B01 and B02 merged into
+  `feat/lens-power` (`1f6c250`, suite 559). `/code-review` of Spec A run; two fix agents were
+  **stopped mid-work at the usage limit** — their uncommitted edits sit in worktrees
+  `agent-a4b0de2ca26e20def` (branch `feat/multi-org-access-review-server`: suspend/unsuspend
+  atomicity, seeder checked results, one role definition, legacy Lead conversion) and
+  `agent-ab79b4a93c7ab75f3` (branch `feat/multi-org-access-review-app`: outlet picker outbox block,
+  re-ask on lost location, offline state, location on every page, FormErrors `""` regression).
+  **Next:** finish and merge those two, full suite, open Spec A's PR; then B03.
+- 2026-09-28 (later still): both review-fix branches finished and merged; full suite 484 passing.
+  Spec A's PR opened to `main`. B03 in progress on `feat/lens-power`.
 - Follow-ups noted during review, not yet ticketed:
   - The Admin Portal's cookie recheck also runs on static-asset requests (one small query each).
   - Two admins removing a user's last two assignments at once could leave the user with none.

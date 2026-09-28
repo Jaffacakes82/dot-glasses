@@ -85,12 +85,16 @@ public class FormErrors
         {
             // DomainRuleViolationFilter and the recording-location refusal (CLAUDE.md) key a
             // whole-record rejection on "" — e.g. one of the three current-location messages from
-            // ticket 07. That key has no control to attribute to, but it isn't a generic
-            // "unattributable" failure either: every caller that can receive one (ConsultationForm.
-            // SubmitAsync) already surfaces that exact text as its own summary message before
-            // calling Merge, so folding it into Unattributed too printed the same sentence twice —
-            // the second time as ": <message>" with a bare leading colon. Dropped here rather than
-            // shown a second time.
+            // ticket 07. That key has no control to attribute to, but it must still reach every
+            // caller: dropping it here (as a prior version of this method did) left Settings'
+            // change-password Merge path showing nothing at all for a "" rejection, since Settings
+            // has no Unattributed summary UI and skips its own fallback message whenever Errors
+            // came back non-empty. Land it in Unattributed like any other uncontrolled failure —
+            // without the "field: " prefix used below, since an empty field would read as a bare
+            // leading colon. A caller that already surfaces this same text itself before calling
+            // Merge (ConsultationForm.SubmitAsync sets _summaryMessage from the same server
+            // response) is responsible for not showing it twice; see ConsultationForm.SubmitAsync.
+            Unattributed.Add(message);
             return;
         }
 

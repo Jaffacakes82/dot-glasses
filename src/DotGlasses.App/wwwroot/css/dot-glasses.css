@@ -135,6 +135,20 @@ html, body {
     flex: 0 0 20px;
 }
 
+/* -- Persistent location bar (MainLayout) -------------------------------------------------- */
+
+.dg-location-bar {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px 20px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-align: center;
+    background: var(--dot-black);
+    color: var(--dot-beige);
+}
+
 /* -- Action tile ------------------------------------------------------------------------ */
 
 .dg-action-tile {

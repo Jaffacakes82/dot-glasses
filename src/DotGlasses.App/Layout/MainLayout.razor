@@ -1,5 +1,61 @@
 @inherits LayoutComponentBase
+@implements IDisposable
+@using DotGlasses.App.Auth
+@inject AuthTokenStore TokenStore
+@inject NavigationManager Navigation
 
-@* No persistent chrome — per the design mockups, Field App screens are full-bleed and use
-   their own TopStrip/back-button navigation instead of a permanent sidebar/nav bar. *@
+@* Field App screens are otherwise full-bleed and use their own TopStrip/back-button navigation
+   instead of a permanent sidebar/nav bar (per the design mockups) — this layout adds exactly one
+   thing across all of them: a persistent line naming the location records will be attributed to
+   (spec: "The location is always on screen"). Home and the consultation forms already showed it
+   inline, but every other signed-in screen (Leads, Settings, Failed records…) had no such chrome
+   at all. Hidden on the three screens where there either is no current location yet or the
+   technician is actively choosing one (Login/NoLocation/OutletSelect) — showing a location line
+   there would either be blank or state something that isn't actually current yet. *@
+@if (_showLocationBar)
+{
+    <div class="dg-location-bar">Recording at @TokenStore.CurrentLocationName</div>
+}
 @Body
+
+@code {
+    // Route-relative paths (no leading/trailing slash) this bar is hidden on — matches the @page
+    // directives of Login.razor/NoLocation.razor/OutletSelect.razor.
+    private static readonly string[] HiddenOnPaths = ["login", "no-location", "outlet-select"];
+
+    private bool _showLocationBar;
+
+    protected override void OnInitialized()
+    {
+        // AuthTokenStore.InitializeAsync runs before the host starts (Program.cs), so the current
+        // location — if any — is already known by this first render; no async fetch needed here.
+        TokenStore.Changed += OnTokenStoreChanged;
+        Navigation.LocationChanged += OnLocationChanged;
+        Refresh();
+    }
+
+    private void OnTokenStoreChanged()
+    {
+        Refresh();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        Refresh();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void Refresh()
+    {
+        var relativePath = Navigation.ToBaseRelativePath(Navigation.Uri).Trim('/').ToLowerInvariant();
+        var hidden = Array.Exists(HiddenOnPaths, p => relativePath == p || relativePath.StartsWith(p + "/", StringComparison.Ordinal));
+        _showLocationBar = !hidden && TokenStore.CurrentLocationName is not null;
+    }
+
+    public void Dispose()
+    {
+        TokenStore.Changed -= OnTokenStoreChanged;
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+}

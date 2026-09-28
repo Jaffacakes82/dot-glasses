@@ -136,16 +136,45 @@ are the record of *how* things got built; don't restate that here.
 
 - **Data scoping** (which rows a user can see) is a global EF Core query filter on
   `IHierarchyScoped` entities (`OrganisationNode`, `Customer`, `Test`, `Lead`, `Sale`), keyed off
-  `ICurrentUserContext.HierarchyPathPrefix`. It is role-independent:
-  a row is visible if its `HierarchyPath` starts with the caller's own path. Scoping is downward
-  only — your own node and everything beneath it, never above or beside you.
+  `ICurrentUserContext.ScopePaths` — a row is visible if its `HierarchyPath` starts with *any* of
+  them (`patterns.Any(p => EF.Functions.Like(HierarchyPath, p))`, a `LIKE ANY`-style predicate, so
+  a row that matches more than one scope path is still counted once). It is role-independent.
+  Scoping is downward only — your own node(s) and everything beneath them, never above or beside
+  you. **A user's scope is the union of their org assignments** (ADR-0006): being assigned to DGI
+  and to a retail point gives DGI's whole scope, not the retail point's. On the Admin Portal the
+  scope is the caller's assignment paths, nested ones collapsed out
+  (`HierarchyPath.Outermost`); on the Field App it is the current location alone (see below), so
+  the Leads list, the conversion Lead match, reference data and lens-set availability come out
+  location-scoped with no extra code. `ScopePaths` is read from the database per request and
+  fails closed — no scope paths means no rows, never "everything."
   `ReferenceDataItem`/`PresetCatalogue`/`LensOption`/`LensStrengthCoatingOption` are **not**
   hierarchy-scoped — they're a single global library, visible to every authenticated user.
   `ApplicationUser` is an Identity type, outside the automatic filter entirely — any screen
-  listing users (User Directory) applies the same prefix rule manually in code.
+  listing users (User Directory) applies the same scope-paths rule manually in code, matched
+  against each user's *assignment* paths rather than the user row itself: a user is listed if
+  *any* one of their assignments is in scope.
 - **RBAC** (what a user can do with rows they can see) is separate, policy-based
   `IAuthorizationHandler`/`[Authorize(Policy = ...)]` — role-dependent, never touches the
   query filter.
+- **There is no "primary" or "active" org.** `ApplicationUser` carries no org column and the
+  sign-in cookie/JWT carry no scope or level claim (the role claim Identity's default factory adds
+  is never read for access) — a user's whole access is `UserAccess`
+  (`ScopePaths`, `HighestLevel`, `Role`, `IsSuspended`), loaded from the database by
+  `IUserAccessLoader` and memoised in `HttpContext.Items` for the request (ADR-0006). Claims carry
+  only identity, plus, on the Field App, the current location id. This is what makes access
+  **instant**: a removed assignment, a changed role or a suspension bites on the user's very next
+  request rather than waiting on the cookie's security-stamp refresh or the JWT's lifetime. A user
+  always keeps at least one assignment — removing the last one is refused
+  (`DomainRuleViolationException`, "suspend them instead"); suspension is the only way to remove
+  all access.
+- **The Field App's current location** (`ICurrentUserContext.CurrentLocation`, a
+  `CurrentLocationCheck`) is re-validated from the database on every request too, never trusted
+  from the token alone: it must still be a direct assignment, Retail Point level, and active. An
+  invalid location doesn't fail authentication — it narrows `ScopePaths` to nothing and is what
+  the Test/Lead/Sale create endpoints refuse against, each with a reason
+  (`CurrentLocationCheck.RefusalMessage`) a technician can act on. A broad Admin Portal scope
+  never widens where someone can record — recording is an explicit per-retail-point assignment,
+  not a side effect of seniority.
 - **Resolving an *ancestor's* name/level** (e.g. "which country is this outlet in?") always needs
   `IUnscopedReportQueryService` — the sanctioned way to look outside a caller's hierarchy scope —
   never a plain scoped query, even for `OrganisationNode` itself: a plain scoped query against
@@ -220,15 +249,21 @@ functionally distinct from Admin anywhere).
 | `PresetCatalogue.EditInScope` | `PresetCatalogue.Manage`, resource-based (lens set's *owning* org at/below caller) | Editing a lens set: name/description, lens powers, retire/reactivate |
 | `PresetCatalogue.AssignInScope` | `PresetCatalogue.Manage`, resource-based (target org at/below caller) | Assigning/unassigning any active lens set |
 | `CustomOrders.View` | Any role, Country level+ | Custom Orders screen + its advance-status action |
-| `Organisations.ManageInScope` | Admin, resource-based (target org at/below caller) | Every Organisations write action |
-| `Users.ManageInScope` | Admin, resource-based (target user at/below caller) | Every User Directory write action |
+| `Organisations.ManageInScope` | Admin, resource-based (target org at/below any of the caller's scope paths) | Every Organisations write action |
+| `Users.ManageInScope` | Admin, resource-based (**every one** of the target user's assignments at/below any of the caller's scope paths) | Every User Directory write action |
 
-Backed by `OrgLevelRequirement` (no DB round trip — reads `ICurrentUserContext.OrgLevel`,
-denormalized onto `ApplicationUser.OrgLevel`, stamped as a JWT/cookie claim at sign-in) and
-`HierarchyDescendantRequirement` (resource-based subtree check, for a controller acting on a
-specific target user/org). Dashboard, Organisations, Event History and User Directory carry only
-`[Authorize]` — any authenticated user reaches them; what they see is narrowed by data scoping,
-not by policy.
+A screen or policy gated by level opens on the user's **highest assigned level** — a DGI admin
+who also holds a retail-point assignment is still a DGI admin; a lower assignment never narrows
+what a higher one already grants (ADR-0006). Backed by `OrgLevelRequirement` (reads
+`ICurrentUserContext.HighestLevel`/`Role`, looked up from the database and memoised per request —
+never from a claim) and `HierarchyDescendantRequirement` (resource-based: the target path sits
+under *any* of `ScopePaths`). `Users.ManageInScope` is stricter than the per-org checks on
+purpose — seeing a user in the directory needs only one assignment in scope, but suspending them,
+resetting their password or changing their role acts on all of their access at once, so it needs
+*every* assignment in scope (`AllAssignmentsInScopeRequirement`); adding or removing a single
+assignment stays on the per-org check. Dashboard, Organisations, Event History and User Directory
+carry only `[Authorize]` — any authenticated user reaches them; what they see is narrowed by data
+scoping, not by policy.
 
 The sidebar (`_Layout.cshtml`) hides Lens Sets/Custom Orders/Reference Data per-request
 via `IAuthorizationService.AuthorizeAsync` against the same three policies their controllers
@@ -259,9 +294,14 @@ across a refresh, with no connectivity. First-ever use still needs one online se
 Known accepted risk, not yet fixed: offline records are attributed to whoever is signed in
 *when they sync*, not when they were created (`TechnicianUserId`/`HierarchyPath` come from the
 JWT on the POST). Client-side mitigation blocks sign-out and location-switch while the outbox is
-non-empty; a token expiring mid-queue still slips through. See `docs/open-issues.md` before
-attempting a fix — the request DTOs deliberately omit these fields, so "accept them from the
-body" is not a safe shortcut.
+non-empty; a token expiring mid-queue still slips through. Records are also refused at sync if
+the token's location is no longer valid — no longer one of the technician's direct assignments,
+deactivated since, or never assigned at all — landing on `/failed-records` with the matching
+`CurrentLocationCheck` message instead of being silently mis-attributed. (This narrows the risk
+without closing it: a queued record can still sync under a different technician at a location
+they're validly assigned to.) See `docs/open-issues.md`
+before attempting a fix — the request DTOs deliberately omit these fields, so "accept them from
+the body" is not a safe shortcut.
 
 ## UI / design system
 

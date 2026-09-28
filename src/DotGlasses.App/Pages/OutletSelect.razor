@@ -1,7 +1,11 @@
 @page "/outlet-select"
 @using DotGlasses.App.Auth
+@using DotGlasses.App.Sync
 @using DotGlasses.Contracts.Auth
+@using DotGlasses.Contracts.Sync
 @inject IUserLocationClient LocationClient
+@inject ISyncQueueStore OutboxStore
+@inject ISyncService SyncService
 @inject NavigationManager Navigation
 
 <PageTitle>Select outlet</PageTitle>
@@ -28,9 +32,23 @@
     }
     else
     {
+        @* Same guard Settings.razor uses on its own location list: switching changes the JWT's
+           HierarchyPath, and a queued-but-unsent record still drains stamped with whatever
+           HierarchyPath is active at sync time, so switching before sending would corrupt those
+           records' outlet. Reached here whether this page opened via Home's redirect (no current
+           location yet) or directly while already holding a valid one — either way, switching
+           away from whatever's active now must wait. *@
+        @if (_pendingCount > 0)
+        {
+            <p style="font-size:12px; color:#c00; margin-bottom:8px;">
+                Send unsent records before switching location — same reason Settings blocks
+                switching too.
+            </p>
+            <button class="dg-btn dg-btn-primary" style="width:100%; margin-bottom:var(--space-3);" type="button" disabled="@_syncing" @onclick="SyncNowAsync">Send now (@_pendingCount)</button>
+        }
         @foreach (var org in _orgs)
         {
-            <button class="dg-outlet-button" type="button" disabled="@_switching" @onclick="() => SelectOutletAsync(org.OrgNodeId)">@org.Name</button>
+            <button class="dg-outlet-button" type="button" disabled="@(_switching || _pendingCount > 0)" @onclick="() => SelectOutletAsync(org.OrgNodeId)">@org.Name</button>
         }
         @if (_error is not null)
         {
@@ -43,10 +61,13 @@
     private IReadOnlyList<AssignedOrgDto> _orgs = [];
     private bool _loading = true;
     private bool _switching;
+    private bool _syncing;
+    private int _pendingCount;
     private string? _error;
 
     protected override async Task OnInitializedAsync()
     {
+        _pendingCount = (await OutboxStore.GetPendingAsync()).Count;
         _orgs = await LocationClient.GetMyOrgsAsync();
         _loading = false;
 
@@ -54,8 +75,9 @@
         // server-side (AuthController.Login), so this page is normally only reached with several.
         // It can still happen — e.g. a location lost mid-session leaves exactly one remaining, or
         // this page is reached directly — and a technician with one true answer shouldn't be asked
-        // a question (story 25).
-        if (_orgs.Count == 1)
+        // a question (story 25). Still subject to the outbox guard below: auto-picking is still a
+        // switch, and switching while records are queued is exactly what's blocked.
+        if (_orgs.Count == 1 && _pendingCount == 0)
         {
             await SelectOutletAsync(_orgs[0].OrgNodeId);
         }
@@ -67,14 +89,41 @@
         _orgs = await LocationClient.GetMyOrgsAsync();
         _loading = false;
 
-        if (_orgs.Count == 1)
+        if (_orgs.Count == 1 && _pendingCount == 0)
         {
             await SelectOutletAsync(_orgs[0].OrgNodeId);
         }
     }
 
+    private async Task SyncNowAsync()
+    {
+        _syncing = true;
+        try
+        {
+            await SyncService.SyncPendingAsync();
+            _pendingCount = (await OutboxStore.GetPendingAsync()).Count;
+
+            if (_pendingCount == 0 && _orgs.Count == 1)
+            {
+                await SelectOutletAsync(_orgs[0].OrgNodeId);
+            }
+        }
+        finally
+        {
+            _syncing = false;
+        }
+    }
+
     private async Task SelectOutletAsync(Guid orgNodeId)
     {
+        if (_pendingCount > 0)
+        {
+            // Belt-and-braces: the buttons that call this are disabled while records are queued,
+            // but OnInitializedAsync/RetryAsync/SyncNowAsync also call this directly for the
+            // single-org auto-pick, so the guard has to live here too, not just on the button.
+            return;
+        }
+
         _switching = true;
         _error = null;
         try
