@@ -202,16 +202,16 @@ public class ConsultationRulesTests
     {
         Id = Guid.NewGuid(),
         LensRangeType = LensRangeType.Custom,
-        CustomSphereLeft = 1.00m,
-        CustomSphereRight = -0.50m,
+        SphereLeft = 1.00m,
+        SphereRight = -0.50m,
     };
 
     private static CreateLeadRequest CustomLead()
     {
         var request = ValidLead();
         request.LensRangeType = LensRangeType.Custom;
-        request.CustomSphereLeft = 1.00m;
-        request.CustomSphereRight = -0.50m;
+        request.SphereLeft = 1.00m;
+        request.SphereRight = -0.50m;
         return request;
     }
 
@@ -225,8 +225,8 @@ public class ConsultationRulesTests
         request.LensOptionLeftId = null;
         request.LensOptionRightId = null;
         request.PresetPupilDistanceBucket = null;
-        request.CustomSphereLeft = 1.00m;
-        request.CustomSphereRight = -0.50m;
+        request.SphereLeft = 1.00m;
+        request.SphereRight = -0.50m;
         request.PupilDistanceMm = 62m;
         return request;
     }
@@ -819,7 +819,7 @@ public class ConsultationRulesTests
         switch (field)
         {
             case "preset": request.PresetCatalogueId = CatalogueA; break;
-            case "custom": request.CustomSphereLeft = 1.00m; break;
+            case "custom": request.SphereLeft = 1.00m; break;
             case "pupilDistance": request.PupilDistanceMm = 62m; break;
             case "bucket": request.PresetPupilDistanceBucket = 2; break;
         }
@@ -836,7 +836,7 @@ public class ConsultationRulesTests
         // Fields belonging to the branch not chosen must be empty — a half-edited form must not
         // reach the database carrying two contradictory prescriptions.
         var request = PresetTest();
-        request.CustomSphereLeft = 1.00m;
+        request.SphereLeft = 1.00m;
 
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
@@ -1116,17 +1116,17 @@ public class ConsultationRulesTests
         var request = CustomTest();
         if (missing == "left")
         {
-            request.CustomSphereLeft = null;
+            request.SphereLeft = null;
         }
         else
         {
-            request.CustomSphereRight = null;
+            request.SphereRight = null;
         }
 
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("LensRangeType", failure.Key);
-        Assert.Equal("CustomSphereLeft and CustomSphereRight are required for a Custom LensRangeType.", failure.Message);
+        Assert.Equal("SphereLeft and SphereRight are required for a Custom LensRangeType.", failure.Message);
     }
 
     [Theory]
@@ -1142,14 +1142,14 @@ public class ConsultationRulesTests
         // Range and increment are one question with one message: a power inside the range but off
         // the quarter-dioptre step is no more grindable than one outside it.
         var request = CustomTest();
-        request.CustomSphereLeft = sphere;
+        request.SphereLeft = sphere;
 
         var result = ConsultationRules.Check(request, Snapshot());
 
         Assert.Equal(accepted, result.IsValid);
         if (!accepted)
         {
-            Assert.Equal("CustomSphereLeft", Assert.Single(result.Failures).Key);
+            Assert.Equal("SphereLeft", Assert.Single(result.Failures).Key);
         }
     }
 
@@ -1157,10 +1157,10 @@ public class ConsultationRulesTests
     public void Custom_OffStepPowerNamesTheRangeAndTheStep()
     {
         var request = CustomTest();
-        request.CustomSphereLeft = 0.30m;
+        request.SphereLeft = 0.30m;
 
         Assert.Equal(
-            "CustomSphereLeft must be between -10 and 10 in 0.25 increments.",
+            "SphereLeft must be between -10 and 10 in 0.25 increments.",
             AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Message);
     }
 
@@ -1175,7 +1175,7 @@ public class ConsultationRulesTests
         // A lens type is set alongside, because an add power is exactly what makes one required —
         // this case is about the power's range, not that requirement.
         var request = CustomTest();
-        request.CustomAddPowerLeft = addPower;
+        request.AddLeft = addPower;
         request.LensTypeRefId = ActiveLensType;
 
         var result = ConsultationRules.Check(request, Snapshot());
@@ -1184,8 +1184,8 @@ public class ConsultationRulesTests
         if (!accepted)
         {
             var failure = Assert.Single(result.Failures);
-            Assert.Equal("CustomAddPowerLeft", failure.Key);
-            Assert.Equal("CustomAddPowerLeft must be between 0 and 3 in 0.25 increments.", failure.Message);
+            Assert.Equal("AddLeft", failure.Key);
+            Assert.Equal("AddLeft must be between 0 and 3 in 0.25 increments.", failure.Message);
         }
     }
 
@@ -1198,7 +1198,7 @@ public class ConsultationRulesTests
     public void Custom_AxisBoundaries(decimal axis, bool accepted)
     {
         var request = CustomTest();
-        request.CustomAxisLeft = axis;
+        request.AxisLeft = axis;
 
         var result = ConsultationRules.Check(request, Snapshot());
 
@@ -1206,8 +1206,8 @@ public class ConsultationRulesTests
         if (!accepted)
         {
             var failure = Assert.Single(result.Failures);
-            Assert.Equal("CustomAxisLeft", failure.Key);
-            Assert.Equal("CustomAxisLeft must be a whole number of degrees between 0 and 180.", failure.Message);
+            Assert.Equal("AxisLeft", failure.Key);
+            Assert.Equal("AxisLeft must be a whole number of degrees between 0 and 180.", failure.Message);
         }
     }
 
@@ -1215,13 +1215,13 @@ public class ConsultationRulesTests
     public void Custom_BothEyesPowersAreCheckedIndependently()
     {
         var request = CustomTest();
-        request.CustomSphereLeft = 0.30m;
-        request.CustomCylinderRight = -20m;
-        request.CustomAxisRight = 200m;
+        request.SphereLeft = 0.30m;
+        request.CylinderRight = -20m;
+        request.AxisRight = 200m;
 
         var result = ConsultationRules.Check(request, Snapshot());
 
-        Assert.Equal(["CustomSphereLeft", "CustomCylinderRight", "CustomAxisRight"], result.Failures.Select(f => f.Key));
+        Assert.Equal(["SphereLeft", "CylinderRight", "AxisRight"], result.Failures.Select(f => f.Key));
     }
 
     // --- Lens range: the lens type ---------------------------------------------------------
@@ -1230,7 +1230,7 @@ public class ConsultationRulesTests
     public void LensType_RequiredOnceAnEyeCarriesTwoDistinctPowers()
     {
         var request = CustomTest();
-        request.CustomAddPowerLeft = 2.00m;
+        request.AddLeft = 2.00m;
 
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
@@ -1242,7 +1242,7 @@ public class ConsultationRulesTests
     public void LensType_TheOtherEyesAddPowerTriggersItToo()
     {
         var request = CustomTest();
-        request.CustomAddPowerRight = 2.00m;
+        request.AddRight = 2.00m;
 
         Assert.Equal("LensTypeRefId", AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Key);
     }
@@ -1274,7 +1274,7 @@ public class ConsultationRulesTests
     public void LensType_RetiredItem_IsRejected()
     {
         var request = CustomTest();
-        request.CustomAddPowerLeft = 2.00m;
+        request.AddLeft = 2.00m;
         request.LensTypeRefId = RetiredLensType;
 
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
@@ -1287,7 +1287,7 @@ public class ConsultationRulesTests
     public void LensType_ItemFromAnotherCategory_IsRejected()
     {
         var request = CustomTest();
-        request.CustomAddPowerLeft = 2.00m;
+        request.AddLeft = 2.00m;
         request.LensTypeRefId = ActiveOccupation;
 
         Assert.Equal("LensTypeRefId", AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Key);
@@ -1297,7 +1297,7 @@ public class ConsultationRulesTests
     public void LensType_OtherWithoutFreeText_IsRejected()
     {
         var request = CustomTest();
-        request.CustomAddPowerLeft = 2.00m;
+        request.AddLeft = 2.00m;
         request.LensTypeRefId = OtherLensType;
 
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
@@ -1310,7 +1310,7 @@ public class ConsultationRulesTests
     public void LensType_OtherWithFreeText_IsAccepted()
     {
         var request = CustomTest();
-        request.CustomAddPowerLeft = 2.00m;
+        request.AddLeft = 2.00m;
         request.LensTypeRefId = OtherLensType;
         request.LensTypeOtherText = "Progressive";
 
@@ -1883,12 +1883,12 @@ public class ConsultationRulesTests
         // range-checks LensRangeType and a Lead never has, though it carries the same enum. Pinned
         // so that harmonising either becomes a deliberate decision rather than an accident.
         var test = CustomTest();
-        test.CustomAddPowerLeft = 1.00m;
+        test.AddLeft = 1.00m;
         test.LensTypeRefId = ActiveLensType;
         test.LensTypeOtherText = new string('a', 201);
 
         var lead = CustomLead();
-        lead.CustomAddPowerLeft = 1.00m;
+        lead.AddLeft = 1.00m;
         lead.LensTypeRefId = ActiveLensType;
         lead.LensTypeOtherText = new string('a', 201);
 

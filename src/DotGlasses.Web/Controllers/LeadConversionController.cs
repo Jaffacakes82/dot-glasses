@@ -180,8 +180,8 @@ public class LeadConversionController(
         {
             answers = answers.WithLens(
                 form.LensRangeType, form.PresetCatalogueId, form.LensOptionLeftId, form.LensOptionRightId,
-                form.CustomSphereLeft, form.CustomCylinderLeft, form.CustomAxisLeft, form.CustomAddPowerLeft,
-                form.CustomSphereRight, form.CustomCylinderRight, form.CustomAxisRight, form.CustomAddPowerRight,
+                form.SphereLeft, form.CylinderLeft, form.AxisLeft, form.AddLeft,
+                form.SphereRight, form.CylinderRight, form.AxisRight, form.AddRight,
                 form.LensTypeRefId, form.LensTypeOtherText,
                 form.PupilDistanceMm, form.PresetPupilDistanceBucket, form.ChildrensFrame);
         }
@@ -238,8 +238,8 @@ public class LeadConversionController(
                 var lensTypeSummary = lead.LensTypeRefId is null
                     ? null
                     : $"; Lens type {referenceData.ResolveLabel(lead.LensTypeRefId, lead.LensTypeOtherText)}";
-                return $"Custom — OD (right) Sphere {lead.CustomSphereRight} / Cyl {lead.CustomCylinderRight} / Axis {lead.CustomAxisRight} / Add {lead.CustomAddPowerRight}; "
-                    + $"OS (left) Sphere {lead.CustomSphereLeft} / Cyl {lead.CustomCylinderLeft} / Axis {lead.CustomAxisLeft} / Add {lead.CustomAddPowerLeft}; "
+                return $"Custom — OD (right) Sphere {lead.SphereRight} / Cyl {lead.CylinderRight} / Axis {lead.AxisRight} / Add {lead.AddRight}; "
+                    + $"OS (left) Sphere {lead.SphereLeft} / Cyl {lead.CylinderLeft} / Axis {lead.AxisLeft} / Add {lead.AddLeft}; "
                     + $"PD {(lead.PupilDistanceMm is { } pd ? $"{pd}mm" : "not recorded")}{lensTypeSummary}";
             default:
                 return null;

@@ -56,14 +56,14 @@ public sealed record SaleAnswers
     public Guid? LensOptionLeftId { get; init; }
     public Guid? LensOptionRightId { get; init; }
 
-    public decimal? CustomSphereLeft { get; init; }
-    public decimal? CustomCylinderLeft { get; init; }
-    public decimal? CustomAxisLeft { get; init; }
-    public decimal? CustomAddPowerLeft { get; init; }
-    public decimal? CustomSphereRight { get; init; }
-    public decimal? CustomCylinderRight { get; init; }
-    public decimal? CustomAxisRight { get; init; }
-    public decimal? CustomAddPowerRight { get; init; }
+    public decimal? SphereLeft { get; init; }
+    public decimal? CylinderLeft { get; init; }
+    public decimal? AxisLeft { get; init; }
+    public decimal? AddLeft { get; init; }
+    public decimal? SphereRight { get; init; }
+    public decimal? CylinderRight { get; init; }
+    public decimal? AxisRight { get; init; }
+    public decimal? AddRight { get; init; }
 
     public Guid? LensTypeRefId { get; init; }
     public string? LensTypeOtherText { get; init; }
@@ -114,8 +114,8 @@ public sealed record SaleAnswers
     /// </summary>
     public SaleAnswers WithLens(
         LensRangeType? lensRangeType, Guid? presetCatalogueId, Guid? lensOptionLeftId, Guid? lensOptionRightId,
-        decimal? customSphereLeft, decimal? customCylinderLeft, decimal? customAxisLeft, decimal? customAddPowerLeft,
-        decimal? customSphereRight, decimal? customCylinderRight, decimal? customAxisRight, decimal? customAddPowerRight,
+        decimal? sphereLeft, decimal? cylinderLeft, decimal? axisLeft, decimal? addLeft,
+        decimal? sphereRight, decimal? cylinderRight, decimal? axisRight, decimal? addRight,
         Guid? lensTypeRefId, string? lensTypeOtherText,
         decimal? pupilDistanceMm, int? presetPupilDistanceBucket, bool childrensFrame) =>
         this with
@@ -124,14 +124,14 @@ public sealed record SaleAnswers
             PresetCatalogueId = presetCatalogueId,
             LensOptionLeftId = lensOptionLeftId,
             LensOptionRightId = lensOptionRightId,
-            CustomSphereLeft = customSphereLeft,
-            CustomCylinderLeft = customCylinderLeft,
-            CustomAxisLeft = customAxisLeft,
-            CustomAddPowerLeft = customAddPowerLeft,
-            CustomSphereRight = customSphereRight,
-            CustomCylinderRight = customCylinderRight,
-            CustomAxisRight = customAxisRight,
-            CustomAddPowerRight = customAddPowerRight,
+            SphereLeft = sphereLeft,
+            CylinderLeft = cylinderLeft,
+            AxisLeft = axisLeft,
+            AddLeft = addLeft,
+            SphereRight = sphereRight,
+            CylinderRight = cylinderRight,
+            AxisRight = axisRight,
+            AddRight = addRight,
             LensTypeRefId = lensTypeRefId,
             LensTypeOtherText = lensTypeOtherText,
             PupilDistanceMm = pupilDistanceMm,

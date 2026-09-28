@@ -93,18 +93,18 @@ else if (Model.LensRangeType == LensRangeType.Custom)
     <div style="display:flex; gap:8px;">
         <div class="dg-field" style="flex:1;">
             <label>Sphere — left</label>
-            <select value="@Model.CustomSphereLeft" @onchange="e => Model.CustomSphereLeft = ParseDecimal(e.Value)">
+            <select value="@Model.SphereLeft" @onchange="e => Model.SphereLeft = ParseDecimal(e.Value)">
                 <option value="">Select...</option>
                 @foreach (var v in SphereSteps)
                 {
                     <option value="@v">@FormatPower(v)</option>
                 }
             </select>
-            <FieldError Errors="Errors" For="CustomSphereLeft" />
+            <FieldError Errors="Errors" For="SphereLeft" />
         </div>
         <div class="dg-field" style="flex:1;">
             <label>Cylinder — left</label>
-            <select value="@Model.CustomCylinderLeft" @onchange="e => Model.CustomCylinderLeft = ParseDecimal(e.Value)">
+            <select value="@Model.CylinderLeft" @onchange="e => Model.CylinderLeft = ParseDecimal(e.Value)">
                 <option value="">Select...</option>
                 @foreach (var v in CylinderSteps)
                 {
@@ -112,10 +112,10 @@ else if (Model.LensRangeType == LensRangeType.Custom)
                 }
             </select>
         </div>
-        <div class="dg-field" style="flex:1;"><label>Axis — left</label><input type="number" min="0" max="180" step="1" @bind="Model.CustomAxisLeft" /><FieldError Errors="Errors" For="CustomAxisLeft" /></div>
+        <div class="dg-field" style="flex:1;"><label>Axis — left</label><input type="number" min="0" max="180" step="1" @bind="Model.AxisLeft" /><FieldError Errors="Errors" For="AxisLeft" /></div>
         <div class="dg-field" style="flex:1;">
             <label>Add power — left</label>
-            <select value="@Model.CustomAddPowerLeft" @onchange="e => OnAddPowerChanged(left: true, ParseDecimal(e.Value))">
+            <select value="@Model.AddLeft" @onchange="e => OnAddPowerChanged(left: true, ParseDecimal(e.Value))">
                 <option value="">Select...</option>
                 @foreach (var v in AddPowerSteps)
                 {
@@ -127,18 +127,18 @@ else if (Model.LensRangeType == LensRangeType.Custom)
     <div style="display:flex; gap:8px;">
         <div class="dg-field" style="flex:1;">
             <label>Sphere — right</label>
-            <select value="@Model.CustomSphereRight" @onchange="e => Model.CustomSphereRight = ParseDecimal(e.Value)">
+            <select value="@Model.SphereRight" @onchange="e => Model.SphereRight = ParseDecimal(e.Value)">
                 <option value="">Select...</option>
                 @foreach (var v in SphereSteps)
                 {
                     <option value="@v">@FormatPower(v)</option>
                 }
             </select>
-            <FieldError Errors="Errors" For="CustomSphereRight" />
+            <FieldError Errors="Errors" For="SphereRight" />
         </div>
         <div class="dg-field" style="flex:1;">
             <label>Cylinder — right</label>
-            <select value="@Model.CustomCylinderRight" @onchange="e => Model.CustomCylinderRight = ParseDecimal(e.Value)">
+            <select value="@Model.CylinderRight" @onchange="e => Model.CylinderRight = ParseDecimal(e.Value)">
                 <option value="">Select...</option>
                 @foreach (var v in CylinderSteps)
                 {
@@ -146,10 +146,10 @@ else if (Model.LensRangeType == LensRangeType.Custom)
                 }
             </select>
         </div>
-        <div class="dg-field" style="flex:1;"><label>Axis — right</label><input type="number" min="0" max="180" step="1" @bind="Model.CustomAxisRight" /><FieldError Errors="Errors" For="CustomAxisRight" /></div>
+        <div class="dg-field" style="flex:1;"><label>Axis — right</label><input type="number" min="0" max="180" step="1" @bind="Model.AxisRight" /><FieldError Errors="Errors" For="AxisRight" /></div>
         <div class="dg-field" style="flex:1;">
             <label>Add power — right</label>
-            <select value="@Model.CustomAddPowerRight" @onchange="e => OnAddPowerChanged(left: false, ParseDecimal(e.Value))">
+            <select value="@Model.AddRight" @onchange="e => OnAddPowerChanged(left: false, ParseDecimal(e.Value))">
                 <option value="">Select...</option>
                 @foreach (var v in AddPowerSteps)
                 {
@@ -158,7 +158,7 @@ else if (Model.LensRangeType == LensRangeType.Custom)
             </select>
         </div>
     </div>
-    @if (Model.CustomAddPowerLeft is not null || Model.CustomAddPowerRight is not null)
+    @if (Model.AddLeft is not null || Model.AddRight is not null)
     {
         <ReferenceDataDropdown Label="Lens type" Items="LensTypes"
                                 SelectedId="Model.LensTypeRefId" SelectedIdChanged="v => Model.LensTypeRefId = v"
@@ -234,14 +234,14 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         Model.PresetCatalogueId = null;
         Model.LensOptionLeftId = null;
         Model.LensOptionRightId = null;
-        Model.CustomSphereLeft = null;
-        Model.CustomCylinderLeft = null;
-        Model.CustomAxisLeft = null;
-        Model.CustomAddPowerLeft = null;
-        Model.CustomSphereRight = null;
-        Model.CustomCylinderRight = null;
-        Model.CustomAxisRight = null;
-        Model.CustomAddPowerRight = null;
+        Model.SphereLeft = null;
+        Model.CylinderLeft = null;
+        Model.AxisLeft = null;
+        Model.AddLeft = null;
+        Model.SphereRight = null;
+        Model.CylinderRight = null;
+        Model.AxisRight = null;
+        Model.AddRight = null;
         Model.LensTypeRefId = null;
         Model.LensTypeOtherText = null;
         Model.PupilDistanceMm = null;
@@ -284,14 +284,14 @@ else if (Model.LensRangeType == LensRangeType.Custom)
     {
         if (left)
         {
-            Model.CustomAddPowerLeft = value;
+            Model.AddLeft = value;
         }
         else
         {
-            Model.CustomAddPowerRight = value;
+            Model.AddRight = value;
         }
 
-        if (Model.CustomAddPowerLeft is null && Model.CustomAddPowerRight is null)
+        if (Model.AddLeft is null && Model.AddRight is null)
         {
             Model.LensTypeRefId = null;
             Model.LensTypeOtherText = null;
