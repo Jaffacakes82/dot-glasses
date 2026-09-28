@@ -1,5 +1,12 @@
 # Consultation capture rules live in a shared `DotGlasses.Rules` project
 
+> **Refined by [ADR-0007](0007-a-lens-power-is-a-value.md) (2026-09-28).** The snapshot no longer
+> carries global coating pairings: a pairing belongs to a lens set lens and travels inside that
+> lens, so the snapshot holds the global coating *exclusions* and each lens's own coatings and
+> pairings. `DotGlasses.Rules` also now owns the lens power values and the lens-set lens helpers
+> (`LensPowers`, `LensSets`); the decision below, one project both apps and the server read, is
+> unchanged.
+
 The rules governing what a valid `Test`/`Lead`/`Sale` looks like were written out four times: once
 per entity in `DotGlasses.Web.Validation` (≈990 lines, with two helper methods byte-identical
 across all three validators after normalising the DTO type name), and again in

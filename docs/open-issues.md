@@ -91,6 +91,19 @@ machine" rule.
   code reading, but running the Field App needs the AppHost, Docker and seeded dev secrets, which
   no coding session has attempted. The checklist itself lives in ticket 09's own `## Comments`
   (`.scratch/multi-org-access-and-retail-points/issues/09-field-app-remembers-shows-and-picks-the-location.md`).
+- **The Field App's lens section and coating selector are unverified in a browser.** The lens
+  choice ("Same lens for both eyes", the right eye limited to the left's lens type, the power line,
+  the Custom dropdowns with the axis only under a cylinder, lens type and coating preference as
+  radios) and the coating selector (offered coatings following both lenses, locked pairings, the
+  removal note, seeding from a Lead or a Failed record) build and follow the shared Rules helpers
+  that the tests cover, but the Blazor UI has no test project and no coding session has run it.
+  Each ticket's `## Comments` holds a manual checklist
+  (`.scratch/lens-power-and-lens-sets/issues/09-field-app-lens-choice.md`, `…/10-field-app-coating-choices.md`).
+- **Before go-live: production has no active lens sets until DGI builds them.** The lens-set
+  redesign retired every earlier set and created none, so the Field App offers only *Custom
+  prescription* at every outlet until an admin builds real lens sets on Lens Sets and assigns them.
+  DGI should also review the Coatings & tints list against the online shop's coatings, since each
+  lens is ticked for coatings from that list.
 
 ## Deliberately deferred (not started, not forgotten)
 
@@ -113,8 +126,8 @@ machine" rule.
   conversion screen (Phase 4).
 - **The Consultation Form is missing**, per the original design mockups: the "use test result"
   Test→Sale carry-over (a technician converting a Test directly into a Sale, skipping Lead), and
-  progressive disclosure for a catalogue with >10 lens options (moot today — both seeded catalogues
-  have ≤12).
+  progressive disclosure for a lens set with >10 lenses (moot today — the example lens sets have
+  ≤12 and lenses are chosen from a dropdown).
 
 ## Known accepted risk (won't fix unless it becomes a real problem)
 
@@ -156,21 +169,15 @@ machine" rule.
 
 ## Real, visible interim gaps (the system tells the user, doesn't hide it)
 
-- **12 of the 16 seeded `LensStrength` reference items have zero configured coatings** (only the 4
-  bifocal ones ship pre-configured, → Photochromic). Those ~12 non-bifocal strengths are genuinely
-  unsellable on a preset range until DGI configures at least one coating for each, via Preset
-  Catalogues' coating-availability grid. The Field App correctly shows "no coatings configured"
-  rather than an empty dropdown — this is expected admin follow-up work, not a bug.
 - **`FrameColour`'s seeded "Other" row** is an assumption made while seeding reference data, not
   explicitly confirmed against real DGI usage — the original call named exactly 6 fixed colours. The
   reporter revisited this list on 2026-09-03 (ticket 11 — supplied a product image per colour, and
   renamed two of them) and left "Other" in place without comment, which is weak evidence rather than
   confirmation. Still worth an explicit yes/no next time the Reference Data screen is reviewed.
-- **`ReferenceDataCategory.LensStrength` exists only as a curated label list.** `PresetCatalogue`/
-  `LensOption` build from it as "which items, in what order" — nothing deeper (e.g. a catalogue
-  picking N strengths with a per-strength coating override baked into the catalogue itself, rather
-  than the separate `LensStrengthCoatingOption` join table). Revisit only if a real design need
-  surfaces; don't guess at a richer model speculatively.
+- **A pairing that runs both ways on one lens (A → B and B → A) is allowed by the Add lens
+  dialog**, but the Field App never locks either coating — they'd hold each other ticked forever —
+  so a technician who unticks one is told by the server rule what is missing. Harmless; if it ever
+  confuses anyone, the honest fix is for the dialog to refuse it.
 
 ---
 
