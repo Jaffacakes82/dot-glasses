@@ -40,9 +40,9 @@ public class CreateLeadRequest
     /// <summary>Null if this Lead carries no product preference at all (test results only).</summary>
     public LensRangeType? LensRangeType { get; set; }
 
+    /// <summary>Which lens set, on a LensSet range. The lenses themselves are the per-eye powers
+    /// and the lens type below, for both lens ranges (ADR-0007).</summary>
     public Guid? PresetCatalogueId { get; set; }
-    public Guid? LensOptionLeftId { get; set; }
-    public Guid? LensOptionRightId { get; set; }
 
     public decimal? SphereLeft { get; set; }
     public decimal? CylinderLeft { get; set; }
@@ -53,8 +53,9 @@ public class CreateLeadRequest
     public decimal? AxisRight { get; set; }
     public decimal? AddRight { get; set; }
 
-    /// <summary>Required when either add power is set (two distinct powers on that eye) — see
-    /// ConsultationRules.</summary>
+    /// <summary>One per pair; null means single vision. Required when either add power is set
+    /// (two distinct powers on that eye) — see ConsultationRules. On a lens set it is the chosen
+    /// lenses' own lens type.</summary>
     public Guid? LensTypeRefId { get; set; }
     public string? LensTypeOtherText { get; set; }
 

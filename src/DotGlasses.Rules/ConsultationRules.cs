@@ -3,6 +3,7 @@ using DotGlasses.Contracts.Leads;
 using DotGlasses.Contracts.Sales;
 using DotGlasses.Contracts.Tests;
 using DotGlasses.Rules.LensPowers;
+using DotGlasses.Rules.LensSets;
 using DotGlasses.Rules.ReferenceData;
 
 namespace DotGlasses.Rules;
@@ -43,7 +44,7 @@ public static class ConsultationRules
                 .Concat(Occupation(request.OccupationRefId, request.OccupationOtherText, snapshot))
                 .Concat(Referral(request.ReferredOrTreated, request.ReferralReasonRefId, request.ReferralOtherText, request.ReferralLocationFreeText, request.TreatedInFacility, snapshot))
                 .Concat(LensRange(
-                    request.LensRangeType, request.PresetCatalogueId, request.LensOptionLeftId, request.LensOptionRightId,
+                    request.LensRangeType, request.PresetCatalogueId,
                     request.SphereLeft, request.CylinderLeft, request.AxisLeft, request.AddLeft,
                     request.SphereRight, request.CylinderRight, request.AxisRight, request.AddRight,
                     request.LensTypeRefId, request.LensTypeOtherText,
@@ -51,7 +52,10 @@ public static class ConsultationRules
                     pupilDistanceRequired: false, presetBucketMessageNamesTheBranch: false, snapshot))
                 .Concat(CoatingPreference(
                     request.CoatingPreferenceRefId,
-                    request.LensRangeType, request.PresetCatalogueId, request.LensOptionLeftId, request.LensOptionRightId,
+                    LeftEyesLensSetLens(
+                        request.LensRangeType, request.PresetCatalogueId,
+                        request.SphereLeft, request.CylinderLeft, request.AxisLeft, request.AddLeft,
+                        request.SphereRight, request.LensTypeRefId, snapshot),
                     availabilityBeforeActiveItem: true, snapshot)));
 
     public static RuleResult Check(CreateLeadRequest request, ReferenceDataSnapshot snapshot) =>
@@ -61,7 +65,7 @@ public static class ConsultationRules
                 .Concat(Referral(request.ReferredOrTreated, request.ReferralReasonRefId, request.ReferralOtherText, request.ReferralLocationFreeText, request.TreatedInFacility, snapshot))
                 .Concat(ReasonNotPurchased(request.ReasonNotPurchasedRefId, request.ReasonNotPurchasedOtherText, snapshot))
                 .Concat(LensRange(
-                    request.LensRangeType, request.PresetCatalogueId, request.LensOptionLeftId, request.LensOptionRightId,
+                    request.LensRangeType, request.PresetCatalogueId,
                     request.SphereLeft, request.CylinderLeft, request.AxisLeft, request.AddLeft,
                     request.SphereRight, request.CylinderRight, request.AxisRight, request.AddRight,
                     request.LensTypeRefId, request.LensTypeOtherText,
@@ -69,7 +73,10 @@ public static class ConsultationRules
                     pupilDistanceRequired: false, presetBucketMessageNamesTheBranch: true, snapshot))
                 .Concat(CoatingPreference(
                     request.CoatingPreferenceRefId,
-                    request.LensRangeType, request.PresetCatalogueId, request.LensOptionLeftId, request.LensOptionRightId,
+                    LeftEyesLensSetLens(
+                        request.LensRangeType, request.PresetCatalogueId,
+                        request.SphereLeft, request.CylinderLeft, request.AxisLeft, request.AddLeft,
+                        request.SphereRight, request.LensTypeRefId, snapshot),
                     availabilityBeforeActiveItem: false, snapshot)));
 
     public static RuleResult Check(CreateSaleRequest request, ReferenceDataSnapshot snapshot) =>
@@ -82,7 +89,7 @@ public static class ConsultationRules
                 // LensRangeType is non-nullable on a Sale, so the "not chosen yet" branch below is
                 // unreachable from here — a Sale always names its lens range.
                 .Concat(LensRange(
-                    request.LensRangeType, request.PresetCatalogueId, request.LensOptionLeftId, request.LensOptionRightId,
+                    request.LensRangeType, request.PresetCatalogueId,
                     request.SphereLeft, request.CylinderLeft, request.AxisLeft, request.AddLeft,
                     request.SphereRight, request.CylinderRight, request.AxisRight, request.AddRight,
                     request.LensTypeRefId, request.LensTypeOtherText,
@@ -90,7 +97,11 @@ public static class ConsultationRules
                     pupilDistanceRequired: true, presetBucketMessageNamesTheBranch: true, snapshot))
                 .Concat(CoatingSet(
                     request.CoatingRefIds,
-                    request.LensRangeType, request.PresetCatalogueId, request.LensOptionLeftId, request.LensOptionRightId,
+                    request.LensRangeType,
+                    LeftEyesLensSetLens(
+                        request.LensRangeType, request.PresetCatalogueId,
+                        request.SphereLeft, request.CylinderLeft, request.AxisLeft, request.AddLeft,
+                        request.SphereRight, request.LensTypeRefId, snapshot),
                     snapshot)));
 
     /// <summary>
@@ -292,9 +303,11 @@ public static class ConsultationRules
     /// <summary>
     /// Which lenses this consultation calls for. Three mutually exclusive shapes: not chosen yet
     /// (Test/Lead only — a Sale always names one), a <b>lens set</b> (which one is
-    /// PresetCatalogueId — ADR-0005), or a <b>Custom</b> prescription typed out in full. Whichever is
-    /// chosen, the other shape's fields must be empty — that is what stops a half-edited form from
-    /// being stored as a prescription nobody can grind.
+    /// PresetCatalogueId — ADR-0005), or a <b>Custom</b> prescription typed out in full. Both lens
+    /// ranges record the lenses the same way — each eye's lens power and one lens type (ADR-0007) —
+    /// so what separates them is PresetCatalogueId and the pupil distance's shape: a lens set names
+    /// a set and a bucket, a Custom prescription neither set nor bucket but millimetres. Not chosen
+    /// yet means every lens field is empty.
     ///
     /// Two things genuinely differ between the three requests rather than being copy drift, and
     /// both are the same underlying rule: <paramref name="pupilDistanceRequired"/> — a Sale needs
@@ -312,7 +325,7 @@ public static class ConsultationRules
     /// </summary>
     private static IEnumerable<RuleFailure> LensRange(
         LensRangeType? lensRangeType,
-        Guid? presetCatalogueId, Guid? lensOptionLeftId, Guid? lensOptionRightId,
+        Guid? presetCatalogueId,
         decimal? sphereLeft, decimal? cylinderLeft, decimal? axisLeft, decimal? addLeft,
         decimal? sphereRight, decimal? cylinderRight, decimal? axisRight, decimal? addRight,
         Guid? lensTypeRefId, string? lensTypeOtherText,
@@ -320,15 +333,15 @@ public static class ConsultationRules
         bool pupilDistanceRequired, bool presetBucketMessageNamesTheBranch,
         ReferenceDataSnapshot snapshot)
     {
-        var presetFieldsSet = presetCatalogueId is not null || lensOptionLeftId is not null || lensOptionRightId is not null;
-        var customFieldsSet = sphereLeft is not null || cylinderLeft is not null || axisLeft is not null || addLeft is not null
+        var lensSetChosen = presetCatalogueId is not null;
+        var lensFieldsSet = sphereLeft is not null || cylinderLeft is not null || axisLeft is not null || addLeft is not null
             || sphereRight is not null || cylinderRight is not null || axisRight is not null || addRight is not null
             || lensTypeRefId is not null || lensTypeOtherText is not null;
 
         switch (lensRangeType)
         {
             case null:
-                if (presetFieldsSet || customFieldsSet || pupilDistanceMm is not null || presetPupilDistanceBucket is not null)
+                if (lensSetChosen || lensFieldsSet || pupilDistanceMm is not null || presetPupilDistanceBucket is not null)
                 {
                     yield return new RuleFailure(LensRangeTypeKey, "Lens set and custom lens fields must be empty when LensRangeType is not set.");
                 }
@@ -337,7 +350,10 @@ public static class ConsultationRules
 
             case LensRangeType.LensSet:
                 foreach (var failure in PresetBranch(
-                    presetCatalogueId, lensOptionLeftId, lensOptionRightId, customFieldsSet,
+                    presetCatalogueId,
+                    sphereLeft, cylinderLeft, axisLeft, addLeft,
+                    sphereRight, cylinderRight, axisRight, addRight,
+                    lensTypeRefId,
                     pupilDistanceMm, presetPupilDistanceBucket, childrensFrame,
                     pupilDistanceRequired, presetBucketMessageNamesTheBranch, snapshot))
                 {
@@ -348,7 +364,7 @@ public static class ConsultationRules
 
             case LensRangeType.Custom:
                 foreach (var failure in CustomBranch(
-                    presetFieldsSet,
+                    lensSetChosen,
                     sphereLeft, cylinderLeft, axisLeft, addLeft,
                     sphereRight, cylinderRight, axisRight, addRight,
                     lensTypeRefId, lensTypeOtherText,
@@ -362,38 +378,40 @@ public static class ConsultationRules
     }
 
     /// <summary>
-    /// A range picked off a catalogue. The two lens options and the catalogue have to be
-    /// consistent with each other — an option from a different catalogue is the mistake this
-    /// catches — and the pupil distance is captured as a coarse bucket rather than a millimetre
+    /// A range picked off a lens set. Each eye's lens power, with the pair's one lens type, has to
+    /// be a lens in the chosen set (see <see cref="ChosenLenses"/>) — the record holds no pointer
+    /// to the lens (ADR-0007), so power plus lens type is how the server knows the lens is one DGI
+    /// makes — and the pupil distance is captured as a coarse bucket rather than a millimetre
     /// reading, its ceiling lowered for a children's frame.
     ///
-    /// The missing-ids check reports once and stops: without all three ids there is nothing to
-    /// check the options against, so continuing would report "must belong to PresetCatalogueId"
-    /// about an id the technician never supplied. That short-circuit is also why
-    /// <see cref="CoatingSet"/> and <see cref="CoatingPreference"/> re-test the same three ids —
-    /// they need the left lens option, and must stay silent in exactly the cases this stops in.
+    /// Two short-circuits, each reporting once and stopping: no lens set means nothing to match
+    /// against, and an eye with no power means no lens chosen for it — which is also exactly how
+    /// an old-shape request arrives, naming its lenses by ids the request no longer carries.
+    /// Continuing past either would report unmatched powers or a missing bucket on top of the one
+    /// thing the technician has to do. <see cref="CoatingSet"/> and
+    /// <see cref="CoatingPreference"/> stay silent in exactly these cases (see
+    /// <see cref="LeftEyesLensSetLens"/>).
     /// </summary>
     private static IEnumerable<RuleFailure> PresetBranch(
-        Guid? presetCatalogueId, Guid? lensOptionLeftId, Guid? lensOptionRightId, bool customFieldsSet,
+        Guid? presetCatalogueId,
+        decimal? sphereLeft, decimal? cylinderLeft, decimal? axisLeft, decimal? addLeft,
+        decimal? sphereRight, decimal? cylinderRight, decimal? axisRight, decimal? addRight,
+        Guid? lensTypeRefId,
         decimal? pupilDistanceMm, int? presetPupilDistanceBucket, bool childrensFrame,
         bool pupilDistanceRequired, bool bucketMessageNamesTheBranch, ReferenceDataSnapshot snapshot)
     {
-        if (customFieldsSet)
+        if (presetCatalogueId is not { } catalogueId)
         {
-            yield return new RuleFailure(LensRangeTypeKey, "Custom prescription fields must be empty for a LensSet LensRangeType.");
-        }
-
-        if (presetCatalogueId is not { } catalogueId || lensOptionLeftId is not { } leftId || lensOptionRightId is not { } rightId)
-        {
-            yield return new RuleFailure(PresetCatalogueIdKey, "PresetCatalogueId, LensOptionLeftId and LensOptionRightId are all required for a LensSet LensRangeType.");
+            yield return new RuleFailure(PresetCatalogueIdKey, "PresetCatalogueId is required for a LensSet LensRangeType.");
             yield break;
         }
 
         // Present *and* active, like every other reference: the server's snapshot keeps retired
         // lens sets so historical records still resolve their labels. The device's snapshot only
-        // ever holds active ones, so there a retired set is simply absent and the belongs-to
-        // checks below report it instead.
-        if (snapshot.FindCatalogue(catalogueId) is { } lensSet)
+        // ever holds active ones, so there a retired set is simply absent — it has no lenses to
+        // match, and the per-eye checks below report it instead.
+        var lensSet = snapshot.FindCatalogue(catalogueId);
+        if (lensSet is not null)
         {
             if (!lensSet.IsActive)
             {
@@ -412,14 +430,28 @@ public static class ConsultationRules
             }
         }
 
-        if (!snapshot.LensOptionBelongsToCatalogue(leftId, catalogueId))
+        if (sphereLeft is not { } leftSphere || sphereRight is not { } rightSphere)
         {
-            yield return new RuleFailure(LensOptionLeftIdKey, "LensOptionLeftId must belong to PresetCatalogueId.");
+            if (sphereLeft is null)
+            {
+                yield return new RuleFailure(SphereLeftKey, "Choose a lens for the left eye.");
+            }
+
+            if (sphereRight is null)
+            {
+                yield return new RuleFailure(SphereRightKey, "Choose a lens for the right eye.");
+            }
+
+            yield break;
         }
 
-        if (!snapshot.LensOptionBelongsToCatalogue(rightId, catalogueId))
+        foreach (var failure in ChosenLenses(
+            lensSet?.LensOptions ?? [],
+            leftSphere, cylinderLeft, axisLeft, addLeft,
+            rightSphere, cylinderRight, axisRight, addRight,
+            lensTypeRefId))
         {
-            yield return new RuleFailure(LensOptionRightIdKey, "LensOptionRightId must belong to PresetCatalogueId.");
+            yield return failure;
         }
 
         if (pupilDistanceMm is not null)
@@ -453,6 +485,91 @@ public static class ConsultationRules
     }
 
     /// <summary>
+    /// Whether each eye's lens power, with the pair's one lens type, is a lens in the chosen set —
+    /// asked through <see cref="LensSetLenses.Match"/>, the one definition of "the same lens" the
+    /// Field App and the Admin Portal pre-select with too. Three different things can be wrong,
+    /// and each is said where it can be fixed:
+    /// <list type="bullet">
+    /// <item>An eye whose power is in the set under <em>no</em> lens type chose no lens from this
+    /// set at all — reported against that eye's sphere, the key the lens dropdown renders.</item>
+    /// <item>Both eyes are real lenses but no one lens type names both — a <b>mixed pair</b>
+    /// (a Bifocal on one eye, single vision on the other). A record has one lens type for the pair,
+    /// so this is refused, against the right eye: the Field App limits the right eye to the left
+    /// eye's lens type, so that is the choice to change.</item>
+    /// <item>Both eyes share a lens type, but the request names another — a client that sent the
+    /// wrong lens type for the lenses it chose (null for a bifocal pair, say). Reported against the
+    /// lens type itself.</item>
+    /// </list>
+    /// </summary>
+    private static IEnumerable<RuleFailure> ChosenLenses(
+        IReadOnlyList<LensOptionSnapshot> lenses,
+        decimal sphereLeft, decimal? cylinderLeft, decimal? axisLeft, decimal? addLeft,
+        decimal sphereRight, decimal? cylinderRight, decimal? axisRight, decimal? addRight,
+        Guid? lensTypeRefId)
+    {
+        var lensTypesInTheSet = lenses.Select(lens => lens.LensTypeRefId).Distinct().ToList();
+
+        // The lens types under which this power is a lens in the set — Match asked once per lens
+        // type the set holds, so "which lens is this" is only ever answered one way.
+        List<Guid?> LensTypesOf(decimal sphere, decimal? cylinder, decimal? axis, decimal? add) =>
+            lensTypesInTheSet.Where(lensType => LensSetLenses.Match(lenses, sphere, cylinder, axis, add, lensType) is not null).ToList();
+
+        var leftLensTypes = LensTypesOf(sphereLeft, cylinderLeft, axisLeft, addLeft);
+        var rightLensTypes = LensTypesOf(sphereRight, cylinderRight, axisRight, addRight);
+
+        if (leftLensTypes.Count == 0)
+        {
+            yield return new RuleFailure(SphereLeftKey, "No lens in this lens set has the left eye's lens power — choose a lens.");
+        }
+
+        if (rightLensTypes.Count == 0)
+        {
+            yield return new RuleFailure(SphereRightKey, "No lens in this lens set has the right eye's lens power — choose a lens.");
+        }
+
+        if (leftLensTypes.Count == 0 || rightLensTypes.Count == 0)
+        {
+            yield break;
+        }
+
+        var shared = leftLensTypes.Intersect(rightLensTypes).ToList();
+        if (shared.Count == 0)
+        {
+            yield return new RuleFailure(SphereRightKey, "Both eyes' lenses must be the same lens type — choose a right-eye lens of the left eye's type.");
+        }
+        else if (!shared.Contains(lensTypeRefId))
+        {
+            yield return new RuleFailure(LensTypeRefIdKey, "LensTypeRefId must be the chosen lenses' own lens type.");
+        }
+    }
+
+    /// <summary>
+    /// What the coating rules scope a lens set by: the lens in the chosen set matching the left
+    /// eye's power and the pair's lens type — like-for-like with the left lens id they read before
+    /// ADR-0007 (lens-power ticket 06 widens this to both lenses). <see cref="LeftEyesLens.Applies"/>
+    /// is false in exactly the cases <see cref="PresetBranch"/> short-circuits in (not a lens set,
+    /// no lens set named, an eye with no power), where the coating rules stay silent; a
+    /// <see cref="LeftEyesLens.Lens"/> of null with Applies true is a left eye matching no lens,
+    /// already reported against the eye, so there is no lens to scope availability by.
+    /// </summary>
+    private static LeftEyesLens LeftEyesLensSetLens(
+        LensRangeType? lensRangeType, Guid? presetCatalogueId,
+        decimal? sphereLeft, decimal? cylinderLeft, decimal? axisLeft, decimal? addLeft,
+        decimal? sphereRight, Guid? lensTypeRefId, ReferenceDataSnapshot snapshot)
+    {
+        if (lensRangeType is not LensRangeType.LensSet || presetCatalogueId is null || sphereLeft is null || sphereRight is null)
+        {
+            return new LeftEyesLens(Applies: false, Lens: null);
+        }
+
+        var lenses = snapshot.FindCatalogue(presetCatalogueId)?.LensOptions ?? [];
+        return new LeftEyesLens(Applies: true, LensSetLenses.Match(lenses, sphereLeft, cylinderLeft, axisLeft, addLeft, lensTypeRefId));
+    }
+
+    /// <summary>See <see cref="LeftEyesLensSetLens"/>.</summary>
+    private readonly record struct LeftEyesLens(bool Applies, LensOptionSnapshot? Lens);
+
+    /// <summary>
     /// A prescription typed out in full, with the shop's values (ADR-0007). Both spheres are
     /// required — one eye's prescription is not a prescription. Note that the missing-sphere
     /// failure reports against LensRangeType rather than the sphere fields: the branch as a whole
@@ -463,14 +580,14 @@ public static class ConsultationRules
     /// request's own property names.
     /// </summary>
     private static IEnumerable<RuleFailure> CustomBranch(
-        bool presetFieldsSet,
+        bool lensSetChosen,
         decimal? sphereLeft, decimal? cylinderLeft, decimal? axisLeft, decimal? addLeft,
         decimal? sphereRight, decimal? cylinderRight, decimal? axisRight, decimal? addRight,
         Guid? lensTypeRefId, string? lensTypeOtherText,
         decimal? pupilDistanceMm, int? presetPupilDistanceBucket, bool pupilDistanceRequired,
         ReferenceDataSnapshot snapshot)
     {
-        if (presetFieldsSet)
+        if (lensSetChosen)
         {
             yield return new RuleFailure(LensRangeTypeKey, "Lens set fields must be empty for a Custom LensRangeType.");
         }
@@ -535,55 +652,53 @@ public static class ConsultationRules
     /// <summary>
     /// The Coatings on a <b>Sale</b>'s lens — a set, per <c>CONTEXT.md</c> and ADR-0001, because
     /// one lens can carry more than one at once. Which Coatings are allowed depends on the lens
-    /// branch: a lens set narrows them to those the left lens set lens comes in (its own coatings,
-    /// ADR-0007 — like-for-like with the check this made against the old global grid; ticket 06 of
-    /// the lens-power spec widens it to both lenses and their pairings), while a Custom
-    /// prescription accepts any active Coating. Exclusions apply to both. No pairing is enforced
-    /// here: global pairings were removed with ADR-0007.
+    /// branch: a lens set narrows them to those the left eye's lens set lens comes in (its own
+    /// coatings, ADR-0007 — like-for-like with the check this made against the old global grid;
+    /// ticket 06 of the lens-power spec widens it to both lenses and their pairings), while a
+    /// Custom prescription accepts any active Coating. Exclusions apply to both. No pairing is
+    /// enforced here: global pairings were removed with ADR-0007.
     ///
-    /// The preset arm re-tests all three preset ids because <see cref="PresetBranch"/>
-    /// short-circuits without them, and this rule has to stay silent in exactly the same cases:
-    /// there is no left lens option to scope by, and telling a technician who has not yet picked a
-    /// lens to choose a coating would be noise on top of the real failure. A LensRangeType outside
-    /// the enum reaches neither arm and so says nothing here — the validators' RuleFor.IsInEnum is
-    /// what reports that.
+    /// The lens-set arm stays silent wherever <see cref="PresetBranch"/> short-circuits (see
+    /// <see cref="LeftEyesLensSetLens"/>): there is no left lens to scope by, and telling a
+    /// technician who has not yet picked a lens to choose a coating would be noise on top of the
+    /// real failure. A left eye that names a power but matches no lens in the set has already been
+    /// reported against the eye; the coatings are then still checked for everything that doesn't
+    /// depend on a lens (present, active, not duplicated, not excluded), just not narrowed to a
+    /// lens that isn't there. A LensRangeType outside the enum reaches neither arm and so says
+    /// nothing here — <see cref="Scalars(CreateSaleRequest)"/>' InEnum check is what reports that.
     ///
-    /// <b>A lens with no Coatings at all is reported against the lens</b>, not the set (ticket 11).
-    /// <see cref="ReferenceDataSnapshot.IsCoatingAvailableForLensOption"/> returns false rather
-    /// than throwing in that case, so it used to surface as "every coating must be configured as
-    /// available for the chosen lens option" against CoatingRefIds — advice no choice of coating
-    /// can satisfy, because none is available. The Field App's own pre-submit check keys it to
-    /// LensOptionLeftId with this same sentence. A lens set lens is meant to carry at least one
-    /// coating (ADR-0007), so this is now a guard rather than a common state.
+    /// <b>A lens with no Coatings at all is reported against the lens</b>, not the set (ticket 11)
+    /// — against SphereLeft, the key the left eye's lens dropdown renders. Reported against
+    /// CoatingRefIds it would be advice no choice of coating can satisfy, because none is
+    /// available. A lens set lens is meant to carry at least one coating (ADR-0007), so this is a
+    /// guard rather than a common state.
     /// </summary>
     private static IEnumerable<RuleFailure> CoatingSet(
         IReadOnlyList<Guid> coatingRefIds,
         LensRangeType? lensRangeType,
-        Guid? presetCatalogueId, Guid? lensOptionLeftId, Guid? lensOptionRightId,
+        LeftEyesLens leftEyesLens,
         ReferenceDataSnapshot snapshot)
     {
         switch (lensRangeType)
         {
             case LensRangeType.LensSet:
-                if (presetCatalogueId is null || lensOptionRightId is null || lensOptionLeftId is not { } leftId)
+                if (!leftEyesLens.Applies)
                 {
                     return [];
                 }
 
                 // Asked ahead of the set itself: when the lens offers nothing, the one thing worth
                 // saying is about the lens, and "choose at least one coating" would send the
-                // technician to a picker with no options in it. A left lens id that resolves to
-                // nothing at all is a different failure and PresetBranch has already reported it,
-                // so this stays out of its way and lets the per-coating check below speak.
-                if (snapshot.FindLensOption(leftId) is { CoatingIds.Count: 0 })
+                // technician to a picker with no options in it.
+                if (leftEyesLens.Lens is { CoatingIds.Count: 0 })
                 {
-                    return [new RuleFailure(LensOptionLeftIdKey, "This lens has no coatings configured yet, so it can't be sold on a lens set.")];
+                    return [new RuleFailure(SphereLeftKey, "This lens has no coatings configured yet, so it can't be sold on a lens set.")];
                 }
 
-                return Coatings(coatingRefIds, restrictToLensOptionId: leftId, snapshot);
+                return Coatings(coatingRefIds, restrictToLens: leftEyesLens.Lens, snapshot);
 
             case LensRangeType.Custom:
-                return Coatings(coatingRefIds, restrictToLensOptionId: null, snapshot);
+                return Coatings(coatingRefIds, restrictToLens: null, snapshot);
 
             default:
                 return [];
@@ -592,8 +707,8 @@ public static class ConsultationRules
 
     /// <summary>
     /// The set itself, once the branch has settled what "available" means.
-    /// <paramref name="restrictToLensOptionId"/> narrows to the Coatings that lens set lens comes in
-    /// (lens set); null accepts any active Coating (Custom).
+    /// <paramref name="restrictToLens"/> narrows to the Coatings that lens set lens comes in
+    /// (lens set); null accepts any active Coating (Custom, or a lens set eye matching no lens).
     ///
     /// One failure at a time, deliberately: each check returns rather than accumulating, so a set
     /// that is both duplicated and mutually excluding reports the duplicate first and the
@@ -601,7 +716,7 @@ public static class ConsultationRules
     /// accumulating them would stack several sentences on one control.
     /// </summary>
     private static IEnumerable<RuleFailure> Coatings(
-        IReadOnlyList<Guid> coatingRefIds, Guid? restrictToLensOptionId, ReferenceDataSnapshot snapshot)
+        IReadOnlyList<Guid> coatingRefIds, LensOptionSnapshot? restrictToLens, ReferenceDataSnapshot snapshot)
     {
         if (coatingRefIds.Count == 0)
         {
@@ -620,7 +735,7 @@ public static class ConsultationRules
                 return [new RuleFailure(CoatingRefIdsKey, "CoatingRefIds must only reference existing, active Coating reference-data items.")];
             }
 
-            if (restrictToLensOptionId is { } lensOptionId && !snapshot.IsCoatingAvailableForLensOption(lensOptionId, coatingRefId))
+            if (restrictToLens is { } lens && !lens.CoatingIds.Contains(coatingRefId))
             {
                 return [new RuleFailure(CoatingRefIdsKey, "Every coating must be configured as available for the chosen lens option (see Lens Sets).")];
             }
@@ -652,9 +767,9 @@ public static class ConsultationRules
     /// of them.
     ///
     /// Optional for every LensRangeType, the unset one included — a preference can be recorded
-    /// before a lens has been chosen. Availability is still scoped by the left lens option where a
-    /// lens set names one, with the same three-id short-circuit
-    /// <see cref="CoatingSet"/> uses, and stays keyed to CoatingPreferenceRefId: the
+    /// before a lens has been chosen. Availability is still scoped by the left eye's lens set lens
+    /// where one is matched (<see cref="LeftEyesLensSetLens"/>, the same lens
+    /// <see cref="CoatingSet"/> uses), and stays keyed to CoatingPreferenceRefId: the
     /// no-coatings-configured case is reported against the lens on a Sale's set only, where
     /// choosing a coating is mandatory and so genuinely unsatisfiable.
     ///
@@ -667,8 +782,7 @@ public static class ConsultationRules
     /// </summary>
     private static IEnumerable<RuleFailure> CoatingPreference(
         Guid? coatingPreferenceRefId,
-        LensRangeType? lensRangeType,
-        Guid? presetCatalogueId, Guid? lensOptionLeftId, Guid? lensOptionRightId,
+        LeftEyesLens leftEyesLens,
         bool availabilityBeforeActiveItem, ReferenceDataSnapshot snapshot)
     {
         if (coatingPreferenceRefId is not { } coatingRefId)
@@ -676,10 +790,8 @@ public static class ConsultationRules
             return [];
         }
 
-        var unavailableForTheChosenLens = lensRangeType is LensRangeType.LensSet
-            && presetCatalogueId is not null && lensOptionRightId is not null
-            && lensOptionLeftId is { } leftId
-            && !snapshot.IsCoatingAvailableForLensOption(leftId, coatingRefId);
+        var unavailableForTheChosenLens = leftEyesLens is { Applies: true, Lens: { } lens }
+            && !lens.CoatingIds.Contains(coatingRefId);
 
         IEnumerable<RuleFailure> availability = unavailableForTheChosenLens
             ? [new RuleFailure(CoatingPreferenceRefIdKey, "CoatingPreferenceRefId is not configured as available for the chosen lens option (see Lens Sets).")]
@@ -744,8 +856,6 @@ public static class ConsultationRules
     // property's type, not its name, so the key still reads off CreateTestRequest with the rest.
     private const string LensRangeTypeKey = nameof(CreateTestRequest.LensRangeType);
     private const string PresetCatalogueIdKey = nameof(CreateTestRequest.PresetCatalogueId);
-    private const string LensOptionLeftIdKey = nameof(CreateTestRequest.LensOptionLeftId);
-    private const string LensOptionRightIdKey = nameof(CreateTestRequest.LensOptionRightId);
     private const string SphereLeftKey = nameof(CreateTestRequest.SphereLeft);
     private const string SphereRightKey = nameof(CreateTestRequest.SphereRight);
     private const string CylinderLeftKey = nameof(CreateTestRequest.CylinderLeft);

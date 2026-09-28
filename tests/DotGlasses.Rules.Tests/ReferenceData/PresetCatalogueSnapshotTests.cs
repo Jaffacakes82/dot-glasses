@@ -70,17 +70,17 @@ public class PresetCatalogueSnapshotTests
 
     [Theory]
     [MemberData(nameof(BothFillings))]
-    public void ResolveLensOptionLabel_KnownLens_ReturnsItsTypedLabel(ReferenceDataSnapshot snapshot)
+    public void FindLensOption_KnownLens_CarriesItsTypedLabel(ReferenceDataSnapshot snapshot)
     {
-        Assert.Equal("+2.50", snapshot.ResolveLensOptionLabel(LensPlus250));
+        Assert.Equal("+2.50", snapshot.FindLensOption(LensPlus250)!.Label);
     }
 
     [Theory]
     [MemberData(nameof(BothFillings))]
-    public void ResolveLensOptionLabel_UnknownOrNullLens_FallsBackToTheEmDash(ReferenceDataSnapshot snapshot)
+    public void FindLensOption_UnknownOrNullLens_IsNull(ReferenceDataSnapshot snapshot)
     {
-        Assert.Equal("—", snapshot.ResolveLensOptionLabel(UnknownLens));
-        Assert.Equal("—", snapshot.ResolveLensOptionLabel(null));
+        Assert.Null(snapshot.FindLensOption(UnknownLens));
+        Assert.Null(snapshot.FindLensOption(null));
     }
 
     [Theory]
@@ -140,15 +140,6 @@ public class PresetCatalogueSnapshotTests
 
     [Theory]
     [MemberData(nameof(BothFillings))]
-    public void LensOptionBelongsToCatalogue_OnlyForItsOwnCatalogue(ReferenceDataSnapshot snapshot)
-    {
-        Assert.True(snapshot.LensOptionBelongsToCatalogue(LensPlus250, Catalogue));
-        Assert.False(snapshot.LensOptionBelongsToCatalogue(LensPlus250, OtherCatalogue));
-        Assert.False(snapshot.LensOptionBelongsToCatalogue(UnknownLens, Catalogue));
-    }
-
-    [Theory]
-    [MemberData(nameof(BothFillings))]
     public void FindCatalogue_ResolvesNameAndLensOptions(ReferenceDataSnapshot snapshot)
     {
         var catalogue = snapshot.FindCatalogue(Catalogue);
@@ -185,7 +176,7 @@ public class PresetCatalogueSnapshotTests
         var catalogues = JsonSerializer.Deserialize<List<PresetCatalogueDto>>(cachedBeforeAdr0007, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
         var snapshot = ReferenceDataSnapshot.FromCachedReferenceData([], catalogues, []);
 
-        Assert.Equal("+2.50", snapshot.ResolveLensOptionLabel(LensPlus250));
+        Assert.Equal("+2.50", snapshot.FindLensOption(LensPlus250)!.Label);
         Assert.Empty(snapshot.FindLensOption(LensPlus250)!.CoatingIds);
         Assert.Empty(snapshot.FindLensOption(LensWithNoCoatings)!.Pairings);
         Assert.Empty(snapshot.FindCatalogue(OtherCatalogue)!.LensOptions);

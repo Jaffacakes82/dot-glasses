@@ -43,6 +43,12 @@
             (retired or unassigned since) — choose a lens range below.
         </p>
     }
+    else if (Model.LensNoLongerInSetName is { } lensSetName)
+    {
+        <p style="font-size:13px; color:#c00; margin:8px 0 0;">
+            This lead's lens is no longer in the lens set “@lensSetName” — choose the lens below.
+        </p>
+    }
     else
     {
         <p style="font-size:13px; color:var(--text-muted-2); margin:8px 0 0;">
@@ -79,8 +85,8 @@
                     <input class="form-control" type="number" min="0" max="4" asp-for="Form.PresetPupilDistanceBucket" />
                 </div>
                 <div>
-                    <label>Left lens option</label>
-                    <select class="form-select" asp-for="Form.LensOptionLeftId">
+                    <label>Left lens</label>
+                    <select class="form-select" asp-for="Form.LensLeftId">
                         <option value="">—</option>
                         @foreach (var catalogue in Model.AvailableCatalogues)
                         {
@@ -92,8 +98,8 @@
                     </select>
                 </div>
                 <div>
-                    <label>Right lens option</label>
-                    <select class="form-select" asp-for="Form.LensOptionRightId">
+                    <label>Right lens</label>
+                    <select class="form-select" asp-for="Form.LensRightId">
                         <option value="">—</option>
                         @foreach (var catalogue in Model.AvailableCatalogues)
                         {
@@ -106,6 +112,8 @@
                 </div>
             </div>
 
+            @* On a lens set the chosen lenses' own powers and lens type are recorded, whatever the
+               Custom fields below hold (LeadConversionFormModel.ApplyLensRange). *@
             <p style="font-size:12px; color:var(--text-muted-2); margin:8px 0 4px;">— or, for a Custom range —</p>
             @* The shop's values, from LensPowerValues (ADR-0007) — nothing here lists them itself. *@
             <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8px;">

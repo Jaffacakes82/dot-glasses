@@ -109,7 +109,7 @@ public class LensSetAvailabilityTests(PostgresContainerFixture postgres)
         Assert.NotNull(lensSet);
         Assert.Equal("Seasonal Readers", lensSet.Name);
         Assert.False(lensSet.IsActive);
-        Assert.Equal("+2.50", snapshot.ResolveLensOptionLabel(lensOptionId));
+        Assert.Equal("+2.50", snapshot.FindLensOption(lensOptionId)?.Label);
     }
 
     [Fact]
