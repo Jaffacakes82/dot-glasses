@@ -21,6 +21,11 @@ How to hand the tickets in `issues/` here and in `../lens-power-and-lens-sets/is
 - 2026-09-28: waves 1–2 done. A01–A06 are merged into `feat/multi-org-access` and pushed, and the
   full suite passes (459 tests). Paused here to save usage. **Next:** wave 3 (A07), then A08 and
   A09.
+- 2026-09-28: waves 3–4 done. A07, A08 (migration `RemoveUserActiveOrg`) and A09 are merged and
+  pushed; full suite 472 passing. The transitional active-org rules are gone. On merge, A09's
+  "can't record here" sign-out was given Settings' outbox guard. A09's manual browser checklist
+  (in its ticket) still needs a human. **Next:** wave 5 (A10 with B01; `feat/lens-power` cut from
+  here), then `/code-review` and Spec A's PR.
 - Follow-ups noted during review, not yet ticketed:
   - The Admin Portal's cookie recheck also runs on static-asset requests (one small query each).
   - Two admins removing a user's last two assignments at once could leave the user with none.
