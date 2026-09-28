@@ -1,6 +1,7 @@
 using DotGlasses.Application.Reporting;
 using DotGlasses.Application.Users;
 using DotGlasses.Domain.Common;
+using DotGlasses.Domain.Enums;
 using DotGlasses.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -31,6 +32,26 @@ public class UserOrgAssignmentService(
                 byId.TryGetValue(a.OrgNodeId, out var node) ? node.Name : "Unknown",
                 a.OrgNodeId == user.OrgNodeId))
             .OrderBy(o => o.Name)
+            .ToList();
+    }
+
+    public async Task<IReadOnlyList<OwningOrgOption>> ListDgiOrCountryAssignmentsAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var assignedOrgNodeIds = await dbContext.UserOrgAssignments
+            .Where(a => a.UserId == userId)
+            .Select(a => a.OrgNodeId)
+            .ToListAsync(cancellationToken);
+
+        // Unscoped for the same reason as ListAssignedOrgsAsync — a Dgi assignment in particular
+        // sits outside a narrower caller's own current scope entirely, so a plain scoped query
+        // could silently drop it.
+        var orgNodes = await unscopedReportQueryService.GetOrganisationNodesUnscopedAsync(cancellationToken);
+
+        return orgNodes
+            .Where(o => assignedOrgNodeIds.Contains(o.Id) && o.Level is OrganisationLevel.Dgi or OrganisationLevel.Country)
+            .OrderBy(o => o.Level)
+            .ThenBy(o => o.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(o => new OwningOrgOption(o.Id, o.Name))
             .ToList();
     }
 

@@ -273,6 +273,18 @@
                         <label>Description</label>
                         <input class="form-control" name="Description" />
                     </div>
+                    @if (Model.OwningOrgOptions.Count > 1)
+                    {
+                        <div class="dg-auth-field">
+                            <label>Owning org</label>
+                            <select class="form-control" name="OwningOrgNodeId">
+                                @foreach (var org in Model.OwningOrgOptions)
+                                {
+                                    <option value="@org.Id">@org.Name</option>
+                                }
+                            </select>
+                        </div>
+                    }
                 </div>
                 <div class="modal-footer">
                     <button class="dg-btn dg-btn-ghost" type="button" data-bs-dismiss="modal">Cancel</button>

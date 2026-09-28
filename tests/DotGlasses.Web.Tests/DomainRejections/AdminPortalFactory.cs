@@ -92,6 +92,48 @@ public class AdminPortalFactory : CustomWebApplicationFactory
         return client;
     }
 
+    /// <summary>A client acting as a freshly created Admin with exactly the given org
+    /// assignments (ADR-0006) — for scenarios CreateAdminClient's single-assignment shape can't
+    /// exercise, such as a lens set's owning-org picker offering more than one choice. The first
+    /// assignment doubles as the account's old single "active org", the same convention
+    /// AccessControlFixture.CreateAccountAsync uses.</summary>
+    public (HttpClient Client, Guid UserId) CreateAdminClientWithAssignments(params Guid[] assignedOrgIds)
+    {
+        var userId = Guid.NewGuid();
+
+        Seed(db =>
+        {
+            var activeOrg = db.OrganisationNodes.IgnoreQueryFilters().Single(o => o.Id == assignedOrgIds[0]);
+            var userName = $"admin-{userId:N}@test.local";
+
+            db.Users.Add(new ApplicationUser
+            {
+                Id = userId,
+                UserName = userName,
+                NormalizedUserName = userName.ToUpperInvariant(),
+                Email = userName,
+                NormalizedEmail = userName.ToUpperInvariant(),
+                EmailConfirmed = true,
+                SecurityStamp = Guid.NewGuid().ToString(),
+                OrgNodeId = activeOrg.Id,
+                HierarchyPath = activeOrg.HierarchyPath,
+                OrgLevel = activeOrg.Level,
+            });
+            db.UserRoles.Add(new IdentityUserRole<Guid> { UserId = userId, RoleId = db.Roles.Single(r => r.Name == RoleNames.Admin).Id });
+            db.UserOrgAssignments.AddRange(assignedOrgIds.Select(orgId => new UserOrgAssignment
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                OrgNodeId = orgId,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            }));
+        });
+
+        var client = CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        client.DefaultRequestHeaders.Add(AdminPortalTestAuthenticationHandler.UserIdHeader, userId.ToString());
+        return (client, userId);
+    }
+
     public void Seed(Action<DotGlassesDbContext> seed)
     {
         using var scope = Services.CreateScope();
