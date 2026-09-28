@@ -10,6 +10,7 @@
 @using DotGlasses.Contracts.Sync
 @using DotGlasses.Contracts.Tests
 @using DotGlasses.Rules
+@using DotGlasses.Rules.LensSets
 @using DotGlasses.Rules.ReferenceData
 @using DotGlasses.Rules.Sales
 @using DotGlasses.App.Auth
@@ -499,6 +500,11 @@
                     _referralReasonRefId = test.ReferralReasonRefId;
                     _referralOtherText = test.ReferralOtherText;
                     _referralLocationFreeText = test.ReferralLocationFreeText;
+                    ApplyLensRange(test.LensRangeType, test.PresetCatalogueId,
+                        test.SphereLeft, test.CylinderLeft, test.AxisLeft, test.AddLeft,
+                        test.SphereRight, test.CylinderRight, test.AxisRight, test.AddRight,
+                        test.LensTypeRefId, test.LensTypeOtherText,
+                        test.PupilDistanceMm, test.PresetPupilDistanceBucket, test.ChildrensFrame);
                 }
 
                 break;
