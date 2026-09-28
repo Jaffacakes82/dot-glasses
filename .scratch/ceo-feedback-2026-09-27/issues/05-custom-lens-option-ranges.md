@@ -20,7 +20,8 @@ e-commerce custom-lens configurator offer? The Field App's custom lens should co
 
 ## Answer
 
-Findings: branch `research/custom-lens-option-ranges` (commit `796fc36`, not pushed), file
+Findings: branch `research/custom-lens-option-ranges` (commit `796fc36`, on origin and never to
+be merged), file
 `.scratch/ceo-feedback-2026-09-27/research/custom-lens-option-ranges.md`. Source: the shop's
 prescription configurator on dotglasses.org, its only glasses product.
 
