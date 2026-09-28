@@ -30,7 +30,10 @@
 
 <div style="display:grid; grid-template-columns: 1.4fr 1fr; gap: var(--space-5);">
     <div class="dg-card">
-        @await Html.PartialAsync("_OrgTreeNode", Model.Tree)
+        @foreach (var tree in Model.Trees)
+        {
+            @await Html.PartialAsync("_OrgTreeNode", tree)
+        }
     </div>
     <div class="dg-card">
         <span class="dg-badge" style="background:@DotGlasses.Web.Models.OrgNode.TypeColor[Model.Selected.Type]; color:var(--dot-white);">@Model.Selected.Type</span>
