@@ -46,17 +46,9 @@ public interface IPresetCatalogueAdminService
 
     Task UpdateAsync(Guid id, string name, string? description, CancellationToken cancellationToken = default);
 
-    /// <summary>SortOrder is max+1 within the catalogue — matches ReferenceDataAdminService's
-    /// CreateAsync convention.</summary>
-    Task<PresetCatalogueLensOptionAdminDto> AddLensOptionAsync(Guid catalogueId, Guid lensStrengthRefId, CancellationToken cancellationToken = default);
-
-    /// <summary>True if this exact catalogue/lens-strength pairing already exists — backs
-    /// AddLensOptionRequestValidator's duplicate guard (the Field App's lens-range picker would
-    /// otherwise render the same strength twice).</summary>
-    Task<bool> LensOptionExistsAsync(Guid catalogueId, Guid lensStrengthRefId, CancellationToken cancellationToken = default);
-
-    /// <summary>Hard remove — no historical Test/Lead/Sale can reference a LensOption that was
-    /// never actually chosen on one, so nothing needs preserving (see CLAUDE.md).</summary>
+    /// <summary>Hard remove, taking the lens's coatings and pairings with it (cascade). A record
+    /// keeps its own copy of what was sold (ADR-0007), so nothing needs preserving; a record that
+    /// still names the lens by id just shows it as missing.</summary>
     Task RemoveLensOptionAsync(Guid lensOptionId, CancellationToken cancellationToken = default);
 
     /// <summary>No-op (not an error) if this exact catalogue/org pairing is already assigned —
@@ -71,17 +63,6 @@ public interface IPresetCatalogueAdminService
 
     /// <summary>No-op (not an error) if the pairing doesn't exist.</summary>
     Task UnassignCatalogueFromOrgAsync(Guid catalogueId, Guid orgNodeId, CancellationToken cancellationToken = default);
-
-    /// <summary>The set of Coating reference-data Ids currently configured as available for a
-    /// given LensStrength reference-data item — the many-to-many that reaches the consultation
-    /// rules as LensOptionSnapshot.AvailableCoatingIds, behind
-    /// ReferenceDataSnapshot.IsCoatingAvailableForLensOption.</summary>
-    Task<IReadOnlyList<Guid>> ListAvailableCoatingsAsync(Guid lensStrengthRefId, CancellationToken cancellationToken = default);
-
-    /// <summary>No-op if already available.</summary>
-    Task AddAvailableCoatingAsync(Guid lensStrengthRefId, Guid coatingRefId, CancellationToken cancellationToken = default);
-
-    Task RemoveAvailableCoatingAsync(Guid lensStrengthRefId, Guid coatingRefId, CancellationToken cancellationToken = default);
 }
 
 public record PresetCatalogueAdminDto(
@@ -91,6 +72,25 @@ public record PresetCatalogueAdminDto(
     Guid OwningOrgNodeId,
     IReadOnlyList<PresetCatalogueLensOptionAdminDto> LensOptions);
 
-public record PresetCatalogueLensOptionAdminDto(Guid Id, Guid LensStrengthRefId, string Label, int SortOrder);
+/// <summary>One lens set lens as the Lens Sets screen lists it (ADR-0007): its label and lens
+/// power, its lens type (<see cref="LensTypeLabel"/> null means single vision), and its coatings
+/// and pairings with their labels resolved. Ids are kept alongside the labels for the lens dialog
+/// that edits them.</summary>
+public record PresetCatalogueLensOptionAdminDto(
+    Guid Id,
+    string Label,
+    decimal Sphere,
+    decimal? Cylinder,
+    decimal? Axis,
+    decimal? Add,
+    Guid? LensTypeRefId,
+    string? LensTypeLabel,
+    IReadOnlyList<LensCoatingAdminDto> Coatings,
+    IReadOnlyList<LensCoatingPairingAdminDto> Pairings);
+
+public record LensCoatingAdminDto(Guid CoatingRefId, string Label);
+
+/// <summary>Directional: on this lens, the trigger coating brings the paired one with it.</summary>
+public record LensCoatingPairingAdminDto(Guid TriggerCoatingRefId, string TriggerLabel, Guid PairedCoatingRefId, string PairedLabel);
 
 public record PresetCatalogueAssignmentAdminDto(Guid OrgNodeId, string OrgName);

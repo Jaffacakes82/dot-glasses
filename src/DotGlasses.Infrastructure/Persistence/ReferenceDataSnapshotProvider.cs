@@ -43,18 +43,27 @@ public class ReferenceDataSnapshotProvider(DotGlassesDbContext dbContext, IUnsco
         // name them, and the rules ask "present and active". PresetCatalogue isn't hierarchy-scoped,
         // so IgnoreQueryFilters() lifts only the soft-delete filter here.
         var catalogues = await dbContext.PresetCatalogues.IgnoreQueryFilters().OrderBy(c => c.Name).ToListAsync(cancellationToken);
-        var lensOptions = await dbContext.LensOptions.OrderBy(l => l.SortOrder).ToListAsync(cancellationToken);
-        var coatingAvailability = await dbContext.LensStrengthCoatingOptions.ToListAsync(cancellationToken);
-        var pairings = await dbContext.CoatingPairings.ToListAsync(cancellationToken);
+        // An interim order — single vision first, then by add, then by sphere — only so the list is
+        // deterministic. Lens-power ticket 04 defines the fixed display order in Rules, and every
+        // screen should then take it from there rather than from this ORDER BY.
+        var lensOptions = await dbContext.LensOptions
+            .OrderBy(l => l.Add ?? 0m).ThenBy(l => l.Sphere).ThenBy(l => l.Label)
+            .ToListAsync(cancellationToken);
+        // A lens's coatings, and its pairings by trigger then paired coating, in the Coating list's
+        // own admin-set order (items above are already in it) — so every screen lists them the
+        // way Reference Data does, not in whatever order the rows happened to be written.
+        var listPosition = items.Select((item, index) => (item.Id, index)).ToDictionary(x => x.Id, x => x.index);
+        int PositionOf(Guid refId) => listPosition.GetValueOrDefault(refId, int.MaxValue);
+        var lensCoatings = (await dbContext.LensOptionCoatings.ToListAsync(cancellationToken))
+            .OrderBy(c => PositionOf(c.CoatingRefId))
+            .ToLookup(c => c.LensOptionId, c => c.CoatingRefId);
+        var lensPairings = (await dbContext.LensOptionCoatingPairings.ToListAsync(cancellationToken))
+            .OrderBy(p => PositionOf(p.TriggerCoatingRefId)).ThenBy(p => PositionOf(p.PairedCoatingRefId))
+            .ToLookup(p => p.LensOptionId, p => new CoatingPairingRule(p.TriggerCoatingRefId, p.PairedCoatingRefId));
         var exclusions = await dbContext.CoatingExclusions.ToListAsync(cancellationToken);
         var assignments = await dbContext.PresetCatalogueAssignments.ToListAsync(cancellationToken);
         var orgPaths = (await unscopedReportQueryService.GetOrganisationNodePathsUnscopedAsync(cancellationToken))
             .ToDictionary(x => x.Id, x => x.HierarchyPath);
-
-        var labelsByRefId = items.ToDictionary(x => x.Id, x => x.Label);
-        var availableCoatingsByStrength = coatingAvailability
-            .GroupBy(o => o.LensStrengthRefId)
-            .ToDictionary(g => g.Key, g => (IReadOnlyList<Guid>)g.Select(o => o.CoatingRefId).ToList());
 
         // An assignment to a deactivated org has no path here (the unscoped query leaves deleted
         // orgs out), so it reaches nothing — nobody can be making a record there.
@@ -71,13 +80,11 @@ public class ReferenceDataSnapshotProvider(DotGlassesDbContext dbContext, IUnsco
                 IsActive: !c.IsDeleted,
                 lensOptions.Where(l => l.PresetCatalogueId == c.Id)
                     .Select(l => new LensOptionSnapshot(
-                        l.Id,
-                        labelsByRefId.GetValueOrDefault(l.LensStrengthRefId, ReferenceDataSnapshot.MissingLabel),
-                        l.SortOrder,
-                        availableCoatingsByStrength.GetValueOrDefault(l.LensStrengthRefId, [])))
+                        l.Id, l.Label, l.Sphere, lensCoatings[l.Id].ToList(),
+                        l.Cylinder, l.Axis, l.Add, l.LensTypeRefId, l.LensTypeOtherText,
+                        lensPairings[l.Id].ToList()))
                     .ToList(),
                 AssignedOrgPaths: assignedPathsByCatalogue.GetValueOrDefault(c.Id, []))).ToList(),
-            pairings.Select(p => new CoatingPairingRule(p.TriggerCoatingRefId, p.PairedCoatingRefId)).ToList(),
             exclusions.Select(e => new CoatingExclusionRule(e.CoatingRefIdA, e.CoatingRefIdB)).ToList());
 
         return _snapshot;

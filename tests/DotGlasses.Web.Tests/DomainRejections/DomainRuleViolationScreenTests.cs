@@ -20,20 +20,22 @@ namespace DotGlasses.Web.Tests.DomainRejections;
 public class DomainRuleViolationScreenTests(AdminPortalFactory factory) : IClassFixture<AdminPortalFactory>
 {
     [Fact]
-    public async Task ReferenceData_PairingACoatingWithItself_ShowsTheMessageOnTheReferenceDataScreen()
+    public async Task ReferenceData_ExcludingACoatingWithItself_ShowsTheMessageOnTheReferenceDataScreen()
     {
+        // Was the global pairing's self-pairing refusal until pairings moved onto each lens set
+        // lens (ADR-0007); the exclusion carries the same rejection path.
         var client = factory.CreateAdminClient();
         var token = await AdminPortalFactory.GetAntiforgeryTokenAsync(client, "/ReferenceData");
         var coatingId = Guid.NewGuid().ToString();
 
         var (redirect, html) = await AdminPortalFactory.PostAndFollowAsync(
             client,
-            "/ReferenceData/AddCoatingPairing",
-            AdminPortalFactory.Form(token, ("triggerCoatingRefId", coatingId), ("pairedCoatingRefId", coatingId)),
+            "/ReferenceData/AddCoatingExclusion",
+            AdminPortalFactory.Form(token, ("coatingRefIdA", coatingId), ("coatingRefIdB", coatingId)),
             referer: "/ReferenceData");
 
         Assert.Equal("/ReferenceData", redirect.Headers.Location?.ToString());
-        Assert.Contains("A coating can&#x27;t pair with itself.", html);
+        Assert.Contains("A coating can&#x27;t exclude itself.", html);
     }
 
     [Fact]
