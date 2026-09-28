@@ -11,6 +11,11 @@ public class LoginRequest
 {
     public string UserName { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
+
+    /// <summary>The current location this device remembers, if any. Used when it is still one of
+    /// the user's eligible locations (an active retail point they are directly assigned to);
+    /// otherwise the token carries the only eligible location if there is exactly one, or none.</summary>
+    public Guid? PreferredLocationId { get; set; }
 }
 
 public class LoginRequestValidator : AbstractValidator<LoginRequest>

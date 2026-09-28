@@ -12,7 +12,7 @@ public class UserAccessLoader(DotGlassesDbContext dbContext, IHttpContextAccesso
 {
     public async Task<UserAccess?> LoadForAdminPortalAsync(ClaimsPrincipal principal, CancellationToken cancellationToken = default)
     {
-        if (CurrentUserContext.ReadUserId(principal) is not { } userId || await ReadAsync(userId, cancellationToken) is not { } row)
+        if (CurrentUserContext.ReadUserId(principal) is not { } userId || await ReadAsync(userId, null, cancellationToken) is not { } row)
         {
             return null;
         }
@@ -22,30 +22,50 @@ public class UserAccessLoader(DotGlassesDbContext dbContext, IHttpContextAccesso
 
     public async Task<UserAccess?> LoadForFieldAppAsync(ClaimsPrincipal principal, CancellationToken cancellationToken = default)
     {
-        if (CurrentUserContext.ReadUserId(principal) is not { } userId || await ReadAsync(userId, cancellationToken) is not { } row)
+        var locationId = Guid.TryParse(principal.FindFirstValue(DotGlassesClaimTypes.CurrentLocationId), out var id) ? id : (Guid?)null;
+
+        if (CurrentUserContext.ReadUserId(principal) is not { } userId || await ReadAsync(userId, locationId, cancellationToken) is not { } row)
         {
             return null;
         }
 
-        var tokenOrg = HierarchyPath.TryParse(principal.FindFirstValue(DotGlassesClaimTypes.HierarchyPath), out var path)
-            ? [path]
-            : Array.Empty<HierarchyPath>();
+        var location = CurrentLocationCheck.Of(row.Orgs.Where(o => o.Id == locationId).Select(ToCandidate).FirstOrDefault());
 
         // Level, role and suspension exactly as the Admin Portal reads them; only the scope differs.
-        return Remember(userId, FromAssignments(row) with { ScopePaths = tokenOrg });
+        return Remember(userId, FromAssignments(row) with
+        {
+            ScopePaths = location.ValidLocation is { } valid ? [valid.Path] : [],
+            CurrentLocation = location,
+        });
     }
 
-    /// <summary>One round trip: the account's lockout, its role and the orgs it is assigned to.
-    /// IgnoreQueryFilters is load-bearing twice over. The org nodes must be read unscoped — an
-    /// assignment is exactly what *defines* the scope, so filtering it by the scope would be
-    /// circular — and ignoring the filters means their parameters are never evaluated, so this
-    /// query can run before the request's scope exists. Soft-deleted orgs are excluded by hand in
-    /// its place.
+    public async Task<IReadOnlyList<CurrentLocation>> ListEligibleLocationsAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        if (await ReadAsync(userId, null, cancellationToken) is not { } row)
+        {
+            return [];
+        }
+
+        return row.Orgs
+            .Select(o => CurrentLocationCheck.Of(ToCandidate(o)).ValidLocation)
+            .OfType<CurrentLocation>()
+            .OrderBy(l => l.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>One round trip: the account's lockout, its role, the orgs it is assigned to and —
+    /// assigned or not — the org <paramref name="locationId"/> names, so a location the user has
+    /// lost can still be named when it is refused. IgnoreQueryFilters is load-bearing twice over.
+    /// The org nodes must be read unscoped — an assignment is exactly what *defines* the scope, so
+    /// filtering it by the scope would be circular — and ignoring the filters means their
+    /// parameters are never evaluated, so this query can run before the request's scope exists.
+    /// It also keeps deactivated (soft-deleted) orgs, which the scope leaves out by hand and the
+    /// current-location check reports as deactivated.
     ///
     /// Transitional: the account's old active org (ApplicationUser.OrgNodeId) counts as one of
     /// its assignments, so no one loses access before the migration that removes that column
     /// backfills an assignment row for it.</summary>
-    private async Task<AccessRow?> ReadAsync(Guid userId, CancellationToken cancellationToken) =>
+    private async Task<AccessRow?> ReadAsync(Guid userId, Guid? locationId, CancellationToken cancellationToken) =>
         await dbContext.Users
             .IgnoreQueryFilters()
             .AsNoTracking()
@@ -58,16 +78,23 @@ public class UserAccessLoader(DotGlassesDbContext dbContext, IHttpContextAccesso
                     .OrderBy(name => name)
                     .FirstOrDefault(),
                 dbContext.OrganisationNodes
-                    .Where(o => !o.IsDeleted &&
-                        (o.Id == u.OrgNodeId || dbContext.UserOrgAssignments.Any(a => a.UserId == u.Id && a.OrgNodeId == o.Id)))
-                    .Select(o => new AccessOrg(o.HierarchyPath, o.Level))
+                    .Select(o => new
+                    {
+                        Org = o,
+                        IsAssigned = o.Id == u.OrgNodeId || dbContext.UserOrgAssignments.Any(a => a.UserId == u.Id && a.OrgNodeId == o.Id),
+                    })
+                    .Where(x => x.IsAssigned || x.Org.Id == locationId)
+                    .Select(x => new AccessOrg(x.Org.Id, x.Org.HierarchyPath, x.Org.Name, x.Org.Level, x.Org.IsDeleted, x.IsAssigned))
                     .ToList()))
             .FirstOrDefaultAsync(cancellationToken);
 
     private static UserAccess FromAssignments(AccessRow row) => UserAccess.FromAssignments(
-        row.Orgs.Select(o => (HierarchyPath.Parse(o.HierarchyPath), o.Level)),
+        row.Orgs.Where(o => o.IsAssigned && !o.IsDeleted).Select(o => (HierarchyPath.Parse(o.HierarchyPath), o.Level)),
         row.Role,
         UserSuspension.IsSuspended(row.LockoutEnd));
+
+    private static LocationCandidate ToCandidate(AccessOrg org) =>
+        new(org.Id, HierarchyPath.Parse(org.HierarchyPath), org.Name, org.Level, IsActive: !org.IsDeleted, IsDirectlyAssigned: org.IsAssigned);
 
     private UserAccess Remember(Guid userId, UserAccess access)
     {
@@ -81,5 +108,5 @@ public class UserAccessLoader(DotGlassesDbContext dbContext, IHttpContextAccesso
 
     private sealed record AccessRow(DateTimeOffset? LockoutEnd, string? Role, List<AccessOrg> Orgs);
 
-    private sealed record AccessOrg(string HierarchyPath, OrganisationLevel Level);
+    private sealed record AccessOrg(Guid Id, string HierarchyPath, string Name, OrganisationLevel Level, bool IsDeleted, bool IsAssigned);
 }

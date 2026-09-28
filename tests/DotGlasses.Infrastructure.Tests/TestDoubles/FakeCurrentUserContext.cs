@@ -17,4 +17,5 @@ public class FakeCurrentUserContext : ICurrentUserContext
     public string? Role { get; set; }
     public bool IsSuspended { get; set; }
     public IReadOnlyCollection<string> Roles { get; set; } = [];
+    public CurrentLocationCheck CurrentLocation { get; set; } = CurrentLocationCheck.NoLocation;
 }

@@ -28,6 +28,8 @@ public class CurrentUserContext(IHttpContextAccessor httpContextAccessor) : ICur
 
     public IReadOnlyCollection<string> Roles => Role is { } role ? [role] : [];
 
+    public CurrentLocationCheck CurrentLocation => Access.CurrentLocation;
+
     public Guid? OrgNodeId =>
         Guid.TryParse(Principal?.FindFirstValue(DotGlassesClaimTypes.OrgNodeId), out var id) ? id : null;
 

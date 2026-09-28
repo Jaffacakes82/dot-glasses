@@ -6,9 +6,9 @@ using DotGlasses.Contracts.Auth;
 namespace DotGlasses.Web.Tests.DomainRejections;
 
 /// <summary>
-/// The JSON-API half of DomainRuleViolationFilter (ADR-0003): a rejection from
-/// UserOrgAssignmentService arrives as a 400 ValidationProblemDetails carrying the service's own
-/// copy, without AuthController catching anything.
+/// The JSON-API half of DomainRuleViolationFilter (ADR-0003): a rejection thrown by
+/// AuthController.SwitchOrg arrives as a 400 ValidationProblemDetails carrying its own
+/// copy, without the controller catching anything.
 /// </summary>
 public class DomainRuleViolationApiTests(CustomWebApplicationFactory factory) : IClassFixture<CustomWebApplicationFactory>
 {
@@ -30,7 +30,7 @@ public class DomainRuleViolationApiTests(CustomWebApplicationFactory factory) : 
         var messages = body.RootElement.GetProperty("errors").GetProperty(string.Empty);
 
         Assert.Equal(
-            "The target org is not one of this user's assigned locations.",
+            "That isn't an active retail point you're assigned to.",
             messages[0].GetString());
     }
 }
