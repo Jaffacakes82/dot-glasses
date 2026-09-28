@@ -9,7 +9,7 @@ request. This is the fix for the CEO's "access drops to the lowest org" bug.
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **Model:** Opus 5.5 — the current-user abstraction, the hierarchy filter (ADR-0004) and the
 permission requirements are cross-cutting and security-critical.
@@ -53,3 +53,17 @@ helper that collapses nested scope paths may also be unit-tested in `DotGlasses.
   request". Decision: ADR-0006. Read ADR-0004 before touching the filter.
 - Prior art: `AccessControlPolicyTests`, `HierarchyScopingFilterTests`, `DashboardTopPerformingTests`.
 - Skills: `/implement` (with `/tdd` at the seam above), then `/code-review` against the spec.
+
+## Comments
+
+- 2026-09-28 — Done on `feat/multi-org-access-01-scope-union`. `UserAccess` (scope paths collapsed
+  via `HierarchyPath.Outermost`, highest assigned level, role, suspension) is loaded by
+  `IUserAccessLoader` from the cookie `OnValidatePrincipal` / JWT `OnTokenValidated` events and
+  memoised in `HttpContext.Items` (`RequestUserAccess`), tagged with the user it was loaded for.
+  The filter is `patterns.Any(p => EF.Functions.Like(HierarchyPath, p))` → `LIKE ANY`. Both
+  requirements read role/level/scope from it. Old active org counts as an assignment
+  (transitional); single-org members kept. JWT scope stays the token's org. A token or cookie for
+  a user that no longer exists is refused too (401 / sign-out). Test harness now uses real
+  accounts: `AdminPortalTestAuthenticationHandler` builds claims via the real factory and calls the
+  loader; API tests use `CustomWebApplicationFactory.CreateTechnicianClient`. CLAUDE.md left to
+  ticket 10.
