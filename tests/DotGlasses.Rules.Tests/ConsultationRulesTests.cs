@@ -76,6 +76,14 @@ public class ConsultationRulesTests
     /// <summary>Single vision on CatalogueA in fewer coatings than LensA1 — only ActiveCoating —
     /// so a right eye can narrow nothing the left lens allows.</summary>
     private static readonly Guid LensA5 = Guid.Parse("00000000-0000-0000-0000-000000000f15");
+
+    /// <summary>Single vision +0.50 on CatalogueA in all three of LensA1's coatings, carrying the
+    /// one pairing in this snapshot: Blue Block (SecondCoating) → Photochromic (ActiveCoating).</summary>
+    private static readonly Guid LensA6Paired = Guid.Parse("00000000-0000-0000-0000-000000000f16");
+
+    /// <summary>Single vision +0.25 on CatalogueA in Blue Block and Clear but not Photochromic — so
+    /// next to LensA6Paired, Blue Block is in both lenses but its paired coating isn't.</summary>
+    private static readonly Guid LensA7NoPhotochromic = Guid.Parse("00000000-0000-0000-0000-000000000f17");
     private static readonly Guid LensB1 = Guid.Parse("00000000-0000-0000-0000-000000000f21");
 
     /// <summary>A retired lens set: present in the server's snapshot (historical records still
@@ -139,6 +147,9 @@ public class ConsultationRulesTests
                 new LensOptionSnapshot(LensA3NoCoatings, "+3.50", 3.50m, []),
                 new LensOptionSnapshot(LensA4Bifocal, "Bifocal +1.00 / +2.00", 1.00m, [ActiveCoating], Add: 2.00m, LensTypeRefId: ActiveLensType),
                 new LensOptionSnapshot(LensA5, "+2.00", 2.00m, [ActiveCoating]),
+                new LensOptionSnapshot(LensA6Paired, "+0.50", 0.50m, [ActiveCoating, SecondCoating, ExcludingCoating],
+                    Pairings: [new CoatingPairingRule(SecondCoating, ActiveCoating)]),
+                new LensOptionSnapshot(LensA7NoPhotochromic, "+0.25", 0.25m, [SecondCoating, ExcludingCoating]),
             ], AssignedOrgPaths: catalogueAAssignedTo),
             new PresetCatalogueSnapshot(CatalogueB, "Nine lens set", IsActive: true, [
                 new LensOptionSnapshot(LensB1, "+3.00", 3.00m, [ActiveCoating]),
@@ -1700,30 +1711,150 @@ public class ConsultationRulesTests
         Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
     }
 
-    [Fact]
-    public void CoatingSet_AvailabilityIsScopedByTheLeftLensOnly()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void CoatingSet_OnALensSet_OnlyCoatingsBothLensesComeIn_WhicheverEyeNarrowsThem(bool narrowLensOnTheLeft)
     {
-        // The rule reads the lens matching the left eye and only that one — like-for-like with the
-        // left lens id it used to read (lens-power ticket 06 widens it to both lenses). LensA5 on
-        // the right comes in ActiveCoating only, and does not narrow what the left allows.
+        // One coating set for the pair (ADR-0007), so a coating has to be one both chosen lenses
+        // come in. LensA1 (+1.00) comes in all three; LensA5 (+2.00) in ActiveCoating only.
         var request = ValidSale();
-        request.SphereRight = 2.00m;
+        (request.SphereLeft, request.SphereRight) = narrowLensOnTheLeft ? (2.00m, 1.00m) : (1.00m, 2.00m);
         request.CoatingRefIds = [SecondCoating];
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("CoatingRefIds", failure.Key);
+        Assert.Equal("Every coating must be configured as available for the chosen lens option (see Lens Sets).", failure.Message);
+
+        request.CoatingRefIds = [ActiveCoating];
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void CoatingSet_ATriggerWithoutItsPairedCoating_IsRefused_WhicheverLensCarriesThePairing(bool pairedLensOnTheLeft)
+    {
+        // LensA6Paired pairs Blue Block → Photochromic; LensA1 carries no pairing. Both lenses'
+        // pairings apply to the pair, so which eye the paired lens is on makes no difference.
+        var request = ValidSale();
+        (request.SphereLeft, request.SphereRight) = pairedLensOnTheLeft ? (0.50m, 1.00m) : (1.00m, 0.50m);
+        request.CoatingRefIds = [SecondCoating];
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("CoatingRefIds", failure.Key);
+        Assert.Equal("Photochromic comes with Blue Block on these lenses — add Photochromic, or remove Blue Block.", failure.Message);
+    }
+
+    [Fact]
+    public void CoatingSet_ATriggerWithItsPairedCoating_IsAccepted()
+    {
+        var request = ValidSale();
+        (request.SphereLeft, request.SphereRight) = (0.50m, 1.00m);
+        request.CoatingRefIds = [SecondCoating, ActiveCoating];
 
         Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
     }
 
     [Fact]
-    public void CoatingSet_OnALensSetWhoseLeftEyeMatchesNoLens_ChecksTheCoatingsButNotAgainstALens()
+    public void CoatingSet_APairingIsOneWay_SoThePairedCoatingAlone_IsAccepted()
     {
-        // No lens matched means no lens to scope availability by; the lens-range rule has already
+        // Blue Block needs Photochromic; Photochromic needs nothing (CONTEXT.md: directional).
+        var request = ValidSale();
+        (request.SphereLeft, request.SphereRight) = (0.50m, 1.00m);
+        request.CoatingRefIds = [ActiveCoating];
+
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void CoatingSet_ATriggerWhosePairedCoatingOneLensDoesNotComeIn_IsNotOnOffer()
+    {
+        // Blue Block is in both LensA6Paired and LensA7NoPhotochromic, but on LensA6Paired it
+        // comes with Photochromic, which LensA7NoPhotochromic doesn't come in. No coating set
+        // holding Blue Block could be sold on this pair, so it isn't offered at all
+        // (LensSetLenses.CoatingsFor) — the refusal is the availability one, not a pairing one
+        // asking for a coating the technician can't add.
+        var request = ValidSale();
+        (request.SphereLeft, request.SphereRight) = (0.50m, 0.25m);
+        request.CoatingRefIds = [SecondCoating];
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("CoatingRefIds", failure.Key);
+        Assert.Equal("Every coating must be configured as available for the chosen lens option (see Lens Sets).", failure.Message);
+
+        request.CoatingRefIds = [ExcludingCoating];
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void CoatingSet_TwoLensesWithNoCoatingBothCanBeMadeIn_IsReportedAgainstTheRightEye()
+    {
+        // LensA5 comes in ActiveCoating only, LensA7NoPhotochromic in everything but — nothing is
+        // offered, so no choice of coating could satisfy the set. Like a mixed pair, it is the
+        // right eye's lens to change (the Field App narrows the right eye to the left's).
+        var request = ValidSale();
+        (request.SphereLeft, request.SphereRight) = (2.00m, 0.25m);
+        request.CoatingRefIds = [];
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("SphereRight", failure.Key);
+        Assert.Equal("No coating can be made on both of these lenses, so they can't be sold together on a lens set — choose another lens for the right eye.", failure.Message);
+    }
+
+    [Fact]
+    public void CoatingSet_OnARightLensWithNoCoatingsConfigured_IsReportedAgainstTheRightEye()
+    {
+        var request = ValidSale();
+        request.SphereRight = 3.50m;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("SphereRight", failure.Key);
+        Assert.Equal("This lens has no coatings configured yet, so it can't be sold on a lens set.", failure.Message);
+    }
+
+    [Fact]
+    public void CoatingSet_OnACustomPrescription_NoPairingIsEnforced()
+    {
+        // Pairings belong to lens set lenses (ADR-0007); a custom prescription has none, so Blue
+        // Block alone is fine there even though a lens set lens pairs it with Photochromic.
+        var request = CustomSale();
+        request.CoatingRefIds = [SecondCoating];
+
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
+    }
+
+    [Theory]
+    [InlineData("SphereLeft")]
+    [InlineData("SphereRight")]
+    public void CoatingSet_OnALensSetWhereAnEyeMatchesNoLens_ChecksTheCoatingsButNotAgainstTheLenses(string unmatchedEye)
+    {
+        // No pair of lenses means nothing to scope availability by; the lens-range rule has already
         // said so against the eye. The coatings are still checked for what doesn't depend on a
         // lens — an unavailable-but-real coating passes here, a retired one would not.
         var request = ValidSale();
-        request.SphereLeft = 3.00m;
+        if (unmatchedEye == "SphereLeft")
+        {
+            request.SphereLeft = 3.00m;
+        }
+        else
+        {
+            request.SphereRight = 3.00m;
+        }
+
         request.CoatingRefIds = [UnavailableCoating];
 
-        Assert.Equal(["SphereLeft"], ConsultationRules.Check(request, Snapshot()).Failures.Select(f => f.Key));
+        Assert.Equal([unmatchedEye], ConsultationRules.Check(request, Snapshot()).Failures.Select(f => f.Key));
+
+        request.CoatingRefIds = [RetiredCoating];
+        Assert.Equal(
+            new[] { unmatchedEye, "CoatingRefIds" }.Order(),
+            ConsultationRules.Check(request, Snapshot()).Failures.Select(f => f.Key).Order());
     }
 
     [Fact]
@@ -1897,6 +2028,56 @@ public class ConsultationRulesTests
 
         Assert.Equal("CoatingPreferenceRefId", failure.Key);
         Assert.Equal("CoatingPreferenceRefId is not configured as available for the chosen lens option (see Lens Sets).", failure.Message);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void CoatingPreference_OnALensSet_MustBeOneBothLensesComeIn(bool narrowLensOnTheLeft)
+    {
+        // Limited to the same list a Sale's coating set is (ADR-0007), so the Sale a Lead later
+        // converts into can honour it. LensA5 (+2.00) comes in ActiveCoating only.
+        var (left, right) = narrowLensOnTheLeft ? (2.00m, 1.00m) : (1.00m, 2.00m);
+        var test = PresetTest();
+        (test.SphereLeft, test.SphereRight) = (left, right);
+        test.CoatingPreferenceRefId = SecondCoating;
+        var lead = PresetLead();
+        (lead.SphereLeft, lead.SphereRight) = (left, right);
+        lead.CoatingPreferenceRefId = SecondCoating;
+
+        foreach (var result in new[] { ConsultationRules.Check(test, Snapshot()), ConsultationRules.Check(lead, Snapshot()) })
+        {
+            var failure = AssertSingleFailure(result);
+            Assert.Equal("CoatingPreferenceRefId", failure.Key);
+            Assert.Equal("CoatingPreferenceRefId is not configured as available for the chosen lens option (see Lens Sets).", failure.Message);
+        }
+
+        test.CoatingPreferenceRefId = ActiveCoating;
+        Assert.True(ConsultationRules.Check(test, Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void CoatingPreference_ATriggerWhosePairedCoatingOneLensDoesNotComeIn_IsNotOnOffer()
+    {
+        // The same offered list as a Sale's (LensSetLenses.CoatingsFor): Blue Block is in both
+        // lenses but could never be sold on them, so it can't be preferred either.
+        var test = PresetTest();
+        (test.SphereLeft, test.SphereRight) = (0.50m, 0.25m);
+        test.CoatingPreferenceRefId = SecondCoating;
+
+        Assert.Equal("CoatingPreferenceRefId", AssertSingleFailure(ConsultationRules.Check(test, Snapshot())).Key);
+    }
+
+    [Fact]
+    public void CoatingPreference_ATriggerWhosePairedCoatingIsOnOffer_IsAccepted()
+    {
+        // A preference is one coating, not a set, so no pairing is asked of it — the Sale's set
+        // is where Photochromic has to join Blue Block.
+        var test = PresetTest();
+        (test.SphereLeft, test.SphereRight) = (0.50m, 1.00m);
+        test.CoatingPreferenceRefId = SecondCoating;
+
+        Assert.True(ConsultationRules.Check(test, Snapshot()).IsValid);
     }
 
     [Fact]

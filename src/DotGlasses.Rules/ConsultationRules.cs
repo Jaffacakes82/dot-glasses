@@ -52,10 +52,11 @@ public static class ConsultationRules
                     pupilDistanceRequired: false, presetBucketMessageNamesTheBranch: false, snapshot))
                 .Concat(CoatingPreference(
                     request.CoatingPreferenceRefId,
-                    LeftEyesLensSetLens(
+                    LensSetPair(
                         request.LensRangeType, request.PresetCatalogueId,
                         request.SphereLeft, request.CylinderLeft, request.AxisLeft, request.AddLeft,
-                        request.SphereRight, request.LensTypeRefId, snapshot),
+                        request.SphereRight, request.CylinderRight, request.AxisRight, request.AddRight,
+                        request.LensTypeRefId, snapshot),
                     availabilityBeforeActiveItem: true, snapshot)));
 
     public static RuleResult Check(CreateLeadRequest request, ReferenceDataSnapshot snapshot) =>
@@ -73,10 +74,11 @@ public static class ConsultationRules
                     pupilDistanceRequired: false, presetBucketMessageNamesTheBranch: true, snapshot))
                 .Concat(CoatingPreference(
                     request.CoatingPreferenceRefId,
-                    LeftEyesLensSetLens(
+                    LensSetPair(
                         request.LensRangeType, request.PresetCatalogueId,
                         request.SphereLeft, request.CylinderLeft, request.AxisLeft, request.AddLeft,
-                        request.SphereRight, request.LensTypeRefId, snapshot),
+                        request.SphereRight, request.CylinderRight, request.AxisRight, request.AddRight,
+                        request.LensTypeRefId, snapshot),
                     availabilityBeforeActiveItem: false, snapshot)));
 
     public static RuleResult Check(CreateSaleRequest request, ReferenceDataSnapshot snapshot) =>
@@ -98,10 +100,11 @@ public static class ConsultationRules
                 .Concat(CoatingSet(
                     request.CoatingRefIds,
                     request.LensRangeType,
-                    LeftEyesLensSetLens(
+                    LensSetPair(
                         request.LensRangeType, request.PresetCatalogueId,
                         request.SphereLeft, request.CylinderLeft, request.AxisLeft, request.AddLeft,
-                        request.SphereRight, request.LensTypeRefId, snapshot),
+                        request.SphereRight, request.CylinderRight, request.AxisRight, request.AddRight,
+                        request.LensTypeRefId, snapshot),
                     snapshot)));
 
     /// <summary>
@@ -390,7 +393,7 @@ public static class ConsultationRules
     /// Continuing past either would report unmatched powers or a missing bucket on top of the one
     /// thing the technician has to do. <see cref="CoatingSet"/> and
     /// <see cref="CoatingPreference"/> stay silent in exactly these cases (see
-    /// <see cref="LeftEyesLensSetLens"/>).
+    /// <see cref="LensSetPair"/>).
     /// </summary>
     private static IEnumerable<RuleFailure> PresetBranch(
         Guid? presetCatalogueId,
@@ -544,30 +547,41 @@ public static class ConsultationRules
     }
 
     /// <summary>
-    /// What the coating rules scope a lens set by: the lens in the chosen set matching the left
-    /// eye's power and the pair's lens type — like-for-like with the left lens id they read before
-    /// ADR-0007 (lens-power ticket 06 widens this to both lenses). <see cref="LeftEyesLens.Applies"/>
-    /// is false in exactly the cases <see cref="PresetBranch"/> short-circuits in (not a lens set,
-    /// no lens set named, an eye with no power), where the coating rules stay silent; a
-    /// <see cref="LeftEyesLens.Lens"/> of null with Applies true is a left eye matching no lens,
-    /// already reported against the eye, so there is no lens to scope availability by.
+    /// What the coating rules scope a lens set by: the lens in the chosen set matching each eye's
+    /// power and the pair's lens type (<see cref="LensSetLenses.Match"/>, as
+    /// <see cref="ChosenLenses"/> asks it). <see cref="ChosenPair.Applies"/> is false in exactly the
+    /// cases <see cref="PresetBranch"/> short-circuits in (not a lens set, no lens set named, an eye
+    /// with no power), where the coating rules stay silent. With Applies true, an eye whose lens is
+    /// null matched no lens — already reported against that eye (or the lens type) — so there is no
+    /// pair to offer coatings for.
     /// </summary>
-    private static LeftEyesLens LeftEyesLensSetLens(
+    private static ChosenPair LensSetPair(
         LensRangeType? lensRangeType, Guid? presetCatalogueId,
         decimal? sphereLeft, decimal? cylinderLeft, decimal? axisLeft, decimal? addLeft,
-        decimal? sphereRight, Guid? lensTypeRefId, ReferenceDataSnapshot snapshot)
+        decimal? sphereRight, decimal? cylinderRight, decimal? axisRight, decimal? addRight,
+        Guid? lensTypeRefId, ReferenceDataSnapshot snapshot)
     {
         if (lensRangeType is not LensRangeType.LensSet || presetCatalogueId is null || sphereLeft is null || sphereRight is null)
         {
-            return new LeftEyesLens(Applies: false, Lens: null);
+            return new ChosenPair(Applies: false, Left: null, Right: null);
         }
 
         var lenses = snapshot.FindCatalogue(presetCatalogueId)?.LensOptions ?? [];
-        return new LeftEyesLens(Applies: true, LensSetLenses.Match(lenses, sphereLeft, cylinderLeft, axisLeft, addLeft, lensTypeRefId));
+        return new ChosenPair(
+            Applies: true,
+            LensSetLenses.Match(lenses, sphereLeft, cylinderLeft, axisLeft, addLeft, lensTypeRefId),
+            LensSetLenses.Match(lenses, sphereRight, cylinderRight, axisRight, addRight, lensTypeRefId));
     }
 
-    /// <summary>See <see cref="LeftEyesLensSetLens"/>.</summary>
-    private readonly record struct LeftEyesLens(bool Applies, LensOptionSnapshot? Lens);
+    /// <summary>See <see cref="LensSetPair"/>. <see cref="Coatings"/> is
+    /// <see cref="LensSetLenses.CoatingsFor"/> for the two lenses — the one definition of what a
+    /// pair offers and requires, shared with the Field App — or null while either eye has no
+    /// lens.</summary>
+    private readonly record struct ChosenPair(bool Applies, LensOptionSnapshot? Left, LensOptionSnapshot? Right)
+    {
+        public LensPairCoatings? Coatings =>
+            Left is { } left && Right is { } right ? LensSetLenses.CoatingsFor(left, right) : null;
+    }
 
     /// <summary>
     /// A prescription typed out in full, with the shop's values (ADR-0007). Both spheres are
@@ -651,54 +665,73 @@ public static class ConsultationRules
 
     /// <summary>
     /// The Coatings on a <b>Sale</b>'s lens — a set, per <c>CONTEXT.md</c> and ADR-0001, because
-    /// one lens can carry more than one at once. Which Coatings are allowed depends on the lens
-    /// branch: a lens set narrows them to those the left eye's lens set lens comes in (its own
-    /// coatings, ADR-0007 — like-for-like with the check this made against the old global grid;
-    /// ticket 06 of the lens-power spec widens it to both lenses and their pairings), while a
-    /// Custom prescription accepts any active Coating. Exclusions apply to both. No pairing is
-    /// enforced here: global pairings were removed with ADR-0007.
+    /// one lens can carry more than one at once. A record has one coating set for the pair
+    /// (ADR-0007, "Coatings"), and which Coatings it may hold depends on the lens branch:
+    /// <list type="bullet">
+    /// <item><b>A lens set</b> offers only the coatings <em>both</em> chosen lenses come in, and
+    /// <em>both</em> lenses' pairings apply — whichever lens a pairing is on, choosing its trigger
+    /// means choosing its paired coating too. Both come from
+    /// <see cref="LensSetLenses.CoatingsFor"/>, the definition the Field App offers coatings
+    /// from, so the device can't show a coating the server then refuses.</item>
+    /// <item><b>A Custom prescription</b> accepts any active Coating, with no pairings — pairings
+    /// belong to lens set lenses.</item>
+    /// </list>
+    /// Exclusions are global and apply to both, and both need at least one coating.
     ///
     /// The lens-set arm stays silent wherever <see cref="PresetBranch"/> short-circuits (see
-    /// <see cref="LeftEyesLensSetLens"/>): there is no left lens to scope by, and telling a
-    /// technician who has not yet picked a lens to choose a coating would be noise on top of the
-    /// real failure. A left eye that names a power but matches no lens in the set has already been
-    /// reported against the eye; the coatings are then still checked for everything that doesn't
-    /// depend on a lens (present, active, not duplicated, not excluded), just not narrowed to a
-    /// lens that isn't there. A LensRangeType outside the enum reaches neither arm and so says
-    /// nothing here — <see cref="Scalars(CreateSaleRequest)"/>' InEnum check is what reports that.
+    /// <see cref="LensSetPair"/>): there are no lenses to scope by, and telling a technician who has
+    /// not yet picked a lens to choose a coating would be noise on top of the real failure. An eye
+    /// that names a power but matches no lens in the set has already been reported against the
+    /// eye; the coatings are then still checked for everything that doesn't depend on the lenses
+    /// (present, active, not duplicated, not excluded), just not narrowed to a pair that isn't
+    /// there. A LensRangeType outside the enum reaches neither arm and so says nothing here —
+    /// <see cref="Scalars(CreateSaleRequest)"/>' InEnum check is what reports that.
     ///
-    /// <b>A lens with no Coatings at all is reported against the lens</b>, not the set (ticket 11)
-    /// — against SphereLeft, the key the left eye's lens dropdown renders. Reported against
-    /// CoatingRefIds it would be advice no choice of coating can satisfy, because none is
-    /// available. A lens set lens is meant to carry at least one coating (ADR-0007), so this is a
-    /// guard rather than a common state.
+    /// <b>A pair that offers no coating at all is reported against the lenses</b>, not the set
+    /// (ticket 11): reported against CoatingRefIds it would be advice no choice of coating can
+    /// satisfy. A lens with no Coatings of its own is reported against its own eye's sphere, the
+    /// key that eye's lens dropdown renders (a lens set lens is meant to carry at least one,
+    /// ADR-0007, so that is a guard rather than a common state). Two lenses that each come in
+    /// something but share nothing sellable are reported against the right eye, as a mixed pair
+    /// is: the Field App narrows the right eye's choice to the left's, so that is the lens to
+    /// change.
     /// </summary>
     private static IEnumerable<RuleFailure> CoatingSet(
         IReadOnlyList<Guid> coatingRefIds,
         LensRangeType? lensRangeType,
-        LeftEyesLens leftEyesLens,
+        ChosenPair pair,
         ReferenceDataSnapshot snapshot)
     {
         switch (lensRangeType)
         {
             case LensRangeType.LensSet:
-                if (!leftEyesLens.Applies)
+                if (!pair.Applies)
                 {
                     return [];
                 }
 
-                // Asked ahead of the set itself: when the lens offers nothing, the one thing worth
-                // saying is about the lens, and "choose at least one coating" would send the
+                // Asked ahead of the set itself: when the lenses offer nothing, the one thing worth
+                // saying is about the lenses, and "choose at least one coating" would send the
                 // technician to a picker with no options in it.
-                if (leftEyesLens.Lens is { CoatingIds.Count: 0 })
+                var lensesWithNoCoatings = new[] { (Lens: pair.Left, Key: SphereLeftKey), (Lens: pair.Right, Key: SphereRightKey) }
+                    .Where(eye => eye.Lens is { CoatingIds.Count: 0 })
+                    .Select(eye => new RuleFailure(eye.Key, "This lens has no coatings configured yet, so it can't be sold on a lens set."))
+                    .ToList();
+                if (lensesWithNoCoatings.Count > 0)
                 {
-                    return [new RuleFailure(SphereLeftKey, "This lens has no coatings configured yet, so it can't be sold on a lens set.")];
+                    return lensesWithNoCoatings;
                 }
 
-                return Coatings(coatingRefIds, restrictToLens: leftEyesLens.Lens, snapshot);
+                var pairCoatings = pair.Coatings;
+                if (pairCoatings is { Offered.Count: 0 })
+                {
+                    return [new RuleFailure(SphereRightKey, "No coating can be made on both of these lenses, so they can't be sold together on a lens set — choose another lens for the right eye.")];
+                }
+
+                return Coatings(coatingRefIds, pairCoatings, snapshot);
 
             case LensRangeType.Custom:
-                return Coatings(coatingRefIds, restrictToLens: null, snapshot);
+                return Coatings(coatingRefIds, lensSetPair: null, snapshot);
 
             default:
                 return [];
@@ -707,16 +740,21 @@ public static class ConsultationRules
 
     /// <summary>
     /// The set itself, once the branch has settled what "available" means.
-    /// <paramref name="restrictToLens"/> narrows to the Coatings that lens set lens comes in
-    /// (lens set); null accepts any active Coating (Custom, or a lens set eye matching no lens).
+    /// <paramref name="lensSetPair"/> is what a lens set pair offers and requires (lens set); null
+    /// accepts any active Coating and enforces no pairing (Custom, or a lens set eye matching no
+    /// lens).
     ///
     /// One failure at a time, deliberately: each check returns rather than accumulating, so a set
     /// that is both duplicated and mutually excluding reports the duplicate first and the
     /// exclusion only once that is fixed. Every message here reports against CoatingRefIds, so
     /// accumulating them would stack several sentences on one control.
+    ///
+    /// The pairing check comes after availability, so a trigger it names always has its paired
+    /// coating on offer — <see cref="LensSetLenses.CoatingsFor"/> doesn't offer a trigger whose
+    /// paired coating isn't — and "add Photochromic" is always advice the technician can follow.
     /// </summary>
     private static IEnumerable<RuleFailure> Coatings(
-        IReadOnlyList<Guid> coatingRefIds, LensOptionSnapshot? restrictToLens, ReferenceDataSnapshot snapshot)
+        IReadOnlyList<Guid> coatingRefIds, LensPairCoatings? lensSetPair, ReferenceDataSnapshot snapshot)
     {
         if (coatingRefIds.Count == 0)
         {
@@ -735,9 +773,20 @@ public static class ConsultationRules
                 return [new RuleFailure(CoatingRefIdsKey, "CoatingRefIds must only reference existing, active Coating reference-data items.")];
             }
 
-            if (restrictToLens is { } lens && !lens.CoatingIds.Contains(coatingRefId))
+            if (lensSetPair is { } offeredOnThePair && !offeredOnThePair.Offered.Contains(coatingRefId))
             {
                 return [new RuleFailure(CoatingRefIdsKey, "Every coating must be configured as available for the chosen lens option (see Lens Sets).")];
+            }
+        }
+
+        // Directional (CONTEXT.md): the trigger needs its paired coating, never the reverse.
+        foreach (var pairing in lensSetPair?.RequiredPairings ?? [])
+        {
+            if (coatingRefIds.Contains(pairing.TriggerCoatingRefId) && !coatingRefIds.Contains(pairing.PairedCoatingRefId))
+            {
+                var trigger = snapshot.ResolveLabel(pairing.TriggerCoatingRefId);
+                var paired = snapshot.ResolveLabel(pairing.PairedCoatingRefId);
+                return [new RuleFailure(CoatingRefIdsKey, $"{paired} comes with {trigger} on these lenses — add {paired}, or remove {trigger}.")];
             }
         }
 
@@ -767,11 +816,13 @@ public static class ConsultationRules
     /// of them.
     ///
     /// Optional for every LensRangeType, the unset one included — a preference can be recorded
-    /// before a lens has been chosen. Availability is still scoped by the left eye's lens set lens
-    /// where one is matched (<see cref="LeftEyesLensSetLens"/>, the same lens
-    /// <see cref="CoatingSet"/> uses), and stays keyed to CoatingPreferenceRefId: the
-    /// no-coatings-configured case is reported against the lens on a Sale's set only, where
-    /// choosing a coating is mandatory and so genuinely unsatisfiable.
+    /// before a lens has been chosen. On a lens set where both eyes matched a lens it must be one
+    /// the pair offers (<see cref="LensSetLenses.CoatingsFor"/>'s Offered, the same list
+    /// <see cref="CoatingSet"/> holds a Sale to, ADR-0007) so the Sale a Lead converts into can
+    /// honour it. No pairing is asked of it — it is one coating, and the paired coating joins it in
+    /// the Sale's set. The failure stays keyed to CoatingPreferenceRefId even when the pair offers
+    /// nothing: the lens-keyed reports are a Sale's only, where choosing a coating is mandatory and
+    /// so genuinely unsatisfiable, whereas a preference can always be cleared.
     ///
     /// <paramref name="availabilityBeforeActiveItem"/> is <em>not</em> a rule — it is pre-existing
     /// ordering drift, preserved deliberately in the same spirit as
@@ -782,7 +833,7 @@ public static class ConsultationRules
     /// </summary>
     private static IEnumerable<RuleFailure> CoatingPreference(
         Guid? coatingPreferenceRefId,
-        LeftEyesLens leftEyesLens,
+        ChosenPair pair,
         bool availabilityBeforeActiveItem, ReferenceDataSnapshot snapshot)
     {
         if (coatingPreferenceRefId is not { } coatingRefId)
@@ -790,10 +841,11 @@ public static class ConsultationRules
             return [];
         }
 
-        var unavailableForTheChosenLens = leftEyesLens is { Applies: true, Lens: { } lens }
-            && !lens.CoatingIds.Contains(coatingRefId);
+        var unavailableForTheChosenLenses = pair.Applies
+            && pair.Coatings is { } offeredOnThePair
+            && !offeredOnThePair.Offered.Contains(coatingRefId);
 
-        IEnumerable<RuleFailure> availability = unavailableForTheChosenLens
+        IEnumerable<RuleFailure> availability = unavailableForTheChosenLenses
             ? [new RuleFailure(CoatingPreferenceRefIdKey, "CoatingPreferenceRefId is not configured as available for the chosen lens option (see Lens Sets).")]
             : [];
 

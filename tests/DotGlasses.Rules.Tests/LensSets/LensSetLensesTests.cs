@@ -196,6 +196,44 @@ public class LensSetLensesTests
     }
 
     [Fact]
+    public void CoatingsFor_DoesNotOfferATriggerWhosePairedCoatingIsNotOffered_WhicheverLensCarriesThePairing()
+    {
+        // The left lens pairs Blue block → Photochromic; the right comes in Blue block but not
+        // Photochromic. Blue block is in both lenses, but on this pair it could never be sold: the
+        // pairing demands Photochromic and Photochromic isn't offered. So it isn't offered either.
+        var blueBlockNeedsPhotochromic = new CoatingPairingRule(BlueBlock, Photochromic);
+        var paired = Lens("+2.50", 2.50m, coatings: [BlueBlock, Photochromic, Clear], pairings: [blueBlockNeedsPhotochromic]);
+        var noPhotochromic = Lens("+2.75", 2.75m, coatings: [BlueBlock, Clear]);
+
+        Assert.Equal([Clear], LensSetLenses.CoatingsFor(paired, noPhotochromic).Offered);
+        Assert.Equal([Clear], LensSetLenses.CoatingsFor(noPhotochromic, paired).Offered);
+
+        // The pairings themselves are still reported as they are — only the offer narrows.
+        Assert.Equal([blueBlockNeedsPhotochromic], LensSetLenses.CoatingsFor(paired, noPhotochromic).RequiredPairings);
+    }
+
+    [Fact]
+    public void CoatingsFor_KeepsATriggerWhosePairedCoatingIsOffered()
+    {
+        var paired = Lens("+2.50", 2.50m, coatings: [BlueBlock, Photochromic, Clear], pairings: [new CoatingPairingRule(BlueBlock, Photochromic)]);
+        var both = Lens("+2.75", 2.75m, coatings: [BlueBlock, Photochromic]);
+
+        Assert.Equal([BlueBlock, Photochromic], LensSetLenses.CoatingsFor(paired, both).Offered);
+        Assert.Equal([BlueBlock, Photochromic, Clear], LensSetLenses.CoatingsFor(paired, paired).Offered);
+    }
+
+    [Fact]
+    public void CoatingsFor_DropsTriggersUntilNothingElseChanges_WhenPairingsChain()
+    {
+        // Clear → Anti-glare → Photochromic, the two pairings on different lenses. The right lens
+        // has no Photochromic, so Anti-glare can't be sold, so neither can Clear, which needs it.
+        var left = Lens("+2.50", 2.50m, coatings: [Clear, AntiGlare, Photochromic, BlueBlock], pairings: [new CoatingPairingRule(Clear, AntiGlare)]);
+        var right = Lens("+2.75", 2.75m, coatings: [Clear, AntiGlare, BlueBlock], pairings: [new CoatingPairingRule(AntiGlare, Photochromic)]);
+
+        Assert.Equal([BlueBlock], LensSetLenses.CoatingsFor(left, right).Offered);
+    }
+
+    [Fact]
     public void RecordedAs_CopiesEachChosenLenssPowerOntoItsEye()
     {
         var left = Lens("+2.50 astig", 2.50m, cylinder: -0.75m, axis: 90m);
