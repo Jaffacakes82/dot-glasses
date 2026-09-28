@@ -9,6 +9,7 @@ public record CataloguesIndexViewModel(
     IReadOnlyList<(Guid Id, string Label)> ActiveCoatings,
     IReadOnlyDictionary<Guid, IReadOnlyList<Guid>> AvailableCoatingsByLensStrength,
     IReadOnlyList<(Guid Id, string Name)> AssignableOrgs,
+    IReadOnlyList<(Guid Id, string Name)> OwningOrgOptions,
     string? Search);
 
 public record RetiredCatalogueCard(Guid Id, string Name, bool CanReactivate);
@@ -23,6 +24,12 @@ public class CreateCatalogueRequest
 {
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
+
+    /// <summary>The Dgi/Country-level assignment chosen to own the new lens set. Only posted when
+    /// the form showed the field, which happens only when more than one of the caller's own
+    /// assignments qualifies — with a single qualifying assignment it is left null and resolved to
+    /// that one automatically (CataloguesController.ResolveOwningOrgNodeIdAsync).</summary>
+    public Guid? OwningOrgNodeId { get; set; }
 }
 
 public class UpdateCatalogueRequest

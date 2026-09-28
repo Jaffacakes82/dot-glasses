@@ -77,22 +77,13 @@ public class DomainRuleViolationScreenTests(AdminPortalFactory factory) : IClass
         Assert.Contains("Can&#x27;t un-assign a user&#x27;s primary org", html);
     }
 
-    [Fact]
-    public async Task Catalogues_CreatingACatalogueOwnedByARetailPoint_ShowsTheMessageOnThePresetCataloguesScreen()
-    {
-        // Country level satisfies PresetCatalogue.Manage, but the acting user's own org node is a
-        // RetailPoint — the service defends the rule itself rather than trusting the claim.
-        var client = factory.CreateAdminClient(OrganisationLevel.Country, OrganisationSeedConfiguration.KenyaRetailPointId);
-        var token = await AdminPortalFactory.GetAntiforgeryTokenAsync(client, "/Catalogues");
-
-        var (_, html) = await AdminPortalFactory.PostAndFollowAsync(
-            client,
-            "/Catalogues/CreateCatalogue",
-            AdminPortalFactory.Form(token, ("Name", "Rejected range")),
-            referer: "/Catalogues");
-
-        Assert.Contains("A PresetCatalogue&#x27;s owning org must be Dgi or Country level.", html);
-    }
+    // Catalogues_CreatingACatalogueOwnedByARetailPoint used to live here, exploiting the old
+    // single-active-org model (an admin whose claims-carried "active org" was a RetailPoint but
+    // whose Country-level assignment satisfied PresetCatalogue.Manage). Ticket 04 moved lens set
+    // creation onto an owning org chosen from the caller's own validated Dgi/Country assignments,
+    // so CreateCatalogue can no longer reach PresetCatalogueAdminService.CreateAsync with anything
+    // but a Dgi/Country org — that service-level defence is now covered directly at the service
+    // seam instead: LensSetAvailabilityTests.CreatingALensSetOwnedByARetailPoint_IsRefused.
 
     /// <summary>Also covers the no-Referer path: the filter falls back to Index on the same
     /// controller rather than dropping the admin somewhere generic.</summary>
