@@ -41,7 +41,9 @@ public static class AccessRecheck
     }
 
     /// <summary>JWT (Field App): a suspended or deleted user's token is refused — 401 — however
-    /// long it has left to run. The Field App's outbox already treats a 401 as a rejection.</summary>
+    /// long it has left to run. The Field App's outbox already treats a 401 as a rejection. The
+    /// token's current location is re-validated by the same load, but an invalid one does not
+    /// fail the token: it leaves the request with no scope, and the create endpoints refuse.</summary>
     public static async Task ValidateTokenAsync(TokenValidatedContext context)
     {
         var loader = context.HttpContext.RequestServices.GetRequiredService<IUserAccessLoader>();

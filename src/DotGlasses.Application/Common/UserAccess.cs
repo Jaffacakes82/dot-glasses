@@ -10,7 +10,8 @@ namespace DotGlasses.Application.Common;
 /// </summary>
 /// <param name="ScopePaths">The request's scope: the hierarchy paths whose subtrees this request
 /// can see, none nested inside another (see HierarchyPath.Outermost). On an Admin Portal request
-/// these are the user's org assignments combined; empty means no rows.</param>
+/// these are the user's org assignments combined; on a Field App request, the valid current
+/// location alone. Empty means no rows.</param>
 /// <param name="HighestLevel">The highest (numerically lowest) level among the user's org
 /// assignments — what a level-gated screen checks. Null when the user has no assignment.</param>
 /// <param name="Role">The user's one role, which applies across their whole scope.</param>
@@ -24,6 +25,11 @@ public sealed record UserAccess(
     /// <summary>No scope, no level, no role — what an anonymous request, or one whose access was
     /// never loaded, is treated as. Fails closed.</summary>
     public static UserAccess None { get; } = new([], null, null, false);
+
+    /// <summary>Field App (JWT) requests only: the token's current location, validated on this
+    /// request. The scope is then that location alone when valid, and nothing otherwise. Always
+    /// NoLocation on an Admin Portal request.</summary>
+    public CurrentLocationCheck CurrentLocation { get; init; } = CurrentLocationCheck.NoLocation;
 
     /// <summary>Builds the Admin Portal access of a user from their org assignments: the scope is
     /// every assignment combined, each subtree counted once.</summary>

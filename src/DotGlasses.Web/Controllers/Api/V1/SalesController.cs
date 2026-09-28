@@ -36,8 +36,8 @@ public class SalesController(
 
     /// <summary>
     /// Idempotent upsert keyed on <see cref="CreateSaleRequest.Id"/>. HierarchyPath/
-    /// TechnicianUserId are stamped from the authenticated caller's claims, never from the
-    /// request body — see TestsController.Create.
+    /// TechnicianUserId are stamped from the authenticated caller and their validated current
+    /// location, never from the request body — see TestsController.Create.
     /// </summary>
     [HttpPost]
     public async Task<ActionResult<SaleDto>> Create(CreateSaleRequest request, CancellationToken cancellationToken)
@@ -50,9 +50,9 @@ public class SalesController(
         // One reference-data read for the whole request, then every rule answered in memory —
         // ADR-0002. A preset-range Sale used to cost 7 + 3n + n(n-1)/2 sequential lookups; the
         // provider is scoped and memoized, so this is the request's only load.
-        // Placed where the record will be stamped, so a lens set is checked against the caller's own
-        // retail point (ADR-0005).
-        var snapshot = (await snapshots.GetAsync(cancellationToken)).AtLocation(currentUser.HierarchyPathPrefix);
+        // Placed where the record will be stamped, so a lens set is checked against the caller's
+        // current location (ADR-0005).
+        var snapshot = (await snapshots.GetAsync(cancellationToken)).AtLocation(RecordingPath);
         var modelState = ConsultationRules.Check(request, snapshot).ToModelStateDictionary();
         await AddSourceLeadFailureAsync(request, modelState, cancellationToken);
 
@@ -61,7 +61,7 @@ public class SalesController(
             return ValidationProblem(modelState);
         }
 
-        var dto = await saleService.CreateAsync(request, technicianUserId, currentUser.HierarchyPathPrefix, cancellationToken);
+        var dto = await saleService.CreateAsync(request, technicianUserId, RecordingPath, cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = dto.Id, version = "1.0" }, dto);
     }
 
@@ -85,4 +85,8 @@ public class SalesController(
             modelState.AddModelError(nameof(request.SourceLeadId), "This Lead has already been converted into a Sale.");
         }
     }
+
+    /// <summary>Where a record is stamped: the validated current location, or "" when there is
+    /// none — which the service refuses (ticket 07 gives each reason its own message).</summary>
+    private string RecordingPath => currentUser.CurrentLocation.ValidLocation?.Path.Value ?? string.Empty;
 }
