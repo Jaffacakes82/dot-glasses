@@ -94,6 +94,14 @@ builder.Services
     .AddClaimsPrincipalFactory<ApplicationUserClaimsPrincipalFactory>()
     .AddDefaultTokenProviders();
 
+// Access is re-read from the database on every request (ADR-0006) — see AccessRecheck. Wrapping
+// rather than replacing the validator AddIdentity installed keeps Identity's security-stamp check.
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    var securityStampValidator = options.Events.OnValidatePrincipal;
+    options.Events.OnValidatePrincipal = context => AccessRecheck.ValidateCookieAsync(context, securityStampValidator);
+});
+
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 builder.Services.Configure<DevSeedOptions>(builder.Configuration.GetSection(DevSeedOptions.SectionName));
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
@@ -123,6 +131,7 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
             RoleClaimType = ClaimTypes.Role,
             NameClaimType = ClaimTypes.Name,
         };
+        options.Events = new JwtBearerEvents { OnTokenValidated = AccessRecheck.ValidateTokenAsync };
     });
 
 // --- RBAC (separate from the data-scoping query filter — see CLAUDE.md) ----------------

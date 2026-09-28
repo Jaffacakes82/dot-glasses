@@ -1,7 +1,9 @@
-using System.Security.Claims;
 using System.Text.Encodings.Web;
 using DotGlasses.Application.Common;
+using DotGlasses.Infrastructure.Identity;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -9,12 +11,14 @@ namespace DotGlasses.Web.Tests.DomainRejections;
 
 /// <summary>
 /// Stands in for the Identity application cookie so the Admin Portal's server-rendered screens
-/// can be driven over HTTP without a real sign-in. The claims come off request headers rather
+/// can be driven over HTTP without a real sign-in. The user id comes off a request header rather
 /// than shared state, so each HttpClient in a test class can act as a different user.
 ///
-/// Only the *authentication* step is faked — every policy, resource-based check and the
-/// hierarchy query filter still run against these claims exactly as they do in production, which
-/// is what makes the screen tests below meaningful.
+/// Only the *sign-in* step is faked, and faithfully: the account is a real row, its claims are
+/// stamped by the real claims-principal factory (exactly what the cookie would carry), and its
+/// access is loaded from the database by the same IUserAccessLoader call the cookie's per-request
+/// validation event makes — refusing a suspended or missing account the same way. Every policy,
+/// resource-based check and the hierarchy query filter then run exactly as they do in production.
 /// </summary>
 public class AdminPortalTestAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
@@ -24,36 +28,28 @@ public class AdminPortalTestAuthenticationHandler(
     public const string SchemeName = "AdminPortalTest";
 
     public const string UserIdHeader = "X-Test-UserId";
-    public const string HierarchyPathHeader = "X-Test-HierarchyPath";
-    public const string OrgLevelHeader = "X-Test-OrgLevel";
-    public const string OrgNodeIdHeader = "X-Test-OrgNodeId";
-    public const string RoleHeader = "X-Test-Role";
 
-    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+    protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         if (!Request.Headers.TryGetValue(UserIdHeader, out var userId))
         {
-            return Task.FromResult(AuthenticateResult.NoResult());
+            return AuthenticateResult.NoResult();
         }
 
-        List<Claim> claims =
-        [
-            new(ClaimTypes.NameIdentifier, userId.ToString()),
-            new(ClaimTypes.Name, "admin-portal-test"),
-            new(ClaimTypes.Role, Header(RoleHeader) ?? RoleNames.Admin),
-            new(DotGlassesClaimTypes.HierarchyPath, Header(HierarchyPathHeader) ?? "/1/"),
-            new(DotGlassesClaimTypes.OrgLevel, Header(OrgLevelHeader) ?? "Dgi"),
-        ];
-
-        if (Header(OrgNodeIdHeader) is { } orgNodeId)
+        var services = Context.RequestServices;
+        var user = await services.GetRequiredService<UserManager<ApplicationUser>>().FindByIdAsync(userId.ToString());
+        if (user is null)
         {
-            claims.Add(new Claim(DotGlassesClaimTypes.OrgNodeId, orgNodeId));
+            return AuthenticateResult.Fail("No such user.");
         }
 
-        var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, SchemeName));
-        return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(principal, SchemeName)));
-    }
+        var principal = await services.GetRequiredService<IUserClaimsPrincipalFactory<ApplicationUser>>().CreateAsync(user);
+        var access = await services.GetRequiredService<IUserAccessLoader>().LoadForAdminPortalAsync(principal);
+        if (access is null || access.IsSuspended)
+        {
+            return AuthenticateResult.Fail("Suspended or missing user.");
+        }
 
-    private string? Header(string name) =>
-        Request.Headers.TryGetValue(name, out var value) ? value.ToString() : null;
+        return AuthenticateResult.Success(new AuthenticationTicket(principal, SchemeName));
+    }
 }

@@ -1,6 +1,5 @@
 using System.Net;
 using DotGlasses.Infrastructure.Persistence;
-using DotGlasses.Infrastructure.Persistence.Configurations;
 using DotGlasses.Web.Tests.DomainRejections;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -20,7 +19,7 @@ public class LensSetNameTests(AdminPortalFactory factory) : IClassFixture<AdminP
     [Fact]
     public async Task ASecondActiveLensSetWithTheSameNameInAnyCase_IsRefusedOnName()
     {
-        var client = factory.CreateAdminClient(orgNodeId: OrganisationSeedConfiguration.DgiId);
+        var client = factory.CreateAdminClient();
         var name = $"Reading set {Guid.NewGuid():N}";
 
         Assert.Equal(HttpStatusCode.Found, (await CreateAsync(client, name)).StatusCode);
@@ -35,7 +34,7 @@ public class LensSetNameTests(AdminPortalFactory factory) : IClassFixture<AdminP
     public async Task ABlankName_IsReportedAsRequired_NotChecked()
     {
         // The uniqueness check must not run on a name that isn't there.
-        var client = factory.CreateAdminClient(orgNodeId: OrganisationSeedConfiguration.DgiId);
+        var client = factory.CreateAdminClient();
 
         var response = await CreateAsync(client, "");
 
@@ -46,7 +45,7 @@ public class LensSetNameTests(AdminPortalFactory factory) : IClassFixture<AdminP
     [Fact]
     public async Task ARetiredLensSetsNameCanBeUsedAgain()
     {
-        var client = factory.CreateAdminClient(orgNodeId: OrganisationSeedConfiguration.DgiId);
+        var client = factory.CreateAdminClient();
         var name = $"Seasonal set {Guid.NewGuid():N}";
         Assert.Equal(HttpStatusCode.Found, (await CreateAsync(client, name)).StatusCode);
 

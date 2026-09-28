@@ -79,6 +79,25 @@ public sealed record HierarchyPath
     /// IsSelfOrDescendantOf, spelled out so the two can never be swapped by accident.</summary>
     public bool IsSelfOrAncestorOf(HierarchyPath descendant) => descendant.IsSelfOrDescendantOf(this);
 
+    /// <summary>The paths not inside any other path in the set, duplicates removed — so a set of
+    /// org assignments becomes a scope that covers each subtree exactly once. A path nested inside
+    /// another adds nothing: DGI plus a retail point beneath it is simply DGI's scope.</summary>
+    public static IReadOnlyList<HierarchyPath> Outermost(IEnumerable<HierarchyPath> paths)
+    {
+        var outermost = new List<HierarchyPath>();
+
+        // Shallowest first, so an ancestor is always kept before any of its descendants is seen.
+        foreach (var path in paths.Distinct().OrderBy(p => p.Depth))
+        {
+            if (!outermost.Any(path.IsSelfOrDescendantOf))
+            {
+                outermost.Add(path);
+            }
+        }
+
+        return outermost;
+    }
+
     public override string ToString() => Value;
 
     /// <summary>Validates the invariant and counts the segments in one pass: a leading separator,
