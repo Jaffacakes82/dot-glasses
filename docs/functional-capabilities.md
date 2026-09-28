@@ -7,7 +7,10 @@ validators, authorization handlers, domain entities and seed data).
 **Reviewed at:** commit `b745220` (`main`), 2026-08-12 — updated from the original 2026-08-07
 review to reflect the full 2026-08-09 roadmap (Phases 1–8, all shipped). Sections untouched by
 that roadmap are carried over from the original review; everything else was re-checked against
-current source.
+current source. Further updated 2026-09-28 for the multi-org access and retail-point recording
+change (ADR-0006): the access model, the Organisations/User Directory/Lens Sets screens, the
+sidebar footer and the Field App's location handling and API surface were re-checked against
+source; sections it didn't touch are otherwise unchanged.
 
 **Scope:** the Admin Portal (`DotGlasses.Web`, server-rendered MVC), the Field App
 (`DotGlasses.App`, Blazor WebAssembly PWA), and the v1 REST API that joins them.
@@ -38,9 +41,15 @@ never touch.
 
 **Data scoping (visibility)** is a global EF Core query filter applied automatically to every
 entity carrying a hierarchy path — `OrganisationNode`, `Customer`, `Test`, `Lead` and `Sale`. The
-rule is: *a row is visible if its `HierarchyPath` starts with the signed-in
-user's own `HierarchyPath`*. This is completely role-independent. Scoping is downward only — you
-see your own node and everything beneath it, never anything above or beside you.
+rule is: *a row is visible if its `HierarchyPath` starts with any of the signed-in user's scope
+paths*. This is completely role-independent. Scoping is downward only — you see your own node(s)
+and everything beneath them, never anything above or beside you. **On the Admin Portal, scope is
+the union of every org a user is assigned to** — being assigned to DGI and to one retail point
+gives DGI's whole scope, and an overlapping record is only counted once (ADR-0006). There is no
+"primary" or "active" org: every assignment counts equally, and access is re-read from the
+database on each request, so a removed assignment, a changed role or a suspension bites on the
+user's very next request. **The Field App scopes to one current location instead** — see §5 —
+because a Test, Lead or Sale must be stamped with exactly one place.
 
 Four entities are **not** hierarchy-scoped and are therefore globally visible to every
 authenticated user: `ReferenceDataItem`, `PresetCatalogue`, `LensOption` and
@@ -60,8 +69,9 @@ unscoped query instead.
 **Two roles exist and are the only ones assignable: `Admin`, `User`.** (A third role, `Manager`,
 existed until 2026-08-10 and was removed — every policy that admitted a Manager admitted an Admin
 identically, so it had never carved out a real distinction. Existing Manager accounts were
-migrated to Admin on removal, preserving their access.) A user holds one role, at one primary
-organisation node.
+migrated to Admin on removal, preserving their access.) A user holds one role, applying across
+every org node they're assigned to — a user can be assigned to any number of nodes, none of them
+special, and a level-gated screen or policy opens on the **highest** level among them.
 
 Four org levels, ordered: `Dgi` (0) → `Country` (1) → `Intermediate` (2) → `RetailPoint` (3).
 "At or above Country" means level ≤ 1, i.e. DGI or Country. Only DGI, Country and Retail Point
@@ -121,17 +131,26 @@ page (not a 404).
 | **Lens Sets** | ● | ● | ✕ (redirected) | ✕ (redirected) | ✕ (redirected) |
 | **Custom Orders** — view + advance | ● | ● | ✕ (redirected) | ✕ (redirected) | ● |
 | **Reference Data** | ● | ✕ (redirected) | ✕ (redirected) | ✕ (redirected) | ✕ (redirected) |
-| **Field App** — record Test/Lead/Sale, convert Lead | ● (stamped to DGI root) | ● (stamped to their node) | ● | ● | ● |
+| **Field App** — record Test/Lead/Sale, convert Lead | ✕ unless also assigned to a retail point | ✕ unless also assigned to a retail point | ● at an assigned retail point | ● | ✕ unless also assigned to a retail point |
 
-Two consequences of that last row are worth flagging: **any** authenticated user can record a
-Test, Lead or Sale through the API — there is no role or level restriction on the write
-endpoints — and the record is stamped with whatever org the caller sits at. A DGI Admin recording
-a Sale produces a Sale attached to the DGI root node, which then resolves as "Unknown outlet" and
-"Unknown country" on every reporting screen.
+**Recording only ever happens at one current location, and it must be an active retail point the
+technician is directly assigned to** — a broader Admin Portal scope never widens where someone can
+record (ADR-0006). A DGI or Country admin with no retail-point assignment of their own sees the
+Field App's "can't record here" screen (§5.7) instead of a form, and the create endpoints refuse
+the same way if a stale or tampered client tries anyway — see §5.7 and §7 for the exact refusal
+messages. This replaced an earlier behaviour where any authenticated user could record through the
+API regardless of role or level, stamped to whatever org they happened to be attached to (a DGI
+Admin's Sale used to resolve as "Unknown outlet"/"Unknown country" everywhere) — that gap is what
+this change closed.
 
 **Navigation now reflects permissions.** The sidebar filters Lens Sets/Custom Orders/
 Reference Data per the policies above; a direct hit on a blocked route (bookmarked, typed) renders
 a real Access Denied page.
+
+**The sidebar footer shows what your access is based on.** Under the signed-in user's email, a
+role line and an assignments line — the assigned org names, sorted highest level first then
+alphabetically, shortened to the first three with a "+N more" suffix once there are more than
+that. The email itself is truncated with an ellipsis rather than overflowing the nav.
 
 ---
 
@@ -277,21 +296,18 @@ check the panel says "You don't have permission to manage this node." and no act
    handed out twice — not even one belonging to a deactivated org, which keeps its path in case it
    is reactivated. The database also refuses two orgs on one path outright.
 5. **Assign users** — a modal with a single-select dropdown of every user in the caller's own
-   scope. Creates a `UserOrgAssignment` row; re-submitting the same pair is a silent no-op. This
-   **does not** change the user's primary organisation on its own — see §4.5 and §5.7 for how a
-   technician actually switches their active/primary location.
+   scope. Creates a `UserOrgAssignment` row; re-submitting the same pair is a silent no-op. Every
+   assignment counts equally toward the user's Admin Portal scope and highest level — there is no
+   "primary" assignment to designate, and this has no bearing on the Field App's separate,
+   per-device *current location* (see §5.7).
 6. **Un-assign a user** — the × next to a name in the "Assigned users" list. Refused (with an
-   inline error, not a crash) if the target org is that user's **primary** org — there's still no
-   "change primary org" UI to move it first, so un-assigning it would leave the user with nothing
-   driving their JWT/hierarchy scope.
+   inline error, not a crash) only if it is that user's **last** remaining assignment — a user
+   always keeps at least one; suspending them from User Directory (§4.5) is how all of their access
+   is removed instead.
 
 **Not built**
 - No edit of `Kind` or level after creation (only the name).
 - No move/re-parent.
-- Assigning a user has no effect on their primary org — see the location-switching capability in
-  §4.5/§5.7 for how that's actually controlled.
-- Users created by the developer seeder have no `UserOrgAssignment` rows unless separately
-  assigned, so they won't appear in any node's "Assigned users" list despite having a primary org.
 
 ---
 
@@ -353,16 +369,22 @@ page/tab links.
 ### 4.5 User Directory
 
 **Route** `/UserDirectory?search=…&role=…&status=…&page=…` · **Access** any authenticated user can
-view the list; every write action requires `Users.ManageInScope` against that specific user.
-Listing applies the hierarchy prefix filter manually, since `ApplicationUser` is outside the
-automatic query filter.
+view the list; every write action requires `Users.ManageInScope`, which — unlike seeing the row at
+all — checks *every one* of the target user's assignments against the viewer's scope, not just
+one (so a country admin can't act on a DGI admin who also happens to hold a retail-point
+assignment in that country). Listing applies the scope-paths filter manually, since
+`ApplicationUser` is outside the automatic query filter.
 
 **The table** — Name, Role, Scope, Last login, Sales, Status, actions. A search box (name or
 email), a Role filter, a Status filter and Previous/Next paging sit above it.
 
 - **Name** is `FullName`, falling back to username where absent.
-- **Scope** is a set of badges listing the org names from the user's `UserOrgAssignment` rows. A
-  user with a primary org but no assignment rows shows an empty Scope column.
+- **Scope** is a set of badges listing the org names from the user's `UserOrgAssignment` rows —
+  every assignment counts, there is no primary among them. A viewer sees the name of an assignment
+  that's within their own scope; one outside it renders as a badge reading "Outside your scope"
+  rather than disclosing an org name the viewer can't otherwise see. A user is listed at all if
+  *any one* of their assignments is in the viewer's scope, but every action below needs *all* of
+  them to be.
 - **Last login** is stamped on both sign-in paths — the Admin Portal cookie login and the Field
   App's API login — so it is populated for field technicians who never open the portal. Shows "—"
   if never.
@@ -377,7 +399,15 @@ email), a Role filter, a Status filter and Previous/Next paging sit above it.
    clear the existing password; the old one keeps working until the link is used.
 2. **Suspend / Unsuspend** — implemented with Identity's own lockout mechanism (lockout end set to
    maximum, or cleared). A suspended user is refused at both the portal and the API login, with
-   the generic invalid-credentials message.
+   the generic invalid-credentials message, and — unlike a removed assignment or a role change,
+   which bite on the user's next request — a signed-in session is also cut off on its very next
+   request, both apps, rather than waiting for the cookie or JWT to expire. Suspension is the only
+   way to remove all of a user's access; there is no delete.
+
+There is also a **change-role capability with no button yet**: `UserDirectory/ChangeRole` is a
+real, `Users.ManageInScope`-checked POST endpoint (transactional, every `IdentityResult` checked),
+but nothing in this screen's markup calls it — a user's role can only be changed today by a
+request built by hand against that route.
 
 **Invite platform user** — a modal, opened from a button that renders for *every* viewer
 regardless of permission (the refusal happens on submit). Fields:
@@ -386,14 +416,13 @@ regardless of permission (the refusal happens on submit). Fields:
 |---|---|
 | Full name | Required, ≤ 200 characters |
 | Email | Required, valid email format, ≤ 256 characters, must not already exist |
-| Hierarchy scope | A scrollable checkbox list of every org in the caller's own scope. At least one required; every selection re-validated as in-scope server-side. **The first checked box becomes the primary/active location.** |
+| Hierarchy scope | A scrollable checkbox list of every org in the caller's own scope. At least one required — refused with "At least one location must be assigned" otherwise — and every selection re-validated as in-scope server-side. Ticking more than one box is meaningful: every checked org becomes a real, equal assignment, with no ordering and nothing "primary" among them. |
 | Role | Select: **Admin / User**, defaulting to User |
 
 On submit the system creates the account **with no password at all** (which is what "Invited"
-means), adds a `UserOrgAssignment` row for every selected org, stamps the *first* selection as the
-primary org — writing `OrgNodeId`, `HierarchyPath` and `OrgLevel`, which become the user's sign-in
-claims and therefore drive everything they can see — generates a reset token, and builds a
-set-password link.
+means), adds a `UserOrgAssignment` row for every selected org — nothing is written onto the user
+row itself, and access is read from these assignment rows fresh on every request rather than from
+anything stamped at invite time — generates a reset token, and builds a set-password link.
 
 **Email delivery is real when Azure Communication Services is provisioned** (staging/production,
 once the user has run the deploy that provisions `acs.bicep`); locally, and in any environment
@@ -404,12 +433,10 @@ Reloading the page loses the on-screen copy; the only recovery at that point is 
 which mints a new one.
 
 **Not built**
-- No edit of a user's name, email, role or org assignments after invite (org un-assignment is done
-  from the Organisations screen instead — see §4.3).
+- No edit of a user's name or email after invite. Assignments are edited one at a time from the
+  Organisations screen instead (§4.3) — assign or un-assign a single org — not from here; role has
+  the server-only endpoint noted above, with no form yet.
 - No delete or deactivate (only suspend).
-- No way to change which of a multi-org user's locations is primary from the Admin Portal (the
-  Field App technician can switch their own *active* location — see §5.7 — but that's not the
-  same as re-designating which org is primary here).
 - No resend of an existing invite without invalidating it.
 - No bulk invite or import.
 - The invite button is shown to users who cannot invite.
@@ -446,9 +473,12 @@ per-catalogue role: every non-empty lens set assigned at or above a retail point
   **unique among active lens sets**, ignoring case — "A lens set with this name already
   exists."; a retired lens set's name is free) and `Description` (≤ 500). The old free-text
   "Diopter / strength range" was removed (2026-09-26): nothing read it, the device never saw it,
-  and the lens roster on the same card already states the range exactly. On create, the owning org is stamped from the caller's own
-  primary org, never submitted by the client; the service rejects the create if that org isn't
-  DGI or Country level.
+  and the lens roster on the same card already states the range exactly. On create, the owning org
+  is chosen from the caller's own DGI-or-Country-level assignments: an **"Owning org"** select
+  appears in the modal only when the caller qualifies through more than one such assignment; with
+  exactly one, it's used automatically and the field stays hidden. The server independently
+  re-checks that a posted choice is really one of the caller's own DGI/Country assignments,
+  refusing anything else.
 - **Add lens** — a dropdown of active `LensStrength` reference items **not already on this
   catalogue** (both client-filtered and server-guarded — a strength can no longer be added twice).
   The chosen strength is appended at the end of the catalogue's sort order. A catalogue's lens
@@ -636,8 +666,15 @@ Sign out from Settings when you hand the device to someone else."*
 
 ### 5.2 Home — `/`
 
-The launcher. Redirects to login if no valid token.
+The launcher. Redirects to login if no valid token. With a valid token but no **current location**
+yet — the very first launch after sign-in, or any later launch where the remembered one is no
+longer eligible — it makes one `my-orgs` call and redirects again before rendering anything else:
+to `/outlet-select` (§5.7) when more than one retail point qualifies, or `/no-location` (§5.7) when
+none do. A token that already carries a location (the ordinary case) skips this entirely.
 
+- **Header** — the signed-in display name, with the current location's name underneath it (falls
+  back to "Field agent" if somehow blank). This is the one place the technician's current location
+  is always visible, per spec.
 - **Connectivity banner** — "Online · Synced", "Online · N record(s) unsynced", "Offline", or
   "Offline · N record(s) unsynced", driven by the browser's online flag, with a warning marker when
   anything is queued.
@@ -652,6 +689,11 @@ The launcher. Redirects to login if no valid token.
 
 The counts refresh only on page load and after a manual sync, so they go stale while the background
 timer syncs underneath.
+
+**Every consultation form's real save action shows "Recording at `<name>`" beside it** — the
+bottom Save/Save-test button, the price-confirmation card's "Yes, save", and the Test→Lead
+"Continue as Lead" button (which also saves, before navigating on) — so the technician sees the
+current location at the moment they commit a record, not just once on Home.
 
 ### 5.3 Record Test — `/consultation/test`
 
@@ -830,17 +872,32 @@ Test/Lead/Sale form pre-filled from the stored payload, for a form the record ty
 **Discard** (behind a confirm). Empty state: "Nothing to review — every record on this device has
 been sent."
 
-**Settings — `/settings`.** An **"Active location"** list, populated from the technician's real
-`UserOrgAssignment` rows (not hard-coded) — tapping an unselected one switches it as their active
-location (a server round trip that re-issues their JWT with the new `HierarchyPath`/`OrgNodeId`).
-Disabled while anything is queued unsent, with an explanation, for the same reason sign-out is
-blocked (see §6). Below that, three "· Coming soon" toolkit items (Talking points & FAQs,
-Near-vision chart, Distance-vision chart) remain static placeholders. A **Sign out** button (behind
-a confirm) is at the bottom, also disabled while records are queued.
+**Settings — `/settings`.** An **"Active location"** list, populated from the technician's
+*eligible* locations — active, Retail-Point-level orgs they're directly assigned to, via
+`IUserLocationClient.GetMyOrgsAsync` — not the full assignment list and not hard-coded. Tapping an
+unselected one switches the current location (a server round trip re-issuing the JWT with the new
+location; nothing is written to the user row — there's no "active org" left to write). The device
+also remembers the choice in IndexedDB, so it's offered again automatically the next time this
+same device signs in (per-device, so two devices sharing an account each keep their own). Disabled
+while anything is queued unsent, with an explanation, for the same reason sign-out is blocked (see
+§6). Below that, three "· Coming soon" toolkit items (Talking points & FAQs, Near-vision chart,
+Distance-vision chart) remain static placeholders. A **Sign out** button (behind a confirm) is at
+the bottom, also disabled while records are queued.
 
-**Outlet select — `/outlet-select`.** Functionally identical to Settings' location list (same
-`IUserLocationClient`, real data) but nothing in the app currently links to this route — it's
-real, just unreached by any in-app navigation.
+**Outlet select — `/outlet-select`.** The location picker: Home (§5.2) redirects here whenever the
+signed-in device has no current location and more than one eligible retail point exists — it
+auto-picks instead, with no picker shown, if it turns out there's really only one. Lists a button
+per eligible location; picking one calls `switch-org` and returns to Home. Reachable directly too
+(e.g. a remembered location stops being eligible mid-session), with a genuine "none eligible" state
+here showing a Retry rather than duplicating the dedicated "can't record here" screen below, which
+is what Home redirects to for that case.
+
+**Can't record here — `/no-location`.** Shown by Home when the signed-in user has **no** eligible
+retail point at all — the case for a DGI or Country admin with no retail-point assignment of their
+own. Explains that the account isn't assigned to a retail point and to ask an admin, rather than
+rendering a broken form. Carries the same queued-records guard as Settings' sign-out: any unsent
+records must be sent first ("Send now (N)"), with the same explanation, before Sign out becomes
+available — otherwise they'd be filed under whoever signs in next.
 
 **Messages — `/messages`.** Two hard-coded announcements ("Reference data updated", "Reminder").
 Nothing is fetched; the "Refreshes on sync" note is aspirational. Still a placeholder.
@@ -883,6 +940,13 @@ queued. A record can still end up `Failed` from a background sync — e.g. the t
 reference-data item got retired between form-fill and send — and the review screen is exactly for
 that case.
 
+**A queued record is also rejected if its location has since stopped being valid** — the
+technician's assignment to it was removed, it was deactivated, or (for a token issued before this
+capability shipped) it names no location at all. `/failed-records` shows the matching message
+("You're no longer assigned to `<name>` — ask your admin.", "`<name>` has been deactivated.", or
+"Choose a retail point before recording.") rather than a generic failure — the same reasons the
+create endpoints refuse a live submission (§7).
+
 **Sign-out and location-switching are both blocked while anything is queued**, with an inline
 explanation — the API stamps `TechnicianUserId`/`HierarchyPath` from the JWT presented **at sync
 time**, not when the record was created, so draining the queue under a different identity would
@@ -902,27 +966,30 @@ Versioned at `v1`, with Swagger exposed in development only.
 
 | Endpoint | Auth | Who | Behaviour |
 |---|---|---|---|
-| `POST /api/v1/auth/login` | Anonymous | Anyone | Username + password → JWT (60 min default). Failures count toward lockout; suspended accounts are refused as invalid credentials. |
-| `GET /api/v1/auth/my-orgs` · `POST /api/v1/auth/switch-org` | JWT | Any authenticated user | Lists the caller's own `UserOrgAssignment` rows; switches which one is active, re-issuing a fresh JWT stamped with the new org. Rejects a target that isn't one of the caller's own assignments. |
-| `GET /api/v1/tests` · `GET /api/v1/tests/{id}` | JWT | Any authenticated user | Hierarchy-scoped list / fetch. |
-| `POST /api/v1/tests` | JWT | Any authenticated user | Idempotent create. Rejected with 400 if the caller has no org assignment. |
+| `POST /api/v1/auth/login` | Anonymous | Anyone | Username + password → JWT (60 min default), plus an optional `PreferredLocationId` (the device's remembered location). Issues a token carrying that location if it's still eligible, the caller's single eligible location if there's exactly one, or none otherwise. Failures count toward lockout; suspended accounts are refused as invalid credentials. |
+| `GET /api/v1/auth/my-orgs` · `POST /api/v1/auth/switch-org` | JWT | Any authenticated user | Lists only the caller's *eligible* locations — active, Retail-Point-level orgs they're directly assigned to, never a broader assignment. Switching issues a fresh JWT carrying the chosen eligible location; nothing is written to the user row. Rejects a target that isn't eligible. |
+| `GET /api/v1/tests` · `GET /api/v1/tests/{id}` | JWT | Any authenticated user | Hierarchy-scoped list / fetch — for the Field App this is the caller's current location alone, not their whole assignment set. |
+| `POST /api/v1/tests` | JWT | Any authenticated user | Idempotent create. Rejected with 400 (keyed on `""`) unless the caller has a **valid current location** — an active Retail Point they're directly assigned to — with one of three messages depending on why not: no location at all, no longer assigned, or deactivated. |
 | `GET/POST /api/v1/leads`, `/api/v1/leads/{id}` | JWT | Any authenticated user | As above. |
 | `GET /api/v1/leads/open` | JWT | Any authenticated user | The caller's own outlet's open (unconverted) leads — backs the Field App's `/leads` worklist. |
 | `GET /api/v1/leads/match?fullName=&phoneNumber=` | JWT | Any authenticated user | An open Lead matching the given name+phone, or 204 — backs the Sale form's automatic conversion prompt. |
 | `GET/POST /api/v1/sales`, `/api/v1/sales/{id}` | JWT | Any authenticated user | As above. `SourceLeadId` on create atomically links and marks the source Lead converted; a second attempt against an already-converted Lead is rejected, as is one naming a Lead the caller can't see. |
 | `GET /api/v1/reference-data` | JWT | Any authenticated user | All **active** reference items across all categories. Not hierarchy-scoped. |
-| `GET /api/v1/preset-catalogues` | JWT | Any authenticated user | Catalogues assigned at or above the caller's org, with each lens's available coatings — non-empty lens sets only, alphabetically. 400 if the caller has no org. |
+| `GET /api/v1/preset-catalogues` | JWT | Any authenticated user | Catalogues assigned at or above the caller's current location, with each lens's available coatings — non-empty lens sets only, alphabetically. Empty list (not a 400) if the caller has no valid current location. |
 | `POST /api/v1/client-logs` | JWT | Any authenticated user | Accepts a batch of client log entries with a correlation ID; writes them to the server log. |
 
 **Capabilities reachable through the API that no UI exposes:**
 - `GET` list and by-ID for Tests, Leads and Sales — nothing in either application reads these
   endpoints; the Field App only writes, and the Admin Portal queries the database directly.
 
-**Restrictions that exist only in the UI, not the API:**
-- Any authenticated user of any role or level can create a Test, Lead or Sale. The Admin Portal
-  simply has no general-purpose form for it (only the narrower Lead-conversion screen, see §4.4).
-- The API applies no level restriction on custom orders — a Sale posted with
-  `OrderFromDotGlasses` from any Retail Point enters the fulfilment queue regardless.
+**Restrictions that exist only in the UI, not the API:** a user of any role or level can *attempt*
+to create a Test, Lead or Sale through the API — there's no role/level gate on the write
+endpoints, and the Admin Portal still has no general-purpose form for it (only the narrower
+Lead-conversion screen, see §4.4). What the API *does* enforce, regardless of role or level, is the
+current-location rule above: the attempt only succeeds against an active retail point the caller
+is directly assigned to. The API applies no separate level restriction on custom orders — a Sale
+posted with `OrderFromDotGlasses` from any eligible Retail Point enters the fulfilment queue
+regardless.
 
 Cross-origin access is restricted to two hard-coded localhost development origins.
 
@@ -967,11 +1034,15 @@ and Dashboard's top-N lists have neither, and only Event History/User Directory 
 server-side paging (Lens Sets' search filters an already-fully-loaded list, proportionate
 to its small size).
 
-**A user whose `HierarchyPath` is blank would match the visibility filter's prefix test against
-every row and see the entire database.** All current creation paths set it, but nothing enforces
-that it is non-empty at the filter itself — unlike the resource-based RBAC check, which explicitly
-rejects an empty prefix.
+**A user with no scope paths sees no rows**, not the whole database — the filter is
+`patterns.Any(p => EF.Functions.Like(HierarchyPath, p))` over the caller's `ScopePaths`, which is
+false for every row when the list is empty (ADR-0006). This replaced an earlier single-path
+filter, where a blank `HierarchyPath` on the user would have matched every row's prefix test; that
+shape no longer exists.
 
-**Records created by a DGI- or Country-level user through the API are stamped at that level** and
-render as "Unknown outlet" / "Unknown country" throughout reporting, and are counted in the
-Dashboard's totals.
+**Records created before this change may still be stamped above retail-point level** (DGI or
+Country) and render as "Unknown outlet" / "Unknown country" throughout reporting, counted in the
+Dashboard's totals. Going forward this can no longer happen through the Field App API, which
+refuses any create without a valid current-location retail point, or through the Admin Portal's
+Lead→Sale conversion, which refuses a deactivated retail point — see §7 and §5.7. Existing
+above-retail-point rows are left as they are; migrating them is out of scope.
