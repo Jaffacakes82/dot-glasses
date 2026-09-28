@@ -74,7 +74,7 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
                 user.Id,
                 user.Email ?? user.UserName ?? "—",
                 user.DisplayName(),
-                roles.FirstOrDefault() ?? "—",
+                RoleNames.Primary(roles) ?? "—",
                 assignedOrgNames,
                 assignedOrgIds,
                 assignmentPaths,
@@ -228,17 +228,64 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
         return await userManager.GeneratePasswordResetTokenAsync(user);
     }
 
+    /// <summary>Two Identity writes — enable lockout, then set its end date — so one transaction,
+    /// opened through the execution strategy for the same reasons as InviteAsync's. Unchecked, a
+    /// refused SetLockoutEndDateAsync would commit over an enabled-but-not-actually-suspended
+    /// account, which UserSuspension.IsSuspended reads by the end date alone.</summary>
     public async Task SuspendAsync(Guid userId, CancellationToken cancellationToken = default)
     {
-        var user = await userManager.FindByIdAsync(userId.ToString()) ?? throw new InvalidOperationException("User not found.");
-        await userManager.SetLockoutEnabledAsync(user, true);
-        await userManager.SetLockoutEndDateAsync(user, UserSuspension.LockoutEnd);
+        var strategy = dbContext.Database.CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(async () =>
+        {
+            // A replayed attempt starts from nothing — EF doesn't revert entity states on
+            // rollback. Safe here: everything earlier in the request (the scope check) only read.
+            dbContext.ChangeTracker.Clear();
+
+            var user = await userManager.FindByIdAsync(userId.ToString()) ?? throw new InvalidOperationException("User not found.");
+
+            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+            var enableResult = await userManager.SetLockoutEnabledAsync(user, true);
+            if (!enableResult.Succeeded)
+            {
+                throw new DomainRuleViolationException(Describe("Couldn't suspend the account", enableResult));
+            }
+
+            var endDateResult = await userManager.SetLockoutEndDateAsync(user, UserSuspension.LockoutEnd);
+            if (!endDateResult.Succeeded)
+            {
+                throw new DomainRuleViolationException(Describe("Couldn't suspend the account", endDateResult));
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+        });
     }
 
+    /// <summary>Single Identity write, but still routed through the same transactional shape as
+    /// SuspendAsync/ChangeRoleAsync — consistency of the pattern over saving a line, and it keeps
+    /// this service's execution-strategy usage uniform rather than one write path being the odd
+    /// one out.</summary>
     public async Task UnsuspendAsync(Guid userId, CancellationToken cancellationToken = default)
     {
-        var user = await userManager.FindByIdAsync(userId.ToString()) ?? throw new InvalidOperationException("User not found.");
-        await userManager.SetLockoutEndDateAsync(user, null);
+        var strategy = dbContext.Database.CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(async () =>
+        {
+            dbContext.ChangeTracker.Clear();
+
+            var user = await userManager.FindByIdAsync(userId.ToString()) ?? throw new InvalidOperationException("User not found.");
+
+            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+            var result = await userManager.SetLockoutEndDateAsync(user, null);
+            if (!result.Succeeded)
+            {
+                throw new DomainRuleViolationException(Describe("Couldn't unsuspend the account", result));
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+        });
     }
 
     /// <summary>Two Identity writes — drop the old role, add the new one — so one transaction,
