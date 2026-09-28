@@ -1,6 +1,7 @@
 using DotGlasses.Application.Common;
 using DotGlasses.Application.ReferenceData;
 using DotGlasses.Application.Reporting;
+using DotGlasses.Rules.LensSets;
 using DotGlasses.Rules.ReferenceData;
 using Microsoft.EntityFrameworkCore;
 
@@ -43,12 +44,8 @@ public class ReferenceDataSnapshotProvider(DotGlassesDbContext dbContext, IUnsco
         // name them, and the rules ask "present and active". PresetCatalogue isn't hierarchy-scoped,
         // so IgnoreQueryFilters() lifts only the soft-delete filter here.
         var catalogues = await dbContext.PresetCatalogues.IgnoreQueryFilters().OrderBy(c => c.Name).ToListAsync(cancellationToken);
-        // An interim order — single vision first, then by add, then by sphere — only so the list is
-        // deterministic. Lens-power ticket 04 defines the fixed display order in Rules, and every
-        // screen should then take it from there rather than from this ORDER BY.
-        var lensOptions = await dbContext.LensOptions
-            .OrderBy(l => l.Add ?? 0m).ThenBy(l => l.Sphere).ThenBy(l => l.Label)
-            .ToListAsync(cancellationToken);
+        // No ORDER BY: each lens set's lenses are put in the fixed display order below, by Rules.
+        var lensOptions = await dbContext.LensOptions.ToListAsync(cancellationToken);
         // A lens's coatings, and its pairings by trigger then paired coating, in the Coating list's
         // own admin-set order (items above are already in it) — so every screen lists them the
         // way Reference Data does, not in whatever order the rows happened to be written.
@@ -72,18 +69,25 @@ public class ReferenceDataSnapshotProvider(DotGlassesDbContext dbContext, IUnsco
             .GroupBy(a => a.PresetCatalogueId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<string>)g.Select(a => orgPaths[a.OrgNodeId]).ToList());
 
+        var itemSnapshots = items
+            .Select(x => new ReferenceItemSnapshot(x.Id, x.Category.ToContract(), x.Label, x.IsActive, x.IsOtherOption))
+            .ToList();
+
         _snapshot = new ReferenceDataSnapshot(
-            items.Select(x => new ReferenceItemSnapshot(x.Id, x.Category.ToContract(), x.Label, x.IsActive, x.IsOtherOption)).ToList(),
+            itemSnapshots,
             catalogues.Select(c => new PresetCatalogueSnapshot(
                 c.Id,
                 c.Name,
                 IsActive: !c.IsDeleted,
-                lensOptions.Where(l => l.PresetCatalogueId == c.Id)
-                    .Select(l => new LensOptionSnapshot(
-                        l.Id, l.Label, l.Sphere, lensCoatings[l.Id].ToList(),
-                        l.Cylinder, l.Axis, l.Add, l.LensTypeRefId, l.LensTypeOtherText,
-                        lensPairings[l.Id].ToList()))
-                    .ToList(),
+                // The fixed display order (LensSetLenses.InDisplayOrder) — every screen and the
+                // lens-set API read the lenses in this order off the snapshot.
+                LensSetLenses.InDisplayOrder(
+                    lensOptions.Where(l => l.PresetCatalogueId == c.Id)
+                        .Select(l => new LensOptionSnapshot(
+                            l.Id, l.Label, l.Sphere, lensCoatings[l.Id].ToList(),
+                            l.Cylinder, l.Axis, l.Add, l.LensTypeRefId, l.LensTypeOtherText,
+                            lensPairings[l.Id].ToList())),
+                    itemSnapshots),
                 AssignedOrgPaths: assignedPathsByCatalogue.GetValueOrDefault(c.Id, []))).ToList(),
             exclusions.Select(e => new CoatingExclusionRule(e.CoatingRefIdA, e.CoatingRefIdB)).ToList());
 
