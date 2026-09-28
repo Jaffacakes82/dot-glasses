@@ -1,6 +1,18 @@
 @model DotGlasses.Web.Models.LeadConversionViewModel
+@using DotGlasses.Rules.LensPowers
+@using Microsoft.AspNetCore.Mvc.Rendering
 @{
     ViewData["Title"] = "Convert lead to sale";
+}
+@functions {
+    // Option values use the request culture's own decimal format — the same culture the form
+    // binder parses them back with — and the select tag helper's asp-for marks the posted value
+    // selected on a re-render. The label is the shop's display format.
+    private static IEnumerable<SelectListItem> PowerOptions(IEnumerable<decimal> values) =>
+        values.Select(v => new SelectListItem(LensPowerValues.FormatPower(v), v.ToString()));
+
+    private static IEnumerable<SelectListItem> AxisOptions() =>
+        LensPowerValues.Axis.Select(v => new SelectListItem(v.ToString("0"), v.ToString("0")));
 }
 
 @await Html.PartialAsync("_PageHeader", new DotGlasses.Web.Models.PageHeaderViewModel
@@ -95,19 +107,20 @@
             </div>
 
             <p style="font-size:12px; color:var(--text-muted-2); margin:8px 0 4px;">— or, for a Custom range —</p>
+            @* The shop's values, from LensPowerValues (ADR-0007) — nothing here lists them itself. *@
             <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8px;">
-                <div><label>Sphere (R)</label><input class="form-control" type="number" step="0.25" asp-for="Form.SphereRight" /></div>
-                <div><label>Cylinder (R)</label><input class="form-control" type="number" step="0.25" asp-for="Form.CylinderRight" /></div>
-                <div><label>Axis (R)</label><input class="form-control" type="number" step="1" asp-for="Form.AxisRight" /></div>
-                <div><label>Add power (R)</label><input class="form-control" type="number" step="0.25" asp-for="Form.AddRight" /></div>
-                <div><label>Sphere (L)</label><input class="form-control" type="number" step="0.25" asp-for="Form.SphereLeft" /></div>
-                <div><label>Cylinder (L)</label><input class="form-control" type="number" step="0.25" asp-for="Form.CylinderLeft" /></div>
-                <div><label>Axis (L)</label><input class="form-control" type="number" step="1" asp-for="Form.AxisLeft" /></div>
-                <div><label>Add power (L)</label><input class="form-control" type="number" step="0.25" asp-for="Form.AddLeft" /></div>
-                <div><label>Pupil distance (mm)</label><input class="form-control" type="number" min="54" max="74" asp-for="Form.PupilDistanceMm" /></div>
+                <div><label>Sphere (R)</label><select class="form-select" asp-for="Form.SphereRight" asp-items="PowerOptions(LensPowerValues.Sphere)"><option value="">—</option></select></div>
+                <div><label>Cylinder (R)</label><select class="form-select" asp-for="Form.CylinderRight" asp-items="PowerOptions(LensPowerValues.Cylinder)"><option value="">—</option></select></div>
+                <div><label>Axis (R, only with a cylinder)</label><select class="form-select" asp-for="Form.AxisRight" asp-items="AxisOptions()"><option value="">—</option></select></div>
+                <div><label>Add power (R)</label><select class="form-select" asp-for="Form.AddRight" asp-items="PowerOptions(LensPowerValues.Add)"><option value="">—</option></select></div>
+                <div><label>Sphere (L)</label><select class="form-select" asp-for="Form.SphereLeft" asp-items="PowerOptions(LensPowerValues.Sphere)"><option value="">—</option></select></div>
+                <div><label>Cylinder (L)</label><select class="form-select" asp-for="Form.CylinderLeft" asp-items="PowerOptions(LensPowerValues.Cylinder)"><option value="">—</option></select></div>
+                <div><label>Axis (L, only with a cylinder)</label><select class="form-select" asp-for="Form.AxisLeft" asp-items="AxisOptions()"><option value="">—</option></select></div>
+                <div><label>Add power (L)</label><select class="form-select" asp-for="Form.AddLeft" asp-items="PowerOptions(LensPowerValues.Add)"><option value="">—</option></select></div>
+                <div><label>Pupil distance (mm)</label><input class="form-control" type="number" min="@LensPowerValues.PupilDistanceMmRange.Min" max="@LensPowerValues.PupilDistanceMmRange.Max" asp-for="Form.PupilDistanceMm" /></div>
                 <div style="display:flex; align-items:flex-end;"><label><input type="checkbox" asp-for="Form.ChildrensFrame" style="width:auto; margin-right:6px;" />Children's frame</label></div>
                 <div>
-                    <label>Lens type (required if an add power is set)</label>
+                    <label>Lens type (required if an add power above 0.00 is set)</label>
                     <select class="form-select" asp-for="Form.LensTypeRefId">
                         <option value="">—</option>
                         @foreach (var lensType in Model.LensTypes)

@@ -1172,11 +1172,12 @@ public class ConsultationRulesTests
     [InlineData(0.1, false)]   // off the step
     public void Custom_AddPowerHasItsOwnNarrowerRange(decimal addPower, bool accepted)
     {
-        // A lens type is set alongside, because an add power is exactly what makes one required —
-        // this case is about the power's range, not that requirement.
+        // A lens type is set alongside any add above 0, because that is exactly what makes one
+        // required — this case is about the power's range, not that requirement. An add of 0.00
+        // is no add, so it takes no lens type.
         var request = CustomTest();
         request.AddLeft = addPower;
-        request.LensTypeRefId = ActiveLensType;
+        request.LensTypeRefId = addPower > 0 ? ActiveLensType : null;
 
         var result = ConsultationRules.Check(request, Snapshot());
 
@@ -1197,7 +1198,9 @@ public class ConsultationRulesTests
     [InlineData(90.5, false)] // whole degrees only
     public void Custom_AxisBoundaries(decimal axis, bool accepted)
     {
+        // With a cylinder, so the axis is asked for at all.
         var request = CustomTest();
+        request.CylinderLeft = -1.00m;
         request.AxisLeft = axis;
 
         var result = ConsultationRules.Check(request, Snapshot());
@@ -1222,6 +1225,74 @@ public class ConsultationRulesTests
         var result = ConsultationRules.Check(request, Snapshot());
 
         Assert.Equal(["SphereLeft", "CylinderRight", "AxisRight"], result.Failures.Select(f => f.Key));
+    }
+
+    [Theory]
+    [InlineData(0.25)]   // the shop sells no positive cylinder
+    [InlineData(4.00)]
+    [InlineData(-6.25)]  // nor one below -6.00
+    [InlineData(-10.00)]
+    [InlineData(-0.30)]  // off the quarter step
+    public void Custom_ACylinderTheShopDoesNotSell_IsRefusedAgainstThatEye(decimal cylinder)
+    {
+        var request = CustomTest();
+        request.CylinderRight = cylinder;
+        request.AxisRight = 90m;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("CylinderRight", failure.Key);
+        Assert.Equal("CylinderRight must be between -6 and 0 in 0.25 increments.", failure.Message);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-6)]
+    [InlineData(-0.25)]
+    public void Custom_ACylinderTheShopSells_IsAccepted(decimal cylinder)
+    {
+        var request = CustomSale();
+        request.CylinderLeft = cylinder;
+        request.AxisLeft = cylinder == 0 ? null : 45m;
+
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void Custom_AxisIsRequiredWhenThatEyeHasACylinder()
+    {
+        var request = CustomLead();
+        request.CylinderLeft = -1.25m;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("AxisLeft", failure.Key);
+        Assert.Equal("AxisLeft is required when CylinderLeft isn't 0.00 — choose an axis from 0 to 180.", failure.Message);
+    }
+
+    [Theory]
+    [InlineData(null)] // a blank cylinder means 0.00
+    [InlineData(0)]
+    public void Custom_AxisIsRefusedWhenThatEyeHasNoCylinder(object? cylinder)
+    {
+        var request = CustomSale();
+        request.CylinderRight = cylinder is null ? null : Convert.ToDecimal(cylinder);
+        request.AxisRight = 90m;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("AxisRight", failure.Key);
+        Assert.Equal("AxisRight must be empty when CylinderRight is 0.00 — an axis only applies to a cylinder.", failure.Message);
+    }
+
+    [Fact]
+    public void Custom_TheOtherEyesCylinderDoesNotAskForThisEyesAxis()
+    {
+        var request = CustomTest();
+        request.CylinderLeft = -0.75m;
+        request.AxisLeft = 10m;
+
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
     }
 
     // --- Lens range: the lens type ---------------------------------------------------------
@@ -1268,6 +1339,43 @@ public class ConsultationRulesTests
 
         Assert.Equal("LensTypeRefId", failure.Key);
         Assert.Equal("LensTypeRefId/LensTypeOtherText must be empty unless an add power is set.", failure.Message);
+    }
+
+    [Fact]
+    public void LensType_AnAddOfZeroIsNoAdd_SoItNeedsNoLensType()
+    {
+        // The shop treats an add of 0.00 as no add, and so does the Field App's lens type prompt.
+        var request = CustomTest();
+        request.AddLeft = 0.00m;
+        request.AddRight = 0.00m;
+
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void LensType_AnAddOfZeroIsNoAdd_SoALensTypeIsRefused()
+    {
+        var request = CustomSale();
+        request.AddLeft = 0.00m;
+        request.LensTypeRefId = ActiveLensType;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("LensTypeRefId", failure.Key);
+        Assert.Equal("LensTypeRefId/LensTypeOtherText must be empty unless an add power is set.", failure.Message);
+    }
+
+    [Fact]
+    public void LensType_OneForThePair_EvenWhenOnlyOneEyeHasAnAdd()
+    {
+        // A record carries one lens type for both eyes: an add on either eye makes the pair
+        // bifocal/progressive, and the other eye's 0.00 add doesn't contradict it.
+        var request = CustomLead();
+        request.AddLeft = 0.00m;
+        request.AddRight = 1.75m;
+        request.LensTypeRefId = ActiveLensType;
+
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
     }
 
     [Fact]
