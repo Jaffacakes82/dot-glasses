@@ -1,6 +1,7 @@
 using DotGlasses.Application.Notifications;
 using DotGlasses.Application.Organisations;
 using DotGlasses.Application.Users;
+using DotGlasses.Domain.Common;
 using DotGlasses.Web.Authorization;
 using DotGlasses.Web.Models;
 using FluentValidation;
@@ -47,7 +48,7 @@ public class UserDirectoryController(
             return View(nameof(Index), await BuildUserListAsync(null, null, null, 1, cancellationToken));
         }
 
-        if (!await CanManageOrgAsync(request.OrgNodeIds[0], cancellationToken))
+        if (!await CanAssignAllAsync(request.OrgNodeIds, cancellationToken))
         {
             return Forbid();
         }
@@ -108,21 +109,43 @@ public class UserDirectoryController(
         return RedirectToAction(nameof(Index));
     }
 
-    private async Task<bool> CanManageOrgAsync(Guid orgNodeId, CancellationToken cancellationToken)
+    /// <summary>Server-side only for now: how the User Directory's edit form offers a role change
+    /// is its own piece of work (map ticket 03). The rule it must enforce lives here already — the
+    /// same all-assignments check as Suspend, since a role applies across the user's whole scope.
+    /// An unknown role is refused by the service as a DomainRuleViolationException.</summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ChangeRole(Guid id, string role, CancellationToken cancellationToken)
     {
-        var org = (await organisationAdminService.ListAsync(cancellationToken)).FirstOrDefault(o => o.Id == orgNodeId);
-        if (org is null)
+        if (await FindManageableUserAsync(id, cancellationToken) is null)
+        {
+            return Forbid();
+        }
+
+        await userAdminService.ChangeRoleAsync(id, role, cancellationToken);
+        return RedirectToAction(nameof(Index));
+    }
+
+    /// <summary>An invite is checked as the user it will create: every org being assigned must be
+    /// in the caller's scope — the same rule as acting on an existing user. An org the caller
+    /// can't see at all fails it outright.</summary>
+    private async Task<bool> CanAssignAllAsync(IReadOnlyCollection<Guid> orgNodeIds, CancellationToken cancellationToken)
+    {
+        var visibleOrgs = (await organisationAdminService.ListAsync(cancellationToken)).ToDictionary(o => o.Id);
+        if (!orgNodeIds.All(visibleOrgs.ContainsKey))
         {
             return false;
         }
 
-        var result = await authorizationService.AuthorizeAsync(User, org.HierarchyPath, AuthorizationPolicies.ManageUsersInScope);
+        var paths = orgNodeIds.Select(id => HierarchyPath.Parse(visibleOrgs[id].HierarchyPath)).ToList();
+        var result = await authorizationService.AuthorizeAsync(User, new UserAssignments(paths), AuthorizationPolicies.ManageUsersInScope);
         return result.Succeeded;
     }
 
-    /// <summary>Resource-based check against the target user's own HierarchyPath — re-checked
-    /// here even though the view already hides the triggering form for a user who'd fail it;
-    /// never trust the hidden-button UX alone.</summary>
+    /// <summary>Resource-based check against all of the target user's org assignments (ADR-0006)
+    /// — re-checked here even though the view already hides the triggering form for a user who'd
+    /// fail it; never trust the hidden-button UX alone. A user not listed at all (no assignment
+    /// in the caller's scope) fails too.</summary>
     private async Task<UserAdminRow?> FindManageableUserAsync(Guid userId, CancellationToken cancellationToken)
     {
         var target = (await userAdminService.ListAsync(cancellationToken)).FirstOrDefault(u => u.Id == userId);
@@ -131,9 +154,11 @@ public class UserDirectoryController(
             return null;
         }
 
-        var result = await authorizationService.AuthorizeAsync(User, target.HierarchyPath, AuthorizationPolicies.ManageUsersInScope);
-        return result.Succeeded ? target : null;
+        return await CanManageAsync(target) ? target : null;
     }
+
+    private async Task<bool> CanManageAsync(UserAdminRow user) =>
+        (await authorizationService.AuthorizeAsync(User, new UserAssignments(user.AssignmentPaths), AuthorizationPolicies.ManageUsersInScope)).Succeeded;
 
     private async Task<UserDirectoryViewModel> BuildUserListAsync(string? search, string? role, string? status, int page, CancellationToken cancellationToken)
     {
@@ -143,7 +168,7 @@ public class UserDirectoryController(
         var users = new List<DirectoryUser>();
         foreach (var row in pageResult.Items)
         {
-            var canManage = (await authorizationService.AuthorizeAsync(User, row.HierarchyPath, AuthorizationPolicies.ManageUsersInScope)).Succeeded;
+            var canManage = await CanManageAsync(row);
             users.Add(new DirectoryUser(
                 row.Id,
                 row.DisplayName,

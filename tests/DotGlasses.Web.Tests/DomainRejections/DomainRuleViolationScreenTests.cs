@@ -55,12 +55,19 @@ public class DomainRuleViolationScreenTests(AdminPortalFactory factory) : IClass
     }
 
     [Fact]
-    public async Task Organisations_UnassigningAUsersPrimaryOrg_ShowsTheMessageOnTheOrganisationsScreen()
+    public async Task Organisations_UnassigningAUsersLastOrg_ShowsTheMessageOnTheOrganisationsScreen()
     {
         var user = await factory.SeedUserAsync(
-            $"primary-{Guid.NewGuid():N}@example.test",
+            $"last-org-{Guid.NewGuid():N}@example.test",
             OrganisationSeedConfiguration.KenyaRetailPointId,
             OrganisationSeedConfiguration.KenyaRetailPointPath);
+        factory.Seed(db => db.UserOrgAssignments.Add(new UserOrgAssignment
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            OrgNodeId = OrganisationSeedConfiguration.KenyaRetailPointId,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+        }));
 
         var client = factory.CreateAdminClient();
         var token = await AdminPortalFactory.GetAntiforgeryTokenAsync(client, "/Organisations");
@@ -74,7 +81,7 @@ public class DomainRuleViolationScreenTests(AdminPortalFactory factory) : IClass
                 ("userId", user.Id.ToString())),
             referer: "/Organisations");
 
-        Assert.Contains("Can&#x27;t un-assign a user&#x27;s primary org", html);
+        Assert.Contains("This is the user&#x27;s last org assignment", html);
     }
 
     [Fact]
