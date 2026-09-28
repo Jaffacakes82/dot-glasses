@@ -45,8 +45,9 @@ where they qualify. This map is for planning only; nothing is implemented from i
     [`multi-org-access-and-retail-points/spec.md`](../multi-org-access-and-retail-points/spec.md),
     which is `ready-for-agent`.
   - Ticket 03's form work follows the rules that spec sets.
-  - Tickets 06–10 are all resolved, so the lens spec can be written. It also absorbs the rework of
-    the Rules and the Field App's offline cache for the new lens shape.
+  - Tickets 05–10 are specified in
+    [`lens-power-and-lens-sets/spec.md`](../lens-power-and-lens-sets/spec.md), which is
+    `ready-for-agent` and follows the multi-org spec.
 - **Custom Orders after the redesign.** If custom lenses come from the lens database and leads can
   order, the Custom Orders queue and its fulfilment status may need to change shape.
 - **MI that doesn't tally.** The call expects small reporting discrepancies after these changes.
