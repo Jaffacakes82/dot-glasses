@@ -1,4 +1,5 @@
 using DotGlasses.Domain.Enums;
+using DotGlasses.Rules.ReferenceData;
 
 namespace DotGlasses.Application.PresetCatalogues;
 
@@ -46,6 +47,23 @@ public interface IPresetCatalogueAdminService
 
     Task UpdateAsync(Guid id, string name, string? description, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// A lens set's lenses — label, lens power and lens type only (no coatings) — read straight
+    /// from the table rather than off the memoised reference-data snapshot: the Add lens dialog's
+    /// validator runs inside a write to the lens-set library, where the per-request snapshot must
+    /// not be consulted (CLAUDE.md, ADR-0002). In no particular order.
+    /// </summary>
+    Task<IReadOnlyList<LensOptionSnapshot>> ListLensesForCheckAsync(Guid catalogueId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Adds a lens to the lens set (<paramref name="lensOptionId"/> null), or replaces an existing
+    /// lens's power, label, lens type, coatings and pairings — the Add lens dialog's save. The
+    /// caller has already validated it (SaveLensRequestValidator) and checked the lens belongs to
+    /// this lens set. Stored the way the rules read it: a 0.00 cylinder or add is stored as none,
+    /// and so is an axis without a cylinder. A retired lens set is refused.
+    /// </summary>
+    Task SaveLensAsync(Guid catalogueId, Guid? lensOptionId, LensSetLensInput lens, CancellationToken cancellationToken = default);
+
     /// <summary>Hard remove, taking the lens's coatings and pairings with it (cascade). A record
     /// keeps its own copy of what was sold (ADR-0007), so nothing needs preserving; a record that
     /// still names the lens by id just shows it as missing.</summary>
@@ -85,8 +103,22 @@ public record PresetCatalogueLensOptionAdminDto(
     decimal? Add,
     Guid? LensTypeRefId,
     string? LensTypeLabel,
+    string? LensTypeOtherText,
     IReadOnlyList<LensCoatingAdminDto> Coatings,
     IReadOnlyList<LensCoatingPairingAdminDto> Pairings);
+
+/// <summary>One lens set lens as the Add lens dialog saves it (ADR-0007). Pairings are directional:
+/// on this lens the trigger coating brings the paired one with it.</summary>
+public record LensSetLensInput(
+    string Label,
+    decimal Sphere,
+    decimal? Cylinder,
+    decimal? Axis,
+    decimal? Add,
+    Guid? LensTypeRefId,
+    string? LensTypeOtherText,
+    IReadOnlyList<Guid> CoatingIds,
+    IReadOnlyList<CoatingPairingRule> Pairings);
 
 public record LensCoatingAdminDto(Guid CoatingRefId, string Label);
 
