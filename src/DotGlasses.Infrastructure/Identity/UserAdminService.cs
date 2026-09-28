@@ -204,7 +204,7 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
     {
         var user = await userManager.FindByIdAsync(userId.ToString()) ?? throw new InvalidOperationException("User not found.");
         await userManager.SetLockoutEnabledAsync(user, true);
-        await userManager.SetLockoutEndDateAsync(user, DateTimeOffset.MaxValue);
+        await userManager.SetLockoutEndDateAsync(user, UserSuspension.LockoutEnd);
     }
 
     public async Task UnsuspendAsync(Guid userId, CancellationToken cancellationToken = default)
