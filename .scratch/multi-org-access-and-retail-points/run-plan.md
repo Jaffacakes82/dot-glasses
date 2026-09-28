@@ -34,6 +34,8 @@ How to hand the tickets in `issues/` here and in `../lens-power-and-lens-sets/is
   `agent-ab79b4a93c7ab75f3` (branch `feat/multi-org-access-review-app`: outlet picker outbox block,
   re-ask on lost location, offline state, location on every page, FormErrors `""` regression).
   **Next:** finish and merge those two, full suite, open Spec A's PR; then B03.
+- 2026-09-28 (later still): both review-fix branches finished and merged; full suite 484 passing.
+  Spec A's PR opened to `main`. B03 in progress on `feat/lens-power`.
 - Follow-ups noted during review, not yet ticketed:
   - The Admin Portal's cookie recheck also runs on static-asset requests (one small query each).
   - Two admins removing a user's last two assignments at once could leave the user with none.
