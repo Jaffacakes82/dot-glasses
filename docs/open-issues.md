@@ -84,6 +84,13 @@ machine" rule.
   `IResourceBuilder` exposed in `AppHost.cs` to rename via `ConfigureInfrastructure`. Revisit if
   Aspire ever exposes a builder handle for either.
 - **Azure Monitor / Application Insights** exporter connection string isn't configured anywhere.
+- **A09's Field App manual browser checklist is still unverified by a human.** The location
+  picker, the auto-pick-when-one-eligible cases, the "can't record here" screen, the header and
+  "Recording at" copy, the Failed-records message after a lost assignment, and the
+  switching-stays-blocked-with-unsent-records guard were all implemented and reasoned through by
+  code reading, but running the Field App needs the AppHost, Docker and seeded dev secrets, which
+  no coding session has attempted. The checklist itself lives in ticket 09's own `## Comments`
+  (`.scratch/multi-org-access-and-retail-points/issues/09-field-app-remembers-shows-and-picks-the-location.md`).
 
 ## Deliberately deferred (not started, not forgotten)
 
@@ -136,6 +143,16 @@ machine" rule.
   create-once atomic events by design. A mistyped phone number or wrong frame colour is permanent.
   This is a deliberate product constraint, not an oversight; don't build an edit path without
   re-confirming with the user first.
+- **The Admin Portal's per-request access recheck (ADR-0006) also runs on static-asset requests**
+  (CSS, JS, images served under the authenticated layout) — each one costs the same small
+  assignments/role/lockout query as a page request, since the cookie's `OnValidatePrincipal` event
+  doesn't distinguish an asset request from a navigation. Correct (an asset request still shouldn't
+  outlive a suspension), just more querying than strictly needed. Revisit only if it shows up as a
+  real load problem.
+- **Two admins concurrently removing the same user's last two assignments could leave them with
+  none**, despite the "at least one assignment" rule — the refusal check and the removal aren't
+  locked against each other, so two racing requests can each see one assignment left (of two) and
+  both proceed. Accepted as unlikely (ticket 03); revisit if it's ever seen in practice.
 
 ## Real, visible interim gaps (the system tells the user, doesn't hide it)
 

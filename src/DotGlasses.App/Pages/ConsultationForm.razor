@@ -1121,6 +1121,13 @@
             if (result.FieldErrors is not null)
             {
                 _errors.Merge(result.FieldErrors, KnownFields);
+
+                // A whole-record ("") rejection lands in _errors.Unattributed too (FormErrors.
+                // Attribute — every caller must see it, Settings' change-password path has no
+                // other way to). This form already shows the identical text as _summaryMessage
+                // above, so drop the exact duplicate here rather than printing it a second time
+                // as a bullet under its own summary line.
+                _errors.Unattributed.RemoveAll(message => message == _summaryMessage);
             }
 
             return false;
