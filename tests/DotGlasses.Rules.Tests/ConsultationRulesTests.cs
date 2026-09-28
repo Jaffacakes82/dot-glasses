@@ -68,6 +68,14 @@ public class ConsultationRulesTests
     /// is meant to carry at least one (ADR-0007), and this is what the lens-keyed failure exists
     /// for when one doesn't.</summary>
     private static readonly Guid LensA3NoCoatings = Guid.Parse("00000000-0000-0000-0000-000000000f13");
+
+    /// <summary>A bifocal on CatalogueA sharing LensA1's sphere (+1.00) — what a mixed pair is
+    /// made of, and the lens a request's lens type has to agree with.</summary>
+    private static readonly Guid LensA4Bifocal = Guid.Parse("00000000-0000-0000-0000-000000000f14");
+
+    /// <summary>Single vision on CatalogueA in fewer coatings than LensA1 — only ActiveCoating —
+    /// so a right eye can narrow nothing the left lens allows.</summary>
+    private static readonly Guid LensA5 = Guid.Parse("00000000-0000-0000-0000-000000000f15");
     private static readonly Guid LensB1 = Guid.Parse("00000000-0000-0000-0000-000000000f21");
 
     /// <summary>A retired lens set: present in the server's snapshot (historical records still
@@ -118,9 +126,9 @@ public class ConsultationRulesTests
             new ReferenceItemSnapshot(UnavailableCoating, ReferenceDataCategory.Coating, "Sunglasses", IsActive: true, IsOtherOption: false),
         ],
         [
-            // Two catalogues, so "this lens option belongs to some catalogue, just not that one"
-            // is a case the tests can actually state — it is the mistake the rule exists to catch,
-            // and an id that belongs to nothing would not distinguish the rule from a null check.
+            // Two catalogues, so "this lens power is in some lens set, just not that one" (+3.00,
+            // LensB1's) is a case the tests can actually state — a record holds powers, not lens
+            // ids (ADR-0007), and each eye is matched in the chosen set only.
             //
             // UnavailableCoating is deliberately on no lens option's roster, and LensA3NoCoatings
             // deliberately has an empty one: those are the two different ways availability fails,
@@ -129,6 +137,8 @@ public class ConsultationRulesTests
                 new LensOptionSnapshot(LensA1, "+1.00", 1.00m, [ActiveCoating, SecondCoating, ExcludingCoating]),
                 new LensOptionSnapshot(LensA2, "+2.50", 2.50m, [ActiveCoating, SecondCoating, ExcludingCoating]),
                 new LensOptionSnapshot(LensA3NoCoatings, "+3.50", 3.50m, []),
+                new LensOptionSnapshot(LensA4Bifocal, "Bifocal +1.00 / +2.00", 1.00m, [ActiveCoating], Add: 2.00m, LensTypeRefId: ActiveLensType),
+                new LensOptionSnapshot(LensA5, "+2.00", 2.00m, [ActiveCoating]),
             ], AssignedOrgPaths: catalogueAAssignedTo),
             new PresetCatalogueSnapshot(CatalogueB, "Nine lens set", IsActive: true, [
                 new LensOptionSnapshot(LensB1, "+3.00", 3.00m, [ActiveCoating]),
@@ -159,9 +169,10 @@ public class ConsultationRulesTests
 
     /// <summary>A Sale cannot decline to name a lens range: LensRangeType is non-nullable and its
     /// default is LensSet, so the baseline request has to carry a complete lens set range —
-    /// catalogue, both lens options, and the pupil-distance bucket a Sale is required to have. It
-    /// also has to carry a Coating set: at least one entry is required on both branches, so a
-    /// baseline with an empty one would not be valid.</summary>
+    /// catalogue, each eye's lens power (LensA1's +1.00 on the left, LensA2's +2.50 on the right,
+    /// both single vision so no lens type), and the pupil-distance bucket a Sale is required to
+    /// have. It also has to carry a Coating set: at least one entry is required on both branches,
+    /// so a baseline with an empty one would not be valid.</summary>
     private static CreateSaleRequest ValidSale() => new()
     {
         Id = Guid.NewGuid(),
@@ -169,8 +180,8 @@ public class ConsultationRulesTests
         FrameColourRefId = ActiveFrameColour,
         LensRangeType = LensRangeType.LensSet,
         PresetCatalogueId = CatalogueA,
-        LensOptionLeftId = LensA1,
-        LensOptionRightId = LensA2,
+        SphereLeft = 1.00m,
+        SphereRight = 2.50m,
         PresetPupilDistanceBucket = 2,
         CoatingRefIds = [ActiveCoating],
     };
@@ -181,8 +192,8 @@ public class ConsultationRulesTests
         Id = Guid.NewGuid(),
         LensRangeType = LensRangeType.LensSet,
         PresetCatalogueId = CatalogueA,
-        LensOptionLeftId = LensA1,
-        LensOptionRightId = LensA2,
+        SphereLeft = 1.00m,
+        SphereRight = 2.50m,
     };
 
     private static CreateLeadRequest PresetLead()
@@ -190,8 +201,20 @@ public class ConsultationRulesTests
         var request = ValidLead();
         request.LensRangeType = LensRangeType.LensSet;
         request.PresetCatalogueId = CatalogueA;
-        request.LensOptionLeftId = LensA1;
-        request.LensOptionRightId = LensA2;
+        request.SphereLeft = 1.00m;
+        request.SphereRight = 2.50m;
+        return request;
+    }
+
+    /// <summary>A Sale on CatalogueA's bifocal (+1.00, add +2.00) for both eyes.</summary>
+    private static CreateSaleRequest BifocalSale()
+    {
+        var request = ValidSale();
+        request.SphereLeft = 1.00m;
+        request.AddLeft = 2.00m;
+        request.SphereRight = 1.00m;
+        request.AddRight = 2.00m;
+        request.LensTypeRefId = ActiveLensType;
         return request;
     }
 
@@ -221,8 +244,6 @@ public class ConsultationRulesTests
         var request = ValidSale();
         request.LensRangeType = LensRangeType.Custom;
         request.PresetCatalogueId = null;
-        request.LensOptionLeftId = null;
-        request.LensOptionRightId = null;
         request.PresetPupilDistanceBucket = null;
         request.SphereLeft = 1.00m;
         request.SphereRight = -0.50m;
@@ -830,20 +851,6 @@ public class ConsultationRulesTests
     }
 
     [Fact]
-    public void LensRange_PresetChosenButACustomFieldWasFilled_IsRejected()
-    {
-        // Fields belonging to the branch not chosen must be empty — a half-edited form must not
-        // reach the database carrying two contradictory prescriptions.
-        var request = PresetTest();
-        request.SphereLeft = 1.00m;
-
-        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
-
-        Assert.Equal("LensRangeType", failure.Key);
-        Assert.Equal("Custom prescription fields must be empty for a LensSet LensRangeType.", failure.Message);
-    }
-
-    [Fact]
     public void LensRange_CustomChosenButAPresetFieldWasFilled_IsRejected()
     {
         var request = CustomTest();
@@ -874,8 +881,8 @@ public class ConsultationRulesTests
         var request = ValidSale();
         request.LensRangeType = LensRangeType.LensSet;
         request.PresetCatalogueId = CatalogueB;
-        request.LensOptionLeftId = LensB1;
-        request.LensOptionRightId = LensB1;
+        request.SphereLeft = 3.00m;
+        request.SphereRight = 3.00m;
 
         Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
     }
@@ -888,8 +895,8 @@ public class ConsultationRulesTests
         // PresetCatalogueId so a Field App Failed record lands on the lens range control.
         var request = ValidSale();
         request.PresetCatalogueId = RetiredCatalogue;
-        request.LensOptionLeftId = LensRetired1;
-        request.LensOptionRightId = LensRetired1;
+        request.SphereLeft = 1.50m;
+        request.SphereRight = 1.50m;
 
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
@@ -929,34 +936,26 @@ public class ConsultationRulesTests
         Assert.Equal("PresetCatalogueId", failure.Key);
     }
 
-    [Theory]
-    [InlineData("catalogue")]
-    [InlineData("left")]
-    [InlineData("right")]
-    public void Preset_MissingOneOfTheThreeIds_ReportsOnceAndStops(string missing)
+    [Fact]
+    public void Preset_MissingTheLensSet_ReportsOnceAndStops()
     {
-        // Without all three there is nothing to check the options against, so the branch reports
-        // the one thing the technician can act on and stops — continuing would complain that an id
-        // they never supplied does not belong to a catalogue.
+        // Without a lens set there is nothing to match the lenses against, so the branch reports
+        // the one thing the technician can act on and stops — continuing would complain that
+        // powers they did choose are in no lens set.
         var request = PresetTest();
-        switch (missing)
-        {
-            case "catalogue": request.PresetCatalogueId = null; break;
-            case "left": request.LensOptionLeftId = null; break;
-            case "right": request.LensOptionRightId = null; break;
-        }
+        request.PresetCatalogueId = null;
 
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("PresetCatalogueId", failure.Key);
-        Assert.Equal("PresetCatalogueId, LensOptionLeftId and LensOptionRightId are all required for a LensSet LensRangeType.", failure.Message);
+        Assert.Equal("PresetCatalogueId is required for a LensSet LensRangeType.", failure.Message);
     }
 
     [Fact]
-    public void Preset_MissingIdsStopsBeforeThePupilDistanceChecks()
+    public void Preset_MissingTheLensSetStopsBeforeThePupilDistanceChecks()
     {
         // The same short-circuit, stated as the thing that actually matters: a Sale with no
-        // catalogue reports the missing ids alone, not that plus a required-bucket message.
+        // catalogue reports the missing lens set alone, not that plus a required-bucket message.
         var request = ValidSale();
         request.PresetCatalogueId = null;
         request.PresetPupilDistanceBucket = null;
@@ -964,41 +963,140 @@ public class ConsultationRulesTests
         Assert.Equal("PresetCatalogueId", AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Key);
     }
 
-    [Fact]
-    public void Preset_LensOptionFromAnotherCatalogue_IsRejected()
+    [Theory]
+    [InlineData("left", "SphereLeft", "Choose a lens for the left eye.")]
+    [InlineData("right", "SphereRight", "Choose a lens for the right eye.")]
+    public void LensSet_AnEyeWithNoLensPower_IsReportedAgainstThatEyeAndStops(string eye, string key, string message)
     {
-        // LensB1 is a real lens option — it just belongs to the other catalogue. That is the
-        // mistake this rule exists to catch, and an id belonging to nothing would not tell the
-        // rule apart from a null check.
-        var request = PresetTest();
-        request.LensOptionLeftId = LensB1;
+        // A lens-set record carries each eye's lens power, the same fields as a Custom
+        // prescription (ADR-0007). An eye with none has no lens chosen — which is also how an
+        // old-shape request arrives, naming its lenses by ids the request no longer has. Reported
+        // against that eye's sphere, the key the lens dropdown renders against, and nothing else:
+        // a missing bucket on top would be noise.
+        var request = ValidSale();
+        request.PresetPupilDistanceBucket = null;
+        if (eye == "left")
+        {
+            request.SphereLeft = null;
+        }
+        else
+        {
+            request.SphereRight = null;
+        }
 
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
-        Assert.Equal("LensOptionLeftId", failure.Key);
-        Assert.Equal("LensOptionLeftId must belong to PresetCatalogueId.", failure.Message);
+        Assert.Equal(key, failure.Key);
+        Assert.Equal(message, failure.Message);
     }
 
     [Fact]
-    public void Preset_BothLensOptionsFromAnotherCatalogue_AreReportedSeparately()
+    public void LensSet_ALensPowerFromAnotherLensSet_IsRejectedAgainstThatEye()
     {
+        // +3.00 is a real lens — LensB1 — but on the other lens set. Each eye is matched in the
+        // chosen set only.
         var request = PresetTest();
-        request.LensOptionLeftId = LensB1;
-        request.LensOptionRightId = LensB1;
+        request.SphereLeft = 3.00m;
 
-        var result = ConsultationRules.Check(request, Snapshot());
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
-        Assert.Equal(["LensOptionLeftId", "LensOptionRightId"], result.Failures.Select(f => f.Key));
-        Assert.Equal("LensOptionRightId must belong to PresetCatalogueId.", result.Failures[1].Message);
+        Assert.Equal("SphereLeft", failure.Key);
+        Assert.Equal("No lens in this lens set has the left eye's lens power — choose a lens.", failure.Message);
+    }
+
+    [Theory]
+    [InlineData("cylinder")]
+    [InlineData("add")]
+    [InlineData("sphere")]
+    public void LensSet_EachEyeMustMatchALensByItsWholeLensPower(string differs)
+    {
+        // The power is sphere, cylinder, axis and add together — a +2.50 with a cylinder is not
+        // the +2.50 in the set.
+        var request = PresetTest();
+        switch (differs)
+        {
+            case "cylinder": request.CylinderRight = -0.50m; request.AxisRight = 90m; break;
+            case "add": request.AddRight = 1.00m; break;
+            case "sphere": request.SphereRight = 2.75m; break;
+        }
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("SphereRight", failure.Key);
+        Assert.Equal("No lens in this lens set has the right eye's lens power — choose a lens.", failure.Message);
     }
 
     [Fact]
-    public void Preset_LensOptionThatNeverExisted_IsRejected()
+    public void LensSet_BothEyesMatchingNothing_AreReportedSeparately()
     {
         var request = PresetTest();
-        request.LensOptionRightId = NeverExisted;
+        request.SphereLeft = 3.00m;
+        request.SphereRight = 3.00m;
 
-        Assert.Equal("LensOptionRightId", AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Key);
+        Assert.Equal(["SphereLeft", "SphereRight"], ConsultationRules.Check(request, Snapshot()).Failures.Select(f => f.Key));
+    }
+
+    [Fact]
+    public void LensSet_AnAddOf000WhereTheLensHasNone_IsTheSameLens()
+    {
+        // Matched the way LensPowerRules reads a power (LensSetLenses.Match): a 0.00 add is no add
+        // and a 0.00 cylinder no cylinder.
+        var request = PresetTest();
+        request.AddLeft = 0.00m;
+        request.CylinderRight = 0.00m;
+
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void LensSet_ALensWithAnAddAndItsLensType_IsAccepted()
+    {
+        Assert.True(ConsultationRules.Check(BifocalSale(), Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void LensSet_ALensWithAnAddButNoLensType_IsAMismatchedLensType()
+    {
+        // The lens type is part of what picks out the lens: +1.00 add +2.00 is only in the set as
+        // a Bifocal, and a request that says "single vision" names no lens there.
+        var request = BifocalSale();
+        request.LensTypeRefId = null;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("LensTypeRefId", failure.Key);
+        Assert.Equal("LensTypeRefId must be the chosen lenses' own lens type.", failure.Message);
+    }
+
+    [Fact]
+    public void LensSet_ALensTypeOnSingleVisionLenses_IsAMismatchedLensType()
+    {
+        var request = PresetTest();
+        request.LensTypeRefId = ActiveLensType;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("LensTypeRefId", failure.Key);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void LensSet_AMixedPair_IsRefusedAgainstTheRightEye(bool lensTypeIsTheLeftLenss)
+    {
+        // Bifocal on the left, single vision on the right: each is a real lens in the set, but a
+        // record has one lens type for the pair, so no one lens type can name both. Reported on
+        // the right eye, which the Field App limits to the left eye's lens type.
+        var request = ValidSale();
+        request.SphereLeft = 1.00m;
+        request.AddLeft = 2.00m;
+        request.SphereRight = 2.50m;
+        request.LensTypeRefId = lensTypeIsTheLeftLenss ? ActiveLensType : null;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("SphereRight", failure.Key);
+        Assert.Equal("Both eyes' lenses must be the same lens type — choose a right-eye lens of the left eye's type.", failure.Message);
     }
 
     [Fact]
@@ -1605,16 +1703,27 @@ public class ConsultationRulesTests
     [Fact]
     public void CoatingSet_AvailabilityIsScopedByTheLeftLensOnly()
     {
-        // The rule reads the left lens option and only the left one. LensB1 carries a different
-        // roster, and putting it on the right does not widen or narrow what the left allows —
-        // it is rejected for belonging to another catalogue, and the coatings still pass.
+        // The rule reads the lens matching the left eye and only that one — like-for-like with the
+        // left lens id it used to read (lens-power ticket 06 widens it to both lenses). LensA5 on
+        // the right comes in ActiveCoating only, and does not narrow what the left allows.
         var request = ValidSale();
-        request.LensOptionRightId = LensB1;
+        request.SphereRight = 2.00m;
         request.CoatingRefIds = [SecondCoating];
 
-        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
+    }
 
-        Assert.Equal("LensOptionRightId", failure.Key);
+    [Fact]
+    public void CoatingSet_OnALensSetWhoseLeftEyeMatchesNoLens_ChecksTheCoatingsButNotAgainstALens()
+    {
+        // No lens matched means no lens to scope availability by; the lens-range rule has already
+        // said so against the eye. The coatings are still checked for what doesn't depend on a
+        // lens — an unavailable-but-real coating passes here, a retired one would not.
+        var request = ValidSale();
+        request.SphereLeft = 3.00m;
+        request.CoatingRefIds = [UnavailableCoating];
+
+        Assert.Equal(["SphereLeft"], ConsultationRules.Check(request, Snapshot()).Failures.Select(f => f.Key));
     }
 
     [Fact]
@@ -1626,11 +1735,11 @@ public class ConsultationRulesTests
         // against CoatingRefIds — advice no choice of coating could satisfy, because none is
         // available. It is the lens that has to change.
         var request = ValidSale();
-        request.LensOptionLeftId = LensA3NoCoatings;
+        request.SphereLeft = 3.50m;
 
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
-        Assert.Equal("LensOptionLeftId", failure.Key);
+        Assert.Equal("SphereLeft", failure.Key);
         Assert.Equal("This lens has no coatings configured yet, so it can't be sold on a lens set.", failure.Message);
     }
 
@@ -1640,12 +1749,12 @@ public class ConsultationRulesTests
         // Asked ahead of "choose at least one coating": sending the technician to a picker with
         // nothing in it would be the one piece of advice they cannot act on.
         var request = ValidSale();
-        request.LensOptionLeftId = LensA3NoCoatings;
+        request.SphereLeft = 3.50m;
         request.CoatingRefIds = [];
 
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
-        Assert.Equal("LensOptionLeftId", failure.Key);
+        Assert.Equal("SphereLeft", failure.Key);
         Assert.Equal("This lens has no coatings configured yet, so it can't be sold on a lens set.", failure.Message);
     }
 
@@ -1720,15 +1829,15 @@ public class ConsultationRulesTests
     [Fact]
     public void CoatingSet_WithoutACompletePresetRange_SaysNothing()
     {
-        // No left lens option means nothing to scope availability by, and telling a technician
-        // who has not picked a lens yet to choose a coating would be noise on top of the real
-        // failure — the same short-circuit the lens-range rule makes.
+        // No left lens means nothing to scope availability by, and telling a technician who has
+        // not picked a lens yet to choose a coating would be noise on top of the real failure —
+        // the same short-circuit the lens-range rule makes.
         var request = ValidSale();
-        request.LensOptionLeftId = null;
+        request.SphereLeft = null;
         request.CoatingRefIds = [];
 
         Assert.Equal(
-            ["PresetCatalogueId"],
+            ["SphereLeft"],
             ConsultationRules.Check(request, Snapshot()).Failures.Select(f => f.Key));
     }
 
@@ -1806,7 +1915,7 @@ public class ConsultationRulesTests
         // preference is optional, so a technician can always clear it and carry on — it is never
         // unsatisfiable the way a mandatory Coating set is.
         var test = PresetTest();
-        test.LensOptionLeftId = LensA3NoCoatings;
+        test.SphereLeft = 3.50m;
         test.CoatingPreferenceRefId = ActiveCoating;
 
         var failure = AssertSingleFailure(ConsultationRules.Check(test, Snapshot()));
@@ -2055,21 +2164,21 @@ public class ConsultationRulesTests
     public void AnEmptySnapshot_RejectsEveryReferenceDataAnswerRatherThanThrowing()
     {
         // A Field App that has never been online holds nothing — no reference items and no preset
-        // catalogues — and the rules still have to answer rather than throw. The lens options and
+        // catalogues — and the rules still have to answer rather than throw. Each eye's lens and
         // the Coating set are rejected for the same reason the occupation is: nothing in the
-        // snapshot carries that id.
+        // snapshot carries them.
         //
         // The Coating set reports "not an active Coating" rather than the lens-keyed
         // no-coatings-configured message, and that is the intended split: with an empty snapshot
-        // the left lens option resolves to nothing at all, which is a different failure that the
-        // lens-range rule has already reported against LensOptionLeftId.
+        // the left eye matches no lens at all, which is a different failure that the lens-range
+        // rule has already reported against SphereLeft.
         var request = ValidSale();
         request.OccupationRefId = ActiveOccupation;
 
         var result = ConsultationRules.Check(request, ReferenceDataSnapshot.Empty);
 
         Assert.Equal(
-            ["OccupationRefId", "FrameColourRefId", "LensOptionLeftId", "LensOptionRightId", "CoatingRefIds"],
+            ["OccupationRefId", "FrameColourRefId", "SphereLeft", "SphereRight", "CoatingRefIds"],
             result.Failures.Select(f => f.Key));
     }
 }

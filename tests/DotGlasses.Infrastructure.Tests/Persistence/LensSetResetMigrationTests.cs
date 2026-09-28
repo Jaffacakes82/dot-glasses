@@ -157,9 +157,13 @@ public class LensSetResetMigrationTests(PostgresContainerFixture postgres)
         Assert.Equal("6-Lens Set", lensSet.Name);
         Assert.False(lensSet.IsActive);
 
-        // Its lens is gone with the set's contents; the record says so honestly rather than
-        // throwing (the lens power it was sold with is not recoverable from a label).
-        Assert.Equal("—", snapshot.ResolveLensOptionLabel(sale.LensOptionLeftId));
+        // Its lens is gone with the set's contents, and since lens-power ticket 05 a record holds
+        // no lens id at all — only lens powers, which an old lens-set record doesn't have (the
+        // power it was sold with is not recoverable from a label). It reads back with empty powers.
+        Assert.Null(sale.SphereLeft);
+        Assert.Null(sale.SphereRight);
+        Assert.Equal(0, await CountAsync(context,
+            """SELECT COUNT(*)::int AS "Value" FROM information_schema.columns WHERE column_name IN ('LensOptionLeftId', 'LensOptionRightId')"""));
     }
 
     [Fact]
