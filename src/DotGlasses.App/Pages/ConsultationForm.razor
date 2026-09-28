@@ -208,13 +208,22 @@
                                        LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
                                        AllowNoPreference="false" Errors="_errors" SelectionChanged="OnLensSelectionChanged" />
 
-                    @if (_lensRange.LensRangeType is LensRangeType.LensSet && _lensRange.LensLeftId is not null && AvailableCoatingIdsForSelectedPreset.Count > 0)
+                    @RenderCoatingRemovedNote()
+
+                    @if (_lensRange.LensRangeType is LensRangeType.LensSet && PairCoatings is { } pairCoatings)
                     {
-                        <CoatingMultiSelector Label="Coating" AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
-                                               RestrictToIds="AvailableCoatingIdsForSelectedPreset"
-                                               SelectedIds="_coatingRefIds" SelectedIdsChanged="v => _coatingRefIds = v"
-                                               Exclusions="ReferenceDataClient.CoatingExclusions"
-                                               Errors="_errors" Field="CoatingRefIds" />
+                        @if (pairCoatings.Offered.Count > 0)
+                        {
+                            <CoatingMultiSelector Label="Coating" AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
+                                                   RestrictToIds="pairCoatings.Offered" RequiredPairings="pairCoatings.RequiredPairings"
+                                                   SelectedIds="_coatingRefIds" SelectedIdsChanged="v => _coatingRefIds = v"
+                                                   Exclusions="ReferenceDataClient.CoatingExclusions"
+                                                   Errors="_errors" Field="CoatingRefIds" />
+                        }
+                        else
+                        {
+                            <p class="dg-lens-note" role="status">No coating can be made on both of these lenses, so they can't be sold together. Choose different lenses.</p>
+                        }
                     }
 
                     @if (_lensRange.LensRangeType == LensRangeType.Custom)
@@ -478,6 +487,7 @@
                     _referralReasonRefId = test.ReferralReasonRefId;
                     _referralOtherText = test.ReferralOtherText;
                     _referralLocationFreeText = test.ReferralLocationFreeText;
+                    _coatingPreferenceRefId = test.CoatingPreferenceRefId;
                     ApplyLensRange("record", test.LensRangeType, test.PresetCatalogueId,
                         test.SphereLeft, test.CylinderLeft, test.AxisLeft, test.AddLeft,
                         test.SphereRight, test.CylinderRight, test.AxisRight, test.AddRight,
@@ -599,34 +609,47 @@
             _lensRange.SameLensForBothEyes = LensRangeSelection.EyesMatch(
                 sphereLeft, cylinderLeft, axisLeft, addLeft, sphereRight, cylinderRight, axisRight, addRight, lensTypeRefId);
         }
+
+        // The coatings the record carried (a Lead's preference seeded as the Sale's coating set, or
+        // a Failed record's own) meet the lenses just chosen: what they don't offer is unticked with
+        // a note, and a trigger's paired coating is ticked — so the form opens in a state the
+        // server would accept, or says why not. The caller sets the coatings before calling this.
+        ReconcileCoatings();
     }
 
-    /// <summary>The coatings the chosen pair of lens set lenses both come in (each lens's own
-    /// coatings, ADR-0007 — <see cref="LensSetLenses.CoatingsFor"/>, the one definition of what a
-    /// pair offers). Empty until both eyes have a lens (with "Same lens for both eyes" ticked, one
-    /// choice is both), or when the pair has no coating in common.</summary>
-    private IReadOnlyList<Guid> AvailableCoatingIdsForSelectedPreset
+    /// <summary>What the chosen pair of lens set lenses offers (each lens's own coatings and
+    /// pairings, ADR-0007 — <see cref="LensSetLenses.CoatingsFor"/>, the one definition the server
+    /// checks a record against too: the coatings both lenses come in, minus any whose pairing
+    /// demands one they don't, plus the pairings that apply). Null until both eyes have a lens (with
+    /// "Same lens for both eyes" ticked, one choice is both) or when the range isn't a lens set.</summary>
+    private LensPairCoatings? PairCoatings
     {
         get
         {
+            if (_lensRange.LensRangeType is not LensRangeType.LensSet)
+            {
+                return null;
+            }
+
             var lenses = Snapshot.FindCatalogue(_lensRange.PresetCatalogueId)?.LensOptions ?? [];
             var left = lenses.FirstOrDefault(l => l.Id == _lensRange.LensLeftId);
             var right = lenses.FirstOrDefault(l => l.Id == _lensRange.LensRightId);
-            return left is not null && right is not null ? LensSetLenses.CoatingsFor(left, right).Offered : [];
+            return left is not null && right is not null ? LensSetLenses.CoatingsFor(left, right) : null;
         }
     }
 
     /// <summary>The optional coating preference of a Test or Lead, as radio buttons with "No
     /// preference" first (never a dropdown — ADR-0007). On a lens set it is limited to the coatings
     /// both chosen lenses come in and appears once they are chosen; on a Custom prescription (or
-    /// with no range chosen yet) any coating may be named.</summary>
+    /// with no range chosen yet) any coating may be named. A preference has no pairing — the
+    /// Sale's coating set carries the paired coating.</summary>
     private RenderFragment RenderCoatingPreference() => @<text>
         @if (_lensRange.LensRangeType is LensRangeType.LensSet)
         {
-            @if (AvailableCoatingIdsForSelectedPreset.Count > 0)
+            @if (PairCoatings is { Offered.Count: > 0 } pairCoatings)
             {
                 <ReferenceDataRadios Label="Coating preference (optional)" NoneLabel="No preference"
-                                      Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating).Where(c => AvailableCoatingIdsForSelectedPreset.Contains(c.Id)).ToList()"
+                                      Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating).Where(c => pairCoatings.Offered.Contains(c.Id)).ToList()"
                                       SelectedId="_coatingPreferenceRefId" SelectedIdChanged="v => _coatingPreferenceRefId = v"
                                       Errors="_errors" Field="CoatingPreferenceRefId" />
             }
@@ -638,17 +661,79 @@
                                   SelectedId="_coatingPreferenceRefId" SelectedIdChanged="v => _coatingPreferenceRefId = v"
                                   Errors="_errors" Field="CoatingPreferenceRefId" />
         }
+        @RenderCoatingRemovedNote()
     </text>;
 
-    /// <summary>Fired by LensRangeSelector whenever the range type or left lens changes — any
-    /// coating already picked may no longer be valid (a different lens option may not offer it,
-    /// or Custom vs preset draws from a different set entirely), so both possible coating fields
-    /// are cleared; only the one the current form actually renders has any visible effect.</summary>
+    /// <summary>The note left behind when a lens change unticked a coating (or cleared the coating
+    /// preference) the new lens no longer offers, so nothing surprises the technician at save time.</summary>
+    private RenderFragment RenderCoatingRemovedNote() => @<text>
+        @if (_coatingRemovedNote is not null)
+        {
+            <p class="dg-lens-note" role="status">@_coatingRemovedNote</p>
+        }
+    </text>;
+
+    /// <summary>Set when a lens change removes coatings the technician had ticked; replaced by the
+    /// next lens change (null when that one removes nothing).</summary>
+    private string? _coatingRemovedNote;
+
+    /// <summary>Fired by LensRangeSelector whenever the range type or either lens changes — the
+    /// coatings on offer are the ones both chosen lenses come in, so a pick may no longer be valid.
+    /// Ticks the new pair still offers are kept; the rest are unticked with a note.</summary>
     private void OnLensSelectionChanged()
     {
-        _coatingRefIds = [];
-        _coatingPreferenceRefId = null;
+        ReconcileCoatings();
         StateHasChanged();
+    }
+
+    /// <summary>
+    /// Brings the coating selection and the coating preference in line with what the lens choice
+    /// offers: still-offered ticks stay, removed ones are unticked and named in a note, and the
+    /// paired coating of every ticked trigger is ticked (a Lead's preference that is a trigger comes
+    /// across with its pair). Custom (and no range) offers every active coating. A lens set whose
+    /// pair isn't complete yet offers nothing to compare against, so the selection is left alone
+    /// until both eyes have a lens — a mid-change state (the right eye emptied by a left lens of
+    /// another type) shouldn't wipe the technician's ticks — and reconciled the moment it completes.
+    /// </summary>
+    private void ReconcileCoatings()
+    {
+        IReadOnlyCollection<Guid> offered;
+        IReadOnlyList<CoatingPairingRule> pairings;
+
+        if (_lensRange.LensRangeType is LensRangeType.LensSet)
+        {
+            if (PairCoatings is not { } pair)
+            {
+                return;
+            }
+
+            offered = pair.Offered;
+            pairings = pair.RequiredPairings;
+        }
+        else
+        {
+            offered = ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating).Select(c => c.Id).ToList();
+            pairings = [];
+        }
+
+        var reconciled = CoatingSelection.Reconcile(_coatingRefIds, offered, pairings);
+        _coatingRefIds = reconciled.Selected;
+
+        if (_coatingPreferenceRefId is { } preference && !offered.Contains(preference))
+        {
+            reconciled.Removed.Add(preference);
+            _coatingPreferenceRefId = null;
+        }
+
+        if (reconciled.Removed.Count == 0)
+        {
+            _coatingRemovedNote = null;
+            return;
+        }
+
+        var coatings = ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating);
+        var names = reconciled.Removed.Select(id => coatings.FirstOrDefault(c => c.Id == id)?.Label ?? "A coating");
+        _coatingRemovedNote = $"Removed {string.Join(", ", names)} — not available on the lens you've now chosen.";
     }
 
     private async Task RetryReferenceDataAsync() => await ReferenceDataClient.RefreshAsync();
