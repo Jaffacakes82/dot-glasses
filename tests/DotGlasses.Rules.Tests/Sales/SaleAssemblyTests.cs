@@ -154,8 +154,8 @@ public class SaleAssemblyTests
         var seeded = SaleAssembly.Seed(lead);
 
         Assert.Equal(LensRangeType.Custom, seeded.LensRangeType);
-        Assert.Equal(-1.25m, seeded.CustomSphereLeft);
-        Assert.Equal(-2.75m, seeded.CustomSphereRight);
+        Assert.Equal(-1.25m, seeded.SphereLeft);
+        Assert.Equal(-2.75m, seeded.SphereRight);
         Assert.Equal(LensType, seeded.LensTypeRefId);
         Assert.Equal(62.5m, seeded.PupilDistanceMm);
         Assert.True(seeded.ChildrensFrame);
@@ -174,7 +174,7 @@ public class SaleAssemblyTests
         // Not merely the range: the whole block stays unset, so a Lead that half-recorded a
         // prescription cannot leak stray powers into a Sale whose range the form is about to ask for.
         Assert.Null(seeded.LensRangeType);
-        Assert.Null(seeded.CustomSphereLeft);
+        Assert.Null(seeded.SphereLeft);
         Assert.Null(seeded.LensTypeRefId);
         Assert.Null(seeded.PupilDistanceMm);
         Assert.False(seeded.ChildrensFrame);
@@ -376,8 +376,8 @@ public class SaleAssemblyTests
             HardCaseColourRefId = HardCaseColour,
         }.WithLens(
             seeded.LensRangeType, seeded.PresetCatalogueId, seeded.LensOptionLeftId, seeded.LensOptionRightId,
-            seeded.CustomSphereLeft, seeded.CustomCylinderLeft, seeded.CustomAxisLeft, seeded.CustomAddPowerLeft,
-            seeded.CustomSphereRight, seeded.CustomCylinderRight, seeded.CustomAxisRight, seeded.CustomAddPowerRight,
+            seeded.SphereLeft, seeded.CylinderLeft, seeded.AxisLeft, seeded.AddLeft,
+            seeded.SphereRight, seeded.CylinderRight, seeded.AxisRight, seeded.AddRight,
             seeded.LensTypeRefId, seeded.LensTypeOtherText,
             seeded.PupilDistanceMm, seeded.PresetPupilDistanceBucket, seeded.ChildrensFrame);
 
@@ -444,14 +444,14 @@ public class SaleAssemblyTests
         ConsentGiven = true,
         CoatingPreferenceRefId = CoatingPreference,
         LensRangeType = LensRangeType.Custom,
-        CustomSphereLeft = -1.25m,
-        CustomCylinderLeft = -0.75m,
-        CustomAxisLeft = 90m,
-        CustomAddPowerLeft = 2.00m,
-        CustomSphereRight = -2.75m,
-        CustomCylinderRight = -1.50m,
-        CustomAxisRight = 180m,
-        CustomAddPowerRight = 2.50m,
+        SphereLeft = -1.25m,
+        CylinderLeft = -0.75m,
+        AxisLeft = 90m,
+        AddLeft = 2.00m,
+        SphereRight = -2.75m,
+        CylinderRight = -1.50m,
+        AxisRight = 180m,
+        AddRight = 2.50m,
         LensTypeRefId = LensType,
         LensTypeOtherText = "Lens type other",
         PupilDistanceMm = 62.5m,

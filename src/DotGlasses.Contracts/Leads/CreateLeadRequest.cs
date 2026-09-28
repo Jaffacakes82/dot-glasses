@@ -44,14 +44,14 @@ public class CreateLeadRequest
     public Guid? LensOptionLeftId { get; set; }
     public Guid? LensOptionRightId { get; set; }
 
-    public decimal? CustomSphereLeft { get; set; }
-    public decimal? CustomCylinderLeft { get; set; }
-    public decimal? CustomAxisLeft { get; set; }
-    public decimal? CustomAddPowerLeft { get; set; }
-    public decimal? CustomSphereRight { get; set; }
-    public decimal? CustomCylinderRight { get; set; }
-    public decimal? CustomAxisRight { get; set; }
-    public decimal? CustomAddPowerRight { get; set; }
+    public decimal? SphereLeft { get; set; }
+    public decimal? CylinderLeft { get; set; }
+    public decimal? AxisLeft { get; set; }
+    public decimal? AddLeft { get; set; }
+    public decimal? SphereRight { get; set; }
+    public decimal? CylinderRight { get; set; }
+    public decimal? AxisRight { get; set; }
+    public decimal? AddRight { get; set; }
 
     /// <summary>Required when either add power is set (two distinct powers on that eye) — see
     /// ConsultationRules.</summary>

@@ -124,9 +124,73 @@ public class ConsultationValidationApiTests(CustomWebApplicationFactory factory)
         Assert.DoesNotContain("OrderFromDotGlasses", errors.Keys);
         Assert.Equal("'Frame Coverage' has a range of values which does not include '99'.", errors["FrameCoverage"].Single());
         Assert.Equal(
-            "CustomSphereLeft and CustomSphereRight are required for a Custom LensRangeType.",
+            "SphereLeft and SphereRight are required for a Custom LensRangeType.",
             errors["LensRangeType"].Single());
         Assert.Equal("Choose at least one coating.", errors["CoatingRefIds"].Single());
+    }
+
+    /// <summary>The per-eye lens power fields carry range-neutral names (lens-power ticket 01), and
+    /// a rejection has to come back keyed on them — FormErrors and the Admin Portal's
+    /// Form.{PropertyName} remap key off exactly these strings.</summary>
+    [Fact]
+    public async Task ACustomPrescriptionOutOfRange_IsReportedAgainstTheRangeNeutralFieldNames()
+    {
+        var client = CreateAuthenticatedClient();
+
+        var response = await client.PostAsJsonAsync("api/v1/tests", new CreateTestRequest
+        {
+            Id = Guid.NewGuid(),
+            Gender = Gender.Female,
+            Outcome = TestOutcome.NeedsGlasses,
+            LensRangeType = LensRangeType.Custom,
+            SphereLeft = 10.10m,
+            SphereRight = 0m,
+            CylinderLeft = -0.30m,
+            AxisRight = 180.5m,
+            AddLeft = 3.25m,
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var errors = await ErrorsAsync(response);
+
+        AssertKeys(["SphereLeft", "CylinderLeft", "AxisRight", "AddLeft", "LensTypeRefId"], errors);
+        Assert.Equal("SphereLeft must be between -10 and 10 in 0.25 increments.", errors["SphereLeft"].Single());
+        Assert.Equal("AxisRight must be a whole number of degrees between 0 and 180.", errors["AxisRight"].Single());
+    }
+
+    /// <summary>
+    /// A device can still hold records queued before the rename: the outbox posts each payload's
+    /// stored JSON as-is, so it arrives spelled sphereLeft and so on. Unknown names are
+    /// ignored by the binder, so without the legacy aliases the prescription would vanish and the
+    /// record be refused for having no spheres. Asserted through a rejection, because a value that
+    /// comes back keyed on SphereLeft is proof the old name was bound to the new property.
+    /// </summary>
+    [Fact]
+    public async Task AQueuedPayloadWithThePreRenameFieldNames_StillBindsItsPrescription()
+    {
+        var client = CreateAuthenticatedClient();
+        var payload = $$"""
+            {
+              "id": "{{Guid.NewGuid()}}",
+              "gender": {{(int)Gender.Female}},
+              "outcome": {{(int)TestOutcome.NeedsGlasses}},
+              "lensRangeType": {{(int)LensRangeType.Custom}},
+              "customSphereLeft": 10.10,
+              "customSphereRight": 0,
+              "customCylinderLeft": -0.30,
+              "customAxisRight": 180.5,
+              "customAddPowerLeft": 3.25
+            }
+            """;
+
+        var response = await client.PostAsync("api/v1/tests", new StringContent(payload, System.Text.Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var errors = await ErrorsAsync(response);
+
+        AssertKeys(["SphereLeft", "CylinderLeft", "AxisRight", "AddLeft", "LensTypeRefId"], errors);
     }
 
     /// <summary>The ValidationProblemDetails body as key → messages.</summary>

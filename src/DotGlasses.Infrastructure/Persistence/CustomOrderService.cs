@@ -151,7 +151,7 @@ public class CustomOrderService(DotGlassesDbContext dbContext, IUnscopedReportQu
     private static bool IsActive(DomainFulfilmentStatus status) => status != DomainFulfilmentStatus.Fulfilled;
 
     private static string FormatPrescription(Sale s) =>
-        $"OD {FormatEye(s.CustomSphereRight, s.CustomCylinderRight, s.CustomAddPowerRight)} / OS {FormatEye(s.CustomSphereLeft, s.CustomCylinderLeft, s.CustomAddPowerLeft)}";
+        $"OD {FormatEye(s.SphereRight, s.CylinderRight, s.AddRight)} / OS {FormatEye(s.SphereLeft, s.CylinderLeft, s.AddLeft)}";
 
     private static string FormatEye(decimal? sphere, decimal? cylinder, decimal? addPower)
     {

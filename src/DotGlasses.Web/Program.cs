@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json.Serialization.Metadata;
 using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
 using DotGlasses.Application.Common;
@@ -188,7 +189,12 @@ builder.Services.AddApiVersioning(options =>
 // the user as a validation response on every action, API or screen, without each controller
 // having to remember to catch one. Registered by type so its ITempDataDictionaryFactory/
 // IUrlHelperFactory dependencies come from DI.
-builder.Services.AddControllersWithViews(options => options.Filters.Add<DomainRuleViolationFilter>());
+// PreRenameLensPowerNames: a Field App outbox can still post create requests queued before the
+// per-eye lens power fields were renamed — see that type for why and when to remove it.
+builder.Services.AddControllersWithViews(options => options.Filters.Add<DomainRuleViolationFilter>())
+    .AddJsonOptions(options => options.JsonSerializerOptions.TypeInfoResolver =
+        (options.JsonSerializerOptions.TypeInfoResolver ?? new DefaultJsonTypeInfoResolver())
+            .WithAddedModifier(DotGlasses.Contracts.Common.PreRenameLensPowerNames.Accept));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.ConfigureOptions<ConfigureSwaggerOptions>();
 builder.Services.AddSwaggerGen();
