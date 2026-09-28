@@ -197,5 +197,6 @@ public class DevUserSeederTests : IAsyncLifetime
         public string? Role => null;
         public bool IsSuspended => false;
         public IReadOnlyCollection<string> Roles => [];
+        public CurrentLocationCheck CurrentLocation => CurrentLocationCheck.NoLocation;
     }
 }

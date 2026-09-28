@@ -1,7 +1,8 @@
+using System.Security.Claims;
 using Asp.Versioning;
 using DotGlasses.Application.Common;
-using DotGlasses.Application.Users;
 using DotGlasses.Contracts.Auth;
+using DotGlasses.Domain.Common;
 using DotGlasses.Infrastructure.Identity;
 using DotGlasses.Web.Auth;
 using FluentValidation;
@@ -18,7 +19,8 @@ namespace DotGlasses.Web.Controllers.Api.V1;
 /// Issues JWTs for API consumers (the Field App). The Admin Portal's own browser session uses
 /// cookie auth instead, via Controllers/AccountController.cs's MVC login page — both check the
 /// same Identity user store. Login is the only anonymous action here — MyOrgs/SwitchOrg act on
-/// the caller's own identity, so they need the class-level JWT [Authorize].
+/// the caller's own identity, so they need the class-level JWT [Authorize]. Each token carries the
+/// Field App's current location (ADR-0006), chosen here among the user's eligible locations.
 /// </summary>
 [ApiController]
 [ApiVersion("1.0")]
@@ -29,7 +31,7 @@ public class AuthController(
     SignInManager<ApplicationUser> signInManager,
     IUserClaimsPrincipalFactory<ApplicationUser> claimsPrincipalFactory,
     IJwtTokenService jwtTokenService,
-    IUserOrgAssignmentService userOrgAssignmentService,
+    IUserAccessLoader userAccessLoader,
     ICurrentUserContext currentUser,
     IValidator<LoginRequest> loginValidator,
     IValidator<SwitchOrgRequest> switchOrgValidator,
@@ -60,15 +62,18 @@ public class AuthController(
         user.LastLoginUtc = DateTimeOffset.UtcNow;
         await userManager.UpdateAsync(user);
 
-        var principal = await claimsPrincipalFactory.CreateAsync(user);
-        var (token, expiresAtUtc) = jwtTokenService.CreateToken(principal.Claims);
+        // The device's remembered location if it is still eligible, else the only eligible one,
+        // else none — the Field App then asks the technician to pick.
+        var eligible = await userAccessLoader.ListEligibleLocationsAsync(user.Id, cancellationToken);
+        var location = eligible.FirstOrDefault(l => l.OrgNodeId == request.PreferredLocationId)
+            ?? (eligible.Count == 1 ? eligible[0] : null);
 
-        return Ok(new LoginResponse { AccessToken = token, ExpiresAtUtc = expiresAtUtc, DisplayName = user.DisplayName(fallback: string.Empty) });
+        return Ok(await IssueTokenAsync(user, location));
     }
 
-    /// <summary>The caller's own assignable locations (UserOrgAssignment), for Settings.razor's
-    /// location list and OutletSelect.razor's post-login picker. IsActive marks whichever one is
-    /// currently ApplicationUser.OrgNodeId.</summary>
+    /// <summary>The caller's eligible locations — the active retail points they are directly
+    /// assigned to — for Settings.razor's location list and OutletSelect.razor's post-login
+    /// picker. IsActive marks the token's current location, when it is still valid.</summary>
     [HttpGet("my-orgs")]
     public async Task<ActionResult<IReadOnlyList<AssignedOrgDto>>> MyOrgs(CancellationToken cancellationToken)
     {
@@ -77,14 +82,16 @@ public class AuthController(
             return Unauthorized();
         }
 
-        var orgs = await userOrgAssignmentService.ListAssignedOrgsAsync(userId, cancellationToken);
-        return Ok(orgs.Select(o => new AssignedOrgDto { OrgNodeId = o.OrgNodeId, Name = o.Name, IsActive = o.IsActive }).ToList());
+        var current = currentUser.CurrentLocation.ValidLocation?.OrgNodeId;
+        var eligible = await userAccessLoader.ListEligibleLocationsAsync(userId, cancellationToken);
+        return Ok(eligible.Select(l => new AssignedOrgDto { OrgNodeId = l.OrgNodeId, Name = l.Name, IsActive = l.OrgNodeId == current }).ToList());
     }
 
-    /// <summary>Switches the caller's active selling point to one of their own assigned orgs and
-    /// returns a freshly-minted JWT carrying the new HierarchyPath/OrgNodeId/OrgLevel claims — the
-    /// old token is still valid until it naturally expires (no server-side revocation exists), so
-    /// the client must swap in the new token immediately, not just treat 200 as confirmation.</summary>
+    /// <summary>Switches the caller's current location to another of their eligible locations and
+    /// returns a freshly-minted JWT carrying it. The location lives only in the token — nothing is
+    /// written to the user row, so two devices on one account keep a location each. The old token
+    /// is still valid until it naturally expires (no server-side revocation exists), so the client
+    /// must swap in the new token immediately, not just treat 200 as confirmation.</summary>
     [HttpPost("switch-org")]
     public async Task<ActionResult<LoginResponse>> SwitchOrg(SwitchOrgRequest request, CancellationToken cancellationToken)
     {
@@ -99,16 +106,15 @@ public class AuthController(
             return ValidationProblem(validation.ToModelStateDictionary());
         }
 
-        // A rejection here ("not one of this user's assigned locations") is a
-        // DomainRuleViolationException, turned into a 400 ValidationProblemDetails by
-        // DomainRuleViolationFilter — same shape the validator failure above returns (ADR-0003).
-        await userOrgAssignmentService.SwitchActiveOrgAsync(userId, request.OrgNodeId, cancellationToken);
+        var eligible = await userAccessLoader.ListEligibleLocationsAsync(userId, cancellationToken);
+
+        // Rendered as a 400 ValidationProblemDetails keyed on "" by DomainRuleViolationFilter —
+        // the same shape the validator failure above returns (ADR-0003).
+        var location = eligible.FirstOrDefault(l => l.OrgNodeId == request.OrgNodeId)
+            ?? throw new DomainRuleViolationException("That isn't an active retail point you're assigned to.");
 
         var user = await userManager.FindByIdAsync(userId.ToString()) ?? throw new InvalidOperationException("User not found.");
-        var principal = await claimsPrincipalFactory.CreateAsync(user);
-        var (token, expiresAtUtc) = jwtTokenService.CreateToken(principal.Claims);
-
-        return Ok(new LoginResponse { AccessToken = token, ExpiresAtUtc = expiresAtUtc, DisplayName = user.DisplayName(fallback: string.Empty) });
+        return Ok(await IssueTokenAsync(user, location));
     }
 
     /// <summary>Changes the caller's own password. No fresh token is issued — a password change
@@ -150,4 +156,31 @@ public class AuthController(
 
         return Ok();
     }
+
+    /// <summary>A Field App token: Identity's own claims (who the user is) plus the current
+    /// location, if any. The old single-org claims the shared claims factory still adds for the
+    /// Admin Portal's cookie are left out — nothing on a Field App request may read them; it reads
+    /// the current location, re-validated on every request (AccessRecheck).</summary>
+    private async Task<LoginResponse> IssueTokenAsync(ApplicationUser user, CurrentLocation? location)
+    {
+        var principal = await claimsPrincipalFactory.CreateAsync(user);
+        var claims = principal.Claims.Where(c => !SingleOrgClaimTypes.Contains(c.Type)).ToList();
+        if (location is not null)
+        {
+            claims.Add(new Claim(DotGlassesClaimTypes.CurrentLocationId, location.OrgNodeId.ToString()));
+        }
+
+        var (token, expiresAtUtc) = jwtTokenService.CreateToken(claims);
+        return new LoginResponse
+        {
+            AccessToken = token,
+            ExpiresAtUtc = expiresAtUtc,
+            DisplayName = user.DisplayName(fallback: string.Empty),
+            CurrentLocationId = location?.OrgNodeId,
+            CurrentLocationName = location?.Name,
+        };
+    }
+
+    private static readonly HashSet<string> SingleOrgClaimTypes =
+        [DotGlassesClaimTypes.OrgNodeId, DotGlassesClaimTypes.HierarchyPath, DotGlassesClaimTypes.OrgLevel];
 }

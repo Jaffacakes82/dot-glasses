@@ -39,8 +39,9 @@ public class LeadsController(
     public async Task<ActionResult<IReadOnlyList<LeadDto>>> ListOpen(CancellationToken cancellationToken) =>
         Ok(await leadService.ListOpenAsync(cancellationToken));
 
-    /// <summary>The most recent open Lead for an exact name+phone match, or 204 if none — backs
-    /// the Field App's "convert this instead?" prompt when recording a Sale.</summary>
+    /// <summary>The most recent open Lead for an exact name+phone match at the current location,
+    /// or 204 if none (always, with no valid current location) — backs the Field App's "convert
+    /// this instead?" prompt when recording a Sale.</summary>
     [HttpGet("match")]
     public async Task<ActionResult<LeadDto>> Match([FromQuery] string fullName, [FromQuery] string? phoneNumber, CancellationToken cancellationToken)
     {
@@ -49,14 +50,19 @@ public class LeadsController(
             return BadRequest();
         }
 
-        var match = await leadService.FindOpenMatchAsync(currentUser.HierarchyPathPrefix, fullName, phoneNumber, cancellationToken);
+        if (currentUser.CurrentLocation.ValidLocation is not { } location)
+        {
+            return NoContent();
+        }
+
+        var match = await leadService.FindOpenMatchAsync(location.Path.Value, fullName, phoneNumber, cancellationToken);
         return match is null ? NoContent() : Ok(match);
     }
 
     /// <summary>
     /// Idempotent upsert keyed on <see cref="CreateLeadRequest.Id"/>. HierarchyPath/
-    /// TechnicianUserId are stamped from the authenticated caller's claims, never from the
-    /// request body — see TestsController.Create.
+    /// TechnicianUserId are stamped from the authenticated caller and their validated current
+    /// location, never from the request body — see TestsController.Create.
     /// </summary>
     [HttpPost]
     public async Task<ActionResult<LeadDto>> Create(CreateLeadRequest request, CancellationToken cancellationToken)
@@ -68,9 +74,9 @@ public class LeadsController(
 
         // One reference-data read for the whole request, then every rule answered in memory —
         // ADR-0002. The provider is scoped and memoized, so this is the request's only load.
-        // Placed where the record will be stamped, so a lens set is checked against the caller's own
-        // retail point (ADR-0005).
-        var snapshot = (await snapshots.GetAsync(cancellationToken)).AtLocation(currentUser.HierarchyPathPrefix);
+        // Placed where the record will be stamped, so a lens set is checked against the caller's
+        // current location (ADR-0005).
+        var snapshot = (await snapshots.GetAsync(cancellationToken)).AtLocation(RecordingPath);
         var modelState = ConsultationRules.Check(request, snapshot).ToModelStateDictionary();
         await AddSourceTestFailureAsync(request, modelState, cancellationToken);
 
@@ -79,7 +85,7 @@ public class LeadsController(
             return ValidationProblem(modelState);
         }
 
-        var dto = await leadService.CreateAsync(request, technicianUserId, currentUser.HierarchyPathPrefix, cancellationToken);
+        var dto = await leadService.CreateAsync(request, technicianUserId, RecordingPath, cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = dto.Id, version = "1.0" }, dto);
     }
 
@@ -116,4 +122,8 @@ public class LeadsController(
             modelState.AddModelError(nameof(request.SourceTestId), "This Test has already been converted into a Lead.");
         }
     }
+
+    /// <summary>Where a record is stamped: the validated current location, or "" when there is
+    /// none — which the service refuses (ticket 07 gives each reason its own message).</summary>
+    private string RecordingPath => currentUser.CurrentLocation.ValidLocation?.Path.Value ?? string.Empty;
 }
