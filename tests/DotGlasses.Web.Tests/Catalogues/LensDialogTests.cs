@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using DotGlasses.Domain.Entities;
 using DotGlasses.Domain.Enums;
@@ -223,10 +224,23 @@ public class LensDialogTests(AdminPortalFactory factory) : IClassFixture<AdminPo
         });
         var client = factory.CreateAdminClient();
 
-        // The Edit button carries the lens as it is, for the dialog to open with.
+        // The Edit button carries the lens as it is, as the dialog's own option values, for the
+        // dialog to open with.
         var before = await client.GetStringAsync("/Catalogues");
-        Assert.Contains($"data-lens-edit", before);
-        Assert.Contains(lensId.ToString(), before);
+        var editData = Regex.Match(before, $"data-lens=\"([^\"]*{lensId}[^\"]*)\"");
+        Assert.True(editData.Success, "No Edit button for the lens.");
+        using (var lens = JsonDocument.Parse(WebUtility.HtmlDecode(editData.Groups[1].Value)))
+        {
+            Assert.Equal("+2.50", lens.RootElement.GetProperty("label").GetString());
+            Assert.Equal(P(2.50m), lens.RootElement.GetProperty("sphere").GetString());
+            Assert.Equal(P(0m), lens.RootElement.GetProperty("cylinder").GetString());
+            Assert.Equal("", lens.RootElement.GetProperty("axis").GetString());
+            Assert.Equal(P(0m), lens.RootElement.GetProperty("add").GetString());
+            Assert.Equal(2, lens.RootElement.GetProperty("coatingIds").GetArrayLength());
+            var pairing = Assert.Single(lens.RootElement.GetProperty("pairings").EnumerateArray());
+            Assert.Equal(BlueBlock, pairing.GetProperty("triggerCoatingRefId").GetGuid());
+            Assert.Equal(Clear, pairing.GetProperty("pairedCoatingRefId").GetGuid());
+        }
 
         // Same label and power as it already has, the pairing dropped, a coating added.
         var response = await SaveAsync(client,
@@ -311,7 +325,7 @@ public class LensDialogTests(AdminPortalFactory factory) : IClassFixture<AdminPo
         Assert.Matches($"<option value=\"{Regex.Escape(P(-1.00m))}\" selected", dialog);
         Assert.Matches($"<option value=\"{Regex.Escape(BlueBlock.ToString())}\" selected", dialog);
         Assert.Contains($"Add lens to {lensSetName}", VisibleText(dialog));
-        Assert.Equal(1, Regex.Matches(TableFor(html, lensSetName), " SPH ").Count);
+        Assert.Single(Regex.Matches(TableFor(html, lensSetName), " SPH "));
 
         // The dialog carries the problems; the page doesn't repeat them above the lens sets.
         Assert.DoesNotContain("validation-summary-errors", html[..html.IndexOf("id=\"lensDialog\"", StringComparison.Ordinal)]);
@@ -417,6 +431,23 @@ public class LensDialogTests(AdminPortalFactory factory) : IClassFixture<AdminPo
             ("Add", P(0m)), ("CoatingIds", Clear.ToString()));
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task EditingALensRemovedSinceThePageLoaded_SaysSo_RatherThanRefusingAccess()
+    {
+        var (lensSetId, _) = SeedLensSet();
+        var client = factory.CreateAdminClient();
+        var token = await AdminPortalFactory.GetAntiforgeryTokenAsync(client, "/Catalogues");
+
+        var (redirect, html) = await AdminPortalFactory.PostAndFollowAsync(client, "/Catalogues/SaveLens",
+            AdminPortalFactory.Form(token,
+                ("CatalogueId", lensSetId.ToString()), ("LensOptionId", Guid.NewGuid().ToString()), ("Label", "+1.00"),
+                ("Sphere", P(1.00m)), ("Cylinder", P(0m)), ("Add", P(0m)), ("CoatingIds", Clear.ToString())),
+            referer: "/Catalogues");
+
+        Assert.Equal("/Catalogues", redirect.Headers.Location?.ToString());
+        Assert.Contains("This lens is no longer in the lens set", html);
     }
 
     [Fact]

@@ -1,0 +1,255 @@
+@using System.Text.Encodings.Web
+@using DotGlasses.Rules.LensPowers
+@using Microsoft.AspNetCore.Html
+@model LensDialogViewModel
+@*
+    The Lens Sets screen's one Add lens dialog (ADR-0007; prototype variant A), shared by every lens
+    set's "Add lens" button and every lens's "Edit" button — wwwroot/js/lens-dialog.js fills it from
+    the button's own data and shows it.
+
+    When a save is refused, CataloguesController.SaveLens renders the screen straight back with the
+    admin's posted form as Model.Reopen and the validator's failures in ModelState, keyed on the
+    request's property names — which are also this form's field names. So the dialog is rendered
+    open (data-open-on-load), on that input, with each message in the slot for its own field
+    (data-error-for). Anything keyed on a name no slot shows is listed at the foot of the dialog
+    rather than dropped. Without Reopen, ModelState belongs to another of the screen's forms, so
+    none of it is shown here.
+
+    Every value list and its text come from LensPowerValues, in the shop's order. An option's
+    value is LensDialogValues' (the request's culture, what the model binder parses), and the
+    Edit button's data uses the same strings.
+*@
+@{
+    var reopen = Model.Reopen;
+    var form = reopen ?? new SaveLensRequest();
+
+    // Plain HTML, not the option tag helper, so "selected" is written exactly when it applies.
+    static IHtmlContent Option(string value, string text, bool selected, bool none = false) => new HtmlString(
+        $"<option value=\"{HtmlEncoder.Default.Encode(value)}\"{(selected ? " selected" : "")}{(none ? " data-none" : "")}>{HtmlEncoder.Default.Encode(text)}</option>");
+
+    IReadOnlyList<string> ErrorsFor(string key) =>
+        reopen is not null && ViewData.ModelState.TryGetValue(key, out var entry)
+            ? entry.Errors.Select(e => e.ErrorMessage).ToList()
+            : [];
+
+    var slotKeys = new HashSet<string>
+    {
+        nameof(SaveLensRequest.Label), nameof(SaveLensRequest.Sphere), nameof(SaveLensRequest.Cylinder),
+        nameof(SaveLensRequest.Axis), nameof(SaveLensRequest.Add), nameof(SaveLensRequest.LensTypeRefId),
+        nameof(SaveLensRequest.LensTypeOtherText), nameof(SaveLensRequest.CoatingIds),
+    };
+    for (var i = 0; i < form.Pairings.Count; i++)
+    {
+        slotKeys.Add($"{nameof(SaveLensRequest.Pairings)}[{i}]");
+    }
+
+    var otherErrors = reopen is null
+        ? []
+        : ViewData.ModelState
+            .Where(e => !slotKeys.Contains(e.Key))
+            .SelectMany(e => e.Value!.Errors.Select(x => x.ErrorMessage))
+            .ToList();
+
+    var hasAdd = LensPowerRules.HasAdd(form.Add);
+
+    // One error slot. Always rendered, empty or not, so the script can clear it and a test can
+    // read it; its messages are spans so the slot holds no nested block.
+    static IHtmlContent Slot(string key, IReadOnlyList<string> messages)
+    {
+        var builder = new HtmlContentBuilder();
+        builder.AppendHtml($"<div class=\"text-danger\" style=\"font-size:12px; font-weight:600; margin-top:4px;\" data-error-for=\"{HtmlEncoder.Default.Encode(key)}\">");
+        foreach (var message in messages)
+        {
+            builder.AppendHtml("<span class=\"d-block\">").Append(message).AppendHtml("</span>");
+        }
+
+        return builder.AppendHtml("</div>");
+    }
+
+    void PairingSelect(string name, Guid? selected, bool trigger)
+    {
+        <select class="form-select form-select-sm" style="max-width:200px;" name="@name"
+                aria-label="@(trigger ? "Coating that brings the other" : "Coating it brings")"
+                data-pairing-role="@(trigger ? "trigger" : "paired")">
+            @Option("", "Choose a coating", selected is null)
+            @foreach (var coating in Model.Coatings)
+            {
+                @Option(coating.Id.ToString(), coating.Label, selected == coating.Id)
+            }
+        </select>
+    }
+
+    // A row posted at <paramref name="index"/>, or (null) the template the script copies, whose
+    // "x" index it renumbers.
+    void PairingRow(int? index, LensPairingField? pairing)
+    {
+        var key = $"{nameof(SaveLensRequest.Pairings)}[{index?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "x"}]";
+        <div data-pairing-row style="margin-bottom:8px;">
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                @{ PairingSelect($"{key}.{nameof(LensPairingField.TriggerCoatingRefId)}", pairing?.TriggerCoatingRefId, trigger: true); }
+                <span aria-hidden="true">→</span>
+                @{ PairingSelect($"{key}.{nameof(LensPairingField.PairedCoatingRefId)}", pairing?.PairedCoatingRefId, trigger: false); }
+                <button type="button" class="dg-btn dg-btn-ghost" style="padding:4px 12px; font-size:12px;" data-pairing-remove>Remove</button>
+            </div>
+            @Slot(index is null ? "" : key, index is null ? [] : ErrorsFor(key))
+        </div>
+    }
+}
+
+<div class="modal fade" id="lensDialog" tabindex="-1" aria-hidden="true" aria-labelledby="lensDialogTitle"
+     data-open-on-load="@(reopen is null ? "false" : "true")">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content" style="border-radius:var(--radius-md); border:none;">
+            <form asp-action="SaveLens" method="post" novalidate>
+                <input type="hidden" name="CatalogueId" value="@form.CatalogueId" />
+                <input type="hidden" name="LensOptionId" value="@form.LensOptionId" />
+                <div class="modal-header">
+                    <h2 class="dg-page-title" style="font-size:20px;" id="lensDialogTitle" data-lens-dialog-title>@(Model.ReopenTitle ?? "Add lens")</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p style="font-size:13px; color:var(--text-muted-2); margin-top:0;">
+                        Choose the lens power the same way as on the online shop, then how it appears to technicians.
+                    </p>
+
+                    <div style="display:grid; grid-template-columns:minmax(150px, 190px) 1fr; gap:10px 16px; align-items:start;">
+                        <label class="dg-stat-label" for="lensDialogSphere" style="padding-top:8px;">Spherical power</label>
+                        <div>
+                            <select class="form-select" style="max-width:220px;" id="lensDialogSphere" name="Sphere">
+                                @Option("", "Select", form.Sphere is null)
+                                @foreach (var value in LensPowerValues.Sphere)
+                                {
+                                    @Option(LensDialogValues.Power(value), LensPowerValues.FormatPower(value), form.Sphere == value)
+                                }
+                            </select>
+                            @Slot(nameof(SaveLensRequest.Sphere), ErrorsFor(nameof(SaveLensRequest.Sphere)))
+                        </div>
+
+                        <label class="dg-stat-label" for="lensDialogCylinder" style="padding-top:8px;">Cylindrical power</label>
+                        <div>
+                            <select class="form-select" style="max-width:220px;" id="lensDialogCylinder" name="Cylinder">
+                                @foreach (var value in LensPowerValues.Cylinder)
+                                {
+                                    @Option(LensDialogValues.Power(value), LensPowerValues.FormatPower(value), (form.Cylinder ?? 0m) == value, none: value == 0m)
+                                }
+                            </select>
+                            @Slot(nameof(SaveLensRequest.Cylinder), ErrorsFor(nameof(SaveLensRequest.Cylinder)))
+                        </div>
+
+                        <label class="dg-stat-label" for="lensDialogAxis" style="padding-top:8px;">Axis</label>
+                        <div>
+                            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                                <select class="form-select" style="max-width:220px;" id="lensDialogAxis" name="Axis">
+                                    @Option("", "Select", form.Axis is null)
+                                    @foreach (var value in LensPowerValues.Axis)
+                                    {
+                                        @Option(LensDialogValues.Axis(value), value.ToString("0", System.Globalization.CultureInfo.InvariantCulture), form.Axis == value)
+                                    }
+                                </select>
+                                <span style="font-size:12px; color:var(--text-muted-2);" data-axis-note>Not needed — no cylinder.</span>
+                            </div>
+                            @Slot(nameof(SaveLensRequest.Axis), ErrorsFor(nameof(SaveLensRequest.Axis)))
+                        </div>
+
+                        <label class="dg-stat-label" for="lensDialogAdd" style="padding-top:8px;">Add near vision power</label>
+                        <div>
+                            <select class="form-select" style="max-width:220px;" id="lensDialogAdd" name="Add">
+                                @foreach (var value in LensPowerValues.Add)
+                                {
+                                    @Option(LensDialogValues.Power(value), LensPowerValues.FormatPower(value), (form.Add ?? 0m) == value, none: value == 0m)
+                                }
+                            </select>
+                            @Slot(nameof(SaveLensRequest.Add), ErrorsFor(nameof(SaveLensRequest.Add)))
+                        </div>
+                    </div>
+
+                    <fieldset style="margin-top:var(--space-4);" data-lens-type-section>
+                        <legend class="dg-stat-label" style="float:none; margin-bottom:4px;">
+                            Lens type <span style="text-transform:none; font-weight:500; color:var(--text-muted-2);">(this lens has an add)</span>
+                        </legend>
+                        <div>
+                            @foreach (var lensType in Model.LensTypes)
+                            {
+                                <label class="form-check form-check-inline" style="margin-right:16px;">
+                                    @* data-other is always "true"/"false": Razor drops a null-valued
+                                       attribute but never a data-* one, which renders empty instead. *@
+                                    <input class="form-check-input" type="radio" name="LensTypeRefId" value="@lensType.Id"
+                                           checked="@(form.LensTypeRefId == lensType.Id)"
+                                           data-other="@(lensType.IsOtherOption ? "true" : "false")" />
+                                    <span class="form-check-label">@lensType.Label</span>
+                                </label>
+                            }
+                        </div>
+                        @Slot(nameof(SaveLensRequest.LensTypeRefId), ErrorsFor(nameof(SaveLensRequest.LensTypeRefId)))
+                        <div data-other-text style="margin-top:6px;">
+                            <input class="form-control" style="max-width:320px;" name="LensTypeOtherText" value="@form.LensTypeOtherText"
+                                   placeholder="Describe the lens type" aria-label="Other lens type" maxlength="200" />
+                            @Slot(nameof(SaveLensRequest.LensTypeOtherText), ErrorsFor(nameof(SaveLensRequest.LensTypeOtherText)))
+                        </div>
+                    </fieldset>
+                    <p style="font-size:13px; color:var(--text-muted-2); margin:var(--space-3) 0 0;" data-single-vision-note hidden="@hasAdd">
+                        No add, so this lens is <strong>single vision</strong>.
+                    </p>
+
+                    <hr />
+                    <label class="dg-stat-label" for="lensDialogLabel" style="display:block; margin-bottom:4px;">Label shown to technicians</label>
+                    <input class="form-control" style="max-width:320px;" id="lensDialogLabel" name="Label" value="@form.Label"
+                           placeholder="e.g. +2.50 or Bifocal +2.00" maxlength="100" />
+                    @Slot(nameof(SaveLensRequest.Label), ErrorsFor(nameof(SaveLensRequest.Label)))
+
+                    <hr />
+                    <fieldset>
+                        <legend class="dg-stat-label" style="float:none; margin-bottom:4px;">
+                            Coatings this lens comes in <span style="text-transform:none; font-weight:500; color:var(--text-muted-2);">(at least one)</span>
+                        </legend>
+                        <div>
+                            @foreach (var coating in Model.Coatings)
+                            {
+                                <label class="form-check form-check-inline" style="margin-right:16px; white-space:nowrap;">
+                                    <input class="form-check-input" type="checkbox" name="CoatingIds" value="@coating.Id"
+                                           checked="@form.CoatingIds.Contains(coating.Id)" />
+                                    <span class="form-check-label">@coating.Label</span>
+                                </label>
+                            }
+                        </div>
+                        @Slot(nameof(SaveLensRequest.CoatingIds), ErrorsFor(nameof(SaveLensRequest.CoatingIds)))
+                        @if (Model.Exclusions.Any())
+                        {
+                            <p style="font-size:13px; color:var(--text-muted-2); margin:6px 0 0;">
+                                Exclusions still apply at sale time: @string.Join(", ", Model.Exclusions).
+                            </p>
+                        }
+                    </fieldset>
+
+                    <fieldset style="margin-top:var(--space-4);">
+                        <legend class="dg-stat-label" style="float:none; margin-bottom:4px;">
+                            Pairings for this lens <span style="text-transform:none; font-weight:500; color:var(--text-muted-2);">(ticking the first coating adds the second, which then can't be unticked)</span>
+                        </legend>
+                        <div data-pairing-rows>
+                            @for (var i = 0; i < form.Pairings.Count; i++)
+                            {
+                                PairingRow(i, form.Pairings[i]);
+                            }
+                        </div>
+                        <p style="font-size:13px; color:var(--text-muted-2); margin:0 0 6px;" data-pairing-hint>Tick at least two coatings to add a pairing.</p>
+                        <button type="button" class="dg-btn dg-btn-ghost" style="padding:4px 12px; font-size:12px;" data-pairing-add>Add pairing</button>
+                    </fieldset>
+
+                    <div class="text-danger" style="font-size:12px; font-weight:600; margin-top:var(--space-3);" data-other-errors hidden="@(otherErrors.Count == 0)">
+                        @foreach (var message in otherErrors)
+                        {
+                            <span class="d-block">@message</span>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="dg-btn dg-btn-ghost" type="button" data-bs-dismiss="modal">Cancel</button>
+                    <button class="dg-btn dg-btn-primary" type="submit">Save lens</button>
+                </div>
+            </form>
+            <template data-pairing-template>
+                @{ PairingRow(null, null); }
+            </template>
+        </div>
+    </div>
+</div><!-- /lensDialog -->
