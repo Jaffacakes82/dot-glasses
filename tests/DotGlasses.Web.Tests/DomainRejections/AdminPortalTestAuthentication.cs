@@ -17,8 +17,13 @@ namespace DotGlasses.Web.Tests.DomainRejections;
 /// Only the *sign-in* step is faked, and faithfully: the account is a real row, its claims are
 /// stamped by the real claims-principal factory (exactly what the cookie would carry), and its
 /// access is loaded from the database by the same IUserAccessLoader call the cookie's per-request
-/// validation event makes — refusing a suspended or missing account the same way. Every policy,
-/// resource-based check and the hierarchy query filter then run exactly as they do in production.
+/// validation event makes. Every policy, resource-based check and the hierarchy query filter then
+/// run exactly as they do in production.
+///
+/// Deliberately *not* a copy of that event's refusal of suspended or deleted users: a duplicate
+/// here could keep passing while the real one regressed. Those cases are covered only through the
+/// real Identity cookie (AccessControl/CombinedScopeTests, via AccessControlFixture's real
+/// sign-in form), where AccessRecheck and its chaining in Program.cs actually run.
 /// </summary>
 public class AdminPortalTestAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
@@ -44,11 +49,7 @@ public class AdminPortalTestAuthenticationHandler(
         }
 
         var principal = await services.GetRequiredService<IUserClaimsPrincipalFactory<ApplicationUser>>().CreateAsync(user);
-        var access = await services.GetRequiredService<IUserAccessLoader>().LoadForAdminPortalAsync(principal);
-        if (access is null || access.IsSuspended)
-        {
-            return AuthenticateResult.Fail("Suspended or missing user.");
-        }
+        await services.GetRequiredService<IUserAccessLoader>().LoadForAdminPortalAsync(principal);
 
         return AuthenticateResult.Success(new AuthenticationTicket(principal, SchemeName));
     }

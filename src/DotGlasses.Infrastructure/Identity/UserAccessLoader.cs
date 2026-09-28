@@ -17,9 +17,7 @@ public class UserAccessLoader(DotGlassesDbContext dbContext, IHttpContextAccesso
             return null;
         }
 
-        var access = UserAccess.FromAssignments(
-            row.Orgs.Select(o => (HierarchyPath.Parse(o.HierarchyPath), o.Level)), row.Role, IsSuspended(row));
-        return Remember(userId, access);
+        return Remember(userId, FromAssignments(row));
     }
 
     public async Task<UserAccess?> LoadForFieldAppAsync(ClaimsPrincipal principal, CancellationToken cancellationToken = default)
@@ -33,8 +31,8 @@ public class UserAccessLoader(DotGlassesDbContext dbContext, IHttpContextAccesso
             ? [path]
             : Array.Empty<HierarchyPath>();
 
-        var access = new UserAccess(tokenOrg, row.Orgs.Count == 0 ? null : row.Orgs.Min(o => o.Level), row.Role, IsSuspended(row));
-        return Remember(userId, access);
+        // Level, role and suspension exactly as the Admin Portal reads them; only the scope differs.
+        return Remember(userId, FromAssignments(row) with { ScopePaths = tokenOrg });
     }
 
     /// <summary>One round trip: the account's lockout, its role and the orgs it is assigned to.
@@ -66,8 +64,10 @@ public class UserAccessLoader(DotGlassesDbContext dbContext, IHttpContextAccesso
                     .ToList()))
             .FirstOrDefaultAsync(cancellationToken);
 
-    /// <summary>The same rule User Directory shows as "Suspended" (UserAdminService).</summary>
-    private static bool IsSuspended(AccessRow row) => row.LockoutEnd is { } end && end > DateTimeOffset.UtcNow;
+    private static UserAccess FromAssignments(AccessRow row) => UserAccess.FromAssignments(
+        row.Orgs.Select(o => (HierarchyPath.Parse(o.HierarchyPath), o.Level)),
+        row.Role,
+        UserSuspension.IsSuspended(row.LockoutEnd));
 
     private UserAccess Remember(Guid userId, UserAccess access)
     {
