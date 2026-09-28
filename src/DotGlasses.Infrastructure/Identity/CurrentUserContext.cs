@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using DotGlasses.Application.Common;
+using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Enums;
 using Microsoft.AspNetCore.Http;
 
@@ -9,12 +10,23 @@ public class CurrentUserContext(IHttpContextAccessor httpContextAccessor) : ICur
 {
     private ClaimsPrincipal? Principal => httpContextAccessor.HttpContext?.User;
 
+    private UserAccess Access => RequestUserAccess.Get(httpContextAccessor.HttpContext);
+
     public bool IsAuthenticated => Principal?.Identity?.IsAuthenticated ?? false;
 
-    public Guid? UserId =>
-        Guid.TryParse(Principal?.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
+    public Guid? UserId => ReadUserId(Principal);
 
     public string? UserName => Principal?.Identity?.Name;
+
+    public IReadOnlyList<HierarchyPath> ScopePaths => Access.ScopePaths;
+
+    public OrganisationLevel? HighestLevel => Access.HighestLevel;
+
+    public string? Role => Access.Role;
+
+    public bool IsSuspended => Access.IsSuspended;
+
+    public IReadOnlyCollection<string> Roles => Role is { } role ? [role] : [];
 
     public Guid? OrgNodeId =>
         Guid.TryParse(Principal?.FindFirstValue(DotGlassesClaimTypes.OrgNodeId), out var id) ? id : null;
@@ -24,6 +36,6 @@ public class CurrentUserContext(IHttpContextAccessor httpContextAccessor) : ICur
     public OrganisationLevel? OrgLevel =>
         Enum.TryParse<OrganisationLevel>(Principal?.FindFirstValue(DotGlassesClaimTypes.OrgLevel), out var level) ? level : null;
 
-    public IReadOnlyCollection<string> Roles =>
-        Principal?.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList() ?? [];
+    internal static Guid? ReadUserId(ClaimsPrincipal? principal) =>
+        Guid.TryParse(principal?.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
 }

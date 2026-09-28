@@ -1,9 +1,10 @@
 namespace DotGlasses.Domain.Entities;
 
 /// <summary>
-/// Which org nodes a user can switch between (Settings -> "switch selling point"). The user's
-/// currently active selection lives on ApplicationUser.OrgNodeId/HierarchyPath (Infrastructure) —
-/// this table is the assignable set, not the active one.
+/// A user's org assignment (CONTEXT.md). On the Admin Portal a user's scope is every assignment
+/// combined, re-read on every request (ADR-0006). The Field App still switches between them
+/// (Settings -> "switch selling point"), with its current selection on
+/// ApplicationUser.OrgNodeId/HierarchyPath (Infrastructure) for now.
 /// </summary>
 public class UserOrgAssignment
 {

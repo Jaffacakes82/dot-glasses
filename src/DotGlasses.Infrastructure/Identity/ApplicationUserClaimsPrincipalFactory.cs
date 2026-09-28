@@ -10,6 +10,11 @@ namespace DotGlasses.Infrastructure.Identity;
 /// Role). Used for both cookie sign-in (DotGlasses.Web's SignInManager) and JWT issuance
 /// (DotGlasses.Web's AuthController resolves the same factory) so both auth paths build
 /// identical claims from one place.
+///
+/// Only the identity claims decide anything on the Admin Portal: scope, level, role and
+/// suspension are re-read from the database every request (IUserAccessLoader, ADR-0006). The org
+/// claims describe the old active org, still read by the single-org consumers and — for now — as
+/// the Field App's scope.
 /// </summary>
 public class ApplicationUserClaimsPrincipalFactory(
     UserManager<ApplicationUser> userManager,

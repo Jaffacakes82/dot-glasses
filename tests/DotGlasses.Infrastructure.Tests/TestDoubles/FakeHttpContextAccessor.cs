@@ -1,11 +1,16 @@
 using System.Security.Claims;
 using DotGlasses.Application.Common;
+using DotGlasses.Domain.Common;
+using DotGlasses.Infrastructure.Identity;
 using Microsoft.AspNetCore.Http;
 
 namespace DotGlasses.Infrastructure.Tests.TestDoubles;
 
-/// <summary>Builds an IHttpContextAccessor carrying the claims DotGlassesDbContext's global
-/// query filter reads — mirrors how DotGlasses.Web actually populates them at sign-in.</summary>
+/// <summary>Builds an IHttpContextAccessor carrying what DotGlassesDbContext's global query filter
+/// reads — mirrors how DotGlasses.Web actually populates it: the user's identity in the claims,
+/// and their access (here, a scope of the one given path) memoised on the request, the way the
+/// per-request recheck leaves it after reading the database (ADR-0006). The HierarchyPath claim is
+/// still stamped for the single-org consumers that read it.</summary>
 public static class FakeHttpContextAccessor
 {
     public static IHttpContextAccessor Create(bool isAuthenticated = true, string hierarchyPathPrefix = "", string userName = "test-user")
@@ -15,14 +20,20 @@ public static class FakeHttpContextAccessor
             return new SimpleHttpContextAccessor { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity()) } };
         }
 
+        var userId = Guid.NewGuid();
         List<Claim> claims =
         [
+            new(ClaimTypes.NameIdentifier, userId.ToString()),
             new(ClaimTypes.Name, userName),
             new(DotGlassesClaimTypes.HierarchyPath, hierarchyPathPrefix),
         ];
         var identity = new ClaimsIdentity(claims, authenticationType: "Test");
+        var httpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) };
 
-        return new SimpleHttpContextAccessor { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) } };
+        IReadOnlyList<HierarchyPath> scope = HierarchyPath.TryParse(hierarchyPathPrefix, out var path) ? [path] : [];
+        RequestUserAccess.Set(httpContext, userId, new UserAccess(scope, null, null, false));
+
+        return new SimpleHttpContextAccessor { HttpContext = httpContext };
     }
 
     /// <summary>

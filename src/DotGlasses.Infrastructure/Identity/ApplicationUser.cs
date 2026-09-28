@@ -5,16 +5,20 @@ namespace DotGlasses.Infrastructure.Identity;
 
 public class ApplicationUser : IdentityUser<Guid>
 {
+    /// <summary>The old single "active org". It no longer decides scope or permissions — those come
+    /// from the user's org assignments, re-read every request (ADR-0006) — but it still counts as
+    /// one of those assignments until the migration that removes these three columns backfills an
+    /// assignment row for it, and the consumers not yet moved onto the combined scope still read
+    /// it (via the claims below).</summary>
     public Guid? OrgNodeId { get; set; }
 
-    /// <summary>Materialized path of this user's org node, e.g. "/1/4/". Copied onto the
-    /// cookie/JWT HierarchyPath claim at sign-in so CurrentUserContext never needs a DB round
-    /// trip to know it.</summary>
+    /// <summary>Materialized path of OrgNodeId, e.g. "/1/4/", copied onto the HierarchyPath claim
+    /// at sign-in. Read only by the single-org consumers (see OrgNodeId).</summary>
     public string HierarchyPath { get; set; } = string.Empty;
 
-    /// <summary>Denormalized OrganisationNode.Level of OrgNodeId, same rationale as
-    /// HierarchyPath — kept in sync whenever a user's org assignment changes, copied onto the
-    /// OrgLevel claim at sign-in so RBAC's OrgLevelRequirement never needs a DB round trip.</summary>
+    /// <summary>Denormalized OrganisationNode.Level of OrgNodeId, copied onto the OrgLevel claim at
+    /// sign-in. Read only by the single-org consumers (see OrgNodeId); level-gated policies use
+    /// the highest assigned level instead.</summary>
     public OrganisationLevel? OrgLevel { get; set; }
 
     /// <summary>Stamped on every successful sign-in, both the MVC cookie path (AccountController)
