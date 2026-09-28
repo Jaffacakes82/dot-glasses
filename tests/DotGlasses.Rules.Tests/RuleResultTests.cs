@@ -42,8 +42,8 @@ public class RuleResultTests
         // list per key — deduplicating here would silently drop the second message.
         var result = RuleResult.From(
         [
-            new RuleFailure("CustomAxisRight", "CustomAxisRight must be a whole number."),
-            new RuleFailure("CustomAxisRight", "CustomAxisRight must be between 0 and 180."),
+            new RuleFailure("AxisRight", "AxisRight must be a whole number."),
+            new RuleFailure("AxisRight", "AxisRight must be between 0 and 180."),
         ]);
 
         Assert.Equal(2, result.Failures.Count);

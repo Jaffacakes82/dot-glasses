@@ -24,8 +24,8 @@ public class SaleConfiguration : IEntityTypeConfiguration<Sale>
 
         foreach (var propertyName in new[]
                  {
-                     nameof(Sale.CustomSphereLeft), nameof(Sale.CustomCylinderLeft), nameof(Sale.CustomAxisLeft), nameof(Sale.CustomAddPowerLeft),
-                     nameof(Sale.CustomSphereRight), nameof(Sale.CustomCylinderRight), nameof(Sale.CustomAxisRight), nameof(Sale.CustomAddPowerRight),
+                     nameof(Sale.SphereLeft), nameof(Sale.CylinderLeft), nameof(Sale.AxisLeft), nameof(Sale.AddLeft),
+                     nameof(Sale.SphereRight), nameof(Sale.CylinderRight), nameof(Sale.AxisRight), nameof(Sale.AddRight),
                  })
         {
             builder.Property(propertyName).HasPrecision(5, 2);

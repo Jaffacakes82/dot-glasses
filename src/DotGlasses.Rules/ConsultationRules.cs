@@ -43,8 +43,8 @@ public static class ConsultationRules
                 .Concat(Referral(request.ReferredOrTreated, request.ReferralReasonRefId, request.ReferralOtherText, request.ReferralLocationFreeText, request.TreatedInFacility, snapshot))
                 .Concat(LensRange(
                     request.LensRangeType, request.PresetCatalogueId, request.LensOptionLeftId, request.LensOptionRightId,
-                    request.CustomSphereLeft, request.CustomCylinderLeft, request.CustomAxisLeft, request.CustomAddPowerLeft,
-                    request.CustomSphereRight, request.CustomCylinderRight, request.CustomAxisRight, request.CustomAddPowerRight,
+                    request.SphereLeft, request.CylinderLeft, request.AxisLeft, request.AddLeft,
+                    request.SphereRight, request.CylinderRight, request.AxisRight, request.AddRight,
                     request.LensTypeRefId, request.LensTypeOtherText,
                     request.PupilDistanceMm, request.PresetPupilDistanceBucket, request.ChildrensFrame,
                     pupilDistanceRequired: false, presetBucketMessageNamesTheBranch: false, snapshot))
@@ -61,8 +61,8 @@ public static class ConsultationRules
                 .Concat(ReasonNotPurchased(request.ReasonNotPurchasedRefId, request.ReasonNotPurchasedOtherText, snapshot))
                 .Concat(LensRange(
                     request.LensRangeType, request.PresetCatalogueId, request.LensOptionLeftId, request.LensOptionRightId,
-                    request.CustomSphereLeft, request.CustomCylinderLeft, request.CustomAxisLeft, request.CustomAddPowerLeft,
-                    request.CustomSphereRight, request.CustomCylinderRight, request.CustomAxisRight, request.CustomAddPowerRight,
+                    request.SphereLeft, request.CylinderLeft, request.AxisLeft, request.AddLeft,
+                    request.SphereRight, request.CylinderRight, request.AxisRight, request.AddRight,
                     request.LensTypeRefId, request.LensTypeOtherText,
                     request.PupilDistanceMm, request.PresetPupilDistanceBucket, request.ChildrensFrame,
                     pupilDistanceRequired: false, presetBucketMessageNamesTheBranch: true, snapshot))
@@ -82,8 +82,8 @@ public static class ConsultationRules
                 // unreachable from here — a Sale always names its lens range.
                 .Concat(LensRange(
                     request.LensRangeType, request.PresetCatalogueId, request.LensOptionLeftId, request.LensOptionRightId,
-                    request.CustomSphereLeft, request.CustomCylinderLeft, request.CustomAxisLeft, request.CustomAddPowerLeft,
-                    request.CustomSphereRight, request.CustomCylinderRight, request.CustomAxisRight, request.CustomAddPowerRight,
+                    request.SphereLeft, request.CylinderLeft, request.AxisLeft, request.AddLeft,
+                    request.SphereRight, request.CylinderRight, request.AxisRight, request.AddRight,
                     request.LensTypeRefId, request.LensTypeOtherText,
                     request.PupilDistanceMm, request.PresetPupilDistanceBucket, request.ChildrensFrame,
                     pupilDistanceRequired: true, presetBucketMessageNamesTheBranch: true, snapshot))
@@ -312,16 +312,16 @@ public static class ConsultationRules
     private static IEnumerable<RuleFailure> LensRange(
         LensRangeType? lensRangeType,
         Guid? presetCatalogueId, Guid? lensOptionLeftId, Guid? lensOptionRightId,
-        decimal? customSphereLeft, decimal? customCylinderLeft, decimal? customAxisLeft, decimal? customAddPowerLeft,
-        decimal? customSphereRight, decimal? customCylinderRight, decimal? customAxisRight, decimal? customAddPowerRight,
+        decimal? sphereLeft, decimal? cylinderLeft, decimal? axisLeft, decimal? addLeft,
+        decimal? sphereRight, decimal? cylinderRight, decimal? axisRight, decimal? addRight,
         Guid? lensTypeRefId, string? lensTypeOtherText,
         decimal? pupilDistanceMm, int? presetPupilDistanceBucket, bool childrensFrame,
         bool pupilDistanceRequired, bool presetBucketMessageNamesTheBranch,
         ReferenceDataSnapshot snapshot)
     {
         var presetFieldsSet = presetCatalogueId is not null || lensOptionLeftId is not null || lensOptionRightId is not null;
-        var customFieldsSet = customSphereLeft is not null || customCylinderLeft is not null || customAxisLeft is not null || customAddPowerLeft is not null
-            || customSphereRight is not null || customCylinderRight is not null || customAxisRight is not null || customAddPowerRight is not null
+        var customFieldsSet = sphereLeft is not null || cylinderLeft is not null || axisLeft is not null || addLeft is not null
+            || sphereRight is not null || cylinderRight is not null || axisRight is not null || addRight is not null
             || lensTypeRefId is not null || lensTypeOtherText is not null;
 
         switch (lensRangeType)
@@ -348,8 +348,8 @@ public static class ConsultationRules
             case LensRangeType.Custom:
                 foreach (var failure in CustomBranch(
                     presetFieldsSet,
-                    customSphereLeft, customCylinderLeft, customAxisLeft, customAddPowerLeft,
-                    customSphereRight, customCylinderRight, customAxisRight, customAddPowerRight,
+                    sphereLeft, cylinderLeft, axisLeft, addLeft,
+                    sphereRight, cylinderRight, axisRight, addRight,
                     lensTypeRefId, lensTypeOtherText,
                     pupilDistanceMm, presetPupilDistanceBucket, pupilDistanceRequired, snapshot))
                 {
@@ -459,8 +459,8 @@ public static class ConsultationRules
     /// </summary>
     private static IEnumerable<RuleFailure> CustomBranch(
         bool presetFieldsSet,
-        decimal? customSphereLeft, decimal? customCylinderLeft, decimal? customAxisLeft, decimal? customAddPowerLeft,
-        decimal? customSphereRight, decimal? customCylinderRight, decimal? customAxisRight, decimal? customAddPowerRight,
+        decimal? sphereLeft, decimal? cylinderLeft, decimal? axisLeft, decimal? addLeft,
+        decimal? sphereRight, decimal? cylinderRight, decimal? axisRight, decimal? addRight,
         Guid? lensTypeRefId, string? lensTypeOtherText,
         decimal? pupilDistanceMm, int? presetPupilDistanceBucket, bool pupilDistanceRequired,
         ReferenceDataSnapshot snapshot)
@@ -470,20 +470,20 @@ public static class ConsultationRules
             yield return new RuleFailure(LensRangeTypeKey, "Lens set fields must be empty for a Custom LensRangeType.");
         }
 
-        if (customSphereLeft is null || customSphereRight is null)
+        if (sphereLeft is null || sphereRight is null)
         {
-            yield return new RuleFailure(LensRangeTypeKey, "CustomSphereLeft and CustomSphereRight are required for a Custom LensRangeType.");
+            yield return new RuleFailure(LensRangeTypeKey, "SphereLeft and SphereRight are required for a Custom LensRangeType.");
         }
 
-        var powers = CustomPower(customSphereLeft, CustomSphereLeftKey, -10m, 10m, 0.25m)
-            .Concat(CustomPower(customSphereRight, CustomSphereRightKey, -10m, 10m, 0.25m))
-            .Concat(CustomPower(customCylinderLeft, CustomCylinderLeftKey, -10m, 10m, 0.25m))
-            .Concat(CustomPower(customCylinderRight, CustomCylinderRightKey, -10m, 10m, 0.25m))
-            .Concat(CustomPower(customAddPowerLeft, CustomAddPowerLeftKey, 0m, 3m, 0.25m))
-            .Concat(CustomPower(customAddPowerRight, CustomAddPowerRightKey, 0m, 3m, 0.25m))
-            .Concat(CustomAxis(customAxisLeft, CustomAxisLeftKey))
-            .Concat(CustomAxis(customAxisRight, CustomAxisRightKey))
-            .Concat(LensType(customAddPowerLeft, customAddPowerRight, lensTypeRefId, lensTypeOtherText, snapshot));
+        var powers = CustomPower(sphereLeft, SphereLeftKey, -10m, 10m, 0.25m)
+            .Concat(CustomPower(sphereRight, SphereRightKey, -10m, 10m, 0.25m))
+            .Concat(CustomPower(cylinderLeft, CylinderLeftKey, -10m, 10m, 0.25m))
+            .Concat(CustomPower(cylinderRight, CylinderRightKey, -10m, 10m, 0.25m))
+            .Concat(CustomPower(addLeft, AddLeftKey, 0m, 3m, 0.25m))
+            .Concat(CustomPower(addRight, AddRightKey, 0m, 3m, 0.25m))
+            .Concat(CustomAxis(axisLeft, AxisLeftKey))
+            .Concat(CustomAxis(axisRight, AxisRightKey))
+            .Concat(LensType(addLeft, addRight, lensTypeRefId, lensTypeOtherText, snapshot));
 
         foreach (var failure in powers)
         {
@@ -522,10 +522,10 @@ public static class ConsultationRules
     /// power, which is what makes the lens bifocal or progressive and so needs naming. Required in
     /// that case; both lens-type fields must stay empty otherwise.</summary>
     private static IEnumerable<RuleFailure> LensType(
-        decimal? customAddPowerLeft, decimal? customAddPowerRight,
+        decimal? addLeft, decimal? addRight,
         Guid? lensTypeRefId, string? lensTypeOtherText, ReferenceDataSnapshot snapshot)
     {
-        var hasTwoPowers = customAddPowerLeft is not null || customAddPowerRight is not null;
+        var hasTwoPowers = addLeft is not null || addRight is not null;
         if (!hasTwoPowers)
         {
             return lensTypeRefId is not null || lensTypeOtherText is not null
@@ -784,14 +784,14 @@ public static class ConsultationRules
     private const string PresetCatalogueIdKey = nameof(CreateTestRequest.PresetCatalogueId);
     private const string LensOptionLeftIdKey = nameof(CreateTestRequest.LensOptionLeftId);
     private const string LensOptionRightIdKey = nameof(CreateTestRequest.LensOptionRightId);
-    private const string CustomSphereLeftKey = nameof(CreateTestRequest.CustomSphereLeft);
-    private const string CustomSphereRightKey = nameof(CreateTestRequest.CustomSphereRight);
-    private const string CustomCylinderLeftKey = nameof(CreateTestRequest.CustomCylinderLeft);
-    private const string CustomCylinderRightKey = nameof(CreateTestRequest.CustomCylinderRight);
-    private const string CustomAddPowerLeftKey = nameof(CreateTestRequest.CustomAddPowerLeft);
-    private const string CustomAddPowerRightKey = nameof(CreateTestRequest.CustomAddPowerRight);
-    private const string CustomAxisLeftKey = nameof(CreateTestRequest.CustomAxisLeft);
-    private const string CustomAxisRightKey = nameof(CreateTestRequest.CustomAxisRight);
+    private const string SphereLeftKey = nameof(CreateTestRequest.SphereLeft);
+    private const string SphereRightKey = nameof(CreateTestRequest.SphereRight);
+    private const string CylinderLeftKey = nameof(CreateTestRequest.CylinderLeft);
+    private const string CylinderRightKey = nameof(CreateTestRequest.CylinderRight);
+    private const string AddLeftKey = nameof(CreateTestRequest.AddLeft);
+    private const string AddRightKey = nameof(CreateTestRequest.AddRight);
+    private const string AxisLeftKey = nameof(CreateTestRequest.AxisLeft);
+    private const string AxisRightKey = nameof(CreateTestRequest.AxisRight);
     private const string LensTypeRefIdKey = nameof(CreateTestRequest.LensTypeRefId);
     private const string LensTypeOtherTextKey = nameof(CreateTestRequest.LensTypeOtherText);
     private const string PupilDistanceMmKey = nameof(CreateTestRequest.PupilDistanceMm);

@@ -1,4 +1,3 @@
-using DotGlasses.Domain.Entities;
 using DotGlasses.Infrastructure.Persistence;
 using DotGlasses.Infrastructure.Persistence.Configurations;
 using DotGlasses.Infrastructure.Tests.Postgres;
@@ -43,8 +42,7 @@ public class ActiveOrgMigrationTests(PostgresContainerFixture postgres)
 
         // A record stamped above retail-point level, which the upgrade must leave where it is.
         var dgiLevelTest = Guid.NewGuid();
-        context.Tests.Add(new Test { Id = dgiLevelTest, HierarchyPath = OrganisationSeedConfiguration.DgiPath, TechnicianUserId = backed });
-        await context.SaveChangesAsync();
+        await PreMigrationRows.InsertTestAsync(context, dgiLevelTest, OrganisationSeedConfiguration.DgiPath, backed);
 
         await context.GetService<IMigrator>().MigrateAsync();
         context.ChangeTracker.Clear();
