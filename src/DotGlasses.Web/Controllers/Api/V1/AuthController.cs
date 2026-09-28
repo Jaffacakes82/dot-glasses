@@ -158,13 +158,11 @@ public class AuthController(
     }
 
     /// <summary>A Field App token: Identity's own claims (who the user is) plus the current
-    /// location, if any. The old single-org claims the shared claims factory still adds for the
-    /// Admin Portal's cookie are left out — nothing on a Field App request may read them; it reads
-    /// the current location, re-validated on every request (AccessRecheck).</summary>
+    /// location, if any — only named here, and re-validated on every request (AccessRecheck).</summary>
     private async Task<LoginResponse> IssueTokenAsync(ApplicationUser user, CurrentLocation? location)
     {
         var principal = await claimsPrincipalFactory.CreateAsync(user);
-        var claims = principal.Claims.Where(c => !SingleOrgClaimTypes.Contains(c.Type)).ToList();
+        var claims = principal.Claims.ToList();
         if (location is not null)
         {
             claims.Add(new Claim(DotGlassesClaimTypes.CurrentLocationId, location.OrgNodeId.ToString()));
@@ -180,7 +178,4 @@ public class AuthController(
             CurrentLocationName = location?.Name,
         };
     }
-
-    private static readonly HashSet<string> SingleOrgClaimTypes =
-        [DotGlassesClaimTypes.OrgNodeId, DotGlassesClaimTypes.HierarchyPath, DotGlassesClaimTypes.OrgLevel];
 }

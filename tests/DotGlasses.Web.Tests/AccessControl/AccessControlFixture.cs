@@ -60,18 +60,15 @@ public class AccessControlFixture : IAsyncLifetime
     public const string ResellerAdmin = "reseller-admin@test.local";
     public const string OutletAdmin = "outlet-admin@test.local";
 
-    // Accounts with more than one org assignment (ADR-0006). Each one's *active* org — the column
-    // the old single-org model read scope from — is deliberately its lowest assignment, so a test
-    // that passes for them cannot be passing on the active org alone.
+    // Accounts with more than one org assignment (ADR-0006).
 
-    /// <summary>Nested assignments: DGI, and a retail point beneath it. Active org: the retail point.</summary>
+    /// <summary>Nested assignments: DGI, and a retail point beneath it.</summary>
     public const string DgiAndOutletAdmin = "dgi-and-outlet-admin@test.local";
 
-    /// <summary>Assignments in separate trees: Kenya and Uganda. Active org: Kenya.</summary>
+    /// <summary>Assignments in separate trees: Kenya and Uganda.</summary>
     public const string TwoCountriesAdmin = "two-countries-admin@test.local";
 
-    /// <summary>A country (Uganda) and a retail point in a different country (Kenya's). Active
-    /// org: the retail point.</summary>
+    /// <summary>A country (Uganda) and a retail point in a different country (Kenya's).</summary>
     public const string CountryAndOutletAdmin = "country-and-outlet-admin@test.local";
 
     public CustomWebApplicationFactory Factory { get; } = new();
@@ -135,32 +132,26 @@ public class AccessControlFixture : IAsyncLifetime
         SecondCountryId = secondCountry.Id;
         SecondCountryRetailPointId = secondCountryRetailPoint.Id;
 
-        await CreateUserAsync(users, DgiAdmin, RoleNames.Admin, OrganisationSeedConfiguration.DgiId, OrganisationSeedConfiguration.DgiPath, OrganisationLevel.Dgi);
-        await CreateUserAsync(users, DgiUser, RoleNames.User, OrganisationSeedConfiguration.DgiId, OrganisationSeedConfiguration.DgiPath, OrganisationLevel.Dgi);
-        await CreateUserAsync(users, CountryAdmin, RoleNames.Admin, OrganisationSeedConfiguration.KenyaId, OrganisationSeedConfiguration.KenyaPath, OrganisationLevel.Country);
-        await CreateUserAsync(users, CountryUser, RoleNames.User, OrganisationSeedConfiguration.KenyaId, OrganisationSeedConfiguration.KenyaPath, OrganisationLevel.Country);
-        await CreateUserAsync(users, ResellerAdmin, RoleNames.Admin, OrganisationSeedConfiguration.KenyaRetailerId, OrganisationSeedConfiguration.KenyaRetailerPath, OrganisationLevel.Intermediate);
-        await CreateUserAsync(users, OutletAdmin, RoleNames.Admin, OrganisationSeedConfiguration.KenyaRetailPointId, OrganisationSeedConfiguration.KenyaRetailPointPath, OrganisationLevel.RetailPoint);
+        await CreateUserAsync(users, db, DgiAdmin, RoleNames.Admin, OrganisationSeedConfiguration.DgiId);
+        await CreateUserAsync(users, db, DgiUser, RoleNames.User, OrganisationSeedConfiguration.DgiId);
+        await CreateUserAsync(users, db, CountryAdmin, RoleNames.Admin, OrganisationSeedConfiguration.KenyaId);
+        await CreateUserAsync(users, db, CountryUser, RoleNames.User, OrganisationSeedConfiguration.KenyaId);
+        await CreateUserAsync(users, db, ResellerAdmin, RoleNames.Admin, OrganisationSeedConfiguration.KenyaRetailerId);
+        await CreateUserAsync(users, db, OutletAdmin, RoleNames.Admin, OrganisationSeedConfiguration.KenyaRetailPointId);
 
-        await CreateUserAsync(users, DgiAndOutletAdmin, RoleNames.Admin,
-            OrganisationSeedConfiguration.KenyaRetailPointId, OrganisationSeedConfiguration.KenyaRetailPointPath, OrganisationLevel.RetailPoint,
-            db, OrganisationSeedConfiguration.DgiId, OrganisationSeedConfiguration.KenyaRetailPointId);
-        await CreateUserAsync(users, TwoCountriesAdmin, RoleNames.Admin,
-            OrganisationSeedConfiguration.KenyaId, OrganisationSeedConfiguration.KenyaPath, OrganisationLevel.Country,
-            db, OrganisationSeedConfiguration.KenyaId, secondCountry.Id);
-        await CreateUserAsync(users, CountryAndOutletAdmin, RoleNames.Admin,
-            OrganisationSeedConfiguration.KenyaRetailPointId, OrganisationSeedConfiguration.KenyaRetailPointPath, OrganisationLevel.RetailPoint,
-            db, secondCountry.Id, OrganisationSeedConfiguration.KenyaRetailPointId);
+        await CreateUserAsync(users, db, DgiAndOutletAdmin, RoleNames.Admin,
+            OrganisationSeedConfiguration.DgiId, OrganisationSeedConfiguration.KenyaRetailPointId);
+        await CreateUserAsync(users, db, TwoCountriesAdmin, RoleNames.Admin,
+            OrganisationSeedConfiguration.KenyaId, secondCountry.Id);
+        await CreateUserAsync(users, db, CountryAndOutletAdmin, RoleNames.Admin,
+            secondCountry.Id, OrganisationSeedConfiguration.KenyaRetailPointId);
 
         InScopeTargetUserId = await CreateUserAsync(
-            users, "outlet-target@test.local", RoleNames.User,
-            OrganisationSeedConfiguration.KenyaRetailPointId, OrganisationSeedConfiguration.KenyaRetailPointPath, OrganisationLevel.RetailPoint);
+            users, db, "outlet-target@test.local", RoleNames.User, OrganisationSeedConfiguration.KenyaRetailPointId);
         OutOfScopeTargetUserId = await CreateUserAsync(
-            users, "uganda-target@test.local", RoleNames.User,
-            secondCountry.Id, secondCountry.HierarchyPath, OrganisationLevel.Country);
+            users, db, "uganda-target@test.local", RoleNames.User, secondCountry.Id);
         SiblingResellerTargetUserId = await CreateUserAsync(
-            users, "sibling-target@test.local", RoleNames.User,
-            siblingReseller.Id, siblingReseller.HierarchyPath, OrganisationLevel.Intermediate);
+            users, db, "sibling-target@test.local", RoleNames.User, siblingReseller.Id);
     }
 
     public async Task DisposeAsync() => await ((IAsyncLifetime)Factory).DisposeAsync();
@@ -199,17 +190,15 @@ public class AccessControlFixture : IAsyncLifetime
     }
 
     /// <summary>Creates a throwaway account for a test that changes it (a role change, a removed
-    /// assignment, a suspension), so no fixture-wide account is ever mutated. The first
-    /// assignment doubles as the account's active org.</summary>
+    /// assignment, a suspension), so no fixture-wide account is ever mutated.</summary>
     public async Task<(string UserName, Guid UserId)> CreateAccountAsync(string role, params Guid[] assignedOrgIds)
     {
         using var scope = Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DotGlassesDbContext>();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
-        var active = await db.OrganisationNodes.IgnoreQueryFilters().SingleAsync(o => o.Id == assignedOrgIds[0]);
         var userName = $"account-{Guid.NewGuid():N}@test.local";
-        var userId = await CreateUserAsync(users, userName, role, active.Id, active.HierarchyPath, active.Level, db, assignedOrgIds);
+        var userId = await CreateUserAsync(users, db, userName, role, assignedOrgIds);
         return (userName, userId);
     }
 
@@ -223,41 +212,33 @@ public class AccessControlFixture : IAsyncLifetime
         CreatedAtUtc = DateTimeOffset.UtcNow,
     };
 
+    /// <summary>An account's access is exactly its org assignments (ADR-0006), so every account
+    /// here gets at least one — the same invariant UserAdminService keeps.</summary>
     private static async Task<Guid> CreateUserAsync(
-        UserManager<ApplicationUser> users, string userName, string role,
-        Guid orgNodeId, string hierarchyPath, OrganisationLevel orgLevel,
-        DotGlassesDbContext? db = null, params Guid[] assignedOrgIds)
+        UserManager<ApplicationUser> users, DotGlassesDbContext db, string userName, string role, params Guid[] assignedOrgIds)
     {
-        // The account's old active org (OrgNodeId/HierarchyPath/OrgLevel) is written exactly as
-        // UserAdminService writes it. It counts as one of the account's org assignments until the
-        // active-org columns are removed, so an account given no assignedOrgIds is scoped to it
-        // alone; assignedOrgIds adds the rest.
+        Assert.NotEmpty(assignedOrgIds);
+
         var user = new ApplicationUser
         {
             UserName = userName,
             Email = userName,
             EmailConfirmed = true,
             FullName = userName,
-            OrgNodeId = orgNodeId,
-            HierarchyPath = hierarchyPath,
-            OrgLevel = orgLevel,
         };
 
         var created = await users.CreateAsync(user, Password);
         Assert.True(created.Succeeded, string.Join("; ", created.Errors.Select(e => e.Description)));
         Assert.True((await users.AddToRoleAsync(user, role)).Succeeded);
 
-        if (assignedOrgIds.Length > 0)
+        db.UserOrgAssignments.AddRange(assignedOrgIds.Select(orgId => new UserOrgAssignment
         {
-            db!.UserOrgAssignments.AddRange(assignedOrgIds.Select(orgId => new UserOrgAssignment
-            {
-                Id = Guid.NewGuid(),
-                UserId = user.Id,
-                OrgNodeId = orgId,
-                CreatedAtUtc = DateTimeOffset.UtcNow,
-            }));
-            await db.SaveChangesAsync();
-        }
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            OrgNodeId = orgId,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+        }));
+        await db.SaveChangesAsync();
 
         return user.Id;
     }

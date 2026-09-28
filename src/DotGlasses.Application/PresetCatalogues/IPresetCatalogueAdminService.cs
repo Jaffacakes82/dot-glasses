@@ -39,7 +39,7 @@ public interface IPresetCatalogueAdminService
     /// <summary>owningOrgNodeId is the org chosen to own the new lens set — the Web controller
     /// resolves it from the caller's own Dgi/Country assignments before calling this (spec user
     /// stories 20-21; CreateCatalogueRequestValidator is what actually refuses a choice outside
-    /// that set, since checking it needs IUserOrgAssignmentService, not just this service). The
+    /// that set, since checking it needs IUserAssignmentsQueryService, not just this service). The
     /// Dgi/Country level rule itself is enforced here regardless, not in Domain, as a second line
     /// of defence — see PresetCatalogue's own doc comment for why it must be Dgi/Country.</summary>
     Task<PresetCatalogueAdminDto> CreateAsync(string name, string? description, Guid owningOrgNodeId, CancellationToken cancellationToken = default);

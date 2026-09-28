@@ -19,7 +19,7 @@ public class CataloguesController(
     IPresetCatalogueAdminService catalogueAdminService,
     IOrganisationAdminService organisationAdminService,
     IReferenceDataAdminService referenceDataAdminService,
-    IUserOrgAssignmentService userOrgAssignmentService,
+    IUserAssignmentsQueryService userAssignmentsQueryService,
     ICurrentUserContext currentUserContext,
     IAuthorizationService authorizationService,
     IUnscopedReportQueryService unscopedReportQueryService,
@@ -58,7 +58,7 @@ public class CataloguesController(
             return chosen;
         }
 
-        var options = await userOrgAssignmentService.ListDgiOrCountryAssignmentsAsync(currentUserContext.UserId!.Value, cancellationToken);
+        var options = await userAssignmentsQueryService.ListDgiOrCountryAssignmentsAsync(currentUserContext.UserId!.Value, cancellationToken);
         return options.Single().OrgNodeId;
     }
 
@@ -283,7 +283,7 @@ public class CataloguesController(
             .Select(o => (o.Id, o.Name))
             .ToList();
 
-        var owningOrgOptions = (await userOrgAssignmentService.ListDgiOrCountryAssignmentsAsync(currentUserContext.UserId!.Value, cancellationToken))
+        var owningOrgOptions = (await userAssignmentsQueryService.ListDgiOrCountryAssignmentsAsync(currentUserContext.UserId!.Value, cancellationToken))
             .Select(o => (Id: o.OrgNodeId, o.Name))
             .ToList();
 

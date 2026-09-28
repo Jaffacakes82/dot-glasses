@@ -10,8 +10,8 @@ namespace DotGlasses.Application.Reporting;
 /// nodes the lookup is built from: there are few of them, they are the tree itself, and a corrupt
 /// one is data corruption worth surfacing rather than working around (see OrgTreeLookup's
 /// constructor). It is wrong for a reporting row. IHierarchyScoped.HierarchyPath is a plain string
-/// column defaulting to "", stamped server-side from a claim that is itself absent for a user with
-/// no org assignment (ICurrentUserContext.HierarchyPathPrefix falls back to ""), and a reporting
+/// column defaulting to "" (older rows recorded by a user with no org assignment carry exactly
+/// that), and a reporting
 /// screen reads *every* Test/Lead/Sale the caller can see — so one unparseable row would turn a
 /// whole Dashboard into a 500 where it previously rendered "Unknown outlet" beside the rest of the
 /// data.
