@@ -16,6 +16,18 @@ How to hand the tickets in `issues/` here and in `../lens-power-and-lens-sets/is
 - Ticket status: `ready-for-agent` → `claimed` when a sub-agent starts → `resolved` when merged into
   the integration branch, with a one-line note under `## Comments`.
 
+## Progress
+
+- 2026-09-28: waves 1–2 done. A01–A06 are merged into `feat/multi-org-access` and pushed, and the
+  full suite passes (459 tests). Paused here to save usage. **Next:** wave 3 (A07), then A08 and
+  A09.
+- Follow-ups noted during review, not yet ticketed:
+  - The Admin Portal's cookie recheck also runs on static-asset requests (one small query each).
+  - Two admins removing a user's last two assignments at once could leave the user with none.
+  - Several transitional "old active org counts as an assignment" rules are left for A08 to remove:
+    the access loader, the User Directory listing and checks, the sidebar query, and invite
+    filling the active-org columns.
+
 ## Models
 
 Each ticket names its model and why. Opus 5.5 (`model: "opus"`) takes the current-user abstraction,
