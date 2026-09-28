@@ -55,6 +55,7 @@ public static class DependencyInjection
         // see IReferenceDataSnapshotProvider/ADR-0002 for why crossing requests is deliberately out.
         services.AddScoped<IReferenceDataSnapshotProvider, ReferenceDataSnapshotProvider>();
         services.AddScoped<IOrganisationAdminService, OrganisationAdminService>();
+        services.AddScoped<IOrganisationNodeLookup, OrganisationNodeLookup>();
         services.AddScoped<IPresetCatalogueQueryService, PresetCatalogueQueryService>();
         services.AddScoped<IPresetCatalogueAdminService, PresetCatalogueAdminService>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();

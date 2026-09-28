@@ -43,6 +43,23 @@ public sealed record CurrentLocationCheck(CurrentLocationStatus Status, CurrentL
     public CurrentLocation? ValidLocation => IsValid ? Location : null;
 
     /// <summary>
+    /// What a create endpoint refuses with — null when valid (ticket 07, spec.md "Recording").
+    /// NotRetailPoint reuses NoLocation's copy: telling a technician "that's not a retail point"
+    /// is no more actionable than telling them to choose one, and CurrentLocationCheck.Of never
+    /// produces it from anything the Field App itself offered, only from a tampered/stale token.
+    /// The other two name the location, which Location guarantees is set whenever Status isn't
+    /// NoLocation (CurrentLocationCheck.Of only returns a non-NoLocation status from a non-null
+    /// candidate).
+    /// </summary>
+    public string? RefusalMessage => Status switch
+    {
+        CurrentLocationStatus.Valid => null,
+        CurrentLocationStatus.NoLongerAssigned => $"You're no longer assigned to {Location!.Name} — ask your admin.",
+        CurrentLocationStatus.Deactivated => $"{Location!.Name} has been deactivated.",
+        _ => "Choose a retail point before recording.",
+    };
+
+    /// <summary>
     /// The one definition of an <b>eligible location</b>: an active, Retail Point level org the
     /// user is directly assigned to. "My orgs", sign-in, switching and the per-request recheck all
     /// ask it, so what the Field App offers and what the server accepts can't drift apart. A

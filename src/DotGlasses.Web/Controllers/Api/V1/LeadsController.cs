@@ -72,6 +72,14 @@ public class LeadsController(
             return Problem("The authenticated request has no user id.", statusCode: StatusCodes.Status400BadRequest);
         }
 
+        // Gates on the current location before anything else: a technician with no valid
+        // location to record at gets the reason why, not a validation report against a body
+        // that was never going anywhere (ticket 07, spec.md "Recording").
+        if (currentUser.CurrentLocation.RefusalMessage is { } refusal)
+        {
+            return ValidationProblem(refusal.ToModelStateDictionary());
+        }
+
         // One reference-data read for the whole request, then every rule answered in memory —
         // ADR-0002. The provider is scoped and memoized, so this is the request's only load.
         // Placed where the record will be stamped, so a lens set is checked against the caller's
