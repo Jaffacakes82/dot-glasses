@@ -1,0 +1,73 @@
+@model DotGlasses.Web.Models.LensPowersViewModel
+@{
+    ViewData["Title"] = "Lens Powers";
+}
+
+<div class="dg-page-header">
+    <div>
+        <span class="dg-crumb">Configuration</span>
+        <h1 class="dg-page-title">Lens Powers</h1>
+    </div>
+    <a class="dg-btn dg-btn-ghost" asp-action="Index">Back to Lens Sets</a>
+</div>
+
+<p class="dg-crumb" style="margin-bottom:var(--space-5);">
+    Read-only. The values every lens power can take, and the validity rules a lens set's own
+    lenses and a custom prescription both follow — the same definition the Field App, the Add
+    lens dialog and the server all read.
+</p>
+
+<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-6);">
+    <div class="dg-card">
+        <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin-top:0; font-size:15px;">Sphere</h3>
+        <p class="dg-stat-label">Required on every lens.</p>
+        <div id="lens-power-sphere" style="display:flex; flex-wrap:wrap; gap:6px;">
+            @foreach (var value in Model.Sphere)
+            {
+                <span class="dg-badge">@value</span>
+            }
+        </div>
+    </div>
+
+    <div class="dg-card">
+        <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin-top:0; font-size:15px;">Cylinder</h3>
+        <p class="dg-stat-label">A blank cylinder means 0.00 — the shop sells no positive cylinder.</p>
+        <div id="lens-power-cylinder" style="display:flex; flex-wrap:wrap; gap:6px;">
+            @foreach (var value in Model.Cylinder)
+            {
+                <span class="dg-badge">@value</span>
+            }
+        </div>
+    </div>
+
+    <div class="dg-card">
+        <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin-top:0; font-size:15px;">Axis</h3>
+        <p class="dg-stat-label">Whole degrees. Asked only when the cylinder isn't 0.00.</p>
+        <div id="lens-power-axis" style="display:flex; flex-wrap:wrap; gap:6px; max-height:180px; overflow-y:auto;">
+            @foreach (var value in Model.Axis)
+            {
+                <span class="dg-badge">@value</span>
+            }
+        </div>
+    </div>
+
+    <div class="dg-card">
+        <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin-top:0; font-size:15px;">Add</h3>
+        <p class="dg-stat-label">A blank or 0.00 add is no add.</p>
+        <div id="lens-power-add" style="display:flex; flex-wrap:wrap; gap:6px;">
+            @foreach (var value in Model.Add)
+            {
+                <span class="dg-badge">@value</span>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="dg-card">
+    <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin-top:0; font-size:15px;">Validity rules</h3>
+    <ul style="margin:0; padding-left:20px; color:var(--text-muted-2); font-size:14px; line-height:1.7;">
+        <li>Sphere is required on every lens.</li>
+        <li>Axis is asked only when the cylinder isn't 0.00 — required then, and refused otherwise.</li>
+        <li>Lens type (Bifocal, Progressive or Other) is asked only when the add is above 0.00 — a blank or 0.00 add means single vision, and no lens type is asked; "Other" needs its own free text.</li>
+    </ul>
+</div>

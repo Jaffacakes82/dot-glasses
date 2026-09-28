@@ -8,10 +8,18 @@
         <span class="dg-crumb">Configuration</span>
         <h1 class="dg-page-title">Lens Sets</h1>
     </div>
-    <button class="dg-btn dg-btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#createCatalogueModal">Create lens set</button>
+    <div style="display:flex; gap:8px;">
+        <a class="dg-btn dg-btn-ghost" asp-action="LensPowers">Lens powers</a>
+        <button class="dg-btn dg-btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#createCatalogueModal">Create lens set</button>
+    </div>
 </div>
 
 <p class="dg-crumb" style="margin-bottom:var(--space-5);">Lens set creation is restricted to DGI/Country-office level — retailers and outlets may only assign what's pushed to them.</p>
+
+@if (TempData["Info"] is string info)
+{
+    <div class="alert alert-success" style="border-radius:var(--radius-md); margin-bottom:var(--space-4);">@info</div>
+}
 
 @if (!ViewData.ModelState.IsValid)
 {
