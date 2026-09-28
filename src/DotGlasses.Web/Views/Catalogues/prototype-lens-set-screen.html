@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<!--
+  PROTOTYPE — throwaway. Map ticket 08 ("The lens set admin screen for adding lenses").
+  Three variants of how an admin adds lenses to a lens set, switchable via ?variant=A|B|C
+  (or the floating bar / arrow keys). Dummy data, in memory only, nothing is saved.
+  Standalone rather than on the real Catalogues route because that needs a signed-in session.
+  Self-contained: the Admin Portal's real stylesheet and logo are inlined, with Bootstrap 5.3.3
+  (the version wwwroot ships) from a CDN. Open by double-clicking. Never merge to main; it lives
+  on a prototype/ branch.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PROTOTYPE — Lens Sets - Dot Glasses Admin Portal</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+<style>
+/* Inlined copy of wwwroot/css/dot-glasses.css so this file runs on its own. */
+/* DOT Glasses design tokens — ported from design/_ds/.../tokens/*.css (gitignored source,
+   reference-only). Keep in sync by hand with src/DotGlasses.App/wwwroot/css/dot-glasses.css;
+   there's no shared static-asset project between Web and the WASM App to source one file from. */
+
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;900&display=swap');
+
+:root {
+    --dot-orange: #F96715;
+    --dot-black: #000000;
+    --dot-beige: #EFEADF;
+    --dot-blue: #4287C6;
+    --dot-yellow: #FFB600;
+    --dot-pink: #FF85BC;
+    --dot-green: #234B33;
+    --dot-white: #FFFFFF;
+
+    --brand-primary: var(--dot-orange);
+    --surface-page: var(--dot-beige);
+    --surface-inverse: var(--dot-black);
+    --surface-card: var(--dot-white);
+    --text-primary: var(--dot-black);
+    --text-inverse: var(--dot-white);
+    --text-muted: #888888;
+    --text-muted-2: #666666;
+    --border-default: rgba(0, 0, 0, 0.12);
+    --focus-ring: var(--dot-blue);
+
+    --font-display: "Poppins", system-ui, sans-serif;
+    --font-body: "Poppins", system-ui, sans-serif;
+
+    --text-headline-lg: clamp(2.25rem, 5vw, 3.75rem);
+    --text-headline-md: clamp(1.75rem, 3.5vw, 2.5rem);
+    --text-body-lg: 1.25rem;
+    --text-body: 1rem;
+    --text-small: 0.875rem;
+
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --space-6: 32px;
+    --space-7: 48px;
+
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-pill: 999px;
+    --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+body {
+    background: var(--surface-page);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+}
+
+/* -- Buttons -------------------------------------------------------------------------- */
+
+.dg-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    border: none;
+    border-radius: var(--radius-pill);
+    padding: 14px 28px;
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 0.02em;
+    text-decoration: none;
+    cursor: pointer;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.dg-btn:hover {
+    transform: scale(1.03);
+}
+
+.dg-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.dg-btn-primary {
+    background: var(--dot-orange);
+    color: var(--dot-black);
+}
+
+.dg-btn-secondary {
+    background: var(--dot-black);
+    color: var(--dot-white);
+}
+
+.dg-btn-ghost {
+    background: transparent;
+    color: var(--dot-black);
+    box-shadow: inset 0 0 0 2px var(--dot-black);
+}
+
+/* -- Card ------------------------------------------------------------------------------ */
+
+.dg-card {
+    background: var(--surface-card);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+    padding: var(--space-5);
+}
+
+/* -- Badge ------------------------------------------------------------------------------ */
+
+.dg-badge {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 4px 12px;
+    border-radius: var(--radius-pill);
+    color: var(--dot-black);
+}
+
+/* -- Page header -------------------------------------------------------------------- */
+
+.dg-crumb {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--dot-orange);
+    margin-bottom: var(--space-2);
+}
+
+.dg-page-title {
+    font-family: var(--font-display);
+    font-weight: 900;
+    text-transform: uppercase;
+    font-size: var(--text-headline-md);
+    margin: 0;
+}
+
+.dg-page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+    flex-wrap: wrap;
+}
+
+/* -- Stat card ------------------------------------------------------------------------ */
+
+.dg-stat-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted-2);
+}
+
+.dg-stat-value {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 32px;
+    margin-top: var(--space-2);
+}
+
+/* -- Empty state ------------------------------------------------------------------------ */
+
+.dg-empty-state {
+    text-align: center;
+    padding: 64px 24px;
+}
+
+.dg-empty-state .dg-ring {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto var(--space-4);
+    border-radius: 50%;
+    border: 2px solid #cccccc;
+}
+
+.dg-empty-state p {
+    font-weight: 700;
+    color: var(--text-muted-2);
+}
+
+/* -- Table ------------------------------------------------------------------------------ */
+
+.dg-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.dg-table th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--border-default);
+}
+
+.dg-table td {
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--border-default);
+}
+
+.dg-table td.dg-muted {
+    color: var(--text-muted-2);
+}
+
+/* -- Admin shell: sidebar / top bar ----------------------------------------------------- */
+
+.dg-shell {
+    display: flex;
+    min-height: 100vh;
+}
+
+.dg-sidebar {
+    width: 240px;
+    flex: 0 0 240px;
+    background: var(--dot-black);
+    color: var(--dot-white);
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-5) var(--space-3);
+    position: sticky;
+    top: 0;
+    height: 100vh;
+}
+
+.dg-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 var(--space-3);
+    margin-bottom: var(--space-5);
+}
+
+.dg-sidebar-logo {
+    display: block;
+    line-height: 0;
+}
+
+.dg-sidebar-logo img {
+    height: 32px;
+    width: auto;
+    /* The source mark is black-on-transparent (same asset as the light-background login page) —
+       collapse it to solid black then invert to white so it reads against the dark sidebar. */
+    filter: brightness(0) invert(1);
+}
+
+.dg-nav-toggle {
+    display: none;
+    border: none;
+    background: none;
+    color: var(--dot-white);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px;
+}
+
+.dg-nav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    flex: 1;
+}
+
+@media (min-width: 992px) {
+    .dg-nav.collapse {
+        display: flex !important;
+    }
+}
+
+.dg-nav-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 12px var(--space-3);
+    border-radius: var(--radius-md);
+    color: var(--dot-white);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.dg-nav-item .dg-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--dot-orange);
+    flex: 0 0 8px;
+}
+
+.dg-nav-item.active {
+    background: var(--dot-orange);
+    color: var(--dot-black);
+}
+
+.dg-nav-item.active .dg-dot {
+    background: var(--dot-black);
+}
+
+.dg-user-chip {
+    padding-top: var(--space-4);
+    margin-top: var(--space-4);
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.dg-user-chip-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    width: 100%;
+    border: none;
+    background: none;
+    padding: 0;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.dg-user-chip-toggle .dg-caret {
+    opacity: 0.6;
+    font-size: 10px;
+    transition: transform 0.15s ease;
+}
+
+.dg-user-chip-toggle[aria-expanded="true"] .dg-caret {
+    transform: rotate(180deg);
+}
+
+.dg-user-menu {
+    min-width: 180px;
+    padding: var(--space-2);
+    border: none;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+}
+
+.dg-user-menu .dropdown-item {
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.dg-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--dot-orange);
+    color: var(--dot-black);
+    font-weight: 700;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 32px;
+}
+
+.dg-content {
+    flex: 1;
+    padding: 40px 48px;
+}
+
+@media (max-width: 991px) {
+    .dg-shell {
+        flex-direction: column;
+    }
+
+    .dg-sidebar {
+        width: 100%;
+        flex: none;
+        height: auto;
+        position: static;
+    }
+
+    .dg-topbar {
+        margin-bottom: 0;
+    }
+
+    .dg-nav-toggle {
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .dg-nav {
+        flex-direction: column;
+        margin-top: var(--space-4);
+    }
+
+    .dg-content {
+        padding: var(--space-5) var(--space-4);
+    }
+}
+
+/* -- Auth pages (login) -------------------------------------------------------------- */
+
+.dg-auth-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-5);
+}
+
+.dg-auth-card {
+    width: 100%;
+    max-width: 380px;
+    text-align: center;
+}
+
+.dg-auth-card .dg-page-title {
+    font-size: 28px;
+    margin-bottom: var(--space-5);
+}
+
+.dg-auth-field {
+    text-align: left;
+    margin-bottom: var(--space-4);
+}
+
+.dg-auth-field label {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: var(--space-2);
+}
+
+.dg-auth-field input {
+    width: 100%;
+    font-size: var(--text-body);
+    font-weight: 500;
+    padding: 14px 16px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-default);
+    background: var(--dot-white);
+}
+
+.dg-auth-field input:focus {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 1px;
+}
+
+</style>
+<style>
+  .proto-banner { background: var(--dot-yellow); border-radius: var(--radius-md); padding: 8px 14px; font-size: 13px; font-weight: 600; margin-bottom: var(--space-4); }
+  .proto-tabs { display: flex; gap: 8px; margin-bottom: var(--space-5); }
+  .proto-tab { border: none; background: transparent; box-shadow: inset 0 0 0 2px var(--dot-black); border-radius: var(--radius-pill); padding: 8px 18px; font-weight: 700; font-size: 13px; }
+  .proto-tab.active { background: var(--dot-black); color: var(--dot-white); }
+  .chip { display: inline-flex; align-items: center; gap: 4px; background: var(--dot-beige); border-radius: var(--radius-pill); padding: 2px 10px; font-size: 12px; font-weight: 600; margin: 2px; white-space: nowrap; }
+  .chip.pair { background: #e3eefa; }
+  .chip button { border: none; background: none; padding: 0; color: #888; line-height: 1; }
+  .err { color: #b00020; font-size: 12px; font-weight: 600; }
+  .ok { color: var(--dot-green); font-size: 12px; font-weight: 700; }
+  .muted { color: var(--text-muted-2); font-size: 13px; }
+  .field-label { font-size: 13px; font-weight: 700; margin-bottom: 4px; display: block; }
+  .shop-grid { display: grid; grid-template-columns: 170px 1fr; gap: 10px 16px; align-items: center; }
+  .grid-table td, .grid-table th { padding: 6px !important; vertical-align: top; }
+  .grid-table select, .grid-table input[type=text] { font-size: 13px; padding: 4px 6px; }
+  .grid-table tr.invalid td { background: #fff1f1; }
+  .grid-table tr.dirty td:first-child { box-shadow: inset 3px 0 0 var(--dot-orange); }
+  .csv-area { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  pre.state { font-size: 11px; background: #fbfaf7; border-radius: var(--radius-md); padding: 12px; max-height: 320px; overflow: auto; }
+  .proto-switcher { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 2000; display: flex; align-items: center; gap: 10px; background: #1b1bff; color: #fff; border-radius: 999px; padding: 8px 12px; box-shadow: 0 6px 20px rgba(0,0,0,.35); font-family: system-ui, sans-serif; font-size: 13px; font-weight: 700; }
+  .proto-switcher button { border: none; background: rgba(255,255,255,.18); color: #fff; border-radius: 999px; width: 30px; height: 30px; font-size: 15px; cursor: pointer; }
+  .power-table td { padding: 4px 10px !important; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<div class="dg-shell">
+  <aside class="dg-sidebar">
+    <div class="dg-topbar"><a class="dg-sidebar-logo" href="#"><img src="data:image/png;base64,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" alt="Dot Glasses" /></a></div>
+    <nav class="dg-nav">
+      <a class="dg-nav-item" href="#"><span class="dg-dot"></span> Dashboard</a>
+      <a class="dg-nav-item" href="#"><span class="dg-dot"></span> Organisations</a>
+      <a class="dg-nav-item" href="#"><span class="dg-dot"></span> Event History</a>
+      <a class="dg-nav-item" href="#"><span class="dg-dot"></span> User Directory</a>
+      <a class="dg-nav-item active" href="#"><span class="dg-dot"></span> Lens Sets</a>
+      <a class="dg-nav-item" href="#"><span class="dg-dot"></span> Custom Orders</a>
+      <a class="dg-nav-item" href="#"><span class="dg-dot"></span> Reference Data</a>
+    </nav>
+    <div class="dg-user-chip">
+      <div class="dg-user-chip-toggle">
+        <div class="dg-avatar">DA</div>
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:600; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">dgi.admin@example.org</div>
+          <div style="font-size:11px; opacity:0.7; text-transform:uppercase;">Admin · Dot Glasses International</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="dg-content">
+    <div class="proto-banner">PROTOTYPE, with dummy data. Nothing is saved; reload to reset. Use the blue bar at the bottom, or ← and →, to switch between the three ways of adding lenses.</div>
+    <div class="dg-page-header">
+      <div><span class="dg-crumb">Configuration</span><h1 class="dg-page-title">Lens Sets</h1></div>
+    </div>
+    <div class="proto-tabs">
+      <button class="proto-tab active" data-tab="sets">Lens sets</button>
+      <button class="proto-tab" data-tab="powers">Lens powers</button>
+    </div>
+
+    <section id="tab-sets">
+      <div class="dg-card" style="margin-bottom:var(--space-4);">
+        <div style="display:flex; gap:var(--space-4); align-items:flex-end; flex-wrap:wrap;">
+          <div style="min-width:240px;">
+            <label class="field-label">Lens set</label>
+            <select class="form-select" id="setPicker"></select>
+          </div>
+          <div class="muted" id="setMeta" style="flex:1;"></div>
+        </div>
+      </div>
+      <div class="dg-card" id="variantHost"></div>
+      <details style="margin-top:var(--space-4);">
+        <summary class="muted" style="cursor:pointer;">Prototype state: what would be saved for this lens set</summary>
+        <pre class="state" id="stateDump"></pre>
+      </details>
+    </section>
+
+    <section id="tab-powers" style="display:none;">
+      <div class="dg-card">
+        <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin-top:0;">Allowed lens powers</h3>
+        <p class="muted">The values every lens set and every custom prescription can use, copied from the DOT Glasses online shop.
+          This page is <strong>read-only</strong>. Changing these values needs a new release of both apps.</p>
+        <div id="powersHost" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:var(--space-4);"></div>
+        <h4 style="margin-top:var(--space-5); font-size:15px; font-weight:800;">Rules</h4>
+        <ul class="muted">
+          <li>Sphere is required.</li>
+          <li>A blank cylinder means 0.00. Axis is required only when cylinder isn't 0.</li>
+          <li>A blank add, or an add of 0.00, means no add. The pair is then <strong>single vision</strong>.</li>
+          <li>With an add, the lens type is Bifocal, Progressive or Other.</li>
+          <li>Pupil distance is 54–74 mm, one value for the pair. It isn't part of a lens.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Variant A's configurator dialog -->
+<div class="modal fade" id="lensModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content" style="border-radius:var(--radius-md); border:none;">
+      <div class="modal-header">
+        <h2 class="dg-page-title" style="font-size:20px;" id="lensModalTitle">Add lens</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="lensModalBody"></div>
+      <div class="modal-footer">
+        <div class="err" id="lensModalErrors" style="margin-right:auto; max-width:60%;"></div>
+        <button class="dg-btn dg-btn-ghost" type="button" data-bs-dismiss="modal">Cancel</button>
+        <button class="dg-btn dg-btn-primary" type="button" id="lensModalSave">Save lens</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="proto-switcher" id="switcher">
+  <button id="swPrev" aria-label="Previous variant">←</button>
+  <span id="swLabel"></span>
+  <button id="swNext" aria-label="Next variant">→</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ---------- Reference data (dummy, matches staging's seeded coatings/exclusions) ----------
+const COATINGS = ['Photochromic', 'Clear', 'Blue block', 'Polarized', 'Sunglasses', 'Anti-glare'];
+const EXCLUSIONS = [['Clear','Polarized'], ['Clear','Sunglasses'], ['Photochromic','Clear'], ['Photochromic','Sunglasses']];
+const LENS_TYPES = ['Bifocal', 'Progressive', 'Other'];
+
+// ---------- Allowed values, copied from the shop's configurator ----------
+const r2 = v => Math.round(v * 100) / 100;
+function steps(from, to, step) { const out = []; for (let v = from; v <= to + 1e-9; v += step) out.push(r2(v)); return out; }
+const SPH = [0, ...steps(-10, 10, 0.25).filter(v => v !== 0)];   // shop order: 0.00 first
+const CYL = [0, ...steps(-6, -0.25, 0.25)];                      // negative only
+const AXIS = steps(0, 180, 1);
+const ADD = steps(0, 3, 0.25);
+const fmt = v => (v > 0 ? '+' : '') + v.toFixed(2);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// ---------- Dummy lens sets ----------
+const E = (label, sph, cyl, axis, add, type, coatings, pairings = []) =>
+  ({ label, sph, cyl, axis, add, type, typeOther: '', coatings, pairings });
+const sets = [
+  { name: 'Kenya Readers', owner: 'Kenya', assigned: ['Kenya'], entries: [
+    E('+1.00', 1, 0, null, null, null, ['Clear', 'Photochromic']),
+    E('+1.50', 1.5, 0, null, null, null, ['Clear', 'Photochromic']),
+    E('+2.00', 2, 0, null, null, null, ['Clear', 'Photochromic', 'Blue block'], [['Blue block', 'Photochromic']]),
+    E('+2.50', 2.5, 0, null, null, null, ['Clear', 'Photochromic']),
+    E('Bifocal +2.00', 0, 0, null, 2, 'Bifocal', ['Photochromic', 'Blue block'], [['Blue block', 'Photochromic']]),
+  ]},
+  { name: 'Outreach Distance', owner: 'Dot Glasses International', assigned: ['DGI Outreach'], entries: [
+    E('-1.00', -1, 0, null, null, null, ['Clear']),
+    E('-2.00 astig', -2, -0.75, 90, null, null, ['Clear', 'Anti-glare']),
+  ]},
+];
+let current = 0;
+const cur = () => sets[current];
+
+// ---------- Rules (the decisions from tickets 06 and 07) ----------
+const isExcluded = (a, b) => EXCLUSIONS.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
+const hasAdd = e => e.add != null && e.add > 0;
+const typeOf = e => hasAdd(e) ? (e.type === 'Other' && e.typeOther ? `Other (${e.typeOther})` : (e.type || '?')) : 'Single vision';
+function powerText(e) {
+  if (e.sph == null) return '—';
+  let s = `SPH ${fmt(e.sph)}`;
+  if (e.cyl) s += ` · CYL ${fmt(e.cyl)} × ${e.axis ?? '?'}°`;
+  if (hasAdd(e)) s += ` · ADD ${fmt(e.add)}`;
+  return s;
+}
+function normalise(e) {
+  if (e.cyl == null) e.cyl = 0;
+  if (e.cyl === 0) e.axis = null;
+  if (!hasAdd(e)) { e.add = null; e.type = null; e.typeOther = ''; }
+  e.pairings = e.pairings.filter(([t, p]) => e.coatings.includes(t) && e.coatings.includes(p));
+  return e;
+}
+function pairingProblem(e, t, p) {
+  if (!t || !p) return 'Choose both coatings.';
+  if (t === p) return 'A coating can’t pair with itself.';
+  if (!e.coatings.includes(t) || !e.coatings.includes(p)) return 'Both coatings must be ticked for this lens.';
+  if (isExcluded(t, p)) return `${t} and ${p} exclude each other, so they can’t be paired.`;
+  if (e.pairings.some(([a, b]) => a === t && b === p)) return 'That pairing already exists.';
+  return null;
+}
+function validate(e, others) {
+  const errs = [];
+  const label = (e.label || '').trim();
+  if (!label) errs.push('Enter a label.');
+  else if (others.some(o => o.label.trim().toLowerCase() === label.toLowerCase())) errs.push(`This lens set already has a lens labelled “${label}”.`);
+  if (e.sph == null) errs.push('Choose a sphere.');
+  if (e.cyl && e.axis == null) errs.push('Choose an axis. It’s needed when cylinder isn’t 0.');
+  if (hasAdd(e) && !e.type) errs.push('Choose a lens type. It’s needed when there’s an add.');
+  if (hasAdd(e) && e.type === 'Other' && !(e.typeOther || '').trim()) errs.push('Describe the “Other” lens type.');
+  if (!e.coatings.length) errs.push('Tick at least one coating.');
+  if (e.sph != null && others.some(o => o.sph === e.sph && (o.cyl || 0) === (e.cyl || 0) && (o.axis ?? null) === (e.axis ?? null)
+      && (o.add ?? null) === (e.add ?? null) && (o.type ?? null) === (e.type ?? null)))
+    errs.push('This lens set already has a lens with this power and lens type.');
+  for (const [t, p] of e.pairings) if (isExcluded(t, p)) errs.push(`${t} → ${p} contradicts an exclusion.`);
+  return errs;
+}
+const clone = e => JSON.parse(JSON.stringify(e));
+const blank = () => ({ label: '', sph: null, cyl: 0, axis: null, add: null, type: null, typeOther: '', coatings: [], pairings: [] });
+
+// ---------- Shared bits ----------
+const opts = (values, selected, { format = fmt, blankLabel = null } = {}) =>
+  (blankLabel !== null ? `<option value="">${blankLabel}</option>` : '') +
+  values.map(v => `<option value="${v}" ${selected === v ? 'selected' : ''}>${format(v)}</option>`).join('');
+const num = v => v === '' || v == null ? null : Number(v);
+const coatingChips = e => e.coatings.map(c => `<span class="chip">${esc(c)}</span>`).join('');
+const pairingChips = (e, removable, idx) => e.pairings.map(([t, p], i) =>
+  `<span class="chip pair">${esc(t)} → ${esc(p)}${removable ? ` <button data-unpair="${idx}:${i}" aria-label="Remove pairing">×</button>` : ''}</span>`).join('') || '<span class="muted">—</span>';
+
+function renderSetPicker() {
+  document.getElementById('setPicker').innerHTML = sets.map((s, i) => `<option value="${i}" ${i === current ? 'selected' : ''}>${esc(s.name)}</option>`).join('');
+  const s = cur();
+  document.getElementById('setMeta').innerHTML = `Owned by <strong>${esc(s.owner)}</strong> · assigned to ${s.assigned.map(esc).join(', ')} · ${s.entries.length} lens(es)`;
+}
+function renderState() {
+  document.getElementById('stateDump').textContent = JSON.stringify(cur(), null, 2);
+}
+
+// =============================================================================================
+// Variant A — configurator dialog: one lens at a time, laid out like the online shop.
+// =============================================================================================
+let modalIdx = null, draft = null;
+const modal = () => bootstrap.Modal.getOrCreateInstance(document.getElementById('lensModal'));
+
+function variantA(host) {
+  const s = cur();
+  host.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-3);">
+      <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin:0; font-size:18px;">Lenses in ${esc(s.name)}</h3>
+      <button class="dg-btn dg-btn-primary" style="padding:10px 20px;" id="aAdd">Add lens</button>
+    </div>
+    <table class="dg-table">
+      <thead><tr><th>Label</th><th>Lens power</th><th>Lens type</th><th>Coatings</th><th>Pairings</th><th></th></tr></thead>
+      <tbody>${s.entries.map((e, i) => `
+        <tr><td style="font-weight:700;">${esc(e.label)}</td><td class="dg-muted">${powerText(e)}</td><td>${esc(typeOf(e))}</td>
+        <td>${coatingChips(e)}</td><td>${pairingChips(e, false)}</td>
+        <td style="white-space:nowrap;"><button class="dg-btn dg-btn-ghost" style="padding:4px 12px; font-size:12px;" data-edit="${i}">Edit</button>
+        <button class="dg-btn dg-btn-ghost" style="padding:4px 12px; font-size:12px;" data-remove="${i}">Remove</button></td></tr>`).join('')
+      || '<tr><td colspan="6" class="dg-muted">No lenses yet. Add one to start.</td></tr>'}</tbody>
+    </table>`;
+  host.querySelector('#aAdd').onclick = () => openModal(null);
+  host.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => openModal(+b.dataset.edit));
+  host.querySelectorAll('[data-remove]').forEach(b => b.onclick = () => { s.entries.splice(+b.dataset.remove, 1); render(); });
+}
+function openModal(idx) {
+  modalIdx = idx;
+  draft = idx == null ? blank() : clone(cur().entries[idx]);
+  document.getElementById('lensModalTitle').textContent = idx == null ? `Add lens to ${cur().name}` : `Edit ${draft.label}`;
+  document.getElementById('lensModalErrors').textContent = '';
+  renderModalBody();
+  modal().show();
+}
+function renderModalBody() {
+  const e = draft;
+  const body = document.getElementById('lensModalBody');
+  const suggested = e.sph == null ? '' : (hasAdd(e) ? `${e.type || 'Bifocal'} ${fmt(e.add)}` : fmt(e.sph));
+  body.innerHTML = `
+    <p class="muted" style="margin-top:0;">Choose the lens power the same way as on the online shop, then how it appears to technicians.</p>
+    <div class="shop-grid">
+      <label class="field-label">Spherical Power</label>
+      <select class="form-select" id="mSph">${opts(SPH, e.sph, { blankLabel: 'Select' })}</select>
+      <label class="field-label">Cylindrical Power</label>
+      <select class="form-select" id="mCyl">${opts(CYL, e.cyl)}</select>
+      <label class="field-label">Axis</label>
+      <select class="form-select" id="mAxis" ${e.cyl ? '' : 'disabled'}>${e.cyl ? opts(AXIS, e.axis, { format: v => v + '°', blankLabel: 'Select' }) : '<option>Not needed (no cylinder)</option>'}</select>
+      <label class="field-label">Add Near Vision Power</label>
+      <select class="form-select" id="mAdd">${opts(ADD, e.add, { blankLabel: 'None' })}</select>
+    </div>
+    ${hasAdd(e) ? `
+      <div style="margin-top:var(--space-4);">
+        <label class="field-label">Lens type <span class="muted">(this lens has an add)</span></label>
+        ${LENS_TYPES.map(t => `<label style="margin-right:16px;"><input type="radio" name="mType" value="${t}" ${e.type === t ? 'checked' : ''}/> ${t}</label>`).join('')}
+        ${e.type === 'Other' ? `<input class="form-control" id="mTypeOther" style="margin-top:6px; max-width:320px;" placeholder="Describe the lens type" value="${esc(e.typeOther)}">` : ''}
+      </div>` : `<p class="muted" style="margin-top:var(--space-3);">No add, so this lens is <strong>single vision</strong>.</p>`}
+    <hr/>
+    <label class="field-label">Label shown to technicians</label>
+    <input class="form-control" id="mLabel" style="max-width:320px;" value="${esc(e.label)}" placeholder="${suggested ? 'e.g. ' + esc(suggested) : 'e.g. +2.50'}">
+    <hr/>
+    <label class="field-label">Coatings this lens comes in <span class="muted">(at least one)</span></label>
+    <div>${COATINGS.map(c => `<label style="margin-right:16px; white-space:nowrap;"><input type="checkbox" data-coat="${esc(c)}" ${e.coatings.includes(c) ? 'checked' : ''}/> ${esc(c)}</label>`).join('')}</div>
+    <p class="muted" style="margin:6px 0 0;">Exclusions still apply at sale time: ${EXCLUSIONS.map(([a, b]) => `${a} ⊘ ${b}`).join(', ')}.</p>
+    <div style="margin-top:var(--space-4);">
+      <label class="field-label">Pairings for this lens <span class="muted">(ticking the first adds the second; the second can't be unticked)</span></label>
+      <div>${pairingChips(e, true, 'm')}</div>
+      ${e.coatings.length >= 2 ? `
+        <div style="display:flex; gap:8px; align-items:center; margin-top:6px;">
+          <select class="form-select form-select-sm" id="mPT" style="max-width:160px;">${e.coatings.map(c => `<option>${esc(c)}</option>`).join('')}</select> →
+          <select class="form-select form-select-sm" id="mPP" style="max-width:160px;">${e.coatings.map(c => `<option>${esc(c)}</option>`).join('')}</select>
+          <button class="dg-btn dg-btn-ghost" style="padding:4px 12px; font-size:12px;" id="mPAdd">Add pairing</button>
+          <span class="err" id="mPErr"></span>
+        </div>` : '<p class="muted" style="margin:0;">Tick at least two coatings to add a pairing.</p>'}
+    </div>`;
+  const reread = () => { normalise(draft); renderModalBody(); };
+  body.querySelector('#mSph').onchange = ev => { draft.sph = num(ev.target.value); reread(); };
+  body.querySelector('#mCyl').onchange = ev => { draft.cyl = num(ev.target.value); reread(); };
+  const axis = body.querySelector('#mAxis'); if (e.cyl) axis.onchange = ev => { draft.axis = num(ev.target.value); reread(); };
+  body.querySelector('#mAdd').onchange = ev => { draft.add = num(ev.target.value); reread(); };
+  body.querySelectorAll('[name=mType]').forEach(r => r.onchange = () => { draft.type = r.value; reread(); });
+  const other = body.querySelector('#mTypeOther'); if (other) other.oninput = ev => draft.typeOther = ev.target.value;
+  body.querySelector('#mLabel').oninput = ev => draft.label = ev.target.value;
+  body.querySelectorAll('[data-coat]').forEach(cb => cb.onchange = () => {
+    const c = cb.dataset.coat;
+    draft.coatings = cb.checked ? [...draft.coatings, c] : draft.coatings.filter(x => x !== c);
+    reread();
+  });
+  body.querySelectorAll('[data-unpair]').forEach(b => b.onclick = () => { draft.pairings.splice(+b.dataset.unpair.split(':')[1], 1); reread(); });
+  const pAdd = body.querySelector('#mPAdd');
+  if (pAdd) pAdd.onclick = () => {
+    const t = body.querySelector('#mPT').value, p = body.querySelector('#mPP').value;
+    const problem = pairingProblem(draft, t, p);
+    if (problem) { body.querySelector('#mPErr').textContent = problem; return; }
+    draft.pairings.push([t, p]); reread();
+  };
+}
+document.getElementById('lensModalSave').onclick = () => {
+  normalise(draft);
+  const others = cur().entries.filter((_, i) => i !== modalIdx);
+  const errs = validate(draft, others);
+  if (errs.length) { document.getElementById('lensModalErrors').innerHTML = errs.map(esc).join('<br>'); return; }
+  if (modalIdx == null) cur().entries.push(draft); else cur().entries[modalIdx] = draft;
+  modal().hide(); render();
+};
+
+// =============================================================================================
+// Variant B — spreadsheet grid: every lens is an editable row; add many rows, save once.
+// =============================================================================================
+let gridRows = null, gridDirty = new Set(), gridSetIdx = null, gridMessage = '';
+function variantB(host) {
+  if (gridRows === null || gridSetIdx !== current) { gridRows = cur().entries.map(clone); gridDirty = new Set(); gridSetIdx = current; }
+  const errsFor = i => validate(normalise(gridRows[i]), gridRows.filter((_, j) => j !== i));
+  const rows = gridRows.map((e, i) => {
+    const errs = errsFor(i);
+    return `
+    <tr class="${errs.length ? 'invalid' : ''} ${gridDirty.has(i) ? 'dirty' : ''}">
+      <td><input type="text" class="form-control" data-f="label" data-i="${i}" value="${esc(e.label)}" placeholder="Label" style="min-width:110px;"></td>
+      <td><select class="form-select" data-f="sph" data-i="${i}">${opts(SPH, e.sph, { blankLabel: '—' })}</select></td>
+      <td><select class="form-select" data-f="cyl" data-i="${i}">${opts(CYL, e.cyl)}</select></td>
+      <td><select class="form-select" data-f="axis" data-i="${i}" ${e.cyl ? '' : 'disabled'}>${e.cyl ? opts(AXIS, e.axis, { format: v => v + '°', blankLabel: '—' }) : '<option>—</option>'}</select></td>
+      <td><select class="form-select" data-f="add" data-i="${i}">${opts(ADD, e.add, { blankLabel: 'None' })}</select></td>
+      <td>${hasAdd(e) ? `<select class="form-select" data-f="type" data-i="${i}"><option value="">—</option>${LENS_TYPES.map(t => `<option ${e.type === t ? 'selected' : ''}>${t}</option>`).join('')}</select>`
+        : '<span class="muted">Single vision</span>'}</td>
+      ${COATINGS.map(c => `<td style="text-align:center;"><input type="checkbox" data-coat="${esc(c)}" data-i="${i}" ${e.coatings.includes(c) ? 'checked' : ''}></td>`).join('')}
+      <td style="min-width:170px;">${pairingChips(e, true, i)}
+        ${e.coatings.length >= 2 ? `<div style="display:flex; gap:4px; margin-top:4px;">
+          <select class="form-select form-select-sm" data-pt="${i}">${e.coatings.map(c => `<option>${esc(c)}</option>`).join('')}</select>
+          <select class="form-select form-select-sm" data-pp="${i}">${e.coatings.map(c => `<option>${esc(c)}</option>`).join('')}</select>
+          <button class="dg-btn dg-btn-ghost" style="padding:2px 8px; font-size:11px;" data-padd="${i}">+</button></div>` : ''}
+        <div class="err" data-perr="${i}"></div></td>
+      <td><button class="dg-btn dg-btn-ghost" style="padding:2px 10px; font-size:12px;" data-del="${i}" title="Remove row">×</button></td>
+    </tr>
+    ${errs.length ? `<tr class="invalid"><td colspan="${8 + COATINGS.length}" class="err" style="padding-top:0 !important;">${errs.map(esc).join(' · ')}</td></tr>` : ''}`;
+  }).join('');
+  const invalidCount = gridRows.filter((_, i) => errsFor(i).length).length;
+  host.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-3); gap:12px; flex-wrap:wrap;">
+      <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin:0; font-size:18px;">Lenses in ${esc(cur().name)}</h3>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <span class="${invalidCount ? 'err' : 'ok'}">${gridMessage || (invalidCount ? `${invalidCount} row(s) need fixing` : gridDirty.size ? `${gridDirty.size} unsaved change(s)` : 'All saved')}</span>
+        <button class="dg-btn dg-btn-ghost" style="padding:8px 16px; font-size:13px;" id="bAdd">Add row</button>
+        <button class="dg-btn dg-btn-primary" style="padding:8px 16px; font-size:13px;" id="bSave" ${gridDirty.size ? '' : 'disabled'}>Save changes</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+    <table class="dg-table grid-table">
+      <thead><tr><th>Label</th><th>SPH</th><th>CYL</th><th>Axis</th><th>Add</th><th>Lens type</th>
+        ${COATINGS.map(c => `<th style="text-align:center; font-size:10px;">${esc(c)}</th>`).join('')}<th>Pairings</th><th></th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="${8 + COATINGS.length}" class="dg-muted">No lenses yet. Add a row.</td></tr>`}</tbody>
+    </table></div>
+    <p class="muted" style="margin-top:var(--space-3);">Edit any cell. Changed rows get an orange edge. Nothing is saved until every row is valid and you press Save changes.</p>`;
+  gridMessage = '';
+  const touch = i => gridDirty.add(i);
+  host.querySelectorAll('[data-f]').forEach(el => {
+    const i = +el.dataset.i, f = el.dataset.f;
+    const apply = () => { gridRows[i][f] = f === 'label' ? el.value : (f === 'type' ? (el.value || null) : num(el.value)); touch(i); };
+    if (f === 'label') { el.oninput = apply; el.onchange = () => render(); } else el.onchange = () => { apply(); render(); };
+  });
+  host.querySelectorAll('[data-coat]').forEach(cb => cb.onchange = () => {
+    const i = +cb.dataset.i, c = cb.dataset.coat, e = gridRows[i];
+    e.coatings = cb.checked ? [...e.coatings, c] : e.coatings.filter(x => x !== c); touch(i); render();
+  });
+  host.querySelectorAll('[data-unpair]').forEach(b => b.onclick = () => { const [i, k] = b.dataset.unpair.split(':').map(Number); gridRows[i].pairings.splice(k, 1); touch(i); render(); });
+  host.querySelectorAll('[data-padd]').forEach(b => b.onclick = () => {
+    const i = +b.dataset.padd, e = gridRows[i];
+    const t = host.querySelector(`[data-pt="${i}"]`).value, p = host.querySelector(`[data-pp="${i}"]`).value;
+    const problem = pairingProblem(e, t, p);
+    if (problem) { host.querySelector(`[data-perr="${i}"]`).textContent = problem; return; }
+    e.pairings.push([t, p]); touch(i); render();
+  });
+  host.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    const d = +b.dataset.del;
+    gridRows.splice(d, 1);
+    gridDirty = new Set([...gridDirty].filter(j => j !== d).map(j => typeof j === 'number' && j > d ? j - 1 : j));
+    gridDirty.add(`deleted-${Date.now()}`);
+    render();
+  });
+  host.querySelector('#bAdd').onclick = () => { gridRows.push(blank()); touch(gridRows.length - 1); render(); };
+  host.querySelector('#bSave').onclick = () => {
+    if (gridRows.some((_, i) => errsFor(i).length)) { gridMessage = 'Fix the red rows first'; render(); return; }
+    cur().entries = gridRows.map(clone); gridDirty = new Set(); gridMessage = 'Saved'; render();
+  };
+}
+
+// =============================================================================================
+// Variant C — CSV import: paste many lenses in a defined format, preview, then add the valid rows.
+// =============================================================================================
+const CSV_HEADER = 'label,sphere,cylinder,axis,add,lens_type,coatings,pairings';
+const CSV_SAMPLE = `${CSV_HEADER}
++3.00,3.00,,,,,Clear;Photochromic,
++3.50,3.50,,,,,Clear;Photochromic;Blue block,Blue block>Photochromic
+Bifocal +2.50,0.00,,,2.50,Bifocal,Photochromic,
+Progressive +1.50,0.00,,,1.50,Progressive,Photochromic;Anti-glare,
+-1.50 astig,-1.50,-0.75,,,,Clear,
++2.00,2.00,,,,,Clear,
++4.00,4.10,,,,,Clear,
+Sun +1.00,1.00,,,,,Sunglasses;Clear,Sunglasses>Clear`;
+let csvText = CSV_SAMPLE, csvPreview = null, csvMessage = '';
+function parseNum(raw, allowed, name) {
+  const t = (raw || '').trim();
+  if (t === '') return { v: null };
+  const v = Number(t);
+  if (Number.isNaN(v)) return { err: `${name} “${t}” isn’t a number.` };
+  if (!allowed.includes(r2(v))) return { err: `${name} ${t} isn’t an allowed value.` };
+  return { v: r2(v) };
+}
+function parseCsv(text) {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  if (lines[0] && lines[0].toLowerCase().startsWith('label,')) lines.shift();
+  const accepted = [];
+  return lines.map((line, n) => {
+    const cols = line.split(',');
+    const errs = [];
+    const e = blank();
+    e.label = (cols[0] || '').trim();
+    for (const [key, idx, allowed, name] of [['sph', 1, SPH, 'Sphere'], ['cyl', 2, CYL, 'Cylinder'], ['axis', 3, AXIS, 'Axis'], ['add', 4, ADD, 'Add']]) {
+      const r = parseNum(cols[idx], allowed, name); if (r.err) errs.push(r.err); else e[key] = r.v;
+    }
+    const type = (cols[5] || '').trim();
+    if (type && !LENS_TYPES.includes(type)) errs.push(`Lens type “${type}” isn’t Bifocal, Progressive or Other.`); else e.type = type || null;
+    e.coatings = (cols[6] || '').split(';').map(s => s.trim()).filter(Boolean);
+    const unknown = e.coatings.filter(c => !COATINGS.includes(c));
+    if (unknown.length) errs.push(`Unknown coating(s): ${unknown.join(', ')}.`);
+    e.pairings = (cols[7] || '').split(';').map(s => s.trim()).filter(Boolean).map(pr => pr.split('>').map(s => s.trim()));
+    for (const [t, p] of e.pairings) { const pb = pairingProblem({ ...e, pairings: [] }, t, p); if (pb) errs.push(`Pairing ${t} > ${p}: ${pb}`); }
+    normalise(e);
+    if (!errs.length) errs.push(...validate(e, [...cur().entries, ...accepted]));
+    if (!errs.length) accepted.push(e);
+    return { line: n + 1, raw: line, e, errs };
+  });
+}
+function variantC(host) {
+  const s = cur();
+  const valid = csvPreview ? csvPreview.filter(r => !r.errs.length) : [];
+  host.innerHTML = `
+    <div style="display:grid; grid-template-columns: minmax(280px, 1fr) minmax(320px, 1.3fr); gap:var(--space-5);">
+      <div>
+        <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin:0 0 var(--space-3); font-size:18px;">Lenses in ${esc(s.name)} (${s.entries.length})</h3>
+        <table class="dg-table">
+          <thead><tr><th>Label</th><th>Lens power</th><th>Coatings</th><th></th></tr></thead>
+          <tbody>${s.entries.map((e, i) => `<tr><td style="font-weight:700;">${esc(e.label)}</td>
+            <td class="dg-muted" style="font-size:13px;">${powerText(e)}<br>${esc(typeOf(e))}</td>
+            <td>${coatingChips(e)}${e.pairings.length ? '<br>' + pairingChips(e, false) : ''}</td>
+            <td><button class="dg-btn dg-btn-ghost" style="padding:2px 10px; font-size:12px;" data-remove="${i}">×</button></td></tr>`).join('')
+            || '<tr><td colspan="4" class="dg-muted">No lenses yet.</td></tr>'}</tbody>
+        </table>
+      </div>
+      <div>
+        <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin:0 0 var(--space-3); font-size:18px;">Import lenses from CSV</h3>
+        <p class="muted" style="margin-top:0;">One lens per line. Columns: <code>${CSV_HEADER}</code>.
+          Leave cylinder, axis and add blank when not needed. Separate coatings with <code>;</code>, and write pairings as
+          <code>Blue block&gt;Photochromic</code>. The sample has some deliberate mistakes.</p>
+        <textarea class="form-control csv-area" id="cText" rows="10">${esc(csvText)}</textarea>
+        <div style="display:flex; gap:8px; margin-top:8px; align-items:center;">
+          <button class="dg-btn dg-btn-ghost" style="padding:8px 16px; font-size:13px;" id="cPreview">Check</button>
+          <button class="dg-btn dg-btn-primary" style="padding:8px 16px; font-size:13px;" id="cAdd" ${valid.length ? '' : 'disabled'}>Add ${valid.length} valid lens(es)</button>
+          <span class="ok">${esc(csvMessage)}</span>
+        </div>
+        ${csvPreview ? `
+          <table class="dg-table" style="margin-top:var(--space-3);">
+            <thead><tr><th>#</th><th>Label</th><th>Lens power</th><th>Result</th></tr></thead>
+            <tbody>${csvPreview.map(r => `<tr><td class="dg-muted">${r.line}</td><td style="font-weight:700;">${esc(r.e.label)}</td>
+              <td class="dg-muted" style="font-size:12px;">${powerText(r.e)}</td>
+              <td>${r.errs.length ? `<span class="err">${r.errs.map(esc).join('<br>')}</span>` : '<span class="ok">✓ Ready to add</span>'}</td></tr>`).join('')}</tbody>
+          </table>` : ''}
+      </div>
+    </div>`;
+  csvMessage = '';
+  host.querySelector('#cText').oninput = ev => { csvText = ev.target.value; };
+  host.querySelector('#cPreview').onclick = () => { csvPreview = parseCsv(csvText); render(); };
+  host.querySelector('#cAdd').onclick = () => {
+    const rows = parseCsv(csvText), ok = rows.filter(r => !r.errs.length);
+    s.entries.push(...ok.map(r => r.e));
+    csvText = rows.filter(r => r.errs.length).map(r => r.raw).join('\n');
+    csvText = csvText ? CSV_HEADER + '\n' + csvText : CSV_HEADER + '\n';
+    csvPreview = null; csvMessage = `Added ${ok.length}. Lines with problems are left in the box.`; render();
+  };
+  host.querySelectorAll('[data-remove]').forEach(b => b.onclick = () => { s.entries.splice(+b.dataset.remove, 1); csvPreview = null; render(); });
+}
+
+// ---------- Lens powers tab (read-only) ----------
+function renderPowers() {
+  const block = (title, values, f, note) => `
+    <div><h4 style="font-size:14px; font-weight:800; margin-bottom:4px;">${title}</h4><p class="muted" style="margin:0 0 6px;">${note}</p>
+    <div style="max-height:260px; overflow:auto; border:1px solid var(--border-default); border-radius:var(--radius-md);">
+    <table class="dg-table power-table"><tbody>${values.map(v => `<tr><td>${f(v)}</td></tr>`).join('')}</tbody></table></div></div>`;
+  document.getElementById('powersHost').innerHTML =
+    block('Sphere', steps(-10, 10, 0.25).reverse(), fmt, '-10.00 to +10.00 in 0.25 steps · required') +
+    block('Cylinder', [0, ...steps(-6, -0.25, 0.25).reverse()], fmt, '0.00 to -6.00 in 0.25 steps · blank means 0.00') +
+    block('Axis', AXIS, v => v + '°', '0–180° in whole degrees · only when cylinder isn’t 0') +
+    block('Add', ADD, fmt, '0.00 to +3.00 in 0.25 steps · blank or 0.00 means no add') +
+    block('Pupil distance', steps(54, 74, 1), v => v + ' mm', '54–74 mm · one value per pair, not per lens');
+}
+
+// ---------- Variant switcher (prototype chrome) ----------
+const VARIANTS = [['A', 'Configurator dialog', variantA], ['B', 'Spreadsheet grid', variantB], ['C', 'CSV import', variantC]];
+let vIdx = Math.max(0, VARIANTS.findIndex(v => v[0] === (new URLSearchParams(location.search).get('variant') || 'A').toUpperCase()));
+function setVariant(i) {
+  vIdx = (i + VARIANTS.length) % VARIANTS.length;
+  const url = new URL(location.href); url.searchParams.set('variant', VARIANTS[vIdx][0]);
+  try { history.replaceState(null, '', url); } catch { /* file:// in some browsers */ }
+  render();
+}
+document.getElementById('swPrev').onclick = () => setVariant(vIdx - 1);
+document.getElementById('swNext').onclick = () => setVariant(vIdx + 1);
+document.addEventListener('keydown', ev => {
+  const t = ev.target;
+  if (t.closest('input, textarea, select, [contenteditable]') || document.querySelector('.modal.show')) return;
+  if (ev.key === 'ArrowLeft') setVariant(vIdx - 1);
+  if (ev.key === 'ArrowRight') setVariant(vIdx + 1);
+});
+
+// ---------- Wiring ----------
+document.getElementById('setPicker').onchange = ev => { current = +ev.target.value; csvPreview = null; render(); };
+document.querySelectorAll('.proto-tab').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.proto-tab').forEach(x => x.classList.toggle('active', x === b));
+  document.getElementById('tab-sets').style.display = b.dataset.tab === 'sets' ? '' : 'none';
+  document.getElementById('tab-powers').style.display = b.dataset.tab === 'powers' ? '' : 'none';
+});
+function render() {
+  renderSetPicker();
+  VARIANTS[vIdx][2](document.getElementById('variantHost'));
+  document.getElementById('swLabel').textContent = `${VARIANTS[vIdx][0]} — ${VARIANTS[vIdx][1]}`;
+  renderState();
+}
+renderPowers();
+render();
+</script>
+</body>
+</html>
