@@ -35,6 +35,7 @@ where they qualify. This map is for planning only; nothing is implemented from i
 - [Which coatings each lens in a lens set can have, and where pairings live](issues/07-coatings-per-lens.md) — each lens-set entry lists its coatings (at least one) and its own pairings, and the server enforces them. Global pairings are gone, and exclusions stay global. A pair gets one coating set, offered from what both lenses come in. See ADR-0007 "Coatings".
 - [What happens to existing lens data](issues/09-migrate-existing-lens-data.md) — reset rather than convert. Old lens sets are retired and emptied, and lens strengths, the coating grid and global pairings are removed; exclusions stay. Old records keep their set name and show "—" for lens power. Staging and production start with no active lens sets, and example sets come from the dev-only seeder.
 - [The lens set admin screen for adding lenses](issues/08-lens-set-admin-screen.md) — prototyped, and variant A was chosen: an "Add lens" dialog laid out like the online shop, one lens at a time, with a typed label, coatings and per-lens pairings. There is no bulk add for now. The prototype is on branch `prototype/lens-set-admin-screen`.
+- [How the Field App captures a lens after the redesign](issues/10-field-app-lens-capture.md) — a lens set uses one "Lens" dropdown with "Same lens for both eyes" ticked by default, and shows the chosen lens's power underneath. Custom copies the shop, with an axis dropdown only when there's a cylinder. Choices are ticks, never dropdowns. The section runs lens → children's frame → PD → coatings → order. A converted Lead's lens is matched by power.
 - [The lens option ranges the Dot Glasses e-commerce site offers](issues/05-custom-lens-option-ranges.md) — sphere (±10) and add (0 to 3) match the Field App. Cylinder doesn't: the site offers 0 to -6 only. The site also requires an axis of 0–180, asks lens type only when add is above 0, and has a different coating list.
 
 ## Not yet specified
@@ -44,9 +45,8 @@ where they qualify. This map is for planning only; nothing is implemented from i
     [`multi-org-access-and-retail-points/spec.md`](../multi-org-access-and-retail-points/spec.md),
     which is `ready-for-agent`.
   - Ticket 03's form work follows the rules that spec sets.
-  - Tickets 06–09 are all resolved, so the lens spec can be written. It also absorbs the rework of
-    the Rules and the Field App's offline cache for the new lens shape. How the Field App form
-    looks (ticket 10) stays a separate decision.
+  - Tickets 06–10 are all resolved, so the lens spec can be written. It also absorbs the rework of
+    the Rules and the Field App's offline cache for the new lens shape.
 - **Custom Orders after the redesign.** If custom lenses come from the lens database and leads can
   order, the Custom Orders queue and its fulfilment status may need to change shape.
 - **MI that doesn't tally.** The call expects small reporting discrepancies after these changes.
