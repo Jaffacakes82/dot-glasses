@@ -9,7 +9,11 @@ namespace DotGlasses.Web.Tests;
 /// Sale needs to pass the rules.</summary>
 public static class LensSetTestData
 {
-    public static (Guid LensId, Guid CoatingId) AddSellableLens(DotGlassesDbContext db, Guid lensSetId, string label = "+2.50", decimal sphere = 2.50m)
+    /// <summary>The power <see cref="AddSellableLens"/> gives its lens by default — what a record on
+    /// that lens set sends as each eye's sphere (lens-set records store powers, not lens ids).</summary>
+    public const decimal SellableSphere = 2.50m;
+
+    public static (Guid LensId, Guid CoatingId) AddSellableLens(DotGlassesDbContext db, Guid lensSetId, string label = "+2.50", decimal sphere = SellableSphere)
     {
         var lensId = Guid.NewGuid();
         var coatingId = ReferenceDataSeedConfiguration.CoatingClearId;

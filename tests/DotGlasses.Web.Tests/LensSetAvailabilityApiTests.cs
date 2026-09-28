@@ -70,8 +70,8 @@ public class LensSetAvailabilityApiTests(CustomWebApplicationFactory factory)
         FrameCoverage = ContractFrameCoverage.FullFrame,
         LensRangeType = ContractLensRangeType.LensSet,
         PresetCatalogueId = fixture.LensSetId,
-        LensOptionLeftId = fixture.LensOptionId,
-        LensOptionRightId = fixture.LensOptionId,
+        SphereLeft = LensSetTestData.SellableSphere,
+        SphereRight = LensSetTestData.SellableSphere,
         PresetPupilDistanceBucket = 2,
         CoatingRefIds = [fixture.CoatingId],
     };
@@ -100,8 +100,8 @@ public class LensSetAvailabilityApiTests(CustomWebApplicationFactory factory)
             Id = Guid.NewGuid(),
             LensRangeType = ContractLensRangeType.LensSet,
             PresetCatalogueId = fixture.LensSetId,
-            LensOptionLeftId = fixture.LensOptionId,
-            LensOptionRightId = fixture.LensOptionId,
+            SphereLeft = LensSetTestData.SellableSphere,
+            SphereRight = LensSetTestData.SellableSphere,
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -127,8 +127,8 @@ public class LensSetAvailabilityApiTests(CustomWebApplicationFactory factory)
             ReasonNotPurchasedRefId = reasonNotPurchasedId,
             LensRangeType = ContractLensRangeType.LensSet,
             PresetCatalogueId = fixture.LensSetId,
-            LensOptionLeftId = fixture.LensOptionId,
-            LensOptionRightId = fixture.LensOptionId,
+            SphereLeft = LensSetTestData.SellableSphere,
+            SphereRight = LensSetTestData.SellableSphere,
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

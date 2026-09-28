@@ -11,7 +11,8 @@ namespace DotGlasses.Contracts.Sales;
 /// ignored for lens sets, server-derived from a single forced coating per lens; see
 /// LensOption's doc comment for why that was replaced; 2026-09-03 — became a set rather than a
 /// single value, see ADR-0001). For Custom, any active Coating item is valid; for a lens set,
-/// every entry must be one of the coatings the chosen left-eye lens set lens comes in — see
+/// every entry must be one of the coatings the left eye's lens set lens (the lens in the set
+/// matching SphereLeft…AddLeft and LensTypeRefId) comes in — see
 /// ConsultationRules. Coating exclusions (ADR-0001) apply to the set regardless of LensRangeType;
 /// pairings now belong to each lens set lens (ADR-0007).
 /// </summary>
@@ -42,9 +43,9 @@ public class CreateSaleRequest
 
     public LensRangeType LensRangeType { get; set; }
 
+    /// <summary>Which lens set, on a LensSet range. The lenses themselves are the per-eye powers
+    /// and the lens type below, for both lens ranges (ADR-0007).</summary>
     public Guid? PresetCatalogueId { get; set; }
-    public Guid? LensOptionLeftId { get; set; }
-    public Guid? LensOptionRightId { get; set; }
 
     public decimal? SphereLeft { get; set; }
     public decimal? CylinderLeft { get; set; }
@@ -55,8 +56,9 @@ public class CreateSaleRequest
     public decimal? AxisRight { get; set; }
     public decimal? AddRight { get; set; }
 
-    /// <summary>Required when either add power is set (two distinct powers on that eye) — see
-    /// ConsultationRules.</summary>
+    /// <summary>One per pair; null means single vision. Required when either add power is set
+    /// (two distinct powers on that eye) — see ConsultationRules. On a lens set it is the chosen
+    /// lenses' own lens type.</summary>
     public Guid? LensTypeRefId { get; set; }
     public string? LensTypeOtherText { get; set; }
 

@@ -10,6 +10,7 @@
 @using DotGlasses.Contracts.Sync
 @using DotGlasses.Contracts.Tests
 @using DotGlasses.Rules
+@using DotGlasses.Rules.LensSets
 @using DotGlasses.Rules.ReferenceData
 @using DotGlasses.Rules.Sales
 @using DotGlasses.App.Auth
@@ -148,11 +149,11 @@
                                             OtherText="@_occupationOtherText" OtherTextChanged="v => _occupationOtherText = v"
                                             Errors="_errors" Field="OccupationRefId" OtherField="OccupationOtherText" />
 
-                    <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues"
+                    <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues" ReferenceData="Snapshot"
                                        LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
                                        AllowNoPreference="true" Errors="_errors" SelectionChanged="OnLensSelectionChanged" />
 
-                    @if (_lensRange.LensRangeType is LensRangeType.LensSet && _lensRange.LensOptionLeftId is not null && AvailableCoatingIdsForSelectedPreset.Count > 0)
+                    @if (_lensRange.LensRangeType is LensRangeType.LensSet && _lensRange.LensLeftId is not null && AvailableCoatingIdsForSelectedPreset.Count > 0)
                     {
                         <ReferenceDataDropdown Label="Coating preference (optional)"
                                                 Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating).Where(c => AvailableCoatingIdsForSelectedPreset.Contains(c.Id)).ToList()"
@@ -215,11 +216,11 @@
 
                 @if (IsSale)
                 {
-                    <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues"
+                    <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues" ReferenceData="Snapshot"
                                        LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
                                        AllowNoPreference="false" Errors="_errors" SelectionChanged="OnLensSelectionChanged" />
 
-                    @if (_lensRange.LensRangeType is LensRangeType.LensSet && _lensRange.LensOptionLeftId is not null && AvailableCoatingIdsForSelectedPreset.Count > 0)
+                    @if (_lensRange.LensRangeType is LensRangeType.LensSet && _lensRange.LensLeftId is not null && AvailableCoatingIdsForSelectedPreset.Count > 0)
                     {
                         <CoatingMultiSelector Label="Coating" AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
                                                RestrictToIds="AvailableCoatingIdsForSelectedPreset"
@@ -259,11 +260,11 @@
                                             OtherText="@_reasonNotPurchasedOtherText" OtherTextChanged="v => _reasonNotPurchasedOtherText = v"
                                             Errors="_errors" Field="ReasonNotPurchasedRefId" OtherField="ReasonNotPurchasedOtherText" />
 
-                    <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues"
+                    <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues" ReferenceData="Snapshot"
                                        LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
                                        AllowNoPreference="true" Errors="_errors" SelectionChanged="OnLensSelectionChanged" />
 
-                    @if (_lensRange.LensRangeType is LensRangeType.LensSet && _lensRange.LensOptionLeftId is not null && AvailableCoatingIdsForSelectedPreset.Count > 0)
+                    @if (_lensRange.LensRangeType is LensRangeType.LensSet && _lensRange.LensLeftId is not null && AvailableCoatingIdsForSelectedPreset.Count > 0)
                     {
                         <ReferenceDataDropdown Label="Coating preference (optional)"
                                                 Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating).Where(c => AvailableCoatingIdsForSelectedPreset.Contains(c.Id)).ToList()"
@@ -383,7 +384,7 @@
          "ReferredOrTreated", "ReferralReasonRefId", "ReferralOtherText", "ReferralLocationFreeText", "TreatedInFacility"];
 
     private static readonly string[] LensFields =
-        ["LensRangeType", "PresetCatalogueId", "LensOptionLeftId", "LensOptionRightId", "SphereLeft", "SphereRight",
+        ["LensRangeType", "PresetCatalogueId", "SphereLeft", "SphereRight",
          "CylinderLeft", "CylinderRight", "AxisLeft", "AxisRight", "AddLeft", "AddRight",
          "LensTypeRefId", "LensTypeOtherText", "PupilDistanceMm", "PresetPupilDistanceBucket"];
 
@@ -463,9 +464,10 @@
         _occupationOtherText = seeded.OccupationOtherText;
         _consentGiven = seeded.ConsentGiven;
         _coatingRefIds = seeded.CoatingRefIds;
-        ApplyLensRange(seeded.LensRangeType, seeded.PresetCatalogueId, seeded.LensOptionLeftId, seeded.LensOptionRightId,
+        ApplyLensRange(seeded.LensRangeType, seeded.PresetCatalogueId,
             seeded.SphereLeft, seeded.CylinderLeft, seeded.AxisLeft, seeded.AddLeft,
             seeded.SphereRight, seeded.CylinderRight, seeded.AxisRight, seeded.AddRight,
+            seeded.LensTypeRefId, seeded.LensTypeOtherText,
             seeded.PupilDistanceMm, seeded.PresetPupilDistanceBucket, seeded.ChildrensFrame);
     }
 
@@ -498,6 +500,11 @@
                     _referralReasonRefId = test.ReferralReasonRefId;
                     _referralOtherText = test.ReferralOtherText;
                     _referralLocationFreeText = test.ReferralLocationFreeText;
+                    ApplyLensRange(test.LensRangeType, test.PresetCatalogueId,
+                        test.SphereLeft, test.CylinderLeft, test.AxisLeft, test.AddLeft,
+                        test.SphereRight, test.CylinderRight, test.AxisRight, test.AddRight,
+                        test.LensTypeRefId, test.LensTypeOtherText,
+                        test.PupilDistanceMm, test.PresetPupilDistanceBucket, test.ChildrensFrame);
                 }
 
                 break;
@@ -516,9 +523,10 @@
                     _reasonNotPurchasedOtherText = lead.ReasonNotPurchasedOtherText;
                     _coatingPreferenceRefId = lead.CoatingPreferenceRefId;
                     SourceTestId = lead.SourceTestId;
-                    ApplyLensRange(lead.LensRangeType, lead.PresetCatalogueId, lead.LensOptionLeftId, lead.LensOptionRightId,
+                    ApplyLensRange(lead.LensRangeType, lead.PresetCatalogueId,
                         lead.SphereLeft, lead.CylinderLeft, lead.AxisLeft, lead.AddLeft,
                         lead.SphereRight, lead.CylinderRight, lead.AxisRight, lead.AddRight,
+                        lead.LensTypeRefId, lead.LensTypeOtherText,
                         lead.PupilDistanceMm, lead.PresetPupilDistanceBucket, lead.ChildrensFrame);
                 }
 
@@ -542,9 +550,10 @@
                     _hardCaseSold = sale.HardCaseSold;
                     _hardCaseColourRefId = sale.HardCaseColourRefId;
                     _hardCaseOtherColourText = sale.HardCaseOtherColourText;
-                    ApplyLensRange(sale.LensRangeType, sale.PresetCatalogueId, sale.LensOptionLeftId, sale.LensOptionRightId,
+                    ApplyLensRange(sale.LensRangeType, sale.PresetCatalogueId,
                         sale.SphereLeft, sale.CylinderLeft, sale.AxisLeft, sale.AddLeft,
                         sale.SphereRight, sale.CylinderRight, sale.AxisRight, sale.AddRight,
+                        sale.LensTypeRefId, sale.LensTypeOtherText,
                         sale.PupilDistanceMm, sale.PresetPupilDistanceBucket, sale.ChildrensFrame);
                 }
 
@@ -552,16 +561,26 @@
         }
     }
 
+    /// <summary>
+    /// Puts a record's lens block into the controls — a converted Lead's (via SaleAssembly.Seed)
+    /// or a Failed record's own. A record holds each eye's lens power and one lens type, not a lens
+    /// id (ADR-0007), so on a lens set the lens each dropdown shows is found by matching the power
+    /// and lens type in the set (LensSetLenses.Match — the one definition of "the same lens" the
+    /// server and the Admin Portal use too). An eye whose lens is no longer in the set is left
+    /// empty, power and all, for the technician to choose again; saving without choosing is then
+    /// refused against that eye. A lens set this device doesn't offer keeps the powers as recorded
+    /// — LensRangeSelector says the set isn't available, and choosing another range clears them.
+    /// </summary>
     private void ApplyLensRange(
-        LensRangeType? rangeType, Guid? catalogueId, Guid? leftId, Guid? rightId,
+        LensRangeType? rangeType, Guid? catalogueId,
         decimal? sphereLeft, decimal? cylinderLeft, decimal? axisLeft, decimal? addLeft,
         decimal? sphereRight, decimal? cylinderRight, decimal? axisRight, decimal? addRight,
+        Guid? lensTypeRefId, string? lensTypeOtherText,
         decimal? pupilDistanceMm, int? presetBucket, bool childrensFrame)
     {
         _lensRange.LensRangeType = rangeType;
         _lensRange.PresetCatalogueId = catalogueId;
-        _lensRange.LensOptionLeftId = leftId;
-        _lensRange.LensOptionRightId = rightId;
+        _lensRange.ForgetChosenLenses();
         _lensRange.SphereLeft = sphereLeft;
         _lensRange.CylinderLeft = cylinderLeft;
         _lensRange.AxisLeft = axisLeft;
@@ -570,9 +589,20 @@
         _lensRange.CylinderRight = cylinderRight;
         _lensRange.AxisRight = axisRight;
         _lensRange.AddRight = addRight;
+        _lensRange.LensTypeRefId = lensTypeRefId;
+        _lensRange.LensTypeOtherText = lensTypeOtherText;
         _lensRange.PupilDistanceMm = pupilDistanceMm;
         _lensRange.PresetPupilDistanceBucket = presetBucket;
         _lensRange.ChildrensFrame = childrensFrame;
+
+        if (rangeType is LensRangeType.LensSet && Snapshot.FindCatalogue(catalogueId) is { } lensSet)
+        {
+            var lenses = lensSet.LensOptions;
+            _lensRange.ChooseLenses(
+                lenses,
+                LensSetLenses.Match(lenses, sphereLeft, cylinderLeft, axisLeft, addLeft, lensTypeRefId)?.Id,
+                LensSetLenses.Match(lenses, sphereRight, cylinderRight, axisRight, addRight, lensTypeRefId)?.Id);
+        }
     }
 
     /// <summary>The coatings the chosen left-eye lens set lens comes in (its own coatings,
@@ -582,7 +612,7 @@
     private IReadOnlyList<Guid> AvailableCoatingIdsForSelectedPreset =>
         ReferenceDataClient.Catalogues
             .SelectMany(c => c.LensOptions)
-            .FirstOrDefault(o => o.Id == _lensRange.LensOptionLeftId)?.CoatingIds ?? [];
+            .FirstOrDefault(o => o.Id == _lensRange.LensLeftId)?.CoatingIds ?? [];
 
     /// <summary>Fired by LensRangeSelector whenever the range type or left lens changes — any
     /// coating already picked may no longer be valid (a different lens option may not offer it,
@@ -607,7 +637,7 @@
         || (IsTest && _testOutcome != TestOutcome.NoGlassesNeeded) || _referredOrTreated
         || _reasonNotPurchasedRefId is not null || _coatingPreferenceRefId is not null
         || _frameColourRefId is not null || _coatingRefIds.Count > 0 || _hardCaseSold
-        || _lensRange.LensOptionLeftId is not null || _lensRange.LensOptionRightId is not null
+        || _lensRange.LensLeftId is not null || _lensRange.LensRightId is not null
         || _lensRange.SphereLeft is not null || _lensRange.SphereRight is not null
         || _lensRange.PupilDistanceMm is not null || _lensRange.PresetPupilDistanceBucket is not null;
 
@@ -800,8 +830,6 @@
             TreatedInFacility = _referredOrTreated && _treatedInFacility,
             LensRangeType = needsGlasses ? _lensRange.LensRangeType : null,
             PresetCatalogueId = needsGlasses ? _lensRange.PresetCatalogueId : null,
-            LensOptionLeftId = needsGlasses ? _lensRange.LensOptionLeftId : null,
-            LensOptionRightId = needsGlasses ? _lensRange.LensOptionRightId : null,
             SphereLeft = needsGlasses ? _lensRange.SphereLeft : null,
             CylinderLeft = needsGlasses ? _lensRange.CylinderLeft : null,
             AxisLeft = needsGlasses ? _lensRange.AxisLeft : null,
@@ -839,8 +867,6 @@
         ReasonNotPurchasedOtherText = _reasonNotPurchasedOtherText,
         LensRangeType = _lensRange.LensRangeType,
         PresetCatalogueId = _lensRange.PresetCatalogueId,
-        LensOptionLeftId = _lensRange.LensOptionLeftId,
-        LensOptionRightId = _lensRange.LensOptionRightId,
         SphereLeft = _lensRange.SphereLeft,
         CylinderLeft = _lensRange.CylinderLeft,
         AxisLeft = _lensRange.AxisLeft,
@@ -897,7 +923,7 @@
         HardCaseColourRefId = _hardCaseColourRefId,
         HardCaseOtherColourText = _hardCaseOtherColourText,
     }.WithLens(
-        _lensRange.LensRangeType, _lensRange.PresetCatalogueId, _lensRange.LensOptionLeftId, _lensRange.LensOptionRightId,
+        _lensRange.LensRangeType, _lensRange.PresetCatalogueId,
         _lensRange.SphereLeft, _lensRange.CylinderLeft, _lensRange.AxisLeft, _lensRange.AddLeft,
         _lensRange.SphereRight, _lensRange.CylinderRight, _lensRange.AxisRight, _lensRange.AddRight,
         _lensRange.LensTypeRefId, _lensRange.LensTypeOtherText,

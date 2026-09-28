@@ -36,7 +36,6 @@ public sealed class ReferenceDataSnapshot
     private readonly Dictionary<Guid, ReferenceItemSnapshot> _itemsById = [];
     private readonly Dictionary<Guid, PresetCatalogueSnapshot> _cataloguesById = [];
     private readonly Dictionary<Guid, LensOptionSnapshot> _lensOptionsById = [];
-    private readonly Dictionary<Guid, Guid> _catalogueIdByLensOptionId = [];
     private readonly HashSet<(Guid Lower, Guid Higher)> _exclusions = [];
 
     public ReferenceDataSnapshot(
@@ -62,7 +61,6 @@ public sealed class ReferenceDataSnapshot
             foreach (var lensOption in catalogue.LensOptions)
             {
                 _lensOptionsById[lensOption.Id] = lensOption;
-                _catalogueIdByLensOptionId[lensOption.Id] = catalogue.Id;
             }
         }
 
@@ -178,15 +176,6 @@ public sealed class ReferenceDataSnapshot
 
     public LensOptionSnapshot? FindLensOption(Guid? lensOptionId) =>
         lensOptionId is { } id ? _lensOptionsById.GetValueOrDefault(id) : null;
-
-    /// <summary>A lens set lens's own typed label, with the same <see cref="MissingLabel"/>
-    /// fallback as everything else — which is what a record made before the lens-set reset shows
-    /// for its lens, since its lens set was emptied (ADR-0007).</summary>
-    public string ResolveLensOptionLabel(Guid? lensOptionId) =>
-        FindLensOption(lensOptionId)?.Label ?? MissingLabel;
-
-    public bool LensOptionBelongsToCatalogue(Guid lensOptionId, Guid presetCatalogueId) =>
-        _catalogueIdByLensOptionId.TryGetValue(lensOptionId, out var catalogueId) && catalogueId == presetCatalogueId;
 
     /// <summary>Whether this lens set lens comes in this coating — read from the lens's own
     /// coatings (ADR-0007, "Coatings"). False (never an exception) if the lens doesn't exist or has
