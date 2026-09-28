@@ -43,12 +43,10 @@ public class AdminPortalFactory : CustomWebApplicationFactory
     }
 
     /// <summary>A client acting as a freshly created Admin assigned to the seeded org at the given
-    /// level (DGI → Kenya → Kangemi Vision Centre → Outreach Post). activeOrgNodeId sets the
-    /// account's old single "active org", which the consumers not yet on the combined scope still
-    /// read; it defaults to the assigned org, and when it differs it counts as a second
-    /// assignment. Redirects are followed by hand so a test can assert on the 302 the rejection
-    /// filter produces as well as on the page it lands on.</summary>
-    public HttpClient CreateAdminClient(OrganisationLevel orgLevel = OrganisationLevel.Dgi, Guid? activeOrgNodeId = null)
+    /// level (DGI → Kenya → Kangemi Vision Centre → Outreach Post). Redirects are followed by
+    /// hand so a test can assert on the 302 the rejection filter produces as well as on the page
+    /// it lands on.</summary>
+    public HttpClient CreateAdminClient(OrganisationLevel orgLevel = OrganisationLevel.Dgi)
     {
         var assignedOrgId = orgLevel switch
         {
@@ -61,7 +59,6 @@ public class AdminPortalFactory : CustomWebApplicationFactory
 
         Seed(db =>
         {
-            var activeOrg = db.OrganisationNodes.IgnoreQueryFilters().Single(o => o.Id == (activeOrgNodeId ?? assignedOrgId));
             var userName = $"admin-{userId:N}@test.local";
 
             db.Users.Add(new ApplicationUser
@@ -73,9 +70,6 @@ public class AdminPortalFactory : CustomWebApplicationFactory
                 NormalizedEmail = userName.ToUpperInvariant(),
                 EmailConfirmed = true,
                 SecurityStamp = Guid.NewGuid().ToString(),
-                OrgNodeId = activeOrg.Id,
-                HierarchyPath = activeOrg.HierarchyPath,
-                OrgLevel = activeOrg.Level,
             });
             db.UserRoles.Add(new IdentityUserRole<Guid> { UserId = userId, RoleId = db.Roles.Single(r => r.Name == RoleNames.Admin).Id });
             db.UserOrgAssignments.Add(new UserOrgAssignment
@@ -94,16 +88,13 @@ public class AdminPortalFactory : CustomWebApplicationFactory
 
     /// <summary>A client acting as a freshly created Admin with exactly the given org
     /// assignments (ADR-0006) — for scenarios CreateAdminClient's single-assignment shape can't
-    /// exercise, such as a lens set's owning-org picker offering more than one choice. The first
-    /// assignment doubles as the account's old single "active org", the same convention
-    /// AccessControlFixture.CreateAccountAsync uses.</summary>
+    /// exercise, such as a lens set's owning-org picker offering more than one choice.</summary>
     public (HttpClient Client, Guid UserId) CreateAdminClientWithAssignments(params Guid[] assignedOrgIds)
     {
         var userId = Guid.NewGuid();
 
         Seed(db =>
         {
-            var activeOrg = db.OrganisationNodes.IgnoreQueryFilters().Single(o => o.Id == assignedOrgIds[0]);
             var userName = $"admin-{userId:N}@test.local";
 
             db.Users.Add(new ApplicationUser
@@ -115,9 +106,6 @@ public class AdminPortalFactory : CustomWebApplicationFactory
                 NormalizedEmail = userName.ToUpperInvariant(),
                 EmailConfirmed = true,
                 SecurityStamp = Guid.NewGuid().ToString(),
-                OrgNodeId = activeOrg.Id,
-                HierarchyPath = activeOrg.HierarchyPath,
-                OrgLevel = activeOrg.Level,
             });
             db.UserRoles.Add(new IdentityUserRole<Guid> { UserId = userId, RoleId = db.Roles.Single(r => r.Name == RoleNames.Admin).Id });
             db.UserOrgAssignments.AddRange(assignedOrgIds.Select(orgId => new UserOrgAssignment
@@ -142,7 +130,9 @@ public class AdminPortalFactory : CustomWebApplicationFactory
         dbContext.SaveChanges();
     }
 
-    public async Task<ApplicationUser> SeedUserAsync(string email, Guid primaryOrgNodeId, string hierarchyPath)
+    /// <summary>An invited account (no password, no role) holding exactly the given org
+    /// assignment — a target for the Organisations screen's un-assign action.</summary>
+    public async Task<ApplicationUser> SeedUserAsync(string email, Guid assignedOrgNodeId)
     {
         using var scope = Services.CreateScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
@@ -151,13 +141,18 @@ public class AdminPortalFactory : CustomWebApplicationFactory
             UserName = email,
             Email = email,
             FullName = email,
-            OrgNodeId = primaryOrgNodeId,
-            HierarchyPath = hierarchyPath,
-            OrgLevel = OrganisationLevel.RetailPoint,
         };
 
         var result = await userManager.CreateAsync(user);
         Assert.True(result.Succeeded, string.Join("; ", result.Errors.Select(e => e.Description)));
+
+        Seed(db => db.UserOrgAssignments.Add(new UserOrgAssignment
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            OrgNodeId = assignedOrgNodeId,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+        }));
         return user;
     }
 

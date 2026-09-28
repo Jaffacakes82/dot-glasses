@@ -1,4 +1,8 @@
+using DotGlasses.Domain.Entities;
+using DotGlasses.Domain.Enums;
+using DotGlasses.Infrastructure.Persistence;
 using DotGlasses.Infrastructure.Persistence.Configurations;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace DotGlasses.Web.Tests.AccessControl;
 
@@ -58,6 +62,43 @@ public class OrganisationsScreenTreesTests(AccessControlFixture fixture) : IClas
         // retail-point assignment must appear exactly once too, as a descendant of that one root.
         Assert.Equal(1, CountOccurrences(html, $"?selectedId={OrganisationSeedConfiguration.DgiId}"));
         Assert.Equal(1, CountOccurrences(html, $"?selectedId={OrganisationSeedConfiguration.KenyaRetailPointId}"));
+    }
+
+    [Fact]
+    public async Task AnAdminAssignedToTwoCountries_SeesTheDeactivatedOrgsOfBoth_AndNoneOutsideThem()
+    {
+        // The deactivated list reads soft-deleted rows the global filter hides, so it applies the
+        // scope by hand — and must use the whole scope, not one org out of it.
+        var underKenya = SeedDeactivatedOrg(OrganisationSeedConfiguration.KenyaPath, OrganisationSeedConfiguration.KenyaId, OrganisationLevel.Intermediate);
+        var underUganda = SeedDeactivatedOrg(AccessControlFixture.SecondCountryPath, fixture.SecondCountryId, OrganisationLevel.Intermediate);
+        var outsideBoth = SeedDeactivatedOrg(OrganisationSeedConfiguration.DgiPath, OrganisationSeedConfiguration.DgiId, OrganisationLevel.Country);
+        var client = await fixture.SignInAsync(AccessControlFixture.TwoCountriesAdmin);
+
+        var html = await client.GetStringAsync("/Organisations");
+
+        Assert.Contains(underKenya, html);
+        Assert.Contains(underUganda, html);
+        Assert.DoesNotContain(outsideBoth, html);
+    }
+
+    private string SeedDeactivatedOrg(string parentPath, Guid parentId, OrganisationLevel level)
+    {
+        using var scope = fixture.Factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<DotGlassesDbContext>();
+        var name = $"Closed {Guid.NewGuid():N}";
+        db.OrganisationNodes.Add(new OrganisationNode
+        {
+            Id = Guid.NewGuid(),
+            ParentId = parentId,
+            Name = name,
+            Level = level,
+            HierarchyPath = $"{parentPath}{Random.Shared.Next(10_000_000, 99_999_999)}/",
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            IsDeleted = true,
+            DeletedAtUtc = DateTimeOffset.UtcNow,
+        });
+        db.SaveChanges();
+        return name;
     }
 
     private static int CountOccurrences(string haystack, string needle)

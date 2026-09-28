@@ -10,7 +10,7 @@ public class CreateCatalogueRequestValidator : AbstractValidator<CreateCatalogue
 {
     public CreateCatalogueRequestValidator(
         IPresetCatalogueAdminService catalogueAdminService,
-        IUserOrgAssignmentService userOrgAssignmentService,
+        IUserAssignmentsQueryService userAssignmentsQueryService,
         ICurrentUserContext currentUserContext)
     {
         // Cascade stop: the uniqueness check has nothing to look up on a blank or overlong name.
@@ -34,7 +34,7 @@ public class CreateCatalogueRequestValidator : AbstractValidator<CreateCatalogue
                     return false;
                 }
 
-                var options = await userOrgAssignmentService.ListDgiOrCountryAssignmentsAsync(userId, cancellationToken);
+                var options = await userAssignmentsQueryService.ListDgiOrCountryAssignmentsAsync(userId, cancellationToken);
                 return ownerId is { } chosen
                     ? options.Any(o => o.OrgNodeId == chosen)
                     : options.Count == 1;

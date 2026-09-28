@@ -104,6 +104,7 @@ public class FieldAppCurrentLocationApiTests(CustomWebApplicationFactory factory
         var second = NewOrg(OrganisationLevel.RetailPoint);
         var userName = await CreateAccountAsync(first.Id, second.Id);
         var (client, _) = await SignInAsync(userName, preferredLocationId: first.Id);
+        var stampBefore = await ConcurrencyStampAsync(userName);
 
         var response = await client.PostAsJsonAsync("api/v1/auth/switch-org", new SwitchOrgRequest { OrgNodeId = second.Id });
 
@@ -113,9 +114,15 @@ public class FieldAppCurrentLocationApiTests(CustomWebApplicationFactory factory
         var orgs = await WithToken(switched.AccessToken).GetFromJsonAsync<List<AssignedOrgDto>>("api/v1/auth/my-orgs");
         Assert.Equal(second.Id, Assert.Single(orgs!, o => o.IsActive).OrgNodeId);
 
+        // Identity rotates the concurrency stamp on every write to the user row.
+        Assert.Equal(stampBefore, await ConcurrencyStampAsync(userName));
+    }
+
+    private async Task<string?> ConcurrencyStampAsync(string userName)
+    {
         using var scope = factory.Services.CreateScope();
         var user = await scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>().FindByNameAsync(userName);
-        Assert.Null(user!.OrgNodeId);
+        return user!.ConcurrencyStamp;
     }
 
     [Fact]
@@ -226,8 +233,7 @@ public class FieldAppCurrentLocationApiTests(CustomWebApplicationFactory factory
         return new Org(node.Id, node.HierarchyPath, node.Name);
     }
 
-    /// <summary>A User-role account with a password and the given direct assignments — and no old
-    /// "active org", so nothing here can be passing on it.</summary>
+    /// <summary>A User-role account with a password and the given direct assignments.</summary>
     private async Task<string> CreateAccountAsync(params Guid[] assignedOrgIds)
     {
         using var scope = factory.Services.CreateScope();

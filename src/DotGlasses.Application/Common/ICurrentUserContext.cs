@@ -38,20 +38,7 @@ public interface ICurrentUserContext
     /// <summary>Field App (JWT) requests only: the current location the token names, re-validated
     /// on this request — still a direct assignment, Retail Point level, active. Its Status says
     /// why when it isn't valid, and its Location names the org whenever the token names a real
-    /// one, so a refusal can name it. Always NoLocation on Admin Portal requests. Read this, never
-    /// HierarchyPathPrefix, for anything the Field App records or reads.</summary>
+    /// one, so a refusal can name it. Always NoLocation on Admin Portal requests. Read this for
+    /// anything the Field App records.</summary>
     CurrentLocationCheck CurrentLocation { get; }
-
-    // --- Single-org members (the old "active org", read from claims) ------------------------
-    // Still read by the Admin Portal consumers not yet moved onto the combined scope: the
-    // Organisations tree, User Directory and lens-set creation. Scope and permission decisions
-    // must not use them, and a Field App token no longer carries them.
-
-    Guid? OrgNodeId { get; }
-
-    /// <summary>Materialized-path prefix of the active org, e.g. "/1/4/".</summary>
-    string HierarchyPathPrefix { get; }
-
-    /// <summary>OrganisationNode.Level of the active org.</summary>
-    OrganisationLevel? OrgLevel { get; }
 }

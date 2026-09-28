@@ -14,10 +14,9 @@ using Microsoft.Extensions.DependencyInjection;
 namespace DotGlasses.Web.Tests.AccessControl;
 
 /// <summary>
-/// ADR-0006: a user's Admin Portal access is the union of all their org assignments. The
-/// accounts come from AccessControlFixture, and each multi-assignment account's old "active org"
-/// is its lowest assignment — the shape of the CEO's "access drops to the lowest org" bug — so
-/// none of these can pass on the active org alone.
+/// ADR-0006: a user's Admin Portal access is the union of all their org assignments — never just
+/// the lowest one, the shape of the CEO's "access drops to the lowest org" bug. The accounts come
+/// from AccessControlFixture.
 ///
 /// Every Admin Portal client here signs in through the real /Account/Login form and holds the real
 /// Identity cookie, so the per-request recheck under test is the production one (AccessRecheck,

@@ -19,9 +19,7 @@ namespace DotGlasses.Web.Tests.AccessControl;
 /// admin who also holds a retail point in that country. Adding or removing a single assignment
 /// needs only that org in scope. No assignment is special, and the last one can't be removed.
 ///
-/// Every target account is created per test (AccessControlFixture.CreateAccountAsync) with its
-/// first assignment doubling as its old "active org", chosen so that a test can't pass on the
-/// active org alone.
+/// Every target account is created per test (AccessControlFixture.CreateAccountAsync).
 /// </summary>
 public class UserDirectoryScopeTests(AccessControlFixture fixture) : IClassFixture<AccessControlFixture>
 {
@@ -32,7 +30,7 @@ public class UserDirectoryScopeTests(AccessControlFixture fixture) : IClassFixtu
     [Fact]
     public async Task AUserIsListed_WhenAnyOneOfTheirAssignmentsIsInTheCallersScope()
     {
-        // Active org: the Ugandan outlet, outside Kenya. Only the Kenyan assignment can list them.
+        // The Ugandan outlet is outside Kenya; only the Kenyan assignment can list them.
         var (straddling, _) = await fixture.CreateAccountAsync(
             RoleNames.User, fixture.SecondCountryRetailPointId, OrganisationSeedConfiguration.KenyaRetailPointId);
         var (ugandaOnly, _) = await fixture.CreateAccountAsync(RoleNames.User, fixture.SecondCountryRetailPointId);
@@ -48,8 +46,8 @@ public class UserDirectoryScopeTests(AccessControlFixture fixture) : IClassFixtu
     [Fact]
     public async Task SuspendResetPasswordAndRoleChange_AreRefused_WhenTheTargetHasAnAssignmentOutsideTheCallersScope()
     {
-        // Active org: the Kenyan outlet, inside Kenya — so the refusal can't be the old
-        // active-org check. The Uganda assignment is what puts them beyond a Kenya admin.
+        // The Kenyan outlet is inside Kenya; the Uganda assignment is what puts them beyond a
+        // Kenya admin.
         var (userName, userId) = await fixture.CreateAccountAsync(
             RoleNames.User, OrganisationSeedConfiguration.KenyaRetailPointId, fixture.SecondCountryId);
 
@@ -146,10 +144,10 @@ public class UserDirectoryScopeTests(AccessControlFixture fixture) : IClassFixtu
     }
 
     [Fact]
-    public async Task RemovingTheAssignmentThatWasOnceTheActiveOrg_ShrinksTheUsersScopeOnTheirNextRequest()
+    public async Task RemovingTheBroadestAssignment_ShrinksTheUsersScopeOnTheirNextRequest()
     {
-        // Active org: DGI. Removing the DGI assignment must actually take DGI's scope away, not
-        // leave it standing behind the old active-org column.
+        // Removing the DGI assignment must take DGI's scope away on the user's very next request,
+        // leaving only the retail point.
         var (userName, userId) = await fixture.CreateAccountAsync(
             RoleNames.Admin, OrganisationSeedConfiguration.DgiId, OrganisationSeedConfiguration.KenyaRetailPointId);
         var user = await fixture.SignInAsync(userName);

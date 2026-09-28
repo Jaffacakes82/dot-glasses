@@ -78,7 +78,7 @@ public class CustomOrderService(DotGlassesDbContext dbContext, IUnscopedReportQu
     /// order and a nonexistent one are indistinguishable here by design, and must stay that way
     /// or the screen leaks which sales exist elsewhere in the tree. Both get the same sentence.
     /// The general-purpose InvalidOperationException still means "missing row or bug" everywhere
-    /// it is left in place — see UserOrgAssignmentService for that case.</summary>
+    /// it is left in place — see UserAdminService's "User not found." for that case.</summary>
     public async Task AdvanceStatusAsync(Guid saleId, CancellationToken cancellationToken = default)
     {
         var sale = await dbContext.Sales.FirstOrDefaultAsync(x => x.Id == saleId, cancellationToken);

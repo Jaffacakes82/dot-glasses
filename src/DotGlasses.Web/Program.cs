@@ -91,7 +91,6 @@ builder.Services
         options.Password.RequiredLength = 8;
     })
     .AddEntityFrameworkStores<DotGlassesDbContext>()
-    .AddClaimsPrincipalFactory<ApplicationUserClaimsPrincipalFactory>()
     .AddDefaultTokenProviders();
 
 // Access is re-read from the database on every request (ADR-0006) — see AccessRecheck. Wrapping
