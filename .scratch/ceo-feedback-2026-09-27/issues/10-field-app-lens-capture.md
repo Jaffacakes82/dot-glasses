@@ -29,3 +29,7 @@ come from one database with per-lens coatings?
   - The coating preference on a Test or Lead follows the same list.
   - On a custom prescription, any active coating is allowed, subject to exclusions only, with no
     pairings.
+- Raised 2026-09-28, while reviewing the lens set screen prototype: on a lens set, the technician
+  picks one lens *per eye* from the set. That's how records already work: one lens-set entry is
+  one lens. Most readers want the same power in both eyes, so decide how the form makes that quick.
+  One option is "same lens for both eyes", ticked by default, with the right eye copying the left.
