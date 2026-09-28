@@ -10,11 +10,12 @@ namespace DotGlasses.Contracts.Sales;
 /// CoatingRefIds requires at least one entry for every LensRangeType (2026-08-05 — previously
 /// ignored for lens sets, server-derived from a single forced coating per lens; see
 /// LensOption's doc comment for why that was replaced; 2026-09-03 — became a set rather than a
-/// single value, see ADR-0001). For Custom, any active Coating item is valid; for a lens set,
-/// every entry must be one of the coatings the left eye's lens set lens (the lens in the set
-/// matching SphereLeft…AddLeft and LensTypeRefId) comes in — see
-/// ConsultationRules. Coating exclusions (ADR-0001) apply to the set regardless of LensRangeType;
-/// pairings now belong to each lens set lens (ADR-0007).
+/// single value, see ADR-0001). For Custom, any active Coating item is valid and no pairing
+/// applies; for a lens set, every entry must be one both chosen lenses (the lenses in the set
+/// matching each eye's power and LensTypeRefId) can be sold in, and every pairing from either
+/// lens applies — a trigger coating needs its paired coating in the set too (ADR-0007; see
+/// ConsultationRules and LensSetLenses.CoatingsFor). Coating exclusions (ADR-0001) apply to the
+/// set regardless of LensRangeType.
 /// </summary>
 public class CreateSaleRequest
 {

@@ -103,16 +103,37 @@ public static class LensSetLenses
     /// one lens twice.
     ///
     /// <para>
-    /// Deliberately literal: a pairing is returned even when its trigger or its paired coating
-    /// isn't offered, and the offered list isn't narrowed to allow for it. What to do with a
-    /// trigger whose paired coating one of the lenses doesn't come in is the caller's rule to state
-    /// (see <see cref="LensPairCoatings"/>).
+    /// <b>A coating that could never be sold on this pair isn't offered.</b> One lens can pair Blue
+    /// block with Photochromic while the other comes in Blue block but not Photochromic: Blue block
+    /// is in both lenses, but choosing it demands a coating the pair doesn't offer, so no coating
+    /// set holding it could pass the rules. Any coating whose paired coating (from either lens's
+    /// pairings) isn't offered is dropped, and that is repeated until nothing else drops, because
+    /// dropping one coating can strand a trigger that needed it (Clear → Anti-glare → Photochromic).
+    /// The device offers and the server accepts exactly this list, so they can't disagree about a
+    /// coating a technician was shown. <see cref="LensPairCoatings.RequiredPairings"/> stays
+    /// literal — every pairing from either lens, whether or not its trigger survived.
     /// </para>
     /// </summary>
-    public static LensPairCoatings CoatingsFor(LensOptionSnapshot left, LensOptionSnapshot right) =>
-        new(
-            left.CoatingIds.Where(right.CoatingIds.Contains).Distinct().ToList(),
-            left.Pairings.Concat(right.Pairings).Distinct().ToList());
+    public static LensPairCoatings CoatingsFor(LensOptionSnapshot left, LensOptionSnapshot right)
+    {
+        var pairings = left.Pairings.Concat(right.Pairings).Distinct().ToList();
+        var offered = left.CoatingIds.Where(right.CoatingIds.Contains).Distinct().ToList();
+
+        // Each pass removes at least one coating or stops, so this ends within offered.Count passes.
+        while (true)
+        {
+            var stillOffered = offered.ToHashSet();
+            var sellable = offered.Where(coating => pairings.All(pairing =>
+                pairing.TriggerCoatingRefId != coating || stillOffered.Contains(pairing.PairedCoatingRefId))).ToList();
+
+            if (sellable.Count == offered.Count)
+            {
+                return new LensPairCoatings(offered, pairings);
+            }
+
+            offered = sellable;
+        }
+    }
 
     /// <summary>
     /// What a record stores for a chosen pair of lens set lenses (ADR-0007): each eye's lens power,
