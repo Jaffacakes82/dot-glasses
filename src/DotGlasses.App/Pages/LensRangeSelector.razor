@@ -1,3 +1,4 @@
+@using System.Globalization
 @using DotGlasses.App.ReferenceData
 @using DotGlasses.App.Validation
 @using DotGlasses.Contracts.Common
@@ -5,7 +6,13 @@
 @using DotGlasses.Contracts.ReferenceData
 @using DotGlasses.Rules.LensPowers
 @using DotGlasses.Rules.LensRanges
+@using DotGlasses.Rules.LensSets
 @using DotGlasses.Rules.ReferenceData
+
+@* The lens section's first half, in the order a technician works in (ADR-0007): lens range, the lens
+   (or a Custom prescription), children's frame, pupil distance. ConsultationForm renders what
+   follows — the coatings or coating preference, then "Order this lens from Dot Glasses" (Custom
+   only, last). *@
 
 <div class="dg-field">
     <label>Lens range</label>
@@ -36,8 +43,7 @@
 
 @if (Model.LensRangeType is LensRangeType.LensSet)
 {
-    var catalogue = SelectedLensSet;
-    @if (catalogue is null)
+    @if (SelectedLensSet is null)
     {
         @* A converted Lead's lens set carries over as-is (SaleAssembly.Seed); if it has since been
            retired or unassigned here, say so rather than silently swapping in another. *@
@@ -48,146 +54,137 @@
         @* A record holds each eye's lens power and the pair's lens type, not the lens (ADR-0007):
            choosing a lens records its power (LensRangeSelection.ChooseLenses), so a rejection
            about a lens comes back keyed on that eye's sphere, and a lens type mismatch on the lens
-           type — both rendered here, since this branch shows no power or lens type controls. *@
+           type — both rendered here, since this branch shows no power or lens type controls.
+           Lenses are listed by label in the Rules' fixed order, and each chosen lens's power reads
+           underneath, so a vague label can be checked against what is behind it. *@
         <div class="dg-field">
-            <label>Lens power — left eye</label>
-            <select value="@Model.LensLeftId" @onchange="OnLeftLensChanged">
-                <option value="">Select...</option>
-                @foreach (var option in catalogue.LensOptions)
-                {
-                    <option value="@option.Id">@option.Label</option>
-                }
-            </select>
-            <FieldError Errors="Errors" For="SphereLeft" />
-        </div>
-        <div class="dg-field">
-            <label>Lens power — right eye</label>
-            <select value="@Model.LensRightId" @onchange="OnRightLensChanged">
-                <option value="">Select...</option>
-                @foreach (var option in catalogue.LensOptions)
-                {
-                    <option value="@option.Id">@option.Label</option>
-                }
-            </select>
-            <FieldError Errors="Errors" For="SphereRight" />
-            <FieldError Errors="Errors" For="LensTypeRefId" />
+            <label class="dg-choice"><input type="checkbox" checked="@Model.SameLensForBothEyes" @onchange="OnSameLensChanged" />Same lens for both eyes</label>
         </div>
 
-        <div class="dg-field">
-            <label>Pupil distance (0–@MaxPresetPdBucket@(Model.ChildrensFrame ? ", children's frame" : ""))</label>
-            <select value="@Model.PresetPupilDistanceBucket" @onchange="e => Model.PresetPupilDistanceBucket = ParseInt(e.Value)">
-                <option value="">Select...</option>
-                @for (var i = 0; i <= MaxPresetPdBucket; i++)
-                {
-                    <option value="@i">@i</option>
-                }
-            </select>
-            <FieldError Errors="Errors" For="PresetPupilDistanceBucket" />
-        </div>
-
-        @if (Model.LensLeftId is not null)
+        @if (Model.SameLensForBothEyes)
         {
-            var leftOption = catalogue.LensOptions.FirstOrDefault(o => o.Id == Model.LensLeftId);
-            @if ((leftOption?.CoatingIds ?? []).Count == 0)
-            {
-                <p style="color:#c00; font-size:12px;">No coatings are configured for this lens yet — it can't be sold on a lens set until DGI adds one on Lens Sets.</p>
-            }
+            <div class="dg-field">
+                <label>Lens</label>
+                <select value="@Model.LensLeftId" @onchange="OnSameLensChosen">
+                    <option value="">Select...</option>
+                    @foreach (var lens in OrderedLenses)
+                    {
+                        <option value="@lens.Id">@lens.Label</option>
+                    }
+                </select>
+                @RenderPowerLine(Model.LensLeftId)
+                @RenderNote(Model.LensNoteLeft ?? Model.LensNoteRight)
+                <FieldError Errors="Errors" For="SphereLeft" />
+                <FieldError Errors="Errors" For="SphereRight" />
+                <FieldError Errors="Errors" For="LensTypeRefId" />
+            </div>
+        }
+        else
+        {
+            <div class="dg-field">
+                <label>Lens — left eye</label>
+                <select value="@Model.LensLeftId" @onchange="OnLeftLensChosen">
+                    <option value="">Select...</option>
+                    @foreach (var lens in OrderedLenses)
+                    {
+                        <option value="@lens.Id">@lens.Label</option>
+                    }
+                </select>
+                @RenderPowerLine(Model.LensLeftId)
+                @RenderNote(Model.LensNoteLeft)
+                <FieldError Errors="Errors" For="SphereLeft" />
+            </div>
+            <div class="dg-field">
+                <label>Lens — right eye</label>
+                <select value="@Model.LensRightId" @onchange="OnRightLensChosen">
+                    <option value="">Select...</option>
+                    @foreach (var lens in RightLensChoices)
+                    {
+                        <option value="@lens.Id">@lens.Label</option>
+                    }
+                </select>
+                @if (LeftLens is not null)
+                {
+                    <p class="dg-lens-hint">Only lenses of the left eye's lens type are listed.</p>
+                }
+                @RenderPowerLine(Model.LensRightId)
+                @RenderNote(Model.LensNoteRight)
+                <FieldError Errors="Errors" For="SphereRight" />
+                <FieldError Errors="Errors" For="LensTypeRefId" />
+            </div>
+        }
+
+        @if (ChosenLensesWithoutCoatings)
+        {
+            <p style="color:#c00; font-size:12px;">No coatings are configured for this lens yet — it can't be sold on a lens set until DGI adds one on Lens Sets.</p>
         }
     }
 }
 else if (Model.LensRangeType == LensRangeType.Custom)
 {
     @* Every value list below is LensPowerValues' (ADR-0007) — the shop's values, in its order. The
-       axis box shows only while that eye has a cylinder, because the rules refuse an axis without
-       one (OnCylinderChanged clears it when the cylinder goes back to 0.00). Every field carries
-       its own FieldError so a server rejection — e.g. a positive cylinder queued before the shop's
-       values applied — lands against the control it's about. *@
-    <div style="display:flex; gap:8px;">
-        <div class="dg-field" style="flex:1;">
-            <label>Sphere — left</label>
-            <select value="@Model.SphereLeft" @onchange="e => Model.SphereLeft = ParseDecimal(e.Value)">
-                <option value="">Select...</option>
-                @foreach (var v in LensPowerValues.Sphere)
-                {
-                    <option value="@v">@LensPowerValues.FormatPower(v)</option>
-                }
-            </select>
-            <FieldError Errors="Errors" For="SphereLeft" />
-        </div>
-        <div class="dg-field" style="flex:1;">
-            <label>Cylinder — left</label>
-            <select value="@Model.CylinderLeft" @onchange="e => OnCylinderChanged(left: true, ParseDecimal(e.Value))">
-                <option value="">Select...</option>
-                @foreach (var v in LensPowerValues.Cylinder)
-                {
-                    <option value="@v">@LensPowerValues.FormatPower(v)</option>
-                }
-            </select>
-            <FieldError Errors="Errors" For="CylinderLeft" />
-        </div>
+       axis dropdown shows only while that eye has a cylinder, because the rules refuse an axis
+       without one (OnCylinderChanged clears it when the cylinder goes back to 0.00); an axis a
+       record already carries with no cylinder (a Failed record queued before the rules applied)
+       keeps its control so the rejection has somewhere to land. Every field carries its own
+       FieldError so a server rejection lands against the control it's about. *@
+    <div style="display:flex; flex-wrap:wrap; gap:8px;">
+        <LensPowerSelect Label="Sphere — left" Values="LensPowerValues.Sphere" Value="Model.SphereLeft"
+                         ValueChanged="v => Model.SphereLeft = v" Errors="Errors" Field="SphereLeft" />
+        <LensPowerSelect Label="Cylinder — left" Values="LensPowerValues.Cylinder" Value="Model.CylinderLeft"
+                         ValueChanged="v => OnCylinderChanged(left: true, v)" Errors="Errors" Field="CylinderLeft" />
         @if (LensPowerRules.HasCylinder(Model.CylinderLeft) || Model.AxisLeft is not null)
         {
-            <div class="dg-field" style="flex:1;"><label>Axis — left</label><input type="number" min="@LensPowerValues.AxisRange.Min" max="@LensPowerValues.AxisRange.Max" step="@LensPowerValues.AxisRange.Step" @bind="Model.AxisLeft" /><FieldError Errors="Errors" For="AxisLeft" /></div>
+            <LensPowerSelect Label="Axis — left" Values="LensPowerValues.Axis" Display="AxisText" Value="Model.AxisLeft"
+                             ValueChanged="v => Model.AxisLeft = v" Errors="Errors" Field="AxisLeft" />
         }
-        <div class="dg-field" style="flex:1;">
-            <label>Add power — left</label>
-            <select value="@Model.AddLeft" @onchange="e => OnAddPowerChanged(left: true, ParseDecimal(e.Value))">
-                <option value="">Select...</option>
-                @foreach (var v in LensPowerValues.Add)
-                {
-                    <option value="@v">@LensPowerValues.FormatPower(v)</option>
-                }
-            </select>
-            <FieldError Errors="Errors" For="AddLeft" />
-        </div>
+        <LensPowerSelect Label="Add power — left" Values="LensPowerValues.Add" Value="Model.AddLeft"
+                         ValueChanged="v => OnAddPowerChanged(left: true, v)" Errors="Errors" Field="AddLeft" />
     </div>
-    <div style="display:flex; gap:8px;">
-        <div class="dg-field" style="flex:1;">
-            <label>Sphere — right</label>
-            <select value="@Model.SphereRight" @onchange="e => Model.SphereRight = ParseDecimal(e.Value)">
-                <option value="">Select...</option>
-                @foreach (var v in LensPowerValues.Sphere)
-                {
-                    <option value="@v">@LensPowerValues.FormatPower(v)</option>
-                }
-            </select>
-            <FieldError Errors="Errors" For="SphereRight" />
-        </div>
-        <div class="dg-field" style="flex:1;">
-            <label>Cylinder — right</label>
-            <select value="@Model.CylinderRight" @onchange="e => OnCylinderChanged(left: false, ParseDecimal(e.Value))">
-                <option value="">Select...</option>
-                @foreach (var v in LensPowerValues.Cylinder)
-                {
-                    <option value="@v">@LensPowerValues.FormatPower(v)</option>
-                }
-            </select>
-            <FieldError Errors="Errors" For="CylinderRight" />
-        </div>
+    <div style="display:flex; flex-wrap:wrap; gap:8px;">
+        <LensPowerSelect Label="Sphere — right" Values="LensPowerValues.Sphere" Value="Model.SphereRight"
+                         ValueChanged="v => Model.SphereRight = v" Errors="Errors" Field="SphereRight" />
+        <LensPowerSelect Label="Cylinder — right" Values="LensPowerValues.Cylinder" Value="Model.CylinderRight"
+                         ValueChanged="v => OnCylinderChanged(left: false, v)" Errors="Errors" Field="CylinderRight" />
         @if (LensPowerRules.HasCylinder(Model.CylinderRight) || Model.AxisRight is not null)
         {
-            <div class="dg-field" style="flex:1;"><label>Axis — right</label><input type="number" min="@LensPowerValues.AxisRange.Min" max="@LensPowerValues.AxisRange.Max" step="@LensPowerValues.AxisRange.Step" @bind="Model.AxisRight" /><FieldError Errors="Errors" For="AxisRight" /></div>
+            <LensPowerSelect Label="Axis — right" Values="LensPowerValues.Axis" Display="AxisText" Value="Model.AxisRight"
+                             ValueChanged="v => Model.AxisRight = v" Errors="Errors" Field="AxisRight" />
         }
-        <div class="dg-field" style="flex:1;">
-            <label>Add power — right</label>
-            <select value="@Model.AddRight" @onchange="e => OnAddPowerChanged(left: false, ParseDecimal(e.Value))">
-                <option value="">Select...</option>
-                @foreach (var v in LensPowerValues.Add)
-                {
-                    <option value="@v">@LensPowerValues.FormatPower(v)</option>
-                }
-            </select>
-            <FieldError Errors="Errors" For="AddRight" />
-        </div>
+        <LensPowerSelect Label="Add power — right" Values="LensPowerValues.Add" Value="Model.AddRight"
+                         ValueChanged="v => OnAddPowerChanged(left: false, v)" Errors="Errors" Field="AddRight" />
     </div>
-    @* An add of 0.00 is no add (LensPowerRules.HasAdd), so it doesn't ask for a lens type. *@
+    @* An add of 0.00 is no add (LensPowerRules.HasAdd), so it doesn't ask for a lens type. It is a
+       radio group, never a dropdown. *@
     @if (LensPowerRules.HasAdd(Model.AddLeft) || LensPowerRules.HasAdd(Model.AddRight) || Model.LensTypeRefId is not null)
     {
-        <ReferenceDataDropdown Label="Lens type" Items="LensTypes"
-                                SelectedId="Model.LensTypeRefId" SelectedIdChanged="v => Model.LensTypeRefId = v"
-                                OtherText="Model.LensTypeOtherText" OtherTextChanged="v => Model.LensTypeOtherText = v"
-                                Errors="Errors" Field="LensTypeRefId" OtherField="LensTypeOtherText" />
+        <ReferenceDataRadios Label="Lens type" Items="LensTypes"
+                              SelectedId="Model.LensTypeRefId" SelectedIdChanged="v => Model.LensTypeRefId = v"
+                              OtherText="Model.LensTypeOtherText" OtherTextChanged="v => Model.LensTypeOtherText = v"
+                              Errors="Errors" Field="LensTypeRefId" OtherField="LensTypeOtherText" />
     }
+}
+
+<div class="dg-field">
+    <label class="dg-choice"><input type="checkbox" checked="@Model.ChildrensFrame" @onchange="OnChildrensFrameChanged" />Children's frame</label>
+</div>
+
+@if (Model.LensRangeType is LensRangeType.LensSet && SelectedLensSet is not null)
+{
+    <div class="dg-field">
+        <label>Pupil distance (0–@MaxPresetPdBucket@(Model.ChildrensFrame ? ", children's frame" : ""))</label>
+        <select value="@Model.PresetPupilDistanceBucket" @onchange="e => Model.PresetPupilDistanceBucket = ParseInt(e.Value)">
+            <option value="">Select...</option>
+            @for (var i = 0; i <= MaxPresetPdBucket; i++)
+            {
+                <option value="@i">@i</option>
+            }
+        </select>
+        <FieldError Errors="Errors" For="PresetPupilDistanceBucket" />
+    </div>
+}
+else if (Model.LensRangeType == LensRangeType.Custom)
+{
     <div class="dg-field">
         <label>Pupil distance (mm, @LensPowerValues.PupilDistanceMmRange.Min–@LensPowerValues.PupilDistanceMmRange.Max)</label>
         <select value="@Model.PupilDistanceMm" @onchange="e => Model.PupilDistanceMm = ParseDecimal(e.Value)">
@@ -201,16 +198,12 @@ else if (Model.LensRangeType == LensRangeType.Custom)
     </div>
 }
 
-<div class="dg-field">
-    <label><input type="checkbox" checked="@Model.ChildrensFrame" @onchange="OnChildrensFrameChanged" style="width:auto; margin-right:8px;" />Children's frame</label>
-</div>
-
 @code {
     [Parameter, EditorRequired] public LensRangeSelection Model { get; set; } = null!;
     [Parameter, EditorRequired] public IReadOnlyList<PresetCatalogueDto> Catalogues { get; set; } = [];
 
-    /// <summary>Only offered once either eye's Custom prescription carries an add above 0.00 (two
-    /// distinct powers on that eye) — see the conditional dropdown above.</summary>
+    /// <summary>The lens type radios a Custom prescription offers once either eye carries an add
+    /// above 0.00 — see the conditional group above.</summary>
     [Parameter] public IReadOnlyList<ReferenceDataItemDto> LensTypes { get; set; } = [];
 
     /// <summary>A Lead can carry no product preference at all; a Sale must always have one.</summary>
@@ -219,17 +212,18 @@ else if (Model.LensRangeType == LensRangeType.Custom)
     [Parameter] public FormErrors? Errors { get; set; }
 
     /// <summary>The same catalogues as <see cref="Catalogues"/>, as the shared rules read them —
-    /// choosing a lens records its power through the Rules (LensRangeSelection.ChooseLenses).</summary>
+    /// choosing a lens records its power through the Rules (LensRangeSelection.ChooseLenses), and
+    /// the lenses are listed in the Rules' order (LensSetLenses.InDisplayOrder).</summary>
     [Parameter, EditorRequired] public ReferenceDataSnapshot ReferenceData { get; set; } = ReferenceDataSnapshot.Empty;
 
-    /// <summary>Fired whenever Model.LensRangeType or the left lens changes. Model is a
+    /// <summary>Fired whenever Model.LensRangeType or a chosen lens changes. Model is a
     /// shared reference-type object, so mutating its properties here doesn't by itself make the
     /// parent re-render — without this, anything the parent conditionally shows/restricts based on
-    /// these fields (the coating picker, restricted to the left lens's configured coatings) only
-    /// catches up the next time some unrelated field happens to trigger the parent's own render,
-    /// not immediately when the range/lens changes. The parent is also responsible for clearing
-    /// its own coating selection in response — this component no longer owns coating state at
-    /// all, see ADR-0001.</summary>
+    /// these fields (the coating picker, restricted to the coatings both chosen lenses come in)
+    /// only catches up the next time some unrelated field happens to trigger the parent's own
+    /// render, not immediately when the range/lens changes. The parent is also responsible for
+    /// clearing its own coating selection in response — this component no longer owns coating
+    /// state at all, see ADR-0001.</summary>
     [Parameter] public EventCallback SelectionChanged { get; set; }
 
     // A Sale has no default lens range (ADR-0005): the first entry is an explicit "Select a lens
@@ -251,6 +245,49 @@ else if (Model.LensRangeType == LensRangeType.Custom)
             ? LensRangeChoice.Format(Model.LensRangeType, Model.PresetCatalogueId)
             : null)
         ?? (AllowNoPreference ? NoPreference : NotChosen);
+
+    private IReadOnlyList<LensOptionSnapshot> SetLenses =>
+        ReferenceData.FindCatalogue(Model.PresetCatalogueId)?.LensOptions ?? [];
+
+    /// <summary>The chosen set's lenses in the fixed Rules order — single vision by sphere, then
+    /// Bifocal, Progressive and Other by add, then by sphere.</summary>
+    private IReadOnlyList<LensOptionSnapshot> OrderedLenses => LensSetLenses.InDisplayOrder(SetLenses, ReferenceData);
+
+    private LensOptionSnapshot? LeftLens => SetLenses.FirstOrDefault(l => l.Id == Model.LensLeftId);
+
+    /// <summary>The right eye is limited to lenses of the left eye's lens type — a pair has one
+    /// lens type, and a mixed pair can't be sold. Every lens is offered until the left is chosen.</summary>
+    private IEnumerable<LensOptionSnapshot> RightLensChoices =>
+        LeftLens is { } left ? OrderedLenses.Where(l => l.LensTypeRefId == left.LensTypeRefId) : OrderedLenses;
+
+    /// <summary>A chosen lens that comes in no coating can't be sold — say so up front.</summary>
+    private bool ChosenLensesWithoutCoatings =>
+        SetLenses.Any(l => (l.Id == Model.LensLeftId || l.Id == Model.LensRightId) && l.CoatingIds.Count == 0);
+
+    private static string AxisText(decimal axis) => axis.ToString("0", CultureInfo.InvariantCulture);
+
+    private RenderFragment RenderPowerLine(Guid? lensId) => builder =>
+    {
+        if (SetLenses.FirstOrDefault(l => l.Id == lensId) is { } lens)
+        {
+            builder.OpenElement(0, "p");
+            builder.AddAttribute(1, "class", "dg-lens-power");
+            builder.AddContent(2, LensPowerText.Format(lens.Sphere, lens.Cylinder, lens.Axis, lens.Add));
+            builder.CloseElement();
+        }
+    };
+
+    private RenderFragment RenderNote(string? note) => builder =>
+    {
+        if (note is not null)
+        {
+            builder.OpenElement(0, "p");
+            builder.AddAttribute(1, "class", "dg-lens-note");
+            builder.AddAttribute(2, "role", "status");
+            builder.AddContent(3, note);
+            builder.CloseElement();
+        }
+    };
 
     private async Task OnRangeChanged(ChangeEventArgs e)
     {
@@ -282,7 +319,7 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         Guid.TryParse(value?.ToString(), out var id) ? id : null;
 
     private static decimal? ParseDecimal(object? value) =>
-        decimal.TryParse(value?.ToString(), out var d) ? d : null;
+        decimal.TryParse(value?.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var d) ? d : null;
 
     private static int? ParseInt(object? value) =>
         int.TryParse(value?.ToString(), out var i) ? i : null;
@@ -303,9 +340,9 @@ else if (Model.LensRangeType == LensRangeType.Custom)
     }
 
     /// <summary>Clears the now-hidden LensType pick the moment neither eye carries an add above
-    /// 0.00 any more — the dropdown itself disappears immediately (see the @if above), so a stale
-    /// value the technician can no longer see or change must not linger to fail validation on
-    /// submit.</summary>
+    /// 0.00 any more — the radio group itself disappears immediately (see the @if above), so a
+    /// stale value the technician can no longer see or change must not linger to fail validation
+    /// on submit.</summary>
     private void OnAddPowerChanged(bool left, decimal? value)
     {
         if (left)
@@ -347,20 +384,30 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         }
     }
 
-    private IReadOnlyList<LensOptionSnapshot> SelectedLensSetLenses =>
-        ReferenceData.FindCatalogue(Model.PresetCatalogueId)?.LensOptions ?? [];
+    // Every lens change tells the parent: the coatings on offer are the ones both chosen lenses
+    // come in, so a change to either eye (or to "Same lens for both eyes") can invalidate a pick.
 
-    private async Task OnLeftLensChanged(ChangeEventArgs e)
+    private async Task OnSameLensChanged(ChangeEventArgs e)
     {
-        Model.ChooseLenses(SelectedLensSetLenses, ParseGuid(e.Value), Model.LensRightId);
-        // Available coatings are keyed off the left-eye lens ("left eye wins" — see SaleService's
-        // historical single-CoatingRefId simplification, still true for which lens drives
-        // availability now that Coating is a set) — the parent must re-derive/clear its own
-        // coating selection since any prior pick may no longer be valid.
+        Model.SetSameLensForBothEyes(SetLenses, e.Value is true);
         await SelectionChanged.InvokeAsync();
     }
 
-    private void OnRightLensChanged(ChangeEventArgs e) =>
-        Model.ChooseLenses(SelectedLensSetLenses, Model.LensLeftId, ParseGuid(e.Value));
+    private async Task OnSameLensChosen(ChangeEventArgs e)
+    {
+        Model.ChooseSameLens(SetLenses, ParseGuid(e.Value));
+        await SelectionChanged.InvokeAsync();
+    }
 
+    private async Task OnLeftLensChosen(ChangeEventArgs e)
+    {
+        Model.ChooseLeftLens(SetLenses, ParseGuid(e.Value));
+        await SelectionChanged.InvokeAsync();
+    }
+
+    private async Task OnRightLensChosen(ChangeEventArgs e)
+    {
+        Model.ChooseRightLens(SetLenses, ParseGuid(e.Value));
+        await SelectionChanged.InvokeAsync();
+    }
 }

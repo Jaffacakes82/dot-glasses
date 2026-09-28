@@ -1,0 +1,43 @@
+@using System.Globalization
+@using DotGlasses.App.Validation
+@using DotGlasses.Rules.LensPowers
+
+@* One of a Custom prescription's dropdowns — sphere, cylinder, axis or add for one eye — over one of
+   LensPowerValues' lists, in the shop's order (ADR-0007). An option's value is the number in a
+   canonical invariant text ("2.5", never "2.50" or a comma-decimal), so a model value that came
+   from JSON or a lens set (2.5) selects the same option a value picked from the list (2.50) does. *@
+<div class="dg-field" style="flex:1 1 45%;">
+    <label>@Label</label>
+    <select value="@Key(Value)" @onchange="OnChangedAsync">
+        <option value="">Select...</option>
+        @foreach (var v in Values)
+        {
+            <option value="@Key(v)">@Display(v)</option>
+        }
+    </select>
+    <FieldError Errors="Errors" For="@Field" />
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyList<decimal> Values { get; set; } = [];
+
+    /// <summary>How an option reads: the Rules display format for a power (+2.50), whole degrees
+    /// for an axis.</summary>
+    [Parameter] public Func<decimal, string> Display { get; set; } = LensPowerValues.FormatPower;
+
+    [Parameter] public decimal? Value { get; set; }
+    [Parameter] public EventCallback<decimal?> ValueChanged { get; set; }
+
+    /// <summary>The request DTO property name this control maps to, so a client-side or server-side
+    /// rejection lands against it — see FormErrors.</summary>
+    [Parameter] public FormErrors? Errors { get; set; }
+    [Parameter, EditorRequired] public string Field { get; set; } = string.Empty;
+
+    private static string Key(decimal? value) =>
+        value is { } v ? v.ToString("0.##", CultureInfo.InvariantCulture) : string.Empty;
+
+    private Task OnChangedAsync(ChangeEventArgs e) =>
+        ValueChanged.InvokeAsync(
+            decimal.TryParse(e.Value?.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var d) ? d : null);
+}

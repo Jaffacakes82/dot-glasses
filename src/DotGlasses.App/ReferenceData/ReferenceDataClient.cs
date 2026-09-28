@@ -19,6 +19,10 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
 {
     private const string StorageKey = "reference-data-cache";
 
+    /// <summary>The shape of the lens sets in the cache: 1 is ADR-0007's (each lens a lens power
+    /// with its own coatings and pairings). A payload with no such field was written before it.</summary>
+    private const int LensSetShape = 1;
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -92,7 +96,7 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
 
     private async Task WriteCacheAsync()
     {
-        var payload = new CachedPayload(DateTimeOffset.UtcNow, _items, Catalogues.ToList(), CoatingExclusions.ToList());
+        var payload = new CachedPayload(DateTimeOffset.UtcNow, _items, Catalogues.ToList(), CoatingExclusions.ToList(), LensSetShape);
         try
         {
             await jsRuntime.InvokeVoidAsync("dotGlassesIdb.kvSet", StorageKey, JsonSerializer.Serialize(payload, JsonOptions));
@@ -121,7 +125,12 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
             }
 
             _items = payload.Items;
-            Catalogues = payload.Catalogues ?? [];
+            // A cache written before lens-set lenses were lens powers holds lenses that are a label and
+            // nothing else — every one would read as a lens with sphere 0.00 and no coatings, and
+            // choosing one would record a prescription nobody made. Those lens sets are dropped
+            // (the technician sees "no lens sets" until they next go online, which replaces the
+            // whole payload); the rest of the cache — reference items, exclusions — is still good.
+            Catalogues = payload.LensSetShape >= LensSetShape ? payload.Catalogues ?? [] : [];
             CoatingExclusions = payload.CoatingExclusions;
             IsFromCache = true;
             CachedAtUtc = payload.CachedAtUtc;
@@ -155,7 +164,8 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
         DateTimeOffset CachedAtUtc,
         List<ReferenceDataItemDto> Items,
         List<PresetCatalogueDto> Catalogues,
-        List<CoatingExclusionDto> CoatingExclusions = null!)
+        List<CoatingExclusionDto> CoatingExclusions = null!,
+        int LensSetShape = 0)
     {
         public List<CoatingExclusionDto> CoatingExclusions { get; init; } = CoatingExclusions ?? [];
     }
