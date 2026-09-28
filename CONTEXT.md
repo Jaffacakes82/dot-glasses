@@ -37,18 +37,49 @@ excludes Photochromic and Sunglasses; Photochromic and Sunglasses exclude each o
 _Avoid_: "incompatible coatings" as a stand-alone term without reference to this rule — exclusion
 is the canonical name for this relationship.
 
+**Current location**:
+The one **Retail point** the Field App stamps every Test, Lead and Sale with. It must be an active
+retail point the user is directly assigned to; being assigned to an org above it isn't enough. It
+is remembered per device. Only the Field App has one; the Admin Portal works across the user's
+whole **Scope** instead (2026-09-28).
+_Avoid_: "active org" or "primary org" for the Admin Portal, which has no single org.
+
+**Lens power**:
+The prescription of one eye's lens: sphere, cylinder, axis and add. A lens power is a value, not
+a stored item. Two lenses with the same four numbers are the same lens power, whether they came
+from a **Lens set** or a **Custom prescription**. The allowed values are fixed, copied from the
+DOT Glasses online shop, and change only with a release. Sphere is required. A blank cylinder
+means 0.00. Axis is required only when cylinder isn't 0. A blank add means no add, and so does
+an add of 0.00 (2026-09-28).
+_Avoid_: "lens strength", which is retired along with its reference data list (2026-09-28).
+
 **Lens range**:
 What a technician picks for the lens on a Test, Lead or Sale: either one **Lens set**, or a
-**Custom prescription** (per-eye sphere/cylinder/axis/add power, made to order). A record's lens
-range names the specific lens set; "6-Lens" and "9-Lens" are not kinds of lens range.
+**Custom prescription**, which is any allowed **Lens power** for each eye, made to order. Both
+produce the same kind of lens. A record's lens range names the specific lens set. "6-Lens" and
+"9-Lens" are not kinds of lens range.
 _Avoid_: "6-Lens range" / "9-Lens range" as types (2026-09-26); "preset" as a noun on its own.
 
 **Lens set**:
-A named, admin-configured list of ready-made lens powers, owned by an org and assigned to orgs.
-It is available to every retail point at or beneath an org it is assigned to, and there may be
-any number of them.
+A named, admin-configured list of ready-made **Lens powers**, built from the allowed values,
+owned by an org and assigned to orgs. Each entry has a typed label, unique within the set, which is
+what technicians pick by. It is available to every retail point at or beneath an org
+it is assigned to, and there may be any number of them.
 _Avoid_: "package", "preset catalogue" (outside the code), "picker role"/"kind" — a lens set has
 no fixed role; the Field App offers whichever lens sets reach the retail point (2026-09-26).
+
+**Lens type**:
+Whether a pair of glasses is single vision, bifocal, progressive or something else. There is one
+lens type per pair, never one per eye. A pair is **single vision** when neither eye has an add;
+single vision is inferred from that, never asked, and isn't an admin-editable option. When either
+eye has an add, the lens type is asked for: Bifocal, Progressive or Other (with free text), taken
+from reference data (2026-09-28).
+
+**Org assignment**:
+A user's link to an org, which gives the user their **Role** over that org and everything beneath
+it. A user has one or more. The last one can't be removed; to take away all of someone's access,
+suspend them instead (2026-09-28).
+_Avoid_: "primary org", which is no longer a concept. No assignment is special.
 
 **Referred or treated**:
 An explicit `bool` flag (`ReferredOrTreated`), independently captured at creation time on each of
@@ -64,6 +95,13 @@ _Avoid_: "Referred" as a `TestOutcome` value — that member was retired; `TestO
 distinguishes `NoGlassesNeeded`/`NeedsGlasses`. Also avoid inferring "referred" from
 `ReferralReasonRefId != null` — `ReferredOrTreated` is the explicit source of truth.
 
+**Retail point**:
+The lowest org level, and the only one where Tests, Leads and Sales are recorded. An org at any
+other level that wants to distribute, for example DGI at an outreach event, creates a retail point
+for it. That retail point is an ordinary one with a descriptive name, with no special marker.
+Nothing new is recorded at a deactivated retail point (2026-09-28).
+_Avoid_: "outlet" in new copy, except where a screen already uses it.
+
 **Retailer**:
 The nearest `Intermediate`-level ancestor of a retail point in the org hierarchy — the reseller
 or distributor that retail point sits under. A retail point need not have one: where the nearest
@@ -72,3 +110,13 @@ the country.
 _Avoid_: "the retail point's parent node" — a retail point's immediate parent is not always
 `Intermediate`-level, so the two definitions disagree wherever a retail point hangs directly off
 a Country (2026-09-04).
+
+**Role**:
+Admin or User. A user has exactly one, and it applies across their whole **Scope**, not per
+**Org assignment** (2026-09-28; this may become per-assignment later).
+
+**Scope**:
+Everything at or beneath any of a user's **Org assignments**, combined. It is what the Admin Portal
+shows the user and lets them act on. Assigning someone to DGI as well as to a retail point gives
+them DGI's scope, not the retail point's (2026-09-28).
+_Avoid_: reading a user's scope from a single org.
