@@ -1,5 +1,10 @@
 # Coating is a set, not a single value, with pairing and exclusion rules between coatings
 
+> **Refined by [ADR-0007](0007-a-lens-power-is-a-value.md) (2026-09-28).** Pairings are no longer
+> global. They belong to individual lens-set entries, where the server enforces them, and custom
+> prescriptions have none. Exclusions remain global, as below. `LensStrengthCoatingOption` is
+> replaced by the coatings each lens-set entry lists.
+
 > **Scope correction (2026-09-04).** As written below, this ADR says "a Sale/Lead's lens" carries
 > a set. That is too broad: the set model applies to the **Sale only**. A `Test` or `Lead` records
 > a single **Coating preference** — an intention captured before any lens exists — which seeds the

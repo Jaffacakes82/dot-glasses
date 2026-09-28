@@ -23,3 +23,9 @@ come from one database with per-lens coatings?
   - Custom lenses use the shop's allowed values: cylinder 0.00 to -6.00 only, and axis required
     only when cylinder isn't 0.
   - Positive powers are shown with a `+`.
+- From ticket 07 (ADR-0007, "Coatings"):
+  - On a lens set, offer only coatings that both chosen lenses come in.
+  - Both lenses' pairings auto-add, and a paired coating can't be unticked.
+  - The coating preference on a Test or Lead follows the same list.
+  - On a custom prescription, any active coating is allowed, subject to exclusions only, with no
+    pairings.

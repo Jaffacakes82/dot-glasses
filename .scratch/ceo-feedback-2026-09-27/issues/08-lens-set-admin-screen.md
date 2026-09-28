@@ -22,3 +22,8 @@ CSV import in a defined format? Prototype the screen to react to.
   - The lens type is asked for only when the lens has an add.
   - The coatings for the lens are chosen in the same step.
   - A read-only "Lens powers" page sits next to Lens Sets and lists the allowed values.
+- From ticket 07 (ADR-0007, "Coatings"):
+  - When adding a lens, the admin ticks the coatings it comes in, at least one.
+  - The admin can add pairings for that lens only, such as "Blue block → Photochromic".
+  - Saving a pairing that contradicts a global exclusion is refused.
+  - The old "Lens strength coating availability" grid goes.
