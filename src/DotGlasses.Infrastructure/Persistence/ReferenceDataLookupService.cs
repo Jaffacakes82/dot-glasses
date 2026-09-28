@@ -1,5 +1,6 @@
 using DotGlasses.Application.ReferenceData;
 using DotGlasses.Domain.Enums;
+using DotGlasses.Rules.ReferenceData;
 using Microsoft.EntityFrameworkCore;
 
 namespace DotGlasses.Infrastructure.Persistence;
@@ -10,9 +11,14 @@ public class ReferenceDataLookupService(DotGlassesDbContext dbContext) : IRefere
     {
         var item = await dbContext.ReferenceDataItems
             .Where(x => x.Id == id && x.Category == category)
-            .Select(x => new { x.IsActive, x.IsOtherOption })
+            .Select(x => new { x.IsActive, x.IsOtherOption, x.Label })
             .FirstOrDefaultAsync(cancellationToken);
 
-        return item is null ? null : new ReferenceDataLookupResult(item.IsActive, item.IsOtherOption);
+        return item is null ? null : new ReferenceDataLookupResult(item.IsActive, item.IsOtherOption, item.Label);
     }
+
+    public async Task<IReadOnlyList<CoatingExclusionRule>> ListCoatingExclusionsAsync(CancellationToken cancellationToken = default) =>
+        await dbContext.CoatingExclusions
+            .Select(e => new CoatingExclusionRule(e.CoatingRefIdA, e.CoatingRefIdB))
+            .ToListAsync(cancellationToken);
 }
