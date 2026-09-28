@@ -1,14 +1,9 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Security.Claims;
 using System.Text.Json;
-using DotGlasses.Application.Common;
 using DotGlasses.Contracts.Common;
 using DotGlasses.Contracts.Leads;
 using DotGlasses.Contracts.Sales;
-using DotGlasses.Web.Auth;
-using Microsoft.Extensions.DependencyInjection;
 using ContractFrameCoverage = DotGlasses.Contracts.Sales.FrameCoverage;
 
 namespace DotGlasses.Web.Tests;
@@ -103,21 +98,5 @@ public class ConversionSourceScopingApiTests(CustomWebApplicationFactory factory
         return body.RootElement.GetProperty("errors").EnumerateObject().Select(e => e.Name).ToList();
     }
 
-    private HttpClient CreateAuthenticatedClient()
-    {
-        var client = factory.CreateClient();
-        var tokenService = factory.Services.GetRequiredService<IJwtTokenService>();
-
-        List<Claim> claims =
-        [
-            new(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()),
-            new(ClaimTypes.Name, "technician"),
-            new(DotGlassesClaimTypes.HierarchyPath, CallerOutlet),
-            new(ClaimTypes.Role, RoleNames.User),
-        ];
-
-        var (token, _) = tokenService.CreateToken(claims);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        return client;
-    }
+    private HttpClient CreateAuthenticatedClient() => factory.CreateTechnicianClient(CallerOutlet);
 }

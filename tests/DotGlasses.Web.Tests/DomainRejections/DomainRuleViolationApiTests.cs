@@ -1,12 +1,7 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Security.Claims;
 using System.Text.Json;
-using DotGlasses.Application.Common;
 using DotGlasses.Contracts.Auth;
-using DotGlasses.Web.Auth;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace DotGlasses.Web.Tests.DomainRejections;
 
@@ -17,23 +12,7 @@ namespace DotGlasses.Web.Tests.DomainRejections;
 /// </summary>
 public class DomainRuleViolationApiTests(CustomWebApplicationFactory factory) : IClassFixture<CustomWebApplicationFactory>
 {
-    private HttpClient CreateAuthenticatedClient()
-    {
-        var client = factory.CreateClient();
-        var tokenService = factory.Services.GetRequiredService<IJwtTokenService>();
-
-        List<Claim> claims =
-        [
-            new(ClaimTypes.NameIdentifier, Guid.NewGuid().ToString()),
-            new(ClaimTypes.Name, "technician"),
-            new(DotGlassesClaimTypes.HierarchyPath, "/1/"),
-            new(ClaimTypes.Role, RoleNames.User),
-        ];
-
-        var (token, _) = tokenService.CreateToken(claims);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        return client;
-    }
+    private HttpClient CreateAuthenticatedClient() => factory.CreateTechnicianClient("/1/");
 
     [Fact]
     public async Task SwitchOrg_ToAnOrgTheUserIsNotAssignedTo_ReturnsTheRejectionAsAValidationProblem()

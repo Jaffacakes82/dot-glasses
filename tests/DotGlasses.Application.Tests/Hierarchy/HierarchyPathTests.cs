@@ -130,4 +130,38 @@ public class HierarchyPathTests
         Assert.False(left.IsSelfOrDescendantOf(right));
         Assert.False(left.IsSelfOrAncestorOf(right));
     }
+
+    [Fact]
+    public void OutermostDropsAPathNestedInsideAnother_SoAScopeCoversEachSubtreeOnce()
+    {
+        // DGI plus a retail point beneath it is DGI's scope, not two overlapping ones.
+        var outermost = HierarchyPath.Outermost([Path("/1/2/3/4/"), Path("/1/"), Path("/1/2/")]);
+
+        Assert.Equal(["/1/"], outermost.Select(p => p.Value));
+    }
+
+    [Fact]
+    public void OutermostKeepsPathsInSeparateTrees_AndDropsDuplicates()
+    {
+        var outermost = HierarchyPath.Outermost([Path("/1/5/"), Path("/1/2/"), Path("/1/2/"), Path("/1/5/50/")]);
+
+        Assert.Equal(["/1/2/", "/1/5/"], outermost.Select(p => p.Value).Order());
+    }
+
+    [Fact]
+    public void OutermostKeepsASiblingThatMerelySharesAPrefix()
+    {
+        // "/1/2/30/" starts with the characters of "/1/2/3" but is not beneath "/1/2/3/".
+        var outermost = HierarchyPath.Outermost([Path("/1/2/3/"), Path("/1/2/30/")]);
+
+        Assert.Equal(["/1/2/3/", "/1/2/30/"], outermost.Select(p => p.Value).Order());
+    }
+
+    [Fact]
+    public void OutermostOfNothingIsNothing()
+    {
+        Assert.Empty(HierarchyPath.Outermost([]));
+    }
+
+    private static HierarchyPath Path(string value) => HierarchyPath.Parse(value);
 }

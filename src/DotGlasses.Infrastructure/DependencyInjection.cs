@@ -28,6 +28,7 @@ public static class DependencyInjection
     {
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserContext, CurrentUserContext>();
+        services.AddScoped<IUserAccessLoader, UserAccessLoader>();
 
         // AuditSaveChangesInterceptor is NOT registered as IInterceptor here for DI
         // auto-discovery — that doesn't actually fire for a context resolved via Aspire's pooled

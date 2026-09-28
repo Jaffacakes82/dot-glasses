@@ -192,6 +192,10 @@ public class DevUserSeederTests : IAsyncLifetime
         public Guid? OrgNodeId => null;
         public string HierarchyPathPrefix => string.Empty;
         public OrganisationLevel? OrgLevel => null;
+        public IReadOnlyList<DotGlasses.Domain.Common.HierarchyPath> ScopePaths => [];
+        public OrganisationLevel? HighestLevel => null;
+        public string? Role => null;
+        public bool IsSuspended => false;
         public IReadOnlyCollection<string> Roles => [];
     }
 }
