@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.RegularExpressions;
 using DotGlasses.Application.Common;
+using DotGlasses.Application.Users;
 using DotGlasses.Contracts.Auth;
 using DotGlasses.Domain.Entities;
 using DotGlasses.Infrastructure.Persistence;
@@ -17,6 +18,10 @@ namespace DotGlasses.Web.Tests.AccessControl;
 /// accounts come from AccessControlFixture, and each multi-assignment account's old "active org"
 /// is its lowest assignment — the shape of the CEO's "access drops to the lowest org" bug — so
 /// none of these can pass on the active org alone.
+///
+/// Every Admin Portal client here signs in through the real /Account/Login form and holds the real
+/// Identity cookie, so the per-request recheck under test is the production one (AccessRecheck,
+/// chained to the security-stamp validator in Program.cs) — not a test stand-in.
 /// </summary>
 public class CombinedScopeTests(AccessControlFixture fixture) : IClassFixture<AccessControlFixture>
 {
@@ -144,8 +149,43 @@ public class CombinedScopeTests(AccessControlFixture fixture) : IClassFixture<Ac
     public async Task ASuspendedUser_GetsUnauthorizedOnTheirNextFieldAppRequest()
     {
         var (userName, userId) = await fixture.CreateAccountAsync(RoleNames.User, OrganisationSeedConfiguration.KenyaRetailPointId);
-        var client = fixture.Factory.CreateClient();
+        var client = await SignInToFieldAppAsync(userName);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/preset-catalogues")).StatusCode);
 
+        await SuspendInDatabaseAsync(userId);
+
+        // The token itself is still well within its lifetime.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/preset-catalogues")).StatusCode);
+    }
+
+    [Fact]
+    public async Task AUserLockedOutBySomeoneElsesFailedSignIns_IsNotTreatedAsSuspended()
+    {
+        // Sign-in locks an account for a few minutes after repeated wrong passwords. Anyone who
+        // knows a username can trigger that, so it must not sign the real user out of a live
+        // session or 401 their Field App token — a 401 is terminal for a queued offline record.
+        var (userName, _) = await fixture.CreateAccountAsync(RoleNames.Admin, OrganisationSeedConfiguration.KenyaId);
+        var portal = await fixture.SignInAsync(userName);
+        var fieldApp = await SignInToFieldAppAsync(userName);
+
+        var attacker = fixture.Factory.CreateClient();
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            await attacker.PostAsJsonAsync("/api/v1/auth/login", new LoginRequest { UserName = userName, Password = "Wrong-passw0rd!" });
+        }
+
+        // The lockout really happened: even the right password is now refused.
+        var rightPassword = await attacker.PostAsJsonAsync(
+            "/api/v1/auth/login", new LoginRequest { UserName = userName, Password = AccessControlFixture.Password });
+        Assert.Equal(HttpStatusCode.Unauthorized, rightPassword.StatusCode);
+
+        Assert.Equal(HttpStatusCode.OK, (await portal.GetAsync("/")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await fieldApp.GetAsync("/api/v1/preset-catalogues")).StatusCode);
+    }
+
+    private async Task<HttpClient> SignInToFieldAppAsync(string userName)
+    {
+        var client = fixture.Factory.CreateClient();
         var login = await client.PostAsJsonAsync("/api/v1/auth/login", new LoginRequest
         {
             UserName = userName,
@@ -154,13 +194,7 @@ public class CombinedScopeTests(AccessControlFixture fixture) : IClassFixture<Ac
         login.EnsureSuccessStatusCode();
         var token = (await login.Content.ReadFromJsonAsync<LoginResponse>())!.AccessToken;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/preset-catalogues")).StatusCode);
-
-        await SuspendInDatabaseAsync(userId);
-
-        // The token itself is still well within its lifetime.
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/v1/preset-catalogues")).StatusCode);
+        return client;
     }
 
     private async Task ChangeInDatabaseAsync(Action<DotGlassesDbContext> change)
@@ -177,12 +211,14 @@ public class CombinedScopeTests(AccessControlFixture fixture) : IClassFixture<Ac
         db.UserRoles.Add(new IdentityUserRole<Guid> { UserId = userId, RoleId = db.Roles.Single(r => r.Name == role).Id });
     });
 
-    private Task SuspendInDatabaseAsync(Guid userId) => ChangeInDatabaseAsync(db =>
+    /// <summary>Suspends through the application's own suspend operation — behind the signed-in
+    /// user's back, but writing exactly the value User Directory's Suspend writes, so the test
+    /// covers how that value round-trips through the database.</summary>
+    private async Task SuspendInDatabaseAsync(Guid userId)
     {
-        var user = db.Users.Single(u => u.Id == userId);
-        user.LockoutEnabled = true;
-        user.LockoutEnd = DateTimeOffset.MaxValue;
-    });
+        using var scope = fixture.Factory.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<IUserAdminService>().SuspendAsync(userId);
+    }
 
     private static void AssertAccessDenied(HttpResponseMessage response)
     {
