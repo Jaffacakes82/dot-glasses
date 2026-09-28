@@ -34,4 +34,15 @@ public static class ValidationResultExtensions
 
         return modelState;
     }
+
+    /// <summary>A ModelStateDictionary carrying one form-level failure, keyed on the empty
+    /// string — the same slot DomainRuleViolationFilter uses for a thrown rejection, for a
+    /// refusal a controller wants to return directly as a ValidationProblem instead (the Test/
+    /// Lead/Sale create endpoints' current-location check — see ticket 07).</summary>
+    public static ModelStateDictionary ToModelStateDictionary(this string formLevelMessage)
+    {
+        var modelState = new ModelStateDictionary();
+        modelState.AddModelError(string.Empty, formLevelMessage);
+        return modelState;
+    }
 }
