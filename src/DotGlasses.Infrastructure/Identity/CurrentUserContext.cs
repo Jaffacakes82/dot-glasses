@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using DotGlasses.Application.Common;
+using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Enums;
 using Microsoft.AspNetCore.Http;
 
@@ -9,21 +10,26 @@ public class CurrentUserContext(IHttpContextAccessor httpContextAccessor) : ICur
 {
     private ClaimsPrincipal? Principal => httpContextAccessor.HttpContext?.User;
 
+    private UserAccess Access => RequestUserAccess.Get(httpContextAccessor.HttpContext);
+
     public bool IsAuthenticated => Principal?.Identity?.IsAuthenticated ?? false;
 
-    public Guid? UserId =>
-        Guid.TryParse(Principal?.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
+    public Guid? UserId => ReadUserId(Principal);
 
     public string? UserName => Principal?.Identity?.Name;
 
-    public Guid? OrgNodeId =>
-        Guid.TryParse(Principal?.FindFirstValue(DotGlassesClaimTypes.OrgNodeId), out var id) ? id : null;
+    public IReadOnlyList<HierarchyPath> ScopePaths => Access.ScopePaths;
 
-    public string HierarchyPathPrefix => Principal?.FindFirstValue(DotGlassesClaimTypes.HierarchyPath) ?? string.Empty;
+    public OrganisationLevel? HighestLevel => Access.HighestLevel;
 
-    public OrganisationLevel? OrgLevel =>
-        Enum.TryParse<OrganisationLevel>(Principal?.FindFirstValue(DotGlassesClaimTypes.OrgLevel), out var level) ? level : null;
+    public string? Role => Access.Role;
 
-    public IReadOnlyCollection<string> Roles =>
-        Principal?.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList() ?? [];
+    public bool IsSuspended => Access.IsSuspended;
+
+    public IReadOnlyCollection<string> Roles => Role is { } role ? [role] : [];
+
+    public CurrentLocationCheck CurrentLocation => Access.CurrentLocation;
+
+    internal static Guid? ReadUserId(ClaimsPrincipal? principal) =>
+        Guid.TryParse(principal?.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
 }

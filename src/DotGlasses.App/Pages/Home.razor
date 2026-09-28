@@ -2,6 +2,7 @@
 @implements IDisposable
 @using DotGlasses.App.Auth
 @using DotGlasses.App.Sync
+@using DotGlasses.Contracts.Auth
 @using DotGlasses.Contracts.Sync
 @inject AuthTokenStore TokenStore
 @inject IUserLocationClient LocationClient
@@ -17,6 +18,17 @@
     @if (!TokenStore.IsAuthenticated)
     {
         <p>Redirecting to login…</p>
+    }
+    else if (_showOfflineLocationState)
+    {
+        @* Couldn't reach the server to resolve a location AND this device has nothing cached —
+           there's no saved location to fall back on and no list to offer a picker from either.
+           This must read as "offline", not "can't record here": the latter (NoLocation.razor)
+           means a confirmed lost assignment, which this genuinely isn't — it's just unknown right
+           now. Same distinction OutletSelect draws between LocationClient.LoadError and a real
+           zero. *@
+        <p style="font-size:13px; color:#c00;">@(LocationClient.LoadError ?? "Couldn't reach the server to check your location.")</p>
+        <button class="dg-btn dg-btn-ghost" type="button" @onclick="RetryLocationAsync">Retry</button>
     }
     else
     {
@@ -42,7 +54,7 @@
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: var(--space-4);">
             <div>
                 <div style="font-weight:700;">@(string.IsNullOrEmpty(TokenStore.DisplayName) ? "Signed in" : TokenStore.DisplayName)</div>
-                <div style="font-size:13px; color:#666;">@(_activeOrgName ?? "Field agent")</div>
+                <div style="font-size:13px; color:#666;">@(TokenStore.CurrentLocationName ?? "Field agent")</div>
             </div>
             <div style="display:flex; gap:8px;">
                 <a class="dg-btn dg-btn-ghost" style="padding:8px 16px; font-size:13px;" href="messages">Messages</a>
@@ -89,7 +101,7 @@
     private int _pendingCount;
     private bool _isSyncing;
     private int _failedCount;
-    private string? _activeOrgName;
+    private bool _showOfflineLocationState;
 
     protected override async Task OnInitializedAsync()
     {
@@ -99,12 +111,81 @@
             return;
         }
 
+        // Home is the landing point after both sign-in and a token rehydrated from a previous
+        // session, so it's the one place that owns "does this session have a valid current
+        // location" — Login.razor deliberately always navigates here rather than deciding itself.
+        if (await RedirectedToLocationScreenAsync())
+        {
+            return;
+        }
+
         ConnectivityTrigger.ConnectivityChanged += OnConnectivityChanged;
 
         await RefreshAsync();
+    }
+
+    /// <summary>
+    /// Resolves the session's location against the caller's eligible locations and routes
+    /// accordingly — every launch, not just when <see cref="AuthTokenStore.CurrentLocationId"/> is
+    /// null. A saved token can carry a location that's since gone bad (assignment revoked, retail
+    /// point deactivated), and story 24 wants that re-asked rather than silently kept working
+    /// under a location the technician no longer has. <see cref="AssignedOrgDto.IsActive"/> marks
+    /// whichever returned org matches the token's current location "when it is still valid"
+    /// (AuthController.MyOrgs) — so a saved location with nothing in the list flagged IsActive is
+    /// exactly the same situation as never having had one: none eligible goes to "can't record
+    /// here" (stories 31/32), one-or-more goes to the outlet picker (which auto-picks if there's
+    /// really only one — see OutletSelect.razor).
+    ///
+    /// Only a fresh, live answer is trusted for *invalidating* a saved location — offline, there's
+    /// no way to check it against anything, so a technician who's simply lost connectivity keeps
+    /// working at their last known location rather than being bounced (that's the "don't do this
+    /// offline" half of story 24). A live load that fails outright with nothing cached
+    /// (<see cref="IUserLocationClient.LoadError"/>) is a separate case again — it must not read as
+    /// "no location" when there's a saved one to fall back on, and when there genuinely is no
+    /// saved location yet it renders Home's own offline/retry state rather than sending an offline
+    /// technician to "can't record here", which would misread lost connectivity as a lost
+    /// assignment.
+    ///
+    /// Returns true once either a navigation has been issued or Home's inline offline state should
+    /// render instead of the dashboard this pass.
+    /// </summary>
+    private async Task<bool> RedirectedToLocationScreenAsync()
+    {
+        var isOnline = await JS.InvokeAsync<bool>("dotGlassesIdb.isOnline");
+
+        if (TokenStore.CurrentLocationId is not null && !isOnline)
+        {
+            return false;
+        }
 
         var orgs = await LocationClient.GetMyOrgsAsync();
-        _activeOrgName = orgs.FirstOrDefault(o => o.IsActive)?.Name;
+
+        if (LocationClient.LoadError is not null)
+        {
+            _showOfflineLocationState = TokenStore.CurrentLocationId is null;
+            return _showOfflineLocationState;
+        }
+
+        if (TokenStore.CurrentLocationId is not null && orgs.Any(o => o.IsActive))
+        {
+            return false;
+        }
+
+        Navigation.NavigateTo(orgs.Count == 0 ? "no-location" : "outlet-select");
+        return true;
+    }
+
+    private async Task RetryLocationAsync()
+    {
+        _showOfflineLocationState = false;
+
+        if (await RedirectedToLocationScreenAsync())
+        {
+            return;
+        }
+
+        ConnectivityTrigger.ConnectivityChanged += OnConnectivityChanged;
+        await RefreshAsync();
     }
 
     private async Task RefreshAsync()

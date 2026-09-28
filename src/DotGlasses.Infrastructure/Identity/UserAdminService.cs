@@ -11,11 +11,30 @@ namespace DotGlasses.Infrastructure.Identity;
 
 public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlassesDbContext dbContext, ICurrentUserContext currentUser) : IUserAdminService
 {
+    /// <summary>Shown in place of the name of an org the caller can't see: the assignment exists
+    /// (and is why the caller may not suspend the user), but where it is isn't theirs to know.</summary>
+    private const string OutsideScopeOrgName = "Outside your scope";
+
     public async Task<IReadOnlyList<UserAdminRow>> ListAsync(CancellationToken cancellationToken = default)
     {
-        var prefix = currentUser.HierarchyPathPrefix;
+        var scopePaths = currentUser.ScopePaths;
+
+        // The same LIKE ANY shape the global hierarchy filter uses (ADR-0004), over the raw column.
+        // Hierarchy paths are digits and slashes only, so nothing needs escaping. No scope paths,
+        // no patterns, no users.
+        var patterns = scopePaths.Select(p => p.Value + "%").ToArray();
+
+        // Read unscoped on purpose, with the scope applied by hand: a user's assignments outside
+        // the caller's scope must still be seen, because they are what stops the caller acting on
+        // the user as a whole. Deactivated orgs count too — the assignment still belongs to the
+        // user and comes back into force if the org is reactivated.
+        var inScopeOrgIds = dbContext.OrganisationNodes
+            .IgnoreQueryFilters()
+            .Where(o => patterns.Any(p => EF.Functions.Like(o.HierarchyPath, p)))
+            .Select(o => o.Id);
+
         var users = await userManager.Users
-            .Where(u => u.HierarchyPath.StartsWith(prefix))
+            .Where(u => dbContext.UserOrgAssignments.Any(a => a.UserId == u.Id && inScopeOrgIds.Contains(a.OrgNodeId)))
             .OrderBy(u => u.UserName)
             .ToListAsync(cancellationToken);
 
@@ -31,35 +50,42 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
             .Where(a => userIds.Contains(a.UserId))
             .ToListAsync(cancellationToken);
 
-        // Scoped automatically (OrganisationNode implements IHierarchyScoped) — an org an
-        // assigned-to user has that falls outside the caller's own scope (rare: a DGI-assigned
-        // user with a foreign secondary org, viewed by a narrower-scoped caller) resolves to
-        // "Unknown" via the fallback below rather than throwing.
-        var orgNames = await dbContext.OrganisationNodes.ToDictionaryAsync(o => o.Id, o => o.Name, cancellationToken);
+        var orgIds = assignments.Select(a => a.OrgNodeId).Distinct().ToList();
+        var orgs = await dbContext.OrganisationNodes
+            .IgnoreQueryFilters()
+            .Where(o => orgIds.Contains(o.Id))
+            .ToDictionaryAsync(o => o.Id, o => (o.Name, Path: HierarchyPath.Parse(o.HierarchyPath)), cancellationToken);
 
         var rows = new List<UserAdminRow>();
         foreach (var user in users)
         {
             var roles = await userManager.GetRolesAsync(user);
-            var userAssignments = assignments.Where(a => a.UserId == user.Id).ToList();
-            var assignedOrgNames = userAssignments.Select(a => orgNames.GetValueOrDefault(a.OrgNodeId, "Unknown")).ToList();
-            var assignedOrgIds = userAssignments.Select(a => a.OrgNodeId).ToList();
+            var assignedOrgIds = assignments.Where(a => a.UserId == user.Id).Select(a => a.OrgNodeId).ToList();
+            var assignedOrgNames = assignedOrgIds
+                .Select(id => orgs.TryGetValue(id, out var org) && InScope(org.Path) ? org.Name : OutsideScopeOrgName)
+                .ToList();
+            var assignmentPaths = assignedOrgIds
+                .Where(orgs.ContainsKey)
+                .Select(id => orgs[id].Path)
+                .Distinct()
+                .ToList();
 
             rows.Add(new UserAdminRow(
                 user.Id,
                 user.Email ?? user.UserName ?? "—",
                 user.DisplayName(),
-                roles.FirstOrDefault() ?? "—",
+                RoleNames.Primary(roles) ?? "—",
                 assignedOrgNames,
                 assignedOrgIds,
-                user.OrgNodeId,
+                assignmentPaths,
                 ResolveStatus(user),
                 user.LastLoginUtc,
-                salesCounts.GetValueOrDefault(user.Id, 0),
-                user.HierarchyPath));
+                salesCounts.GetValueOrDefault(user.Id, 0)));
         }
 
         return rows;
+
+        bool InScope(HierarchyPath path) => scopePaths.Any(path.IsSelfOrDescendantOf);
     }
 
     public async Task<PagedResult<UserAdminRow>> ListPagedAsync(string? search, string? role, string? status, int page, int pageSize, CancellationToken cancellationToken = default)
@@ -115,6 +141,13 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
     /// </summary>
     public async Task<InviteUserResult> InviteAsync(string email, string fullName, string role, IReadOnlyList<Guid> orgNodeIds, CancellationToken cancellationToken = default)
     {
+        // InviteUserRequestValidator already requires one; this keeps the invariant — a user
+        // always has at least one assignment — true for any other caller too.
+        if (orgNodeIds.Count == 0)
+        {
+            throw new DomainRuleViolationException("At least one location must be assigned.");
+        }
+
         // Routed through the execution strategy rather than calling BeginTransactionAsync
         // directly: Aspire's AddAzureNpgsqlDbContext turns connection retries on by default
         // (NpgsqlEntityFrameworkCorePostgreSQLSettings.DisableRetry defaults to false), and a
@@ -135,17 +168,12 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
             // check) has only read.
             dbContext.ChangeTracker.Clear();
 
-            var primaryOrg = await dbContext.OrganisationNodes.FirstAsync(o => o.Id == orgNodeIds[0], cancellationToken);
-
             var invitee = new ApplicationUser
             {
                 UserName = email,
                 Email = email,
                 EmailConfirmed = false,
                 FullName = fullName,
-                OrgNodeId = primaryOrg.Id,
-                HierarchyPath = primaryOrg.HierarchyPath,
-                OrgLevel = primaryOrg.Level,
             };
 
             await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
@@ -200,17 +228,107 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
         return await userManager.GeneratePasswordResetTokenAsync(user);
     }
 
+    /// <summary>Two Identity writes — enable lockout, then set its end date — so one transaction,
+    /// opened through the execution strategy for the same reasons as InviteAsync's. Unchecked, a
+    /// refused SetLockoutEndDateAsync would commit over an enabled-but-not-actually-suspended
+    /// account, which UserSuspension.IsSuspended reads by the end date alone.</summary>
     public async Task SuspendAsync(Guid userId, CancellationToken cancellationToken = default)
     {
-        var user = await userManager.FindByIdAsync(userId.ToString()) ?? throw new InvalidOperationException("User not found.");
-        await userManager.SetLockoutEnabledAsync(user, true);
-        await userManager.SetLockoutEndDateAsync(user, DateTimeOffset.MaxValue);
+        var strategy = dbContext.Database.CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(async () =>
+        {
+            // A replayed attempt starts from nothing — EF doesn't revert entity states on
+            // rollback. Safe here: everything earlier in the request (the scope check) only read.
+            dbContext.ChangeTracker.Clear();
+
+            var user = await userManager.FindByIdAsync(userId.ToString()) ?? throw new InvalidOperationException("User not found.");
+
+            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+            var enableResult = await userManager.SetLockoutEnabledAsync(user, true);
+            if (!enableResult.Succeeded)
+            {
+                throw new DomainRuleViolationException(Describe("Couldn't suspend the account", enableResult));
+            }
+
+            var endDateResult = await userManager.SetLockoutEndDateAsync(user, UserSuspension.LockoutEnd);
+            if (!endDateResult.Succeeded)
+            {
+                throw new DomainRuleViolationException(Describe("Couldn't suspend the account", endDateResult));
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+        });
     }
 
+    /// <summary>Single Identity write, but still routed through the same transactional shape as
+    /// SuspendAsync/ChangeRoleAsync — consistency of the pattern over saving a line, and it keeps
+    /// this service's execution-strategy usage uniform rather than one write path being the odd
+    /// one out.</summary>
     public async Task UnsuspendAsync(Guid userId, CancellationToken cancellationToken = default)
     {
-        var user = await userManager.FindByIdAsync(userId.ToString()) ?? throw new InvalidOperationException("User not found.");
-        await userManager.SetLockoutEndDateAsync(user, null);
+        var strategy = dbContext.Database.CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(async () =>
+        {
+            dbContext.ChangeTracker.Clear();
+
+            var user = await userManager.FindByIdAsync(userId.ToString()) ?? throw new InvalidOperationException("User not found.");
+
+            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+            var result = await userManager.SetLockoutEndDateAsync(user, null);
+            if (!result.Succeeded)
+            {
+                throw new DomainRuleViolationException(Describe("Couldn't unsuspend the account", result));
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+        });
+    }
+
+    /// <summary>Two Identity writes — drop the old role, add the new one — so one transaction,
+    /// opened through the execution strategy for the same reasons as InviteAsync's. Unchecked, a
+    /// refused AddToRoleAsync would commit over the removal and leave the user with no role.</summary>
+    public async Task ChangeRoleAsync(Guid userId, string role, CancellationToken cancellationToken = default)
+    {
+        if (!RoleNames.All.Contains(role))
+        {
+            throw new DomainRuleViolationException("Role must be one of: " + string.Join(", ", RoleNames.All) + ".");
+        }
+
+        var strategy = dbContext.Database.CreateExecutionStrategy();
+
+        await strategy.ExecuteAsync(async () =>
+        {
+            // A replayed attempt starts from nothing — EF doesn't revert entity states on
+            // rollback. Safe here: everything earlier in the request (the scope check) only read.
+            dbContext.ChangeTracker.Clear();
+
+            var user = await userManager.FindByIdAsync(userId.ToString()) ?? throw new InvalidOperationException("User not found.");
+            var currentRoles = await userManager.GetRolesAsync(user);
+            if (currentRoles.SequenceEqual([role]))
+            {
+                return;
+            }
+
+            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+            var removeResult = await userManager.RemoveFromRolesAsync(user, currentRoles);
+            if (!removeResult.Succeeded)
+            {
+                throw new DomainRuleViolationException(Describe("Couldn't remove the account's current role", removeResult));
+            }
+
+            var addResult = await userManager.AddToRoleAsync(user, role);
+            if (!addResult.Succeeded)
+            {
+                throw new DomainRuleViolationException(Describe($"Couldn't give the account the {role} role", addResult));
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+        });
     }
 
     public async Task AssignUserToOrgAsync(Guid userId, Guid orgNodeId, CancellationToken cancellationToken = default)
@@ -235,20 +353,29 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
 
     public async Task UnassignUserFromOrgAsync(Guid userId, Guid orgNodeId, CancellationToken cancellationToken = default)
     {
-        var user = await userManager.FindByIdAsync(userId.ToString()) ?? throw new InvalidOperationException("User not found.");
-        if (user.OrgNodeId == orgNodeId)
+        // A missing user is a tampered form or a bug, not a no-op — left a 500 (ADR-0003).
+        if (!await dbContext.Users.AnyAsync(u => u.Id == userId, cancellationToken))
         {
-            throw new DomainRuleViolationException("Can't un-assign a user's primary org — switch their primary org first.");
+            throw new InvalidOperationException("User not found.");
         }
 
-        var entity = await dbContext.UserOrgAssignments
-            .FirstOrDefaultAsync(a => a.UserId == userId && a.OrgNodeId == orgNodeId, cancellationToken);
-        if (entity is null)
+        var assignments = await dbContext.UserOrgAssignments
+            .Where(a => a.UserId == userId)
+            .ToListAsync(cancellationToken);
+
+        var removed = assignments.FirstOrDefault(a => a.OrgNodeId == orgNodeId);
+        if (removed is null)
         {
             return;
         }
 
-        dbContext.UserOrgAssignments.Remove(entity);
+        if (assignments.Count == 1)
+        {
+            throw new DomainRuleViolationException(
+                "This is the user's last org assignment, so it can't be removed. To take away all of their access, suspend them instead.");
+        }
+
+        dbContext.UserOrgAssignments.Remove(removed);
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -266,7 +393,8 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
             return "Invited";
         }
 
-        if (user.LockoutEnd is { } lockoutEnd && lockoutEnd > DateTimeOffset.UtcNow)
+        // Only a real suspension — not the temporary lockout anyone can trigger with wrong passwords.
+        if (UserSuspension.IsSuspended(user.LockoutEnd))
         {
             return "Suspended";
         }

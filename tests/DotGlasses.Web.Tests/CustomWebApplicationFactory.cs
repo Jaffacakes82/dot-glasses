@@ -1,8 +1,16 @@
+using System.Net.Http.Headers;
+using System.Security.Claims;
+using DotGlasses.Application.Common;
+using DotGlasses.Domain.Entities;
+using DotGlasses.Infrastructure.Identity;
 using DotGlasses.Infrastructure.Persistence;
+using DotGlasses.Web.Auth;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Testcontainers.PostgreSql;
 
@@ -83,6 +91,52 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
                 ["Jwt:AccessTokenLifetimeMinutes"] = "60",
             });
         });
+    }
+
+    /// <summary>
+    /// A Field App client: a freshly created technician account (role User), directly assigned to
+    /// the org at <paramref name="hierarchyPath"/>, holding a JWT whose current location is that
+    /// org. The account and its assignment are real rows because every JWT request re-reads them
+    /// from the database (ADR-0006) — a token for a user that doesn't exist is refused with a 401
+    /// however well it is signed, and a current location the user isn't assigned to scopes the
+    /// request to nothing.
+    /// </summary>
+    public HttpClient CreateTechnicianClient(string hierarchyPath)
+    {
+        var userId = Guid.NewGuid();
+        var userName = $"technician-{userId:N}@test.local";
+        Guid locationId;
+
+        using (var scope = Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<DotGlassesDbContext>();
+            locationId = db.OrganisationNodes.IgnoreQueryFilters().Single(o => o.HierarchyPath == hierarchyPath).Id;
+            db.Users.Add(new ApplicationUser
+            {
+                Id = userId,
+                UserName = userName,
+                NormalizedUserName = userName.ToUpperInvariant(),
+                Email = userName,
+                NormalizedEmail = userName.ToUpperInvariant(),
+                SecurityStamp = Guid.NewGuid().ToString(),
+            });
+            db.UserRoles.Add(new IdentityUserRole<Guid> { UserId = userId, RoleId = db.Roles.Single(r => r.Name == RoleNames.User).Id });
+            db.UserOrgAssignments.Add(new UserOrgAssignment { Id = Guid.NewGuid(), UserId = userId, OrgNodeId = locationId, CreatedAtUtc = DateTimeOffset.UtcNow });
+            db.SaveChanges();
+        }
+
+        List<Claim> claims =
+        [
+            new(ClaimTypes.NameIdentifier, userId.ToString()),
+            new(ClaimTypes.Name, "technician"),
+            new(DotGlassesClaimTypes.CurrentLocationId, locationId.ToString()),
+            new(ClaimTypes.Role, RoleNames.User),
+        ];
+
+        var (token, _) = Services.GetRequiredService<IJwtTokenService>().CreateToken(claims);
+        var client = CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        return client;
     }
 
     /// <summary>

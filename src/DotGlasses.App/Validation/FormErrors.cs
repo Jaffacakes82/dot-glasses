@@ -81,6 +81,23 @@ public class FormErrors
             return;
         }
 
+        if (string.IsNullOrEmpty(field))
+        {
+            // DomainRuleViolationFilter and the recording-location refusal (CLAUDE.md) key a
+            // whole-record rejection on "" — e.g. one of the three current-location messages from
+            // ticket 07. That key has no control to attribute to, but it must still reach every
+            // caller: dropping it here (as a prior version of this method did) left Settings'
+            // change-password Merge path showing nothing at all for a "" rejection, since Settings
+            // has no Unattributed summary UI and skips its own fallback message whenever Errors
+            // came back non-empty. Land it in Unattributed like any other uncontrolled failure —
+            // without the "field: " prefix used below, since an empty field would read as a bare
+            // leading colon. A caller that already surfaces this same text itself before calling
+            // Merge (ConsultationForm.SubmitAsync sets _summaryMessage from the same server
+            // response) is responsible for not showing it twice; see ConsultationForm.SubmitAsync.
+            Unattributed.Add(message);
+            return;
+        }
+
         if (knownFields.Contains(field, StringComparer.OrdinalIgnoreCase))
         {
             Add(field, message);

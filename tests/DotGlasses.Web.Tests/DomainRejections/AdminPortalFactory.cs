@@ -1,8 +1,11 @@
 using System.Text.RegularExpressions;
 using DotGlasses.Application.Common;
+using DotGlasses.Domain.Entities;
 using DotGlasses.Domain.Enums;
 using DotGlasses.Infrastructure.Identity;
 using DotGlasses.Infrastructure.Persistence;
+using DotGlasses.Infrastructure.Persistence.Configurations;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
@@ -39,23 +42,84 @@ public class AdminPortalFactory : CustomWebApplicationFactory
         });
     }
 
-    /// <summary>A client acting as an Admin at the given org level, whose scope is "/1/" (the
-    /// whole seeded tree). Redirects are followed by hand so a test can assert on the 302 the
-    /// rejection filter produces as well as on the page it lands on.</summary>
-    public HttpClient CreateAdminClient(OrganisationLevel orgLevel = OrganisationLevel.Dgi, Guid? orgNodeId = null)
+    /// <summary>A client acting as a freshly created Admin assigned to the seeded org at the given
+    /// level (DGI → Kenya → Kangemi Vision Centre → Outreach Post). Redirects are followed by
+    /// hand so a test can assert on the 302 the rejection filter produces as well as on the page
+    /// it lands on.</summary>
+    public HttpClient CreateAdminClient(OrganisationLevel orgLevel = OrganisationLevel.Dgi)
     {
-        var client = CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
-        client.DefaultRequestHeaders.Add(AdminPortalTestAuthenticationHandler.UserIdHeader, Guid.NewGuid().ToString());
-        client.DefaultRequestHeaders.Add(AdminPortalTestAuthenticationHandler.RoleHeader, RoleNames.Admin);
-        client.DefaultRequestHeaders.Add(AdminPortalTestAuthenticationHandler.HierarchyPathHeader, "/1/");
-        client.DefaultRequestHeaders.Add(AdminPortalTestAuthenticationHandler.OrgLevelHeader, orgLevel.ToString());
-
-        if (orgNodeId is { } id)
+        var assignedOrgId = orgLevel switch
         {
-            client.DefaultRequestHeaders.Add(AdminPortalTestAuthenticationHandler.OrgNodeIdHeader, id.ToString());
-        }
+            OrganisationLevel.Dgi => OrganisationSeedConfiguration.DgiId,
+            OrganisationLevel.Country => OrganisationSeedConfiguration.KenyaId,
+            OrganisationLevel.Intermediate => OrganisationSeedConfiguration.KenyaRetailerId,
+            _ => OrganisationSeedConfiguration.KenyaRetailPointId,
+        };
+        var userId = Guid.NewGuid();
 
+        Seed(db =>
+        {
+            var userName = $"admin-{userId:N}@test.local";
+
+            db.Users.Add(new ApplicationUser
+            {
+                Id = userId,
+                UserName = userName,
+                NormalizedUserName = userName.ToUpperInvariant(),
+                Email = userName,
+                NormalizedEmail = userName.ToUpperInvariant(),
+                EmailConfirmed = true,
+                SecurityStamp = Guid.NewGuid().ToString(),
+            });
+            db.UserRoles.Add(new IdentityUserRole<Guid> { UserId = userId, RoleId = db.Roles.Single(r => r.Name == RoleNames.Admin).Id });
+            db.UserOrgAssignments.Add(new UserOrgAssignment
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                OrgNodeId = assignedOrgId,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            });
+        });
+
+        var client = CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        client.DefaultRequestHeaders.Add(AdminPortalTestAuthenticationHandler.UserIdHeader, userId.ToString());
         return client;
+    }
+
+    /// <summary>A client acting as a freshly created Admin with exactly the given org
+    /// assignments (ADR-0006) — for scenarios CreateAdminClient's single-assignment shape can't
+    /// exercise, such as a lens set's owning-org picker offering more than one choice.</summary>
+    public (HttpClient Client, Guid UserId) CreateAdminClientWithAssignments(params Guid[] assignedOrgIds)
+    {
+        var userId = Guid.NewGuid();
+
+        Seed(db =>
+        {
+            var userName = $"admin-{userId:N}@test.local";
+
+            db.Users.Add(new ApplicationUser
+            {
+                Id = userId,
+                UserName = userName,
+                NormalizedUserName = userName.ToUpperInvariant(),
+                Email = userName,
+                NormalizedEmail = userName.ToUpperInvariant(),
+                EmailConfirmed = true,
+                SecurityStamp = Guid.NewGuid().ToString(),
+            });
+            db.UserRoles.Add(new IdentityUserRole<Guid> { UserId = userId, RoleId = db.Roles.Single(r => r.Name == RoleNames.Admin).Id });
+            db.UserOrgAssignments.AddRange(assignedOrgIds.Select(orgId => new UserOrgAssignment
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                OrgNodeId = orgId,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            }));
+        });
+
+        var client = CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        client.DefaultRequestHeaders.Add(AdminPortalTestAuthenticationHandler.UserIdHeader, userId.ToString());
+        return (client, userId);
     }
 
     public void Seed(Action<DotGlassesDbContext> seed)
@@ -66,7 +130,9 @@ public class AdminPortalFactory : CustomWebApplicationFactory
         dbContext.SaveChanges();
     }
 
-    public async Task<ApplicationUser> SeedUserAsync(string email, Guid primaryOrgNodeId, string hierarchyPath)
+    /// <summary>An invited account (no password, no role) holding exactly the given org
+    /// assignment — a target for the Organisations screen's un-assign action.</summary>
+    public async Task<ApplicationUser> SeedUserAsync(string email, Guid assignedOrgNodeId)
     {
         using var scope = Services.CreateScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
@@ -75,13 +141,18 @@ public class AdminPortalFactory : CustomWebApplicationFactory
             UserName = email,
             Email = email,
             FullName = email,
-            OrgNodeId = primaryOrgNodeId,
-            HierarchyPath = hierarchyPath,
-            OrgLevel = OrganisationLevel.RetailPoint,
         };
 
         var result = await userManager.CreateAsync(user);
         Assert.True(result.Succeeded, string.Join("; ", result.Errors.Select(e => e.Description)));
+
+        Seed(db => db.UserOrgAssignments.Add(new UserOrgAssignment
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            OrgNodeId = assignedOrgNodeId,
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+        }));
         return user;
     }
 

@@ -159,13 +159,16 @@ public class OrganisationsController(
         var byId = nodes.ToDictionary(n => n.Id);
         var byParent = nodes.ToLookup(n => n.ParentId);
 
-        // Root for display purposes is whichever node has no visible parent — the true DGI root
-        // for a DGI Admin, or e.g. Kenya for a Kenya-level Admin (Kenya's real ParentId points at
-        // DGI, but DGI is filtered out of their scoped result, so it's effectively their root).
-        var rootId = nodes.First(n => n.ParentId is null || !byId.ContainsKey(n.ParentId.Value)).Id;
-        var tree = BuildTree(rootId, byId, byParent);
+        // One tree per separate part of the caller's scope (ADR-0006, spec user stories 5-6): a
+        // root is any node with no visible parent — the true DGI root for a DGI Admin, or e.g.
+        // Kenya for a Kenya-level Admin (Kenya's real ParentId points at DGI, but DGI is filtered
+        // out of their scoped result, so it's effectively their root). A nested assignment (DGI
+        // plus a retail point beneath it) surfaces only one root here because ScopePaths already
+        // collapsed it before ListAsync's query ran — the retail point's own row is simply absent
+        // from "no visible parent", not merely deduplicated after the fact.
+        var trees = BuildTrees(byId, byParent);
 
-        var selected = (selectedId.HasValue ? FindNode(tree, selectedId.Value) : null) ?? tree;
+        var selected = (selectedId.HasValue ? FindNode(trees, selectedId.Value) : null) ?? trees[0];
         var selectedAdmin = byId[selected.Id];
 
         var canManage = (await authorizationService.AuthorizeAsync(User, selectedAdmin.HierarchyPath, AuthorizationPolicies.ManageOrgInScope)).Succeeded;
@@ -186,8 +189,19 @@ public class OrganisationsController(
             .Select(n => (n.Id, n.Name))
             .ToList();
 
-        return new OrganisationsIndexViewModel(tree, selected, canManage, selected.Children.Count > 0, validChildLevels, assignableUsers, selectedAssignedUsers, deactivatedNodes);
+        return new OrganisationsIndexViewModel(trees, selected, canManage, selected.Children.Count > 0, validChildLevels, assignableUsers, selectedAssignedUsers, deactivatedNodes);
     }
+
+    /// <summary>Every root in the scoped node set — highest level first (DGI, then Country, ...),
+    /// alphabetical within a level, per the ticket's ordering rule.</summary>
+    private static IReadOnlyList<OrgNode> BuildTrees(
+        IReadOnlyDictionary<Guid, OrganisationAdminNode> byId, ILookup<Guid?, OrganisationAdminNode> byParent) =>
+        byId.Values
+            .Where(n => n.ParentId is null || !byId.ContainsKey(n.ParentId.Value))
+            .OrderBy(n => n.Level)
+            .ThenBy(n => n.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(n => BuildTree(n.Id, byId, byParent))
+            .ToList();
 
     private static OrgNode BuildTree(Guid nodeId, IReadOnlyDictionary<Guid, OrganisationAdminNode> byId, ILookup<Guid?, OrganisationAdminNode> byParent)
     {
@@ -199,6 +213,9 @@ public class OrganisationsController(
 
         return new OrgNode(node.Id, node.Name, LevelDisplay(node.Level), node.Kind, node.IsTrainingOrg, children);
     }
+
+    private static OrgNode? FindNode(IReadOnlyList<OrgNode> trees, Guid id) =>
+        trees.Select(t => FindNode(t, id)).FirstOrDefault(n => n is not null);
 
     private static OrgNode? FindNode(OrgNode node, Guid id) =>
         node.Id == id ? node : node.Children.Select(c => FindNode(c, id)).FirstOrDefault(n => n is not null);

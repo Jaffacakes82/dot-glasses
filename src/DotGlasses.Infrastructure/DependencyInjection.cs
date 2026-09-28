@@ -28,6 +28,7 @@ public static class DependencyInjection
     {
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserContext, CurrentUserContext>();
+        services.AddScoped<IUserAccessLoader, UserAccessLoader>();
 
         // AuditSaveChangesInterceptor is NOT registered as IInterceptor here for DI
         // auto-discovery — that doesn't actually fire for a context resolved via Aspire's pooled
@@ -43,7 +44,7 @@ public static class DependencyInjection
         services.AddScoped<IDashboardQueryService, DashboardQueryService>();
         services.AddEmailSender();
         services.AddScoped<IUserAdminService, UserAdminService>();
-        services.AddScoped<IUserOrgAssignmentService, UserOrgAssignmentService>();
+        services.AddScoped<IUserAssignmentsQueryService, UserAssignmentsQueryService>();
 
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<DotGlassesDbContext>());
         services.AddScoped<IReferenceDataLookupService, ReferenceDataLookupService>();
@@ -53,6 +54,7 @@ public static class DependencyInjection
         // see IReferenceDataSnapshotProvider/ADR-0002 for why crossing requests is deliberately out.
         services.AddScoped<IReferenceDataSnapshotProvider, ReferenceDataSnapshotProvider>();
         services.AddScoped<IOrganisationAdminService, OrganisationAdminService>();
+        services.AddScoped<IOrganisationNodeLookup, OrganisationNodeLookup>();
         services.AddScoped<IPresetCatalogueQueryService, PresetCatalogueQueryService>();
         services.AddScoped<IPresetCatalogueAdminService, PresetCatalogueAdminService>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();

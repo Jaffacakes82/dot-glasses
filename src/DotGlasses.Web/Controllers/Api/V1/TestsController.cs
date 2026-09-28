@@ -44,18 +44,30 @@ public class TestsController(
             return Problem("The authenticated request has no user id.", statusCode: StatusCodes.Status400BadRequest);
         }
 
+        // Gates on the current location before anything else: a technician with no valid
+        // location to record at gets the reason why, not a validation report against a body
+        // that was never going anywhere (ticket 07, spec.md "Recording").
+        if (currentUser.CurrentLocation.RefusalMessage is { } refusal)
+        {
+            return ValidationProblem(refusal.ToModelStateDictionary());
+        }
+
         // One reference-data read for the whole request, then every rule answered in memory —
         // ADR-0002. The provider is scoped and memoized, so this is the request's only load.
-        // Placed where the record will be stamped, so a lens set is checked against the caller's own
-        // retail point (ADR-0005).
-        var snapshot = (await snapshots.GetAsync(cancellationToken)).AtLocation(currentUser.HierarchyPathPrefix);
+        // Placed where the record will be stamped, so a lens set is checked against the caller's
+        // current location (ADR-0005).
+        var snapshot = (await snapshots.GetAsync(cancellationToken)).AtLocation(RecordingPath);
         var rules = ConsultationRules.Check(request, snapshot);
         if (!rules.IsValid)
         {
             return ValidationProblem(rules.ToModelStateDictionary());
         }
 
-        var dto = await testService.CreateAsync(request, technicianUserId, currentUser.HierarchyPathPrefix, cancellationToken);
+        var dto = await testService.CreateAsync(request, technicianUserId, RecordingPath, cancellationToken);
         return CreatedAtAction(nameof(GetById), new { id = dto.Id, version = "1.0" }, dto);
     }
+
+    /// <summary>Where a record is stamped: the validated current location, or "" when there is
+    /// none — which the service refuses (ticket 07 gives each reason its own message).</summary>
+    private string RecordingPath => currentUser.CurrentLocation.ValidLocation?.Path.Value ?? string.Empty;
 }

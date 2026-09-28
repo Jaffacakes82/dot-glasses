@@ -91,8 +91,15 @@ builder.Services
         options.Password.RequiredLength = 8;
     })
     .AddEntityFrameworkStores<DotGlassesDbContext>()
-    .AddClaimsPrincipalFactory<ApplicationUserClaimsPrincipalFactory>()
     .AddDefaultTokenProviders();
+
+// Access is re-read from the database on every request (ADR-0006) — see AccessRecheck. Wrapping
+// rather than replacing the validator AddIdentity installed keeps Identity's security-stamp check.
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    var securityStampValidator = options.Events.OnValidatePrincipal;
+    options.Events.OnValidatePrincipal = context => AccessRecheck.ValidateCookieAsync(context, securityStampValidator);
+});
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 builder.Services.Configure<DevSeedOptions>(builder.Configuration.GetSection(DevSeedOptions.SectionName));
@@ -123,6 +130,7 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
             RoleClaimType = ClaimTypes.Role,
             NameClaimType = ClaimTypes.Name,
         };
+        options.Events = new JwtBearerEvents { OnTokenValidated = AccessRecheck.ValidateTokenAsync };
     });
 
 // --- RBAC (separate from the data-scoping query filter — see CLAUDE.md) ----------------
@@ -137,12 +145,14 @@ builder.Services.AddAuthorizationBuilder()
     // org, AssignInScope against the org being assigned to. Two names so each call site says which.
     .AddPolicy(AuthorizationPolicies.PresetCatalogueEditInScope, PresetCatalogueManageInScope)
     .AddPolicy(AuthorizationPolicies.PresetCatalogueAssignInScope, PresetCatalogueManageInScope)
+    // Against a whole user: every one of their org assignments must be in the caller's scope.
     .AddPolicy(AuthorizationPolicies.ManageUsersInScope, policy =>
-        policy.Requirements.Add(new HierarchyDescendantRequirement(RoleNames.Admin)))
+        policy.Requirements.Add(new AllAssignmentsInScopeRequirement(RoleNames.Admin)))
     .AddPolicy(AuthorizationPolicies.ManageOrgInScope, policy =>
         policy.Requirements.Add(new HierarchyDescendantRequirement(RoleNames.Admin)));
 builder.Services.AddScoped<IAuthorizationHandler, OrgLevelAuthorizationHandler>();
 builder.Services.AddScoped<IAuthorizationHandler, HierarchyDescendantAuthorizationHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, AllAssignmentsInScopeAuthorizationHandler>();
 
 // --- Validation --------------------------------------------------------------------------
 // Contracts assembly: validators with no Infrastructure/Application dependency (e.g.

@@ -1,0 +1,92 @@
+@page "/no-location"
+@using DotGlasses.App.Auth
+@using DotGlasses.Contracts.Sync
+@inject AuthTokenStore TokenStore
+@inject ISyncQueueStore OutboxStore
+@inject ISyncService SyncService
+@inject NavigationManager Navigation
+
+<PageTitle>Can't record here</PageTitle>
+
+<div class="dg-screen" style="justify-content:center; align-items:center; text-align:center;">
+    <div style="width:100%; max-width:320px;">
+        <p style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; font-size:18px; margin-bottom:var(--space-3);">
+            You're not set up to record here
+        </p>
+        <p style="color:#555; font-size:14px;">
+            Your account isn't assigned to a retail point, so there's nowhere for the Field App to
+            attribute a record to. Ask your admin to assign you to a retail point, then sign in
+            again.
+        </p>
+
+        @if (_unsentCount > 0)
+        {
+            <p style="font-size:13px; color:#c00; margin-top:var(--space-4);">
+                @_unsentCount record(s) haven't been sent yet. Send them before signing out — the
+                server records who saved them from whoever is signed in at the moment they're sent,
+                so anything left in the queue would be filed under the next person to log in.
+            </p>
+            <button class="dg-btn dg-btn-primary" style="width:100%;" type="button" disabled="@_busy" @onclick="SyncNowAsync">Send now (@_unsentCount)</button>
+            <button class="dg-btn dg-btn-ghost" style="width:100%; margin-top:8px;" type="button" disabled>Sign out</button>
+        }
+        else if (_confirmingSignOut)
+        {
+            <p style="font-size:13px; color:#555; margin-top:var(--space-4);">Sign out on this device?</p>
+            <div style="display:flex; gap:8px;">
+                <button class="dg-btn dg-btn-ghost" style="flex:1;" type="button" @onclick="() => _confirmingSignOut = false">Cancel</button>
+                <button class="dg-btn dg-btn-primary" style="flex:1;" type="button" @onclick="SignOutAsync">Sign out</button>
+            </div>
+        }
+        else
+        {
+            <button class="dg-btn dg-btn-primary" style="width:100%; margin-top:var(--space-4);" type="button" @onclick="() => _confirmingSignOut = true">Sign out</button>
+        }
+
+        @if (_message is not null)
+        {
+            <p style="font-size:13px; color:#555; margin-top:8px;">@_message</p>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _confirmingSignOut;
+    private bool _busy;
+    private int _unsentCount;
+    private string? _message;
+
+    protected override async Task OnInitializedAsync() => await RefreshAsync();
+
+    private async Task RefreshAsync() => _unsentCount = (await OutboxStore.GetPendingAsync()).Count;
+
+    private async Task SyncNowAsync()
+    {
+        _busy = true;
+        _message = null;
+        try
+        {
+            await SyncService.SyncPendingAsync();
+            await RefreshAsync();
+            _message = _unsentCount == 0
+                ? "All records sent."
+                : "Couldn't send everything — check your connection and try again.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>
+    /// Blocked while records are queued, exactly as on Settings (see its SignOutAsync): a queued
+    /// record is stamped from whoever is signed in when it syncs, so signing out here would file
+    /// it under the next person to log in. That doesn't strand a technician with no eligible
+    /// location: once online, sending drains the queue — the server refuses each record with its
+    /// reason, which moves it to Failed records and off the queue.
+    /// </summary>
+    private async Task SignOutAsync()
+    {
+        await TokenStore.ClearAsync();
+        Navigation.NavigateTo("login");
+    }
+}

@@ -1,6 +1,5 @@
 using System.Linq.Expressions;
 using System.Reflection;
-using System.Security.Claims;
 using DotGlasses.Application.Common;
 using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Entities;
@@ -92,17 +91,25 @@ public class DotGlassesDbContext(DbContextOptions<DotGlassesDbContext> options, 
         return (LambdaExpression)method.Invoke(this, null)!;
     }
 
-    private static readonly MethodInfo IsAuthenticatedMethod =
-        typeof(DotGlassesDbContext).GetMethod(nameof(IsAuthenticated), BindingFlags.NonPublic | BindingFlags.Static)!;
+    private static readonly MethodInfo ScopePatternsMethod =
+        typeof(DotGlassesDbContext).GetMethod(nameof(ScopePatterns), BindingFlags.NonPublic | BindingFlags.Static)!;
 
-    private static readonly MethodInfo HierarchyPathPrefixMethod =
-        typeof(DotGlassesDbContext).GetMethod(nameof(HierarchyPathPrefix), BindingFlags.NonPublic | BindingFlags.Static)!;
+    private static readonly MethodInfo LikeMethod =
+        typeof(DbFunctionsExtensions).GetMethod(
+            nameof(DbFunctionsExtensions.Like), [typeof(DbFunctions), typeof(string), typeof(string)])!;
 
-    private static bool IsAuthenticated(IHttpContextAccessor accessor) =>
-        accessor.HttpContext?.User?.Identity?.IsAuthenticated ?? false;
+    private static readonly MethodInfo AnyWithPredicateMethod =
+        typeof(Enumerable).GetMethods()
+            .Single(m => m.Name == nameof(Enumerable.Any) && m.GetParameters().Length == 2)
+            .MakeGenericMethod(typeof(string));
 
-    private static string HierarchyPathPrefix(IHttpContextAccessor accessor) =>
-        accessor.HttpContext?.User?.FindFirstValue(DotGlassesClaimTypes.HierarchyPath) ?? string.Empty;
+    /// <summary>The request's scope as LIKE patterns, one per scope path ("/1/4/" → "/1/4/%").
+    /// Hierarchy paths are digits and slashes only (HierarchyPath's invariant), so none of them
+    /// carries a LIKE wildcard that would need escaping. Empty — so no row matches — when the
+    /// request's access was never loaded: unauthenticated, a background job, or a user with no
+    /// assignment.</summary>
+    private static string[] ScopePatterns(IHttpContextAccessor accessor) =>
+        RequestUserAccess.Get(accessor.HttpContext).ScopePaths.Select(p => p.Value + "%").ToArray();
 
     private LambdaExpression BuildQueryFilterGeneric<TEntity>() where TEntity : class
     {
@@ -121,18 +128,20 @@ public class DotGlassesDbContext(DbContextOptions<DotGlassesDbContext> options, 
 
         if (typeof(IHierarchyScoped).IsAssignableFrom(typeof(TEntity)))
         {
+            // patterns.Any(p => EF.Functions.Like(e.HierarchyPath, p)), which Npgsql translates to
+            // one predicate — "HierarchyPath" LIKE ANY (@patterns) — over the raw string column
+            // (ADR-0004). One predicate, not one per scope path OR'd or UNION'd together, is what
+            // makes a row covered by two of a user's assignments count once (ADR-0006). An empty
+            // array matches nothing, which is the fail-closed answer for "no scope".
             var hierarchyPathAccess = Expression.Property(parameter, nameof(IHierarchyScoped.HierarchyPath));
-            var prefixAccess = Expression.Call(HierarchyPathPrefixMethod, accessorField);
-            var startsWithMethod = typeof(string).GetMethod(nameof(string.StartsWith), [typeof(string)])!;
-            var startsWithCall = Expression.Call(hierarchyPathAccess, startsWithMethod, prefixAccess);
-
-            // string.StartsWith("") is always true, so an unassigned caller's empty prefix would
-            // otherwise match every row instead of none — fail closed by requiring a non-empty
-            // prefix before the StartsWith check runs at all.
-            var prefixIsNotEmpty = Expression.NotEqual(prefixAccess, Expression.Constant(string.Empty));
-
-            var isAuthenticatedAccess = Expression.Call(IsAuthenticatedMethod, accessorField);
-            var hierarchyCheck = Expression.AndAlso(isAuthenticatedAccess, Expression.AndAlso(prefixIsNotEmpty, startsWithCall));
+            var patterns = Expression.Call(ScopePatternsMethod, accessorField);
+            var pattern = Expression.Parameter(typeof(string), "p");
+            var like = Expression.Call(
+                LikeMethod,
+                Expression.Property(null, typeof(EF), nameof(EF.Functions)),
+                hierarchyPathAccess,
+                pattern);
+            var hierarchyCheck = Expression.Call(AnyWithPredicateMethod, patterns, Expression.Lambda<Func<string, bool>>(like, pattern));
 
             body = body is null ? hierarchyCheck : Expression.AndAlso(body, hierarchyCheck);
         }

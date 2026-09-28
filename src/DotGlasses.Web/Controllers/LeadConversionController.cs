@@ -1,4 +1,5 @@
 using DotGlasses.Application.Leads;
+using DotGlasses.Application.Organisations;
 using DotGlasses.Application.PresetCatalogues;
 using DotGlasses.Application.ReferenceData;
 using DotGlasses.Application.Sales;
@@ -7,6 +8,7 @@ using DotGlasses.Contracts.PresetCatalogues;
 using DotGlasses.Contracts.Leads;
 using DotGlasses.Contracts.ReferenceData;
 using DotGlasses.Contracts.Sales;
+using DotGlasses.Domain.Common;
 using DotGlasses.Rules;
 using DotGlasses.Rules.ReferenceData;
 using DotGlasses.Rules.Sales;
@@ -37,7 +39,8 @@ public class LeadConversionController(
     ISaleService saleService,
     IReferenceDataQueryService referenceDataQueryService,
     IReferenceDataSnapshotProvider referenceDataSnapshotProvider,
-    IPresetCatalogueQueryService presetCatalogueQueryService) : Controller
+    IPresetCatalogueQueryService presetCatalogueQueryService,
+    IOrganisationNodeLookup organisationNodeLookup) : Controller
 {
     [HttpGet("Leads/Convert/{id:guid}")]
     public async Task<IActionResult> Convert(Guid id, CancellationToken cancellationToken)
@@ -76,6 +79,21 @@ public class LeadConversionController(
         {
             TempData["Info"] = "This lead has already been converted into a sale.";
             return RedirectToAction("Index", "EventHistory", new { tab = "leads" });
+        }
+
+        // Deactivating a retail point after a Lead was recorded there must stop the conversion,
+        // the same way it stops a fresh Sale at the Field App API boundary (ticket 07, spec.md
+        // "Recording"). Looked up by IgnoreQueryFilters() specifically because deactivation is
+        // exactly what's being asked about — see IOrganisationNodeLookup's doc comment.
+        //
+        // Only refuse when a node is found *and* it's deactivated. A Lead stamped above retail-
+        // point level, or a legacy row whose HierarchyPath matches no org node at all (e.g. ""),
+        // has nothing here to be deactivated — FindByHierarchyPathAsync returning null means "no
+        // such node", not "the node is gone", so it must not be read as a refusal.
+        var retailPoint = await organisationNodeLookup.FindByHierarchyPathAsync(lead.HierarchyPath, cancellationToken);
+        if (retailPoint is { IsActive: false })
+        {
+            throw new DomainRuleViolationException($"{retailPoint.Name} has been deactivated.");
         }
 
         // Placed at the *Lead's* location: the Sale inherits the Lead's attribution (ADR-0005).

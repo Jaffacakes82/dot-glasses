@@ -59,7 +59,6 @@ public class InviteAtomicityTests(PostgresContainerFixture postgres)
             {
                 UserName = probeEmail,
                 Email = probeEmail,
-                HierarchyPath = OrganisationSeedConfiguration.DgiPath,
             };
 
             Assert.True((await host.UserManager.CreateAsync(probe)).Succeeded);
@@ -89,11 +88,6 @@ public class InviteAtomicityTests(PostgresContainerFixture postgres)
         Assert.Equal(InviteeName, user.FullName);
         Assert.Null(user.PasswordHash);
 
-        // The first location listed becomes the primary, denormalized onto the account.
-        Assert.Equal(OrganisationSeedConfiguration.KenyaRetailPointId, user.OrgNodeId);
-        Assert.Equal(OrganisationSeedConfiguration.KenyaRetailPointPath, user.HierarchyPath);
-        Assert.Equal(OrganisationLevel.RetailPoint, user.OrgLevel);
-
         Assert.Single(await verifyContext.UserRoles.Where(r => r.UserId == user.Id).ToListAsync());
 
         var assignedOrgIds = await verifyContext.UserOrgAssignments
@@ -103,6 +97,21 @@ public class InviteAtomicityTests(PostgresContainerFixture postgres)
         Assert.Equal(
             [OrganisationSeedConfiguration.KenyaRetailerId, OrganisationSeedConfiguration.KenyaRetailPointId],
             assignedOrgIds.OrderBy(id => id).ToList());
+    }
+
+    [Fact]
+    public async Task InvitingAUserWithNoLocation_IsRefusedAndCreatesNothing()
+    {
+        // A user always keeps at least one assignment — with none, they would have no access at
+        // all and no org to be managed from. InviteUserRequestValidator refuses this first; the
+        // service holds the same line for any other caller.
+        await using var host = await CreateHostAsync();
+
+        await Assert.ThrowsAsync<DomainRuleViolationException>(() => host.Service.InviteAsync(
+            InviteeEmail, InviteeName, RoleNames.User, []));
+
+        await using var verifyContext = CreateContext(host.ConnectionString);
+        Assert.Empty(await verifyContext.Users.Where(u => u.Email == InviteeEmail).ToListAsync());
     }
 
     [Fact]
@@ -222,7 +231,7 @@ public class InviteAtomicityTests(PostgresContainerFixture postgres)
             UserManager = _scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
             Service = new UserAdminService(UserManager, Context, new FakeCurrentUserContext
             {
-                HierarchyPathPrefix = OrganisationSeedConfiguration.DgiPath,
+                ScopePaths = [HierarchyPath.Parse(OrganisationSeedConfiguration.DgiPath)],
             });
         }
 

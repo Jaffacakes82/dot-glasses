@@ -3,6 +3,7 @@ using DotGlasses.Application.Organisations;
 using DotGlasses.Application.PresetCatalogues;
 using DotGlasses.Application.ReferenceData;
 using DotGlasses.Application.Reporting;
+using DotGlasses.Application.Users;
 using DotGlasses.Domain.Enums;
 using DotGlasses.Web.Authorization;
 using DotGlasses.Web.Models;
@@ -18,6 +19,7 @@ public class CataloguesController(
     IPresetCatalogueAdminService catalogueAdminService,
     IOrganisationAdminService organisationAdminService,
     IReferenceDataAdminService referenceDataAdminService,
+    IUserAssignmentsQueryService userAssignmentsQueryService,
     ICurrentUserContext currentUserContext,
     IAuthorizationService authorizationService,
     IUnscopedReportQueryService unscopedReportQueryService,
@@ -41,8 +43,23 @@ public class CataloguesController(
             return View(nameof(Index), await BuildViewModelAsync(null, cancellationToken));
         }
 
-        await catalogueAdminService.CreateAsync(request.Name, request.Description, currentUserContext.OrgNodeId!.Value, cancellationToken);
+        var owningOrgNodeId = await ResolveOwningOrgNodeIdAsync(request.OwningOrgNodeId, cancellationToken);
+        await catalogueAdminService.CreateAsync(request.Name, request.Description, owningOrgNodeId, cancellationToken);
         return RedirectToAction(nameof(Index));
+    }
+
+    /// <summary>The explicit choice if one was posted, otherwise the caller's single qualifying
+    /// Dgi/Country assignment — safe to assume there is exactly one because createValidator
+    /// already refused a blank choice when more than one qualifies.</summary>
+    private async Task<Guid> ResolveOwningOrgNodeIdAsync(Guid? requestedOwningOrgNodeId, CancellationToken cancellationToken)
+    {
+        if (requestedOwningOrgNodeId is { } chosen)
+        {
+            return chosen;
+        }
+
+        var options = await userAssignmentsQueryService.ListDgiOrCountryAssignmentsAsync(currentUserContext.UserId!.Value, cancellationToken);
+        return options.Single().OrgNodeId;
     }
 
     [HttpPost]
@@ -266,6 +283,10 @@ public class CataloguesController(
             .Select(o => (o.Id, o.Name))
             .ToList();
 
+        var owningOrgOptions = (await userAssignmentsQueryService.ListDgiOrCountryAssignmentsAsync(currentUserContext.UserId!.Value, cancellationToken))
+            .Select(o => (Id: o.OrgNodeId, o.Name))
+            .ToList();
+
         // Actions the caller would be refused aren't offered — the server re-checks every one
         // regardless (CLAUDE.md: hidden-button UX is never the only guard).
         var orgPaths = await OrgPathsAsync(cancellationToken);
@@ -300,6 +321,7 @@ public class CataloguesController(
             coatings,
             availableCoatingsByStrength,
             assignableOrgs,
+            owningOrgOptions,
             search);
     }
 }

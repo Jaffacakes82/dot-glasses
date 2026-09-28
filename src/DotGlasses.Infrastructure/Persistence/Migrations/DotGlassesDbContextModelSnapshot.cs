@@ -1941,10 +1941,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.Property<string>("FullName")
                         .HasColumnType("text");
 
-                    b.Property<string>("HierarchyPath")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<DateTimeOffset?>("LastLoginUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -1961,12 +1957,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.Property<string>("NormalizedUserName")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
-
-                    b.Property<int?>("OrgLevel")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid?>("OrgNodeId")
-                        .HasColumnType("uuid");
 
                     b.Property<string>("PasswordHash")
                         .HasColumnType("text");
@@ -1995,8 +1985,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.HasIndex("NormalizedUserName")
                         .IsUnique()
                         .HasDatabaseName("UserNameIndex");
-
-                    b.HasIndex("OrgNodeId");
 
                     b.ToTable("AspNetUsers", (string)null);
                 });
@@ -2168,14 +2156,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("DotGlasses.Infrastructure.Identity.ApplicationUser", b =>
-                {
-                    b.HasOne("DotGlasses.Domain.Entities.OrganisationNode", null)
-                        .WithMany()
-                        .HasForeignKey("OrgNodeId")
-                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>

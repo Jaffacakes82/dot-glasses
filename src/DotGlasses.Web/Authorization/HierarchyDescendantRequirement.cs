@@ -1,12 +1,15 @@
 using DotGlasses.Application.Common;
+using DotGlasses.Domain.Common;
 using Microsoft.AspNetCore.Authorization;
 
 namespace DotGlasses.Web.Authorization;
 
 /// <summary>
-/// Resource-based: role membership AND the target's HierarchyPath starts with the acting user's
-/// own HierarchyPathPrefix (target is at/below the actor's node). Backs
-/// AuthorizationPolicies.ManageUsersInScope/ManageOrgInScope — call via
+/// Resource-based: role membership AND the target's HierarchyPath sits at/below *any* of the
+/// acting user's scope paths — their org assignments combined (ADR-0006). Role and scope come from
+/// ICurrentUserContext, read from the database on every request, never from the sign-in claims.
+/// Backs
+/// AuthorizationPolicies.ManageOrgInScope and the lens-set policies — call via
 /// `AuthorizeAsync(User, targetHierarchyPath, policyName)`.
 ///
 /// Deliberately does NOT also check the target user's role: an Admin can manage any role at/
@@ -15,8 +18,8 @@ namespace DotGlasses.Web.Authorization;
 /// model section) — that's different from the simple "who can call this at all" role check,
 /// which still applies via AllowedRoles here.
 ///
-/// Wired to UserDirectoryController (Invite/ResetPassword/Suspend/Unsuspend),
-/// OrganisationsController (CreateChild, the two flag toggles, AssignUser), and CataloguesController
+/// Wired to OrganisationsController (CreateChild, the two flag toggles, AssignUser, UnassignUser)
+/// and CataloguesController
 /// (PresetCatalogue.EditInScope against a lens set's owning org; PresetCatalogue.AssignInScope
 /// against the org being assigned to).
 /// </summary>
@@ -31,9 +34,10 @@ public class HierarchyDescendantAuthorizationHandler(ICurrentUserContext current
     protected override Task HandleRequirementAsync(
         AuthorizationHandlerContext context, HierarchyDescendantRequirement requirement, string targetHierarchyPath)
     {
-        if (requirement.AllowedRoles.Any(context.User.IsInRole) &&
-            !string.IsNullOrEmpty(currentUser.HierarchyPathPrefix) &&
-            targetHierarchyPath.StartsWith(currentUser.HierarchyPathPrefix, StringComparison.Ordinal))
+        if (currentUser.Role is { } role &&
+            requirement.AllowedRoles.Contains(role) &&
+            HierarchyPath.TryParse(targetHierarchyPath, out var target) &&
+            currentUser.ScopePaths.Any(target.IsSelfOrDescendantOf))
         {
             context.Succeed(requirement);
         }
