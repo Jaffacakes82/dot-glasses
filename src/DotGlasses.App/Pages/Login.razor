@@ -52,6 +52,11 @@
 
         try
         {
+            // The device's own remembered location, if any — sent so the server can re-issue it
+            // when it's still one of the technician's eligible locations (see AuthTokenStore's
+            // LastKnownLocationId and CLAUDE.md's outbox/current-location notes).
+            _request.PreferredLocationId = TokenStore.LastKnownLocationId;
+
             var response = await Http.PostAsJsonAsync("api/v1/auth/login", _request);
             if (!response.IsSuccessStatusCode)
             {
@@ -62,7 +67,10 @@
             var result = await response.Content.ReadFromJsonAsync<LoginResponse>();
             if (result is not null)
             {
-                await TokenStore.SetTokenAsync(result.AccessToken, result.ExpiresAtUtc, result.DisplayName);
+                await TokenStore.SetTokenAsync(result.AccessToken, result.ExpiresAtUtc, result.DisplayName, result.CurrentLocationId, result.CurrentLocationName);
+                // Home owns routing from here: straight to the dashboard when the token already
+                // carries a location, otherwise to the outlet picker or the "can't record here"
+                // screen depending on how many locations are eligible.
                 Navigation.NavigateTo("/");
             }
         }
