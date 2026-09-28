@@ -141,6 +141,24 @@ public class LensSetAvailabilityTests(PostgresContainerFixture postgres)
         await Assert.ThrowsAsync<DomainRuleViolationException>(() => admin.AssignCatalogueToOrgAsync(id, OrganisationSeedConfiguration.KenyaRetailPointId));
     }
 
+    /// <summary>PresetCatalogueAdminService's own Dgi/Country check on the owning org (defence in
+    /// depth, per PresetCatalogue's doc comment) — CataloguesController now only ever calls
+    /// CreateAsync with an org from the caller's own validated Dgi/Country assignments (ticket 04),
+    /// so this can no longer be reached over HTTP; it stays covered here at the service seam
+    /// instead of DomainRuleViolationScreenTests.</summary>
+    [Fact]
+    public async Task CreatingALensSetOwnedByARetailPoint_IsRefused()
+    {
+        var connectionString = await postgres.CreateDatabaseAsync();
+
+        await using var context = CreateContext(connectionString);
+        var admin = CreateAdminService(context);
+
+        var ex = await Assert.ThrowsAsync<DomainRuleViolationException>(
+            () => admin.CreateAsync("Rejected range", null, OrganisationSeedConfiguration.KenyaRetailPointId));
+        Assert.Equal("A PresetCatalogue's owning org must be Dgi or Country level.", ex.Message);
+    }
+
     [Fact]
     public async Task EveryLensSetReachingTheRetailPointIsOffered_Alphabetically()
     {
