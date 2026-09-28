@@ -26,8 +26,7 @@ public class ReferenceDataController(
         (ReferenceDataCategory.FrameColour, "Frame colors", "DGI-editable · Sale/custom color swatches, matches e-commerce site", true),
         (ReferenceDataCategory.HardCaseColour, "Hard case colors", "DGI-editable · shown when a Sale includes a hard case", false),
         (ReferenceDataCategory.Occupation, "Occupations", "DGI-editable · optional occupation field on Test, Lead and Sale", false),
-        (ReferenceDataCategory.LensStrength, "Lens strengths", "DGI-editable · curated power labels used to build Preset Catalogues — see Preset Catalogues for per-strength coating availability", false),
-        (ReferenceDataCategory.LensType, "Lens types", "DGI-editable · asked on a custom lens carrying two distinct powers", false),
+        (ReferenceDataCategory.LensType, "Lens types", "DGI-editable · asked when a lens has an add, on a custom prescription or a lens set lens", false),
     ];
 
     public async Task<IActionResult> Index(CancellationToken cancellationToken) =>
@@ -37,8 +36,12 @@ public class ReferenceDataController(
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(CreateReferenceDataItemRequest request, CancellationToken cancellationToken)
     {
+        // ModelState as well as the validator: MVC binds a category number the enum doesn't define
+        // as a binding error and leaves Category at its default, Occupation, which the validator
+        // would then accept — so a page still showing the retired Lens strengths card (category 6,
+        // ADR-0007) would otherwise add its item to Occupations.
         var validationResult = await createValidator.ValidateAsync(request, cancellationToken);
-        if (!validationResult.IsValid)
+        if (!validationResult.IsValid || !ModelState.IsValid)
         {
             validationResult.AddToModelState(ModelState);
             return View(nameof(Index), await BuildViewModelAsync(cancellationToken));
@@ -95,26 +98,11 @@ public class ReferenceDataController(
         return RedirectToAction(nameof(Index));
     }
 
-    /// <summary>See ADR-0001. AddCoatingPairingAsync/AddCoatingExclusionAsync throw
-    /// DomainRuleViolationException for every validation failure (self-pairing, retired/wrong-
-    /// category coating, duplicate rule, or a rule contradicting the other kind) — surfaced on
-    /// this screen by DomainRuleViolationFilter, not caught here (ADR-0003).</summary>
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> AddCoatingPairing(Guid triggerCoatingRefId, Guid pairedCoatingRefId, CancellationToken cancellationToken)
-    {
-        await referenceDataAdminService.AddCoatingPairingAsync(triggerCoatingRefId, pairedCoatingRefId, cancellationToken);
-        return RedirectToAction(nameof(Index));
-    }
-
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> RemoveCoatingPairing(Guid id, CancellationToken cancellationToken)
-    {
-        await referenceDataAdminService.RemoveCoatingPairingAsync(id, cancellationToken);
-        return RedirectToAction(nameof(Index));
-    }
-
+    /// <summary>See ADR-0001. AddCoatingExclusionAsync throws DomainRuleViolationException for
+    /// every validation failure (self-exclusion, retired/wrong-category coating, duplicate rule, or
+    /// a lens set lens that pairs the two coatings) — surfaced on this screen by
+    /// DomainRuleViolationFilter, not caught here (ADR-0003). Pairings are not managed here any
+    /// more: they belong to each lens set lens (ADR-0007).</summary>
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> AddCoatingExclusion(Guid coatingRefIdA, Guid coatingRefIdB, CancellationToken cancellationToken)
@@ -134,7 +122,6 @@ public class ReferenceDataController(
     private async Task<IReadOnlyList<ReferenceDataList>> BuildViewModelAsync(CancellationToken cancellationToken)
     {
         var items = await referenceDataAdminService.ListAllAsync(cancellationToken);
-        var pairings = await referenceDataAdminService.ListCoatingPairingsAsync(cancellationToken);
         var exclusions = await referenceDataAdminService.ListCoatingExclusionsAsync(cancellationToken);
 
         return CategoryMeta.Select(meta =>
@@ -149,7 +136,6 @@ public class ReferenceDataController(
                 categoryItems.Any(x => x.IsActive && x.IsOtherOption),
                 categoryItems.Where(x => x.IsActive).Select(x => new ReferenceDataOption(x.Id, x.Label, x.ImageUrl)).ToList(),
                 categoryItems.Where(x => !x.IsActive).Select(x => new ReferenceDataOption(x.Id, x.Label, x.ImageUrl)).ToList(),
-                isCoating ? pairings : [],
                 isCoating ? exclusions : []);
         }).ToList();
     }

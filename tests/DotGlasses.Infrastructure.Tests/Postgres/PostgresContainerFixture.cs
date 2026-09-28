@@ -56,6 +56,10 @@ public sealed class PostgresContainerFixture : IAsyncLifetime
         await using (var context = CreateContext(ConnectionStringFor(TemplateDatabase)))
         {
             await context.Database.MigrateAsync();
+
+            // Migrations leave no active lens set (ADR-0007: DGI builds the real ones), so the
+            // template gets the same example 6-Lens and 9-Lens sets local dev does.
+            await ExampleLensSets.EnsureSeededAsync(context);
         }
 
         // CREATE DATABASE ... TEMPLATE refuses to run while anything else is connected to the

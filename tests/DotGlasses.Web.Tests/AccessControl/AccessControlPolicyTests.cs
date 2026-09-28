@@ -254,8 +254,9 @@ public class AccessControlPolicyTests(AccessControlFixture fixture) : IClassFixt
 
         AssertAccessDenied(await AccessControlFixture.PostFormAsync(countryAdmin, "/Catalogues/UpdateCatalogue",
             ("Id", dgiOwned.ToString()), ("Name", $"Renamed {dgiOwned:N}")));
-        AssertAccessDenied(await AccessControlFixture.PostFormAsync(countryAdmin, "/Catalogues/AddLensOption",
-            ("CatalogueId", dgiOwned.ToString()), ("LensStrengthRefId", ReferenceDataSeedConfiguration.LensStrength200Id.ToString())));
+        // A lens on the example 6-Lens set, which is DGI-owned too.
+        AssertAccessDenied(await AccessControlFixture.PostFormAsync(countryAdmin, "/Catalogues/RemoveLensOption",
+            ("lensOptionId", ExampleLensSets.SixLensPlus250Id.ToString())));
         AssertAccessDenied(await AccessControlFixture.PostFormAsync(countryAdmin, "/Catalogues/RetireCatalogue",
             ("catalogueId", dgiOwned.ToString())));
 

@@ -35,7 +35,6 @@
     [Parameter, EditorRequired] public IReadOnlyList<Guid> SelectedIds { get; set; } = [];
     [Parameter] public EventCallback<List<Guid>> SelectedIdsChanged { get; set; }
 
-    [Parameter] public IReadOnlyList<CoatingPairingDto> Pairings { get; set; } = [];
     [Parameter] public IReadOnlyList<CoatingExclusionDto> Exclusions { get; set; } = [];
 
     [Parameter] public FormErrors? Errors { get; set; }
@@ -59,11 +58,8 @@
     /// <summary>
     /// Checking a coating that would violate an exclusion with something already selected is
     /// blocked outright (never silently resolved by removing the existing pick) — see ADR-0001.
-    /// Checking a valid coating also auto-adds any coating it directionally pairs with, skipping
-    /// (not blocking) any paired target that would itself conflict with the existing set, so the
-    /// user's explicit choice always succeeds even when a convenience auto-add can't be applied.
-    /// Unchecking never cascades — removing a coating that triggered a pairing leaves the
-    /// paired-in coating exactly where it is.
+    /// Nothing is auto-added: the global pairings this used to apply were removed with ADR-0007,
+    /// and a lens set lens's own pairings (ticked and locked) arrive with lens-power ticket 10.
     /// </summary>
     private async Task ToggleAsync(Guid coatingId, bool isChecked)
     {
@@ -80,14 +76,6 @@
             }
 
             selection.Add(coatingId);
-
-            foreach (var pairedId in Pairings.Where(p => p.TriggerCoatingRefId == coatingId).Select(p => p.PairedCoatingRefId))
-            {
-                if (!selection.Contains(pairedId) && FindConflict(pairedId, selection) is null)
-                {
-                    selection.Add(pairedId);
-                }
-            }
         }
         else
         {

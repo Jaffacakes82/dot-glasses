@@ -21,7 +21,7 @@ public class LensPowerRulesTests
             new ReferenceItemSnapshot(Bifocal, ReferenceDataCategory.LensType, "Bifocal", IsActive: true, IsOtherOption: false),
             new ReferenceItemSnapshot(Other, ReferenceDataCategory.LensType, "Other", IsActive: true, IsOtherOption: true),
         ],
-        [], [], []);
+        [], []);
 
     private static IReadOnlyList<RuleFailure> Check(decimal? sphere, decimal? cylinder = null, decimal? axis = null, decimal? add = null) =>
         LensPowerRules.Check(sphere, cylinder, axis, add, Names).ToList();

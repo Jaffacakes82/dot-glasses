@@ -48,7 +48,7 @@
             <label>Lens power — left eye</label>
             <select value="@Model.LensOptionLeftId" @onchange="OnLeftLensChanged">
                 <option value="">Select...</option>
-                @foreach (var option in catalogue.LensOptions.OrderBy(o => o.SortOrder))
+                @foreach (var option in catalogue.LensOptions)
                 {
                     <option value="@option.Id">@option.Label</option>
                 }
@@ -59,7 +59,7 @@
             <label>Lens power — right eye</label>
             <select value="@Model.LensOptionRightId" @onchange="e => Model.LensOptionRightId = ParseGuid(e.Value)">
                 <option value="">Select...</option>
-                @foreach (var option in catalogue.LensOptions.OrderBy(o => o.SortOrder))
+                @foreach (var option in catalogue.LensOptions)
                 {
                     <option value="@option.Id">@option.Label</option>
                 }
@@ -82,9 +82,9 @@
         @if (Model.LensOptionLeftId is not null)
         {
             var leftOption = catalogue.LensOptions.FirstOrDefault(o => o.Id == Model.LensOptionLeftId);
-            @if ((leftOption?.AvailableCoatingIds ?? []).Count == 0)
+            @if ((leftOption?.CoatingIds ?? []).Count == 0)
             {
-                <p style="color:#c00; font-size:12px;">No coatings are configured for this lens yet — it can't be sold on a lens set until DGI configures one in Reference Data.</p>
+                <p style="color:#c00; font-size:12px;">No coatings are configured for this lens yet — it can't be sold on a lens set until DGI adds one on Lens Sets.</p>
             }
         }
     }

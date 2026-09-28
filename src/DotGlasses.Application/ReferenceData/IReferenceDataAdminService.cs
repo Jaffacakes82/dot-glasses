@@ -41,32 +41,21 @@ public interface IReferenceDataAdminService
 
     Task ReactivateAsync(Guid id, CancellationToken cancellationToken = default);
 
-    /// <summary>Every Coating pairing rule, both coatings' labels included for display — see
-    /// ADR-0001. Managed from Reference Data's Coating category, not a separate admin
-    /// surface.</summary>
-    Task<IReadOnlyList<CoatingPairingAdminItem>> ListCoatingPairingsAsync(CancellationToken cancellationToken = default);
-
+    /// <summary>Every Coating exclusion, both coatings' labels included for display — see
+    /// ADR-0001. Managed from Reference Data's Coating category. Pairings are not listed here:
+    /// they belong to each lens set lens now (ADR-0007) and are managed on Lens Sets.</summary>
     Task<IReadOnlyList<CoatingExclusionAdminItem>> ListCoatingExclusionsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Both ids must reference active Coating items and be distinct. Throws
     /// DomainRuleViolationException (surfaced as a validation error, not a 500 — ADR-0003) if
-    /// either check fails, the pairing already exists, or an exclusion already exists between the
-    /// same two coatings (either direction) — a pairing can never contradict an exclusion, see
-    /// ADR-0001.</summary>
-    Task AddCoatingPairingAsync(Guid triggerCoatingRefId, Guid pairedCoatingRefId, CancellationToken cancellationToken = default);
-
-    Task RemoveCoatingPairingAsync(Guid id, CancellationToken cancellationToken = default);
-
-    /// <summary>Both ids must reference active Coating items and be distinct. Throws
-    /// DomainRuleViolationException if either check fails, the exclusion already exists (either
-    /// order), or a pairing already exists between the same two coatings (either direction).</summary>
+    /// either check fails, the exclusion already exists (either order), or any lens set lens
+    /// pairs the same two coatings (either direction) — a pairing can never contradict an
+    /// exclusion (ADR-0001, ADR-0007).</summary>
     Task AddCoatingExclusionAsync(Guid coatingRefIdA, Guid coatingRefIdB, CancellationToken cancellationToken = default);
 
     Task RemoveCoatingExclusionAsync(Guid id, CancellationToken cancellationToken = default);
 }
 
 public record ReferenceDataAdminItem(Guid Id, ReferenceDataCategory Category, string Code, string Label, int SortOrder, bool IsActive, bool IsOtherOption, string? ImageUrl);
-
-public record CoatingPairingAdminItem(Guid Id, Guid TriggerCoatingRefId, string TriggerCoatingLabel, Guid PairedCoatingRefId, string PairedCoatingLabel);
 
 public record CoatingExclusionAdminItem(Guid Id, Guid CoatingRefIdA, string LabelA, Guid CoatingRefIdB, string LabelB);

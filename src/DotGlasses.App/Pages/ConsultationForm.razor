@@ -224,7 +224,7 @@
                         <CoatingMultiSelector Label="Coating" AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
                                                RestrictToIds="AvailableCoatingIdsForSelectedPreset"
                                                SelectedIds="_coatingRefIds" SelectedIdsChanged="v => _coatingRefIds = v"
-                                               Pairings="ReferenceDataClient.CoatingPairings" Exclusions="ReferenceDataClient.CoatingExclusions"
+                                               Exclusions="ReferenceDataClient.CoatingExclusions"
                                                Errors="_errors" Field="CoatingRefIds" />
                     }
 
@@ -235,7 +235,7 @@
                         </div>
                         <CoatingMultiSelector Label="Coating" AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
                                                SelectedIds="_coatingRefIds" SelectedIdsChanged="v => _coatingRefIds = v"
-                                               Pairings="ReferenceDataClient.CoatingPairings" Exclusions="ReferenceDataClient.CoatingExclusions"
+                                               Exclusions="ReferenceDataClient.CoatingExclusions"
                                                Errors="_errors" Field="CoatingRefIds" />
                     }
 
@@ -575,14 +575,14 @@
         _lensRange.ChildrensFrame = childrensFrame;
     }
 
-    /// <summary>Coatings configured as available for the currently-chosen preset left-eye
-    /// LensOption — mirrors the lookup LensRangeSelector used to do internally before coating
+    /// <summary>The coatings the chosen left-eye lens set lens comes in (its own coatings,
+    /// ADR-0007) — mirrors the lookup LensRangeSelector used to do internally before coating
     /// moved out to the parent (see ADR-0001). Empty when no left lens is chosen yet, or the
-    /// chosen lens has no coatings configured.</summary>
+    /// chosen lens has no coatings.</summary>
     private IReadOnlyList<Guid> AvailableCoatingIdsForSelectedPreset =>
         ReferenceDataClient.Catalogues
             .SelectMany(c => c.LensOptions)
-            .FirstOrDefault(o => o.Id == _lensRange.LensOptionLeftId)?.AvailableCoatingIds ?? [];
+            .FirstOrDefault(o => o.Id == _lensRange.LensOptionLeftId)?.CoatingIds ?? [];
 
     /// <summary>Fired by LensRangeSelector whenever the range type or left lens changes — any
     /// coating already picked may no longer be valid (a different lens option may not offer it,
