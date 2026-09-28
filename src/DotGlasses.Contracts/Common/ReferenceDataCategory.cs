@@ -1,7 +1,8 @@
 namespace DotGlasses.Contracts.Common;
 
 /// <summary>Mirrors DotGlasses.Domain.Enums.ReferenceDataCategory — see Contracts.Common.Gender
-/// for why Contracts keeps its own copy rather than referencing Domain.</summary>
+/// for why Contracts keeps its own copy rather than referencing Domain. Value 6 ("Lens strength")
+/// is retired and reserved there and here alike (ADR-0007); never reuse it.</summary>
 public enum ReferenceDataCategory
 {
     Occupation = 0,
@@ -10,6 +11,8 @@ public enum ReferenceDataCategory
     Coating = 3,
     FrameColour = 4,
     HardCaseColour = 5,
-    LensStrength = 6,
+
+    // 6 — retired ("Lens strength", ADR-0007). Reserved; do not reuse.
+
     LensType = 7,
 }

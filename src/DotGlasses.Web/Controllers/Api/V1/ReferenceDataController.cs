@@ -24,8 +24,9 @@ public class ReferenceDataController(IReferenceDataQueryService referenceDataQue
     public async Task<ActionResult<IReadOnlyList<ReferenceDataItemDto>>> List(CancellationToken cancellationToken) =>
         Ok(await referenceDataQueryService.ListActiveAsync(cancellationToken));
 
-    /// <summary>Coating pairing/exclusion rules — see ADR-0001. Fetched/cached by the Field App
-    /// alongside the reference-data list above so live enforcement works offline.</summary>
+    /// <summary>Coating exclusions — see ADR-0001. Fetched/cached by the Field App alongside the
+    /// reference-data list above so live enforcement works offline. No pairings: each lens set
+    /// lens carries its own in the lens-set payload (ADR-0007).</summary>
     [HttpGet("coating-rules")]
     public async Task<ActionResult<CoatingRulesDto>> CoatingRules(CancellationToken cancellationToken) =>
         Ok(await referenceDataQueryService.GetCoatingRulesAsync(cancellationToken));

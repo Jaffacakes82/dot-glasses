@@ -64,9 +64,9 @@ public class ConsultationRulesTests
     private static readonly Guid LensA1 = Guid.Parse("00000000-0000-0000-0000-000000000f11");
     private static readonly Guid LensA2 = Guid.Parse("00000000-0000-0000-0000-000000000f12");
 
-    /// <summary>On CatalogueA like the other two, but with no Coatings configured for its
-    /// strength — the state 12 of the 16 seeded LensStrength items are actually in (see
-    /// <c>docs/open-issues.md</c>), and what the lens-keyed failure exists for.</summary>
+    /// <summary>On CatalogueA like the other two, but with no Coatings of its own — a lens set lens
+    /// is meant to carry at least one (ADR-0007), and this is what the lens-keyed failure exists
+    /// for when one doesn't.</summary>
     private static readonly Guid LensA3NoCoatings = Guid.Parse("00000000-0000-0000-0000-000000000f13");
     private static readonly Guid LensB1 = Guid.Parse("00000000-0000-0000-0000-000000000f21");
 
@@ -126,18 +126,17 @@ public class ConsultationRulesTests
             // deliberately has an empty one: those are the two different ways availability fails,
             // and they are reported against different fields.
             new PresetCatalogueSnapshot(CatalogueA, "Six lens set", IsActive: true, [
-                new LensOptionSnapshot(LensA1, "+1.00", 0, [ActiveCoating, SecondCoating, ExcludingCoating]),
-                new LensOptionSnapshot(LensA2, "+2.50", 1, [ActiveCoating, SecondCoating, ExcludingCoating]),
-                new LensOptionSnapshot(LensA3NoCoatings, "+3.50", 2, []),
+                new LensOptionSnapshot(LensA1, "+1.00", 1.00m, [ActiveCoating, SecondCoating, ExcludingCoating]),
+                new LensOptionSnapshot(LensA2, "+2.50", 2.50m, [ActiveCoating, SecondCoating, ExcludingCoating]),
+                new LensOptionSnapshot(LensA3NoCoatings, "+3.50", 3.50m, []),
             ], AssignedOrgPaths: catalogueAAssignedTo),
             new PresetCatalogueSnapshot(CatalogueB, "Nine lens set", IsActive: true, [
-                new LensOptionSnapshot(LensB1, "+3.00", 0, [ActiveCoating]),
+                new LensOptionSnapshot(LensB1, "+3.00", 3.00m, [ActiveCoating]),
             ], AssignedOrgPaths: null),
             new PresetCatalogueSnapshot(RetiredCatalogue, "Retired lens set", IsActive: false, [
-                new LensOptionSnapshot(LensRetired1, "+1.50", 0, [ActiveCoating]),
+                new LensOptionSnapshot(LensRetired1, "+1.50", 1.50m, [ActiveCoating]),
             ], AssignedOrgPaths: null),
         ],
-        [],
         [
             // Clear excludes Photochromic, the worked example in CONTEXT.md and ADR-0001. Stated
             // one way round only — the rule is symmetric and the snapshot canonicalizes it, which
@@ -1581,15 +1580,15 @@ public class ConsultationRulesTests
     [Fact]
     public void CoatingSet_OnAPresetRange_RejectsACoatingNotConfiguredForTheChosenLens()
     {
-        // UnavailableCoating is active and real — it is simply not on this lens strength's
-        // roster. That is the distinction between this rule and the active-item check above.
+        // UnavailableCoating is active and real — it is simply not one of this lens's own
+        // coatings. That is the distinction between this rule and the active-item check above.
         var request = ValidSale();
         request.CoatingRefIds = [UnavailableCoating];
 
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("CoatingRefIds", failure.Key);
-        Assert.Equal("Every coating must be configured as available for the chosen lens option (see Reference Data > Lens Strength).", failure.Message);
+        Assert.Equal("Every coating must be configured as available for the chosen lens option (see Lens Sets).", failure.Message);
     }
 
     [Fact]
@@ -1622,7 +1621,7 @@ public class ConsultationRulesTests
     public void CoatingSet_OnALensWithNoCoatingsConfigured_IsReportedAgainstTheLensNotTheSet()
     {
         // The behaviour change ticket 11 made deliberately. IsCoatingAvailableForLensOption
-        // returns false rather than throwing when a strength has no coatings configured, so this
+        // returns false rather than throwing when a lens has no coatings of its own, so this
         // used to read "every coating must be configured as available for the chosen lens option"
         // against CoatingRefIds — advice no choice of coating could satisfy, because none is
         // available. It is the lens that has to change.
@@ -1788,7 +1787,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(test, Snapshot()));
 
         Assert.Equal("CoatingPreferenceRefId", failure.Key);
-        Assert.Equal("CoatingPreferenceRefId is not configured as available for the chosen lens option (see Reference Data > Lens Strength).", failure.Message);
+        Assert.Equal("CoatingPreferenceRefId is not configured as available for the chosen lens option (see Lens Sets).", failure.Message);
     }
 
     [Fact]
@@ -1830,12 +1829,12 @@ public class ConsultationRulesTests
         var leadFailures = ConsultationRules.Check(lead, Snapshot()).Failures;
 
         Assert.Equal(
-            ["CoatingPreferenceRefId is not configured as available for the chosen lens option (see Reference Data > Lens Strength).",
+            ["CoatingPreferenceRefId is not configured as available for the chosen lens option (see Lens Sets).",
              "CoatingPreferenceRefId must reference an existing, active Coating reference-data item."],
             testFailures.Select(f => f.Message));
         Assert.Equal(
             ["CoatingPreferenceRefId must reference an existing, active Coating reference-data item.",
-             "CoatingPreferenceRefId is not configured as available for the chosen lens option (see Reference Data > Lens Strength)."],
+             "CoatingPreferenceRefId is not configured as available for the chosen lens option (see Lens Sets)."],
             leadFailures.Select(f => f.Message));
     }
 

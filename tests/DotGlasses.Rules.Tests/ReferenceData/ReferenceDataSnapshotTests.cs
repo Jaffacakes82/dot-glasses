@@ -24,7 +24,6 @@ public class ReferenceDataSnapshotTests
             new ReferenceItemSnapshot(OtherReason, ReferenceDataCategory.ReasonNotPurchased, "Other", IsActive: true, IsOtherOption: true),
         ],
         [],
-        [],
         []);
 
     /// <summary>The Field App's filling of the same library, through the adapter the App calls:
@@ -34,7 +33,6 @@ public class ReferenceDataSnapshotTests
             new ReferenceDataItemDto { Id = ActiveReason, Category = ReferenceDataCategory.ReasonNotPurchased, Label = "Too expensive" },
             new ReferenceDataItemDto { Id = OtherReason, Category = ReferenceDataCategory.ReasonNotPurchased, Label = "Other", IsOtherOption = true },
         ],
-        [],
         [],
         []);
 
@@ -148,7 +146,6 @@ public class ReferenceDataSnapshotTests
                 new ReferenceItemSnapshot(ActiveReason, ReferenceDataCategory.ReasonNotPurchased, "First", IsActive: true, IsOtherOption: false),
                 new ReferenceItemSnapshot(ActiveReason, ReferenceDataCategory.ReasonNotPurchased, "Second", IsActive: true, IsOtherOption: false),
             ],
-            [],
             [],
             []);
 

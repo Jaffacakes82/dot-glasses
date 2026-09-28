@@ -34,8 +34,6 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
 
     public IReadOnlyList<PresetCatalogueDto> Catalogues { get; private set; } = [];
 
-    public IReadOnlyList<CoatingPairingDto> CoatingPairings { get; private set; } = [];
-
     public IReadOnlyList<CoatingExclusionDto> CoatingExclusions { get; private set; } = [];
 
     public async Task EnsureLoadedAsync()
@@ -63,7 +61,6 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
 
                 _items = items ?? [];
                 Catalogues = catalogues ?? [];
-                CoatingPairings = coatingRules?.Pairings ?? [];
                 CoatingExclusions = coatingRules?.Exclusions ?? [];
                 LoadError = null;
                 IsFromCache = false;
@@ -95,7 +92,7 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
 
     private async Task WriteCacheAsync()
     {
-        var payload = new CachedPayload(DateTimeOffset.UtcNow, _items, Catalogues.ToList(), CoatingPairings.ToList(), CoatingExclusions.ToList());
+        var payload = new CachedPayload(DateTimeOffset.UtcNow, _items, Catalogues.ToList(), CoatingExclusions.ToList());
         try
         {
             await jsRuntime.InvokeVoidAsync("dotGlassesIdb.kvSet", StorageKey, JsonSerializer.Serialize(payload, JsonOptions));
@@ -124,8 +121,7 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
             }
 
             _items = payload.Items;
-            Catalogues = payload.Catalogues;
-            CoatingPairings = payload.CoatingPairings;
+            Catalogues = payload.Catalogues ?? [];
             CoatingExclusions = payload.CoatingExclusions;
             IsFromCache = true;
             CachedAtUtc = payload.CachedAtUtc;
@@ -144,17 +140,23 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
 
     public IReadOnlyList<ReferenceDataItemDto> AllItems => _items;
 
-    /// <summary>CoatingPairings/CoatingExclusions default to an empty list so a cache payload
-    /// written before those fields existed still deserializes safely (missing JSON properties
-    /// fall back to the constructor's default parameter value).</summary>
+    /// <summary>
+    /// CoatingExclusions defaults to an empty list so a cache payload written before that field
+    /// existed still deserializes safely (missing JSON properties fall back to the constructor's
+    /// default parameter value).
+    ///
+    /// Older payloads are read, never rejected: a payload cached before ADR-0007 still carries a
+    /// <c>coatingPairings</c> list and lens-set lenses with <c>sortOrder</c>/<c>availableCoatingIds</c>.
+    /// System.Text.Json ignores the names this type no longer has, and each lens comes back with
+    /// its label, a zero sphere and no coatings (LensOptionDto's defaults) — the lens sets it names
+    /// were all retired by the reset anyway, and the next online load replaces the whole payload.
+    /// </summary>
     private sealed record CachedPayload(
         DateTimeOffset CachedAtUtc,
         List<ReferenceDataItemDto> Items,
         List<PresetCatalogueDto> Catalogues,
-        List<CoatingPairingDto> CoatingPairings = null!,
         List<CoatingExclusionDto> CoatingExclusions = null!)
     {
-        public List<CoatingPairingDto> CoatingPairings { get; init; } = CoatingPairings ?? [];
         public List<CoatingExclusionDto> CoatingExclusions { get; init; } = CoatingExclusions ?? [];
     }
 }
