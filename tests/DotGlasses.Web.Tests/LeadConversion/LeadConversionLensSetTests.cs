@@ -156,9 +156,9 @@ public class LeadConversionLensSetTests(AdminPortalFactory factory) : IClassFixt
         });
         var client = factory.CreateAdminClient();
 
-        var page = await client.GetStringAsync($"/Leads/Convert/{leadId}");
+        var page = System.Net.WebUtility.HtmlDecode(await client.GetStringAsync($"/Leads/Convert/{leadId}"));
 
-        Assert.Contains($"lens is no longer in the lens set “Kenya Readers {lensSetId:N}”", page);
+        Assert.Contains($"The SPH +3.50 on this Lead is no longer in Kenya Readers {lensSetId:N}. Choose a lens.", page);
         Assert.Equal(lensSetId.ToString(), SelectedValue(page, "Form.LensRange"));
         Assert.Equal(plus250.ToString(), SelectedValue(page, "Form.LensLeftId"));
         Assert.Null(SelectedValue(page, "Form.LensRightId"));

@@ -63,10 +63,12 @@ public class LeadConversionController(
         // what a straight submit would record — the Coating set seeded from the Lead's Coating
         // preference included (CONTEXT.md).
         var seeded = SaleAssembly.Seed(lead);
-        var form = new LeadConversionFormModel { ConsentGiven = seeded.ConsentGiven, CoatingRefIds = seeded.CoatingRefIds };
+        // "Same lens for both eyes" starts ticked, as it does on the Field App.
+        var form = new LeadConversionFormModel { ConsentGiven = seeded.ConsentGiven, CoatingRefIds = seeded.CoatingRefIds, SameLensForBothEyes = true };
 
         // A Lead whose lens set still reaches it but no longer holds one of its lenses asks again —
-        // with the set, and whichever lens still matches, pre-selected rather than blank.
+        // with the set, and whichever lens still matches, pre-selected rather than blank. It starts
+        // "Same lens for both eyes" ticked only if its two eyes are the same lens.
         var atLeadsLocation = await SnapshotAtLeadsLocationAsync(lead, cancellationToken);
         if (LensNoLongerInSet(lead, atLeadsLocation))
         {
@@ -74,11 +76,44 @@ public class LeadConversionController(
             form.LensRange = LensRangeChoice.Format(LensRangeType.LensSet, lead.PresetCatalogueId);
             form.LensLeftId = left?.Id;
             form.LensRightId = right?.Id;
+            form.SameLensForBothEyes = EyesAreTheSameLens(lead);
             form.PresetPupilDistanceBucket = lead.PresetPupilDistanceBucket;
             form.ChildrensFrame = lead.ChildrensFrame;
         }
 
         return View(await BuildViewModelAsync(lead, form, cancellationToken));
+    }
+
+    /// <summary>
+    /// The coatings a pair of lens set lenses both come in, and the pairings they carry — what the
+    /// screen's script asks for whenever the admin changes a lens, so the browser never restates
+    /// what <see cref="LensSetLenses.CoatingsFor"/> decides. Both lenses must be in a lens set
+    /// reaching the Lead's retail point; anything else answers <c>offered: null</c> ("no pair
+    /// chosen — list every coating"), never an error, since half-chosen is a normal state here.
+    /// With only <c>left</c> given the one lens stands for both ("Same lens for both eyes").
+    /// </summary>
+    [HttpGet("Leads/Convert/{id:guid}/coatings")]
+    public async Task<IActionResult> Coatings(Guid id, Guid? left, Guid? right, CancellationToken cancellationToken)
+    {
+        var lead = await leadService.GetByIdAsync(id, cancellationToken);
+        if (lead is null)
+        {
+            return NotFound();
+        }
+
+        var atLeadsLocation = await SnapshotAtLeadsLocationAsync(lead, cancellationToken);
+        var pair = FindPair(atLeadsLocation, left, right ?? left);
+        if (pair is not var (leftLens, rightLens))
+        {
+            return Json(new { offered = (Guid[]?)null, pairings = Array.Empty<object>() });
+        }
+
+        var coatings = LensSetLenses.CoatingsFor(leftLens, rightLens);
+        return Json(new
+        {
+            offered = coatings.Offered,
+            pairings = coatings.RequiredPairings.Select(p => new { trigger = p.TriggerCoatingRefId, paired = p.PairedCoatingRefId }),
+        });
     }
 
     [HttpPost("Leads/Convert/{id:guid}")]
@@ -180,6 +215,95 @@ public class LeadConversionController(
             LensSetLenses.Match(lenses, lead.SphereRight, lead.CylinderRight, lead.AxisRight, lead.AddRight, lead.LensTypeRefId));
     }
 
+    /// <summary>Whether the Lead's two eyes are the same lens — the same power and lens type, read the
+    /// way LensSetLenses.Match reads them (a blank cylinder is 0.00, an axis counts only with a
+    /// cylinder, an add of 0.00 is none), so "the same lens" has one definition. Two eyes with
+    /// nothing recorded count as matching.</summary>
+    private static bool EyesAreTheSameLens(LeadDto lead)
+    {
+        if (lead.SphereLeft is not { } sphereLeft)
+        {
+            return lead.SphereRight is null;
+        }
+
+        var leftAsLens = new LensOptionSnapshot(Guid.Empty, string.Empty, sphereLeft, [], lead.CylinderLeft, lead.AxisLeft, lead.AddLeft, lead.LensTypeRefId);
+        return LensSetLenses.Match([leftAsLens], lead.SphereRight, lead.CylinderRight, lead.AxisRight, lead.AddRight, lead.LensTypeRefId) is not null;
+    }
+
+    /// <summary>The two lenses in lens sets reaching the Lead's retail point, or null when either
+    /// isn't one. A lens id belongs to exactly one set, so the id alone finds it.</summary>
+    private static (LensOptionSnapshot Left, LensOptionSnapshot Right)? FindPair(ReferenceDataSnapshot atLeadsLocation, Guid? leftId, Guid? rightId)
+    {
+        LensOptionSnapshot? Find(Guid? id) =>
+            atLeadsLocation.PresetCatalogues
+                .Where(set => atLeadsLocation.IsLensSetAvailable(set.Id))
+                .SelectMany(set => set.LensOptions)
+                .FirstOrDefault(lens => lens.Id == id);
+
+        return Find(leftId) is { } left && Find(rightId) is { } right ? (left, right) : null;
+    }
+
+    /// <summary>The pair the coatings are scoped by: the Lead's own lenses when its lens carries over,
+    /// otherwise the ones the form names (one lens standing for both when "Same lens for both eyes"
+    /// is ticked). Null when there is no pair yet — a Custom prescription, no range, or a lens still
+    /// to choose.</summary>
+    private static (LensOptionSnapshot Left, LensOptionSnapshot Right)? ChosenPair(
+        LeadDto lead, LeadConversionFormModel form, ReferenceDataSnapshot atLeadsLocation, bool lensCarriesOver)
+    {
+        if (lensCarriesOver)
+        {
+            return lead.LensRangeType is LensRangeType.LensSet && LeadsLenses(lead, atLeadsLocation) is ({ } left, { } right)
+                ? (left, right)
+                : null;
+        }
+
+        var (rangeType, catalogueId) = LensRangeChoice.Parse(form.LensRange);
+        if (rangeType is not LensRangeType.LensSet)
+        {
+            return null;
+        }
+
+        // Only lenses of the chosen set count: a lens id posted from another set matches nothing.
+        var inSet = atLeadsLocation.FindCatalogue(catalogueId)?.LensOptions ?? [];
+        var pair = FindPair(atLeadsLocation, form.LensLeftId, form.SameLensForBothEyes ? form.LensLeftId : form.LensRightId);
+        return pair is var (l, r) && inSet.Any(x => x.Id == l.Id) && inSet.Any(x => x.Id == r.Id) ? pair : null;
+    }
+
+    /// <summary>The note for each eye of a lens-set Lead whose lens has gone from the set and that the
+    /// admin has yet to choose again — "The SPH +3.50 on this Lead is no longer in Readers. Choose a
+    /// lens." — the same wording the Field App shows. An eye with no power recorded has nothing to be
+    /// "no longer in the set". With "Same lens for both eyes" ticked the one dropdown answers both.</summary>
+    private static (string? Left, string? Right) LensNotes(LeadDto lead, LeadConversionFormModel form, ReferenceDataSnapshot atLeadsLocation)
+    {
+        if (!LensNoLongerInSet(lead, atLeadsLocation) || atLeadsLocation.FindCatalogue(lead.PresetCatalogueId) is not { } lensSet)
+        {
+            return (null, null);
+        }
+
+        var (left, right) = LeadsLenses(lead, atLeadsLocation);
+        string? Note(decimal? sphere, decimal? cylinder, decimal? axis, decimal? add, LensOptionSnapshot? found, Guid? chosen) =>
+            sphere is { } s && found is null && chosen is null
+                ? $"The {LensOptionCard.FormatLensPower(s, cylinder, axis, add)} on this Lead is no longer in {lensSet.Name}. Choose a lens."
+                : null;
+
+        var noteLeft = Note(lead.SphereLeft, lead.CylinderLeft, lead.AxisLeft, lead.AddLeft, left, form.LensLeftId);
+        var noteRight = Note(lead.SphereRight, lead.CylinderRight, lead.AxisRight, lead.AddRight, right, form.SameLensForBothEyes ? form.LensLeftId : form.LensRightId);
+        return (noteLeft, noteRight);
+    }
+
+    /// <summary>Each lens set reaching the Lead's retail point with its lenses in the Rules' fixed
+    /// order (single vision by sphere, then Bifocal, Progressive, Other by add) — one definition of
+    /// the order, shared with the Field App.</summary>
+    private static IReadOnlyList<LensSetChoice> LensSetChoices(IEnumerable<PresetCatalogueDto> catalogues, ReferenceDataSnapshot atLeadsLocation) =>
+        catalogues
+            .Select(set => new LensSetChoice(
+                set.Id,
+                set.Name,
+                LensSetLenses.InDisplayOrder(atLeadsLocation.FindCatalogue(set.Id)?.LensOptions ?? [], atLeadsLocation)
+                    .Select(lens => new LensChoice(lens.Id, lens.Label, LensOptionCard.FormatLensPower(lens.Sphere, lens.Cylinder, lens.Axis, lens.Add), lens.LensTypeRefId))
+                    .ToList()))
+            .ToList();
+
     /// <summary>
     /// Seeds the answers from the Lead and overlays what this form asked — the same shared builder
     /// ConsultationForm.razor uses, so a field added to CreateSaleRequest cannot reach one write
@@ -237,6 +361,13 @@ public class LeadConversionController(
         var atLeadsLocation = await SnapshotAtLeadsLocationAsync(lead, cancellationToken);
         var lensCarriesOver = LeadLensCarriesOver(lead, atLeadsLocation);
 
+        // What the chosen pair of lenses offers — the Lead's own when its lens carried over, else
+        // the pair the form names. No pair (Custom, or a lens still to choose) lists every coating.
+        var coatings = ChosenPair(lead, form, atLeadsLocation, lensCarriesOver) is var (left, right)
+            ? LensSetLenses.CoatingsFor(left, right)
+            : null;
+        var (noteLeft, noteRight) = LensNotes(lead, form, atLeadsLocation);
+
         return new LeadConversionViewModel
         {
             Lead = lead,
@@ -250,7 +381,14 @@ public class LeadConversionController(
                 ? atLeadsLocation.FindCatalogue(lead.PresetCatalogueId)?.Name
                 : null,
             LensSummary = BuildLensSummary(lead, atLeadsLocation),
-            AvailableCatalogues = catalogues,
+            LensSets = LensSetChoices(catalogues, atLeadsLocation),
+            LensNoteLeft = noteLeft,
+            LensNoteRight = noteRight,
+            OfferedCoatingIds = coatings?.Offered,
+            CoatingPairings = coatings?.RequiredPairings ?? [],
+            CoatingsNote = coatings is { Offered.Count: 0 }
+                ? "No coating can be made on both of these lenses, so they can't be sold together on a lens set — choose another lens."
+                : null,
             FrameColours = referenceData.Where(x => x.Category == ReferenceDataCategory.FrameColour).OrderBy(x => x.SortOrder).ToList(),
             Coatings = referenceData.Where(x => x.Category == ReferenceDataCategory.Coating).OrderBy(x => x.SortOrder).ToList(),
             HardCaseColours = referenceData.Where(x => x.Category == ReferenceDataCategory.HardCaseColour).OrderBy(x => x.SortOrder).ToList(),
