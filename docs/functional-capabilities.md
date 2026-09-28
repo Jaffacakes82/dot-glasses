@@ -51,10 +51,10 @@ database on each request, so a removed assignment, a changed role or a suspensio
 user's very next request. **The Field App scopes to one current location instead** — see §5 —
 because a Test, Lead or Sale must be stamped with exactly one place.
 
-Four entities are **not** hierarchy-scoped and are therefore globally visible to every
-authenticated user: `ReferenceDataItem`, `PresetCatalogue`, `LensOption` and
-`LensStrengthCoatingOption`. Reference data and catalogues are a single global library, not a
-per-country one. Note also that `ApplicationUser` is an Identity type, outside the automatic
+Three entities (and the two child tables of `LensOption`, `LensOptionCoating` and
+`LensOptionCoatingPairing`) are **not** hierarchy-scoped and are therefore globally visible to
+every authenticated user: `ReferenceDataItem`, `PresetCatalogue` and `LensOption`. Reference data
+and lens sets are a single global library, not a per-country one. Note also that `ApplicationUser` is an Identity type, outside the automatic
 filter entirely — the User Directory applies the same prefix rule manually in code.
 
 Because reporting screens need to resolve a row's *ancestor* names (which country is this outlet
@@ -343,9 +343,35 @@ equivalent for — coating, frame colour, hard case, "order from DOT Glasses", a
 where the Lead captured no preference — plus **referred or treated**, with a referral reason, its
 "Other" free text, a treated-in-facility flag and a referral location, following exactly the same
 conditional rules as every other capture path (2026-09-04). Frame coverage is **not** asked here,
-matching the Field App's Sale form; the sale records the Full frame default. Every field is
-rendered unconditionally with its condition stated in the label — the rules are enforced
-server-side and reported as a validation summary on submit, not by live show/hide.
+matching the Field App's Sale form; the sale records the Full frame default. Outside the lens
+section every field is rendered unconditionally with its condition stated in the label — the
+rules are enforced server-side and reported as a validation summary on submit, not by live
+show/hide.
+
+The **lens section** has the Field App's choices in the Field App's order (§5.6): lens range; the
+lens (or a Custom prescription); children's frame; pupil distance; coatings; and last, "Order this
+lens from DOT Glasses (Custom range only)", which stays unconditional as the form's own rule.
+- *Lens set* — "Same lens for both eyes" (ticked to start) with one **Lens** dropdown, or unticked
+  a left and a right dropdown with the right one limited to the left's lens type. Lenses are listed
+  by their label in the fixed display order, and the chosen lens's power reads underneath
+  (`SPH +2.50 · CYL -0.75 × 90 · ADD +2.00`). Pupil distance is a 0–4 dropdown (0–2 with a
+  children's frame).
+- *Custom prescription* — the shop's dropdowns for sphere, cylinder, axis and add, an axis only
+  when the cylinder isn't 0.00, lens type radios only with an add above 0.00 (with a text box for
+  "Other"), and pupil distance as a millimetre dropdown.
+- *Coatings* — only the coatings both chosen lenses come in. A paired coating is ticked and locked
+  ("Comes with `<trigger>` on this lens"); an exclusion is enforced by the rules on submit. Before a
+  pair is chosen (Custom, or a lens still to pick) every coating is listed and the rules decide on
+  submit.
+- *A Lead's own lens* is carried over by matching its power and lens type against the set. One that
+  is no longer in the set leaves that eye empty under "The `<power>` on this Lead is no longer in
+  `<set>`. Choose a lens.", and that note stands until the eye has a lens.
+- The choices are progressive enhancement: `wwwroot/js/lead-conversion.js` shows and hides the
+  blocks, refills the dropdowns, and fetches the offered coatings from
+  `GET /Leads/Convert/{id}/coatings?left=&right=` (hierarchy-scoped through the Lead; it returns
+  what the shared rule says, never restating it). Without the script every block is shown and the
+  server validates and re-renders, so changing range or unticking "Same lens" then needs a submit.
+  A refused field shows its message under its own control as well as in the summary.
 
 Reference-data labels (referral reason, reason not purchased) resolve against **all** reference
 items including retired ones, so a historical event referencing a since-retired option still
@@ -450,43 +476,66 @@ level. Everyone else is redirected to Access Denied.
 
 Catalogues themselves are **not** hierarchy-scoped: every user who reaches this page sees every
 catalogue in the system, regardless of who owns it. A name search box narrows the list (no
-paging — the table is structurally small, see below).
+paging — the table is structurally small, see below). A **Lens powers** button in the page header
+opens the read-only page described at the end of this section.
+
+**What a lens is.** A lens set is a list of lenses, and a lens is a **lens power** — a sphere and
+optionally a cylinder, axis and add, the same values a Custom prescription uses (ADR-0007) — with a
+label the technician chooses it by, a **lens type** when it has an add (Bifocal, Progressive or
+Other; a lens with no add is single vision and is never asked), the **coatings** it comes in
+(at least one) and its own **pairings**. A set may repeat a power only with a different lens type.
+Nothing links a lens to a reference-data list any more.
 
 **Lens set cards** — one per lens set (a `PresetCatalogue` in the code), showing name,
 description, and the list of orgs it's assigned to (with an un-assign action per org, not just a
-count). Below that, the lens roster as removable badges, and an add-lens form. There is no
+count). Below that, a table of the set's lenses — Label, Lens power (`SPH +2.50 · CYL -0.75 × 90 ·
+ADD +2.00`, only the parts the lens has), Lens type ("Single vision" when there is none), Coatings
+and Pairings (`Blue block → Photochromic`, or "—") — in the fixed display order: single vision by
+sphere, then Bifocal, Progressive and Other by add, then sphere. Each row has **Edit** and
+**Remove**, and each card an **Add lens** button, where the caller may change the set. There is no
 per-catalogue role: every non-empty lens set assigned at or above a retail point is offered there
 (see §5.6, ADR-0005).
 
 **Who may change what.**
-- **Editing a lens set** — Edit, add or remove lens powers, Retire/Reactivate — is limited to admins
-  at or above its **owning org** (`PresetCatalogue.EditInScope`). A DGI-owned lens set reaches every
-  country, so a country admin can't change what it contains. On a lens set the caller can't edit,
-  those actions aren't shown and the card says "Owned above your organisation — you can assign
-  it, but not change it." The server refuses them regardless, with Access Denied.
+- **Editing a lens set** — Edit, add, edit or remove lenses, Retire/Reactivate — is limited to
+  admins at or above its **owning org** (`PresetCatalogue.EditInScope`). A DGI-owned lens set
+  reaches every country, so a country admin can't change what it contains. On a lens set the
+  caller can't edit, those actions aren't shown and the card says "Owned above your organisation —
+  you can assign it, but not change it." The server refuses them regardless, with Access Denied.
 - **Assigning** any active lens set, and removing an assignment, is open to any admin who reaches
   the screen, but only for orgs within their own scope (`PresetCatalogue.AssignInScope`).
-- The lens-strength coating grid below is a single global setting, not per lens set, so it stays
-  under `PresetCatalogue.Manage`.
 
 - **Create lens set** / **Edit** — a modal with two fields: `Name` (required, ≤ 200, and
   **unique among active lens sets**, ignoring case — "A lens set with this name already
   exists."; a retired lens set's name is free) and `Description` (≤ 500). The old free-text
-  "Diopter / strength range" was removed (2026-09-26): nothing read it, the device never saw it,
-  and the lens roster on the same card already states the range exactly. On create, the owning org
+  diopter-range field was removed (2026-09-26): nothing read it, the device never saw it, and the
+  lens table on the same card already states the range exactly. On create, the owning org
   is chosen from the caller's own DGI-or-Country-level assignments: an **"Owning org"** select
   appears in the modal only when the caller qualifies through more than one such assignment; with
   exactly one, it's used automatically and the field stays hidden. The server independently
   re-checks that a posted choice is really one of the caller's own DGI/Country assignments,
   refusing anything else.
-- **Add lens** — a dropdown of active `LensStrength` reference items **not already on this
-  catalogue** (both client-filtered and server-guarded — a strength can no longer be added twice).
-  The chosen strength is appended at the end of the catalogue's sort order. A catalogue's lens
-  roster is therefore *"which curated strength labels are included, in what order"* — the actual
-  power and bifocal-ness live in the reference item's own label (e.g. `+2.50`,
-  `+0.00 / +2.50 (Bifocal)`).
-- **Remove lens** (the × on each badge) — a **hard delete**, not a retire. This is safe because no
-  Test, Lead or Sale can reference a lens option that was never chosen on a real transaction.
+- **Add lens** / **Edit** (one dialog, opened from a card's *Add lens* button or a row's *Edit*).
+  It is built the way the online shop's configurator is, with every list read from the lens power
+  values (see *Lens powers* below): *Spherical power* (required), *Cylindrical power* (0.00 first,
+  never positive), *Axis* (enabled only when the cylinder isn't 0.00, and required then), *Add near
+  vision power* (0.00 first, and 0.00 means no add), *Lens type* radios (only with an add above
+  0.00; "Other" reveals a text box, ≤ 200), a **Label** shown to technicians (required, ≤ 100, and
+  **unique within the set**, ignoring case), the **coatings** the lens comes in (at least one, each
+  an active Coating; the global exclusions are listed as a note) and any number of **pairings**
+  ("ticking the first coating adds the second, which then can't be unticked" — both must be ticked
+  for this lens, not the same coating, not listed twice, and not forbidden by a global exclusion).
+  No other lens in the set may have the same power **and** lens type; the same power can appear
+  again with a different lens type. Every problem is reported at once, next to its own field, with
+  the dialog reopened on what the admin typed; a save that passes returns to the screen with
+  `Lens "X" added.` or `Lens "X" saved.` A lens with no add shows "single vision" and takes no
+  lens type. Editing a lens removed since the page loaded is refused with a sentence, not an
+  error page; editing a lens through another lens set's id is Access Denied. The server owns
+  these checks (the same lens power rules a Custom prescription is held to); the dialog's script
+  only keeps the controls consistent.
+- **Remove lens** (a row's *Remove*, after a confirmation) — a **hard delete** of the lens and its
+  coatings and pairings, not a retire. Records never point at a lens — each keeps its own copy of
+  the power it was sold with — so no history is touched.
 - **Retire** (in the Edit modal, with a confirmation) — a soft delete. The lens set stops being
   offered in the Field App (from its next reference-data refresh) and in the assign form, and a
   hand-built assign POST is refused. Its **assignments are kept**. Records that used it still show
@@ -499,20 +548,34 @@ per-catalogue role: every non-empty lens set assigned at or above a retail point
 Each selected catalogue produces one assignment; re-assigning an existing pair is a silent no-op.
 **Assignment cascades downward** — assigning to an Intermediate makes the catalogue available to
 every Retail Point beneath it. Each assignment can be individually removed from the catalogue
-card's assigned-orgs list.
+card's assigned-orgs list. A successful assign returns to the screen with a green confirmation
+("Lens set assigned." or "N lens sets assigned.").
 
-**Lens strength coating availability** — a grid with active lens strengths as rows and active
-coatings as columns. Each cell is a checkbox recording "this strength can be sold in this
-coating"; check/uncheck any number of cells and click Save to submit every change in one request
-(no reload per cell). This grid directly drives the Field App: a technician choosing a preset lens is
-offered exactly the coatings ticked here, and a strength with **no** coatings ticked cannot be
-sold on a preset range at all — the Field App shows an explanatory message instead of an empty
-dropdown, and the API rejects the sale. If no active Coating reference items exist, the whole grid
-is replaced with a pointer to the Reference Data screen.
+**Coatings and pairings live on the lens.** There is no global coating grid and no global pairing
+list. A technician choosing lenses from a set is offered only the coatings **both** chosen lenses
+come in, and both lenses' pairings apply (§5.6). A lens with **no** coating can't be sold on a lens
+set at all — the Add lens dialog requires one, and the API rejects a sale on a lens with none.
+Exclusions are the one global coating rule (Reference Data, §4.8) and apply everywhere, including
+a Custom prescription; saving a pairing an exclusion forbids is refused, and so is adding an
+exclusion a lens's pairing contradicts.
+
+**Lens powers** (`/Catalogues/LensPowers`, reached from the header button; same policy as the
+rest of the screen) — a read-only page listing every value a lens power can take (sphere,
+cylinder, axis, add) and the validity rules (axis only with a cylinder; lens type only with an
+add). It renders straight off the definition the Field App, the Admin Portal and the server all
+share (`LensPowerValues`), so it can never disagree with them. The values are copied from the DOT
+Glasses online shop and change only with a release: sphere -10.00 to +10.00, cylinder 0.00 to
+-6.00, add 0.00 to +3.00, all in 0.25 steps; axis 0–180 whole degrees.
+
+**What ships.** Production and staging have **no active lens sets** until DGI builds them on this
+screen: the lens-set redesign retired every earlier set and removed the old lens list, and no
+lens set is ever created by a migration. Development and the test hosts get two example sets (a
+"6-Lens Set" and a "9-Lens Set", DGI-owned and assigned to Kenya) so the screens have something to
+show.
 
 **Not built**
 - No delete or archive of a catalogue.
-- No reordering of lenses within a catalogue.
+- No reordering of lenses within a catalogue — the display order is fixed.
 - Catalogues cannot be assigned to Country or DGI nodes from this screen (only Intermediate and
   Retail Point), even though the seeded assignments are at Country level and the cascade logic
   supports it.
@@ -586,11 +649,18 @@ Seven category cards in a fixed display order, each with an explanatory scope no
 |---|---|
 | Reasons not purchased | Field App Lead form (required) |
 | Referral reasons | Field App Test form when outcome is *Referred* |
-| Coatings & tints | Lead coating preference, Sale coating, and the Lens Sets availability grid |
+| Coatings & tints | Lead coating preference and Sale coating, and the coatings each lens set lens is ticked for on Lens Sets |
 | Frame colors | Sale frame-colour swatches |
 | Hard case colors | Sale, when a hard case is sold |
 | Occupations | Optional on Test, Lead and Sale |
-| Lens strengths | Building preset catalogue rosters |
+| Lens types | Bifocal / Progressive / Other, asked when a lens has an add — on a Custom prescription and on a lens set lens alike |
+
+There is no Lens strengths card and no Pairings section: a lens set lens is a lens power with its
+own label, coatings and pairings, all set on Lens Sets (§4.6). The **Coatings & tints** card also
+carries **Exclusions (can never be selected together)** — pairs of coatings that no record may
+hold together, added and removed here and enforced everywhere, on a lens set and on a Custom
+prescription alike. Adding an exclusion is refused if a lens set lens pairs those two coatings
+("Can't add this exclusion — a lens in a lens set pairs these two coatings."). None ship.
 
 **Each card shows** its active options as chips — with a circular 18px thumbnail where an image URL
 is set, on the Frame colors card only — each carrying a **pencil icon to edit** (label and image
@@ -617,13 +687,8 @@ one-per-category rule.
 
 **Out of the box** the system seeds: 12 Occupations, 9 Reasons not purchased, 6 Referral reasons,
 5 Coatings (Photochromic, Clear, Blue block, Polarized, Sunglasses), 7 Frame colors, 3 Hard case
-colors, and 16 Lens strengths (12 standard plus 4 bifocal). Each of the first six categories except
-Coatings ships with an "Other" row.
-
-Only the four bifocal lens strengths ship with a coating configured (Photochromic). **The other
-twelve strengths have no coatings configured and are therefore unsellable on a preset range** until
-someone ticks a box on the Lens Sets grid (tracked in `open-issues.md`). This is visible
-rather than silent — the Field App tells the technician the lens has no coatings configured.
+colors, and 3 Lens types (Bifocal, Progressive, Other). Every category except Coatings ships with
+an "Other" row.
 
 **Not built**
 - No hard delete for a mistyped entry (edit covers a mislabel; retire covers removal).
@@ -738,8 +803,12 @@ field from the originally-queued payload.
 Client-side validation as above. Fields: Age, Gender, **Full name**, **Phone number**, Occupation
 (optional), a consent checkbox ("Customer consents to be contacted by DOT Glasses for
 follow-ups/marketing"), **Reason not purchased** (reference dropdown + Other free-text), the
-shared **lens range selector** with "No preference yet" permitted, and — only when the chosen
-range is *not* a preset — **Coating preference (optional)**.
+shared **lens range selector** with "No preference yet" permitted, and **Coating preference
+(optional)**, a radio group with "No preference" first. On a lens set it lists only the coatings
+both chosen lenses come in (nothing until both eyes have a lens); on a Custom prescription, or
+with no range, every active coating. A preference the chosen lenses don't offer is refused by the
+server against `CoatingPreferenceRefId`, and choosing different lenses clears one that's no longer
+offered.
 
 Server rules: full name required (≤ 200), phone required (≤ 32), reason not purchased must be an
 active option with its free text present if Other, age 0–120, and if a `sourceTestId` is carried
@@ -765,8 +834,10 @@ preference" option — a Sale must always have a range.
 **Two ways a Sale gets linked to a Lead** (`SourceLeadId`):
 - **Opened from the Leads worklist** (`/leads`, see 5.7a) via `?sourceLeadId=…` — every field the
   Lead actually captured (name, phone, age, gender, occupation, consent, lens/prescription
-  preference if any) pre-fills. Frame colour, coating, hard case and "order from DOT Glasses"
-  still need filling in fresh — a Lead has no equivalent fields for any of those.
+  preference if any, and its coating preference as the Sale's coating) pre-fills. A Lead's lens is
+  found in the set again by matching its power and lens type; one that is no longer there is left
+  unchosen under a note (§5.6). Frame colour, hard case and "order from DOT Glasses" still need
+  filling in fresh — a Lead has no equivalent fields for any of those.
 - **Automatic match prompt** — for a fresh Sale (not already opened from a specific Lead), the app
   checks once per form visit whether the entered name + phone matches an existing open Lead. If it
   does, a card appears before the price-confirmation step: *"Existing lead found — `<name>` already
@@ -774,12 +845,12 @@ preference" option — a Sale must always have a range.
   record?"* — accepting sets `SourceLeadId` and proceeds; declining continues as an ordinary
   unlinked Sale and doesn't ask again on that visit.
 
-**When the range is Custom**, two extra controls appear:
+The **Coating** list follows the lens range (5.6): a lens set offers the coatings both chosen lenses
+come in, a Custom prescription offers **every** active coating. **When the range is Custom**, one
+more control appears, last in the lens section:
 - *"Order this lens from DOT Glasses (outlet doesn't have stock)"* — a checkbox. Ticking it is what
   creates a Custom Order: the sale is stamped *Submitted* and appears in the Admin Portal queue.
   Server-rejected if the range is not Custom.
-- *Coating* — a dropdown of **all** active coatings (a preset range instead gets a restricted list
-  from the lens range selector; see 5.6).
 
 Then, for every sale:
 - **Frame colour** — a row of circular colour swatches, one per active Frame colour reference item.
@@ -794,10 +865,13 @@ Then, for every sale:
 column and the request field remain, and every Sale records the Full frame default; existing
 records read back unchanged.
 
-A coating is **always required** on a Sale. For a preset range it must be one the admin has ticked
-as available for the chosen *left eye* lens's strength; for Custom, any active coating is
-accepted. Note the documented simplification: one coating column exists for both eyes, resolved
-against the left eye's configuration.
+A coating is **always required** on a Sale, and a Sale has **one coating set for the pair**, not one
+per eye. On a lens set every coating in it must be one both chosen lenses come in, and both
+lenses' pairings must hold (choosing a coating that one lens pairs with another requires the
+other — "`<Paired>` comes with `<Trigger>` on these lenses — add `<Paired>`, or remove
+`<Trigger>`."); exclusions apply too. For Custom, any active coating is accepted, no pairing
+applies, and exclusions still do. A pair on which no coating can be made is refused against the
+right eye's lens.
 
 Submitting shows the same price-awareness confirmation as a Lead. A Sale opened via
 `?fixOutboxId=` pre-fills from the originally-queued payload, same as Test/Lead.
@@ -830,23 +904,54 @@ and asks "Choose a lens range." if it is left empty. A Lead whose lens set no lo
 retail point gets the same choice, under a note naming the lens set and saying it isn't available
 there any more; its other lens preferences don't carry over either, since they belonged to that set.
 
-**Lens set** →
-- *Lens power — left eye* and *— right eye*: selects listing the catalogue's lens options in sort
-  order.
-- *Pupil distance (0–4)*: a coarse frame-fit bucket, **not** millimetres. Drops to 0–2 when the
-  children's-frame box is ticked, and a previously chosen out-of-range value is cleared.
-- *Coating*: appears once a left lens is chosen, listing **only** the coatings configured for that
-  lens strength. If none are configured it is replaced by: "No coatings are configured for this
-  lens yet — it can't be sold on a lens set until DGI configures one in Reference Data."
-  Changing the left lens clears any coating already picked.
+**Lens set** → in this order:
+- *Same lens for both eyes* (ticked to start) with one **Lens** dropdown; or unticked, *Lens — left
+  eye* and *Lens — right eye*. Lenses are listed by their label in the fixed display order (single
+  vision by sphere, then Bifocal, Progressive and Other by add, then sphere), and the chosen lens's
+  power reads underneath (`SPH +2.50 · CYL -0.75 × 90 · ADD +2.00`, only the parts it has) so a
+  vague label can be checked against what is behind it. A pair has **one lens type**: once the
+  left lens is chosen the right dropdown lists only lenses of its type ("Only lenses of the left
+  eye's lens type are listed."), changing the left to another type empties a right lens that no
+  longer fits, and re-ticking "Same lens" copies the left lens across. Choosing a lens records its
+  power on each eye (and the pair's lens type) — the record never holds the lens itself, so the
+  admin later editing or removing that lens changes nothing already recorded.
+- *Children's frame*, then *Pupil distance (0–4)*: a coarse frame-fit bucket, **not** millimetres.
+  Drops to 0–2 when the children's-frame box is ticked, and a previously chosen out-of-range value
+  is cleared.
+- *Coating* (a Sale) or *Coating preference* (a Test or Lead): nothing is listed until both eyes
+  have a lens; then **only the coatings both lenses come in** — a coating whose paired coating one
+  lens lacks is left out, since it could never be sold. A coating a chosen lens pairs with a ticked
+  one is ticked with it and locked ("Comes with `<trigger>` on this lens") while that one stays
+  ticked (a pairing that runs both ways never locks); a coating an exclusion forbids with a ticked
+  one is disabled ("Can't be combined with `<coating>`"). If the pair offers nothing: "No coating
+  can be made on both of these lenses, so they can't be sold together. Choose different lenses." A
+  chosen lens with no coatings at all says "No coatings are configured for this lens yet — it can't
+  be sold on a lens set until DGI adds one on Lens Sets." Changing either lens (or the same-lens
+  box) keeps the coatings the new pair still offers and unticks the rest, saying "Removed `<names>`
+  — not available on the lens you've now chosen."
+- **A lens from a converted Lead or a Failed record** is found again by its power and lens type.
+  One no longer in the set is left unchosen with "The `<power>` on this `<Lead / record>` is no
+  longer in `<set>`. Choose a lens." and saving without choosing is refused against the dropdown.
+- **The server enforces the same choices** on every Test, Lead and Sale naming a lens set, keyed
+  on the fields the form shows: an eye with no lens ("Choose a lens for the left eye.", keyed on
+  `SphereLeft`; `SphereRight` likewise), a power that is in no lens of the set ("No lens in this
+  lens set has the left eye's lens power — choose a lens."), a pair with no shared lens type
+  (against `SphereRight`) or a lens type other than the pair's (`LensTypeRefId`). The record is
+  stored with the same fields a Custom prescription fills.
 
-**Custom range** → per eye (left and right):
-- *Sphere*: a select from −10.00 to +10.00 in 0.25 steps.
-- *Cylinder*: a select from −6.00 to +0.25 in 0.25 steps.
-- *Axis*: a number input, whole degrees 0–180.
-- *Add power*: a select from +0.00 to +3.00 in 0.25 steps.
+**Custom range** → per eye (left and right), each a dropdown of the shop's values in the shop's
+order (`LensPowerValues`, the definition the Lens powers page shows):
+- *Sphere*: −10.00 to +10.00 in 0.25 steps, 0.00 first. Required for both eyes.
+- *Cylinder*: 0.00 first, then −6.00 to −0.25 in 0.25 steps; there is no positive cylinder.
+- *Axis*: whole degrees 0–180. It appears **only while that eye has a cylinder** and is cleared when
+  the cylinder goes back to 0.00; the server refuses an axis without a cylinder and a cylinder
+  without an axis.
+- *Add power*: 0.00 to +3.00 in 0.25 steps. A 0.00 add is no add.
+- *Lens type*: **Bifocal / Progressive / Other** radios (Other reveals a text box), shown only when
+  an add above 0.00 is chosen and cleared when it is removed. A lens with no add is single vision
+  and is never asked.
 
-Plus *Pupil distance (mm, 54–74)* — a select of whole millimetres. Both sphere values are required.
+Plus *Pupil distance (mm, 54–74)* — a select of whole millimetres.
 
 All of these constraints are enforced twice: as generated dropdown ranges client-side, and
 independently server-side (values outside range, or off the 0.25 increment, are rejected with a
@@ -947,6 +1052,13 @@ capability shipped) it names no location at all. `/failed-records` shows the mat
 "Choose a retail point before recording.") rather than a generic failure — the same reasons the
 create endpoints refuse a live submission (§7).
 
+**A lens-set record queued before the lens power redesign is rejected, not lost.** It names a lens by
+Id, which the server no longer reads, and a set the redesign retired; it lands on `/failed-records`
+against the lens dropdowns. A Custom record queued under the old field names (`customSphereLeft`,
+…) is still read correctly — the server and the Failed-records reload accept the eight old names as
+aliases. A device whose offline cache predates the new lens shape has its lens sets dropped on an
+offline load, rather than showing zero-power lenses, until its next online refresh.
+
 **Sign-out and location-switching are both blocked while anything is queued**, with an inline
 explanation — the API stamps `TechnicianUserId`/`HierarchyPath` from the JWT presented **at sync
 time**, not when the record was created, so draining the queue under a different identity would
@@ -975,7 +1087,8 @@ Versioned at `v1`, with Swagger exposed in development only.
 | `GET /api/v1/leads/match?fullName=&phoneNumber=` | JWT | Any authenticated user | An open Lead matching the given name+phone, or 204 — backs the Sale form's automatic conversion prompt. |
 | `GET/POST /api/v1/sales`, `/api/v1/sales/{id}` | JWT | Any authenticated user | As above. `SourceLeadId` on create atomically links and marks the source Lead converted; a second attempt against an already-converted Lead is rejected, as is one naming a Lead the caller can't see. |
 | `GET /api/v1/reference-data` | JWT | Any authenticated user | All **active** reference items across all categories. Not hierarchy-scoped. |
-| `GET /api/v1/preset-catalogues` | JWT | Any authenticated user | Catalogues assigned at or above the caller's current location, with each lens's available coatings — non-empty lens sets only, alphabetically. Empty list (not a 400) if the caller has no valid current location. |
+| `GET /api/v1/preset-catalogues` | JWT | Any authenticated user | Lens sets assigned at or above the caller's current location — non-empty ones only, alphabetically, each with its lenses in the fixed display order. A lens carries its `Label`, its lens power (`Sphere`, `Cylinder`, `Axis`, `Add`), `LensTypeRefId`/`LensTypeOtherText` (null lens type is single vision), the `CoatingIds` it comes in and its own `Pairings` (`TriggerCoatingRefId` → `PairedCoatingRefId`). Empty list (not a 400) if the caller has no valid current location. |
+| `GET /api/v1/reference-data/coating-rules` | JWT | Any authenticated user | The global coating exclusions (pairs of coatings that can never be selected together). Fetched and cached alongside the reference data so the rule holds offline. There are no global pairings — each lens carries its own. |
 | `POST /api/v1/client-logs` | JWT | Any authenticated user | Accepts a batch of client log entries with a correlation ID; writes them to the server log. |
 
 **Capabilities reachable through the API that no UI exposes:**
