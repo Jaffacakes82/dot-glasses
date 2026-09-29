@@ -175,9 +175,27 @@ machine" rule.
   renamed two of them) and left "Other" in place without comment, which is weak evidence rather than
   confirmation. Still worth an explicit yes/no next time the Reference Data screen is reviewed.
 - **A pairing that runs both ways on one lens (A → B and B → A) is allowed by the Add lens
-  dialog**, but the Field App never locks either coating — they'd hold each other ticked forever —
-  so a technician who unticks one is told by the server rule what is missing. Harmless; if it ever
-  confuses anyone, the honest fix is for the dialog to refuse it.
+  dialog**, but neither the Field App nor the Admin Portal's lead conversion ever locks either
+  coating (`PairedCoatings`) — they'd hold each other ticked forever — so a user who unticks one is
+  told by the server rule what is missing. Harmless; if it ever confuses anyone, the honest fix is
+  for the dialog to refuse it.
+- **Two pairings on one trigger whose paired coatings exclude each other both pass the Add lens
+  dialog**, because exclusions are checked against each pairing on its own — so "A → B" and
+  "A → C" with B and C excluding each other are both accepted, and A can then never be sold (any
+  set holding A needs both B and C). Nothing is lost — the Field App offers A and the server says
+  why it's refused — but the dialog should refuse the second pairing.
+
+## Code-level debts (behaviour is right; the shape isn't)
+
+- **Each eye's lens power travels as loose positional parameters** — `sphereLeft, cylinderLeft,
+  axisLeft, addLeft, sphereRight, …` through `ConsultationRules`, `LensSetLenses.SameLens`,
+  `SaleAnswers.WithLens` and the three services (a Data Clump). `LensPairPowers` already names the
+  shape; passing it (or a per-eye value) instead would make a swapped argument a compile error
+  rather than a silent bug. Not done in the lens power work to keep the change reviewable.
+- **The Lens powers page's validity rules are hand-written prose**, not read from
+  `LensPowerRules`. The value lists on the same page come from `LensPowerValues`, so a changed
+  bound shows up there, but a changed rule (say, axis no longer required with a cylinder) would
+  leave the prose stale until someone edits the view.
 
 ---
 
