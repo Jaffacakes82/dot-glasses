@@ -180,6 +180,44 @@ public class LeadConversionLensSetTests(AdminPortalFactory factory) : IClassFixt
     }
 
     [Fact]
+    public async Task ALeadOnAnOtherLensWhoseTextWasEditedSince_ConvertsWithTheLensesCurrentText()
+    {
+        // The Lead's lens still matches by power and lens type, so it carries over as a read-only
+        // summary — but an admin has since edited the lens's "Other" text. The Sale is recorded
+        // from the lens as it is now, not refused on LensTypeOtherText with no field to fix it.
+        var otherLensType = Query(db => db.ReferenceDataItems.Single(x => x.Category == ReferenceDataCategory.LensType && x.IsActive && x.IsOtherOption).Id);
+        var lensSetId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var leadId = Guid.NewGuid();
+        factory.Seed(db =>
+        {
+            db.PresetCatalogues.Add(new PresetCatalogue { Id = lensSetId, Name = $"Other Readers {lensSetId:N}", OwningOrgNodeId = OrganisationSeedConfiguration.DgiId });
+            var lensId = Guid.NewGuid();
+            db.LensOptions.Add(new LensOption { Id = lensId, PresetCatalogueId = lensSetId, Label = "+1.00 / +2.00 Office", Sphere = 1.00m, Add = 2.00m, LensTypeRefId = otherLensType, LensTypeOtherText = "Office (renamed)" });
+            db.LensOptionCoatings.Add(new LensOptionCoating { Id = Guid.NewGuid(), LensOptionId = lensId, CoatingRefId = ReferenceDataSeedConfiguration.CoatingClearId });
+            db.PresetCatalogueAssignments.Add(new PresetCatalogueAssignment { Id = Guid.NewGuid(), PresetCatalogueId = lensSetId, OrgNodeId = OrganisationSeedConfiguration.KenyaRetailerId });
+            db.Customers.Add(new Customer { Id = customerId, FullName = "Njeri Mwangi", PhoneNumber = "+254744000000", HierarchyPath = OrganisationSeedConfiguration.KenyaRetailPointPath });
+            db.Leads.Add(new Lead
+            {
+                Id = leadId, CustomerId = customerId, TechnicianUserId = Guid.NewGuid(), HierarchyPath = OrganisationSeedConfiguration.KenyaRetailPointPath, ConsentGiven = true,
+                LensRangeType = LensRangeType.LensSet, PresetCatalogueId = lensSetId,
+                SphereLeft = 1.00m, AddLeft = 2.00m, SphereRight = 1.00m, AddRight = 2.00m,
+                LensTypeRefId = otherLensType, LensTypeOtherText = "Office", PresetPupilDistanceBucket = 2,
+            });
+        });
+        var client = factory.CreateAdminClient();
+
+        var token = await AdminPortalFactory.GetAntiforgeryTokenAsync(client, $"/Leads/Convert/{leadId}");
+        await AdminPortalFactory.PostAndFollowAsync(client, $"/Leads/Convert/{leadId}", AdminPortalFactory.Form(token,
+            ("Form.ConsentGiven", "true"),
+            ("Form.FrameColourRefId", AFrameColour().ToString()),
+            ("Form.CoatingRefIds", ReferenceDataSeedConfiguration.CoatingClearId.ToString())));
+
+        var sale = Query(db => db.Sales.IgnoreQueryFilters().Single(s => s.SourceLeadId == leadId));
+        Assert.Equal((otherLensType, "Office (renamed)"), (sale.LensTypeRefId!.Value, sale.LensTypeOtherText));
+    }
+
+    [Fact]
     public async Task SubmittingWithNoLensRangeChosenAsksForOne()
     {
         var leadId = SeedLeadWithNoLensPreference();
