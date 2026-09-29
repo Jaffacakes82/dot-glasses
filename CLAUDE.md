@@ -41,7 +41,10 @@ are the record of *how* things got built; don't restate that here.
   becomes what a record stores). The lens-set branch of `ConsultationRules` matches each eye
   through these, and the Field App, the Admin Portal's lead conversion and the Add lens dialog's
   validator call the same helpers — don't restate a bound, a comparison or a coating rule in a
-  view, script or component. `LensPowerValues.FormatPower` is the one display format.
+  view, script or component (a script reads what the server rendered from Rules).
+  `LensPowerValues.FormatPower`/`FormatLensPower` are the one display format,
+  `LensSets.PairedCoatings` is what a pairing ticks and locks, and a record stores each eye as
+  `LensPowerRules.Normalise` spells it.
 - **There is no consultation request validator.** `ConsultationRules.Check` holds *every* rule for
   a `Test`/`Lead`/`Sale` create — including the scalar ones (`NotEmpty`, length caps, `IsInEnum`,
   the age range), whose messages are FluentValidation's generated copy reproduced verbatim because
