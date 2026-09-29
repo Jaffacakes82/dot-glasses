@@ -36,6 +36,11 @@ How to hand the tickets in `issues/` here and in `../lens-power-and-lens-sets/is
   **Next:** finish and merge those two, full suite, open Spec A's PR; then B03.
 - 2026-09-28 (later still): both review-fix branches finished and merged; full suite 484 passing.
   Spec A's PR opened to `main`. B03 in progress on `feat/lens-power`.
+- 2026-09-29: Spec B complete. B03–B12 merged into `feat/lens-power` (migrations
+  `ResetLensSetsToLensPowers`, `DropRecordLensOptionIds`), with `feat/multi-org-access` merged in
+  before B12. `/code-review` of Spec B run and its fixes merged; full suite 714 passing. Decision
+  (user): pre-reset lens-set records lose which lens was sold — recorded in ADR-0007. Spec B's PR
+  opened, stacked on Spec A's. Field App manual checklists (A09, B09, B10) still need a human.
 - Follow-ups noted during review, not yet ticketed:
   - The Admin Portal's cookie recheck also runs on static-asset requests (one small query each).
   - Two admins removing a user's last two assignments at once could leave the user with none.
