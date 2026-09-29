@@ -8,12 +8,21 @@
         <span class="dg-crumb">Configuration</span>
         <h1 class="dg-page-title">Lens Sets</h1>
     </div>
-    <button class="dg-btn dg-btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#createCatalogueModal">Create lens set</button>
+    <div style="display:flex; gap:8px;">
+        <a class="dg-btn dg-btn-ghost" asp-action="LensPowers">Lens powers</a>
+        <button class="dg-btn dg-btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#createCatalogueModal">Create lens set</button>
+    </div>
 </div>
 
 <p class="dg-crumb" style="margin-bottom:var(--space-5);">Lens set creation is restricted to DGI/Country-office level — retailers and outlets may only assign what's pushed to them.</p>
 
-@if (!ViewData.ModelState.IsValid)
+@if (TempData["Info"] is string info)
+{
+    <div class="alert alert-success" style="border-radius:var(--radius-md); margin-bottom:var(--space-4);">@info</div>
+}
+
+@* A refused lens is reported inside the Add lens dialog, which reopens on it — not repeated here. *@
+@if (!ViewData.ModelState.IsValid && Model.LensDialog.Reopen is null)
 {
     <div class="alert alert-danger" style="border-radius:var(--radius-md); margin-bottom:var(--space-4);" asp-validation-summary="All"></div>
 }
@@ -70,45 +79,66 @@
                 </div>
             }
 
-            <div style="display:flex; flex-wrap:wrap; gap:6px; margin:var(--space-3) 0;">
-                @if (!catalogue.LensOptions.Any())
-                {
-                    <span style="font-size:13px; color:#999;">No lens options yet.</span>
-                }
-                @foreach (var lensOption in catalogue.LensOptions)
-                {
-                    <span class="dg-badge" style="background:var(--dot-beige); display:inline-flex; align-items:center; gap:6px;">
-                        @lensOption.Label
-                        @if (catalogue.CanEdit)
-                        {
-                            <form asp-action="RemoveLensOption" method="post" style="display:inline;">
-                                <input type="hidden" name="lensOptionId" value="@lensOption.Id" />
-                                <button type="submit" aria-label="Remove @lensOption.Label" style="border:none; background:none; cursor:pointer; padding:0; color:#888; font-size:13px; line-height:1;">&times;</button>
-                            </form>
-                        }
-                    </span>
-                }
-            </div>
-
-            @{
-                var availableStrengths = Model.AllLensStrengths.Where(s => !catalogue.LensOptions.Any(l => l.LensStrengthRefId == s.Id)).ToList();
-            }
-            @if (catalogue.CanEdit && availableStrengths.Any())
+            @if (catalogue.CanEdit)
             {
-                <form asp-action="AddLensOption" method="post" style="display:flex; gap:var(--space-2);">
-                    <input type="hidden" name="CatalogueId" value="@catalogue.Id" />
-                    <select class="form-select" name="LensStrengthRefId" style="flex:1;">
-                        @foreach (var strength in availableStrengths)
-                        {
-                            <option value="@strength.Id">@strength.Label</option>
-                        }
-                    </select>
-                    <button class="dg-btn dg-btn-ghost" style="padding:8px 16px; font-size:13px; white-space:nowrap;" type="submit">Add lens</button>
-                </form>
+                <div style="display:flex; justify-content:flex-end; margin-top:var(--space-3);">
+                    <button class="dg-btn dg-btn-primary" style="padding:6px 14px; font-size:12px;" type="button"
+                            data-lens-add data-catalogue-id="@catalogue.Id" data-catalogue-name="@catalogue.Name">Add lens</button>
+                </div>
             }
-            else if (catalogue.CanEdit)
+            @if (!catalogue.LensOptions.Any())
             {
-                <p style="font-size:12px; color:#999; margin:0;">Every active lens strength is already in this lens set.</p>
+                <p style="font-size:13px; color:#999; margin:var(--space-3) 0;">No lenses yet.</p>
+            }
+            else
+            {
+                @* In the fixed Rules order (LensSetLenses.InDisplayOrder, applied where the snapshot
+                   is built); Edit opens the one Add lens dialog below on this lens. *@
+                <div style="overflow-x:auto; margin:var(--space-3) 0;">
+                    <table class="dg-table" aria-label="Lenses in @catalogue.Name">
+                        <thead>
+                            <tr>
+                                <th>Label</th>
+                                <th>Lens power</th>
+                                <th>Lens type</th>
+                                <th>Coatings</th>
+                                <th>Pairings</th>
+                                @if (catalogue.CanEdit)
+                                {
+                                    <th><span class="visually-hidden">Actions</span></th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var lens in catalogue.LensOptions)
+                            {
+                                <tr>
+                                    <td>@lens.Label</td>
+                                    <td style="white-space:nowrap;">@lens.LensPower</td>
+                                    <td>@lens.LensType</td>
+                                    <td>@string.Join(", ", lens.Coatings)</td>
+                                    <td>@(lens.Pairings.Any() ? string.Join(", ", lens.Pairings) : "—")</td>
+                                    @if (catalogue.CanEdit)
+                                    {
+                                        <td style="white-space:nowrap;">
+                                            <button type="button" class="dg-btn dg-btn-ghost" style="padding:2px 10px; font-size:12px;"
+                                                    data-lens-edit data-catalogue-id="@catalogue.Id" data-catalogue-name="@catalogue.Name"
+                                                    data-lens="@Json.Serialize(lens.Edit).ToString()"
+                                                    aria-label="Edit @lens.Label">Edit</button>
+                                            <form asp-action="RemoveLensOption" method="post" style="display:inline;">
+                                                <input type="hidden" name="lensOptionId" value="@lens.Id" />
+                                                <button type="submit" class="dg-btn dg-btn-ghost" style="padding:2px 10px; font-size:12px;"
+                                                        aria-label="Remove @lens.Label"
+                                                        data-confirm="Remove @lens.Label from @catalogue.Name? Records that used it keep their own copy of the lens."
+                                                        onclick="return confirm(this.dataset.confirm);">Remove</button>
+                                            </form>
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             }
         </div>
 
@@ -152,6 +182,8 @@
         }
     }
 </div>
+
+<partial name="_LensDialog" model="Model.LensDialog" />
 
 @if (Model.RetiredCatalogues.Any())
 {
@@ -208,54 +240,6 @@
     </form>
 </div>
 
-<div class="dg-card">
-    <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin-top:0;">Lens strength coating availability</h3>
-    <p style="font-size:12px; color:var(--text-muted); margin-bottom:var(--space-3);">
-        Which coatings each lens strength can be sold with on a lens set — drives the Field App's
-        coating picker. A strength with no coatings checked can't be sold on a lens set yet.
-    </p>
-    @if (!Model.ActiveCoatings.Any())
-    {
-        <p style="font-size:13px; color:#999;">No active Coating reference-data items exist yet — add some under Reference Data first.</p>
-    }
-    else
-    {
-        <form asp-action="SaveCoatingAvailability" method="post">
-            <div style="overflow-x:auto;">
-                <table class="dg-table">
-                    <thead>
-                        <tr>
-                            <th>Lens strength</th>
-                            @foreach (var coating in Model.ActiveCoatings)
-                            {
-                                <th>@coating.Label</th>
-                            }
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var strength in Model.AllLensStrengths)
-                        {
-                            var available = Model.AvailableCoatingsByLensStrength.GetValueOrDefault(strength.Id, []);
-                            <tr>
-                                <td>@strength.Label</td>
-                                @foreach (var coating in Model.ActiveCoatings)
-                                {
-                                    <td>
-                                        <input type="checkbox" name="Selected" value="@($"{strength.Id}:{coating.Id}")"
-                                               checked="@(available.Contains(coating.Id) ? "checked" : null)"
-                                               aria-label="@coating.Label for @strength.Label" style="width:18px; height:18px; cursor:pointer;" />
-                                    </td>
-                                }
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-            <button class="dg-btn dg-btn-primary" style="margin-top:var(--space-4);" type="submit">Save</button>
-        </form>
-    }
-</div>
-
 <div class="modal fade" id="createCatalogueModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content" style="border-radius:var(--radius-md); border:none;">
@@ -294,3 +278,7 @@
         </div>
     </div>
 </div>
+
+@section Scripts {
+    <script src="~/js/lens-dialog.js" asp-append-version="true"></script>
+}

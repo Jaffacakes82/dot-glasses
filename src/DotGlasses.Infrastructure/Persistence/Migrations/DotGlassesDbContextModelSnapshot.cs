@@ -50,32 +50,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.ToTable("CoatingExclusions", (string)null);
                 });
 
-            modelBuilder.Entity("DotGlasses.Domain.Entities.CoatingPairing", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("PairedCoatingRefId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("TriggerCoatingRefId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PairedCoatingRefId");
-
-                    b.HasIndex("TriggerCoatingRefId");
-
-                    b.HasIndex("TriggerCoatingRefId", "PairedCoatingRefId")
-                        .IsUnique();
-
-                    b.ToTable("CoatingPairings", (string)null);
-                });
-
             modelBuilder.Entity("DotGlasses.Domain.Entities.Customer", b =>
                 {
                     b.Property<Guid>("Id")
@@ -135,8 +109,24 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<decimal?>("AddLeft")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<decimal?>("AddRight")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
                     b.Property<int?>("AgeYears")
                         .HasColumnType("integer");
+
+                    b.Property<decimal?>("AxisLeft")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<decimal?>("AxisRight")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
 
                     b.Property<bool>("ChildrensFrame")
                         .HasColumnType("boolean");
@@ -157,40 +147,16 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<decimal?>("CustomAddPowerLeft")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomAddPowerRight")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomAxisLeft")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomAxisRight")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomCylinderLeft")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomCylinderRight")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomSphereLeft")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomSphereRight")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uuid");
+
+                    b.Property<decimal?>("CylinderLeft")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<decimal?>("CylinderRight")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
 
                     b.Property<DateTimeOffset?>("DeletedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -209,12 +175,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
-
-                    b.Property<Guid?>("LensOptionLeftId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("LensOptionRightId")
-                        .HasColumnType("uuid");
 
                     b.Property<int?>("LensRangeType")
                         .HasColumnType("integer");
@@ -277,6 +237,14 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("SourceTestId")
                         .HasColumnType("uuid");
 
+                    b.Property<decimal?>("SphereLeft")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<decimal?>("SphereRight")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
                     b.Property<Guid>("TechnicianUserId")
                         .HasColumnType("uuid");
 
@@ -299,167 +267,45 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("LensStrengthRefId")
+                    b.Property<decimal?>("Add")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<decimal?>("Axis")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<decimal?>("Cylinder")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("LensTypeOtherText")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid?>("LensTypeRefId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("PresetCatalogueId")
                         .HasColumnType("uuid");
 
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("integer");
+                    b.Property<decimal>("Sphere")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("LensStrengthRefId");
 
                     b.HasIndex("PresetCatalogueId");
 
                     b.ToTable("LensOptions", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("d0000000-0000-0000-0000-000000000001"),
-                            LensStrengthRefId = new Guid("b0000000-0000-0000-0000-000000000044"),
-                            PresetCatalogueId = new Guid("c0000000-0000-0000-0000-000000000001"),
-                            SortOrder = 0
-                        },
-                        new
-                        {
-                            Id = new Guid("d0000000-0000-0000-0000-000000000002"),
-                            LensStrengthRefId = new Guid("b0000000-0000-0000-0000-000000000046"),
-                            PresetCatalogueId = new Guid("c0000000-0000-0000-0000-000000000001"),
-                            SortOrder = 1
-                        },
-                        new
-                        {
-                            Id = new Guid("d0000000-0000-0000-0000-000000000003"),
-                            LensStrengthRefId = new Guid("b0000000-0000-0000-0000-000000000047"),
-                            PresetCatalogueId = new Guid("c0000000-0000-0000-0000-000000000001"),
-                            SortOrder = 2
-                        },
-                        new
-                        {
-                            Id = new Guid("d0000000-0000-0000-0000-000000000004"),
-                            LensStrengthRefId = new Guid("b0000000-0000-0000-0000-000000000049"),
-                            PresetCatalogueId = new Guid("c0000000-0000-0000-0000-000000000001"),
-                            SortOrder = 3
-                        },
-                        new
-                        {
-                            Id = new Guid("d0000000-0000-0000-0000-000000000005"),
-                            LensStrengthRefId = new Guid("b0000000-0000-0000-0000-000000000052"),
-                            PresetCatalogueId = new Guid("c0000000-0000-0000-0000-000000000001"),
-                            SortOrder = 4
-                        },
-                        new
-                        {
-                            Id = new Guid("d0000000-0000-0000-0000-000000000006"),
-                            LensStrengthRefId = new Guid("b0000000-0000-0000-0000-000000000054"),
-                            PresetCatalogueId = new Guid("c0000000-0000-0000-0000-000000000001"),
-                            SortOrder = 5
-                        },
-                        new
-                        {
-                            Id = new Guid("d0000000-0000-0000-0000-000000000007"),
-                            LensStrengthRefId = new Guid("b0000000-0000-0000-0000-000000000056"),
-                            PresetCatalogueId = new Guid("c0000000-0000-0000-0000-000000000001"),
-                            SortOrder = 6
-                        },
-                        new
-                        {
-                            Id = new Guid("d0000000-0000-0000-0000-000000000008"),
-                            LensStrengthRefId = new Guid("b0000000-0000-0000-0000-000000000058"),
-                            PresetCatalogueId = new Guid("c0000000-0000-0000-0000-000000000001"),
-                            SortOrder = 7
-                        },
-                        new
-                        {
-                            Id = new Guid("d0000000-0000-0000-0000-000000000009"),
-                            LensStrengthRefId = new Guid("b0000000-0000-0000-0000-000000000043"),
-                            PresetCatalogueId = new Guid("c0000000-0000-0000-0000-000000000002"),
-                            SortOrder = 0
-                        },
-                        new
-                        {
-                            Id = new Guid("d0000000-0000-0000-0000-000000000010"),
-                            LensStrengthRefId = new Guid("b0000000-0000-0000-0000-000000000045"),
-                            PresetCatalogueId = new Guid("c0000000-0000-0000-0000-000000000002"),
-                            SortOrder = 1
-                        },
-                        new
-                        {
-                            Id = new Guid("d0000000-0000-0000-0000-000000000011"),
-                            LensStrengthRefId = new Guid("b0000000-0000-0000-0000-000000000046"),
-                            PresetCatalogueId = new Guid("c0000000-0000-0000-0000-000000000002"),
-                            SortOrder = 2
-                        },
-                        new
-                        {
-                            Id = new Guid("d0000000-0000-0000-0000-000000000012"),
-                            LensStrengthRefId = new Guid("b0000000-0000-0000-0000-000000000047"),
-                            PresetCatalogueId = new Guid("c0000000-0000-0000-0000-000000000002"),
-                            SortOrder = 3
-                        },
-                        new
-                        {
-                            Id = new Guid("d0000000-0000-0000-0000-000000000013"),
-                            LensStrengthRefId = new Guid("b0000000-0000-0000-0000-000000000048"),
-                            PresetCatalogueId = new Guid("c0000000-0000-0000-0000-000000000002"),
-                            SortOrder = 4
-                        },
-                        new
-                        {
-                            Id = new Guid("d0000000-0000-0000-0000-000000000014"),
-                            LensStrengthRefId = new Guid("b0000000-0000-0000-0000-000000000049"),
-                            PresetCatalogueId = new Guid("c0000000-0000-0000-0000-000000000002"),
-                            SortOrder = 5
-                        },
-                        new
-                        {
-                            Id = new Guid("d0000000-0000-0000-0000-000000000015"),
-                            LensStrengthRefId = new Guid("b0000000-0000-0000-0000-000000000050"),
-                            PresetCatalogueId = new Guid("c0000000-0000-0000-0000-000000000002"),
-                            SortOrder = 6
-                        },
-                        new
-                        {
-                            Id = new Guid("d0000000-0000-0000-0000-000000000016"),
-                            LensStrengthRefId = new Guid("b0000000-0000-0000-0000-000000000051"),
-                            PresetCatalogueId = new Guid("c0000000-0000-0000-0000-000000000002"),
-                            SortOrder = 7
-                        },
-                        new
-                        {
-                            Id = new Guid("d0000000-0000-0000-0000-000000000017"),
-                            LensStrengthRefId = new Guid("b0000000-0000-0000-0000-000000000053"),
-                            PresetCatalogueId = new Guid("c0000000-0000-0000-0000-000000000002"),
-                            SortOrder = 8
-                        },
-                        new
-                        {
-                            Id = new Guid("d0000000-0000-0000-0000-000000000018"),
-                            LensStrengthRefId = new Guid("b0000000-0000-0000-0000-000000000055"),
-                            PresetCatalogueId = new Guid("c0000000-0000-0000-0000-000000000002"),
-                            SortOrder = 9
-                        },
-                        new
-                        {
-                            Id = new Guid("d0000000-0000-0000-0000-000000000019"),
-                            LensStrengthRefId = new Guid("b0000000-0000-0000-0000-000000000057"),
-                            PresetCatalogueId = new Guid("c0000000-0000-0000-0000-000000000002"),
-                            SortOrder = 10
-                        },
-                        new
-                        {
-                            Id = new Guid("d0000000-0000-0000-0000-000000000020"),
-                            LensStrengthRefId = new Guid("b0000000-0000-0000-0000-000000000058"),
-                            PresetCatalogueId = new Guid("c0000000-0000-0000-0000-000000000002"),
-                            SortOrder = 11
-                        });
                 });
 
-            modelBuilder.Entity("DotGlasses.Domain.Entities.LensStrengthCoatingOption", b =>
+            modelBuilder.Entity("DotGlasses.Domain.Entities.LensOptionCoating", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
@@ -467,52 +313,37 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("CoatingRefId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("LensStrengthRefId")
+                    b.Property<Guid>("LensOptionId")
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CoatingRefId");
-
-                    b.HasIndex("LensStrengthRefId");
-
-                    b.HasIndex("LensStrengthRefId", "CoatingRefId")
+                    b.HasIndex("LensOptionId", "CoatingRefId")
                         .IsUnique();
 
-                    b.ToTable("LensStrengthCoatingOptions", (string)null);
+                    b.ToTable("LensOptionCoatings", (string)null);
+                });
 
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("e1000000-0000-0000-0000-000000000001"),
-                            CoatingRefId = new Guid("b0000000-0000-0000-0000-000000000023"),
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            LensStrengthRefId = new Guid("b0000000-0000-0000-0000-000000000055")
-                        },
-                        new
-                        {
-                            Id = new Guid("e1000000-0000-0000-0000-000000000002"),
-                            CoatingRefId = new Guid("b0000000-0000-0000-0000-000000000023"),
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            LensStrengthRefId = new Guid("b0000000-0000-0000-0000-000000000056")
-                        },
-                        new
-                        {
-                            Id = new Guid("e1000000-0000-0000-0000-000000000003"),
-                            CoatingRefId = new Guid("b0000000-0000-0000-0000-000000000023"),
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            LensStrengthRefId = new Guid("b0000000-0000-0000-0000-000000000057")
-                        },
-                        new
-                        {
-                            Id = new Guid("e1000000-0000-0000-0000-000000000004"),
-                            CoatingRefId = new Guid("b0000000-0000-0000-0000-000000000023"),
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            LensStrengthRefId = new Guid("b0000000-0000-0000-0000-000000000058")
-                        });
+            modelBuilder.Entity("DotGlasses.Domain.Entities.LensOptionCoatingPairing", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("LensOptionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PairedCoatingRefId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TriggerCoatingRefId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LensOptionId", "TriggerCoatingRefId", "PairedCoatingRefId")
+                        .IsUnique();
+
+                    b.ToTable("LensOptionCoatingPairings", (string)null);
                 });
 
             modelBuilder.Entity("DotGlasses.Domain.Entities.OrganisationNode", b =>
@@ -670,26 +501,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.HasIndex("OwningOrgNodeId");
 
                     b.ToTable("PresetCatalogues", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("c0000000-0000-0000-0000-000000000001"),
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            Description = "Standard six-option lens range for outlets with local stock.",
-                            IsDeleted = false,
-                            Name = "6-Lens Set",
-                            OwningOrgNodeId = new Guid("a0000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("c0000000-0000-0000-0000-000000000002"),
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            Description = "Extended nine-option lens range for outlets with wider stock.",
-                            IsDeleted = false,
-                            Name = "9-Lens Set",
-                            OwningOrgNodeId = new Guid("a0000000-0000-0000-0000-000000000001")
-                        });
                 });
 
             modelBuilder.Entity("DotGlasses.Domain.Entities.PresetCatalogueAssignment", b =>
@@ -716,22 +527,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("PresetCatalogueAssignments", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("e0000000-0000-0000-0000-000000000001"),
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            OrgNodeId = new Guid("a0000000-0000-0000-0000-000000000002"),
-                            PresetCatalogueId = new Guid("c0000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            Id = new Guid("e0000000-0000-0000-0000-000000000002"),
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            OrgNodeId = new Guid("a0000000-0000-0000-0000-000000000002"),
-                            PresetCatalogueId = new Guid("c0000000-0000-0000-0000-000000000002")
-                        });
                 });
 
             modelBuilder.Entity("DotGlasses.Domain.Entities.ReferenceDataItem", b =>
@@ -1320,198 +1115,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
-                            Id = new Guid("b0000000-0000-0000-0000-000000000043"),
-                            Category = 6,
-                            Code = "plus_3_00",
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            IsActive = true,
-                            IsDeleted = false,
-                            IsOtherOption = false,
-                            Label = "+3.00",
-                            SortOrder = 0
-                        },
-                        new
-                        {
-                            Id = new Guid("b0000000-0000-0000-0000-000000000044"),
-                            Category = 6,
-                            Code = "plus_2_50",
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            IsActive = true,
-                            IsDeleted = false,
-                            IsOtherOption = false,
-                            Label = "+2.50",
-                            SortOrder = 1
-                        },
-                        new
-                        {
-                            Id = new Guid("b0000000-0000-0000-0000-000000000045"),
-                            Category = 6,
-                            Code = "plus_2_00",
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            IsActive = true,
-                            IsDeleted = false,
-                            IsOtherOption = false,
-                            Label = "+2.00",
-                            SortOrder = 2
-                        },
-                        new
-                        {
-                            Id = new Guid("b0000000-0000-0000-0000-000000000046"),
-                            Category = 6,
-                            Code = "plus_1_25",
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            IsActive = true,
-                            IsDeleted = false,
-                            IsOtherOption = false,
-                            Label = "+1.25",
-                            SortOrder = 3
-                        },
-                        new
-                        {
-                            Id = new Guid("b0000000-0000-0000-0000-000000000047"),
-                            Category = 6,
-                            Code = "plus_0_00",
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            IsActive = true,
-                            IsDeleted = false,
-                            IsOtherOption = false,
-                            Label = "+0.00",
-                            SortOrder = 4
-                        },
-                        new
-                        {
-                            Id = new Guid("b0000000-0000-0000-0000-000000000048"),
-                            Category = 6,
-                            Code = "minus_1_00",
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            IsActive = true,
-                            IsDeleted = false,
-                            IsOtherOption = false,
-                            Label = "-1.00",
-                            SortOrder = 5
-                        },
-                        new
-                        {
-                            Id = new Guid("b0000000-0000-0000-0000-000000000049"),
-                            Category = 6,
-                            Code = "minus_1_50",
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            IsActive = true,
-                            IsDeleted = false,
-                            IsOtherOption = false,
-                            Label = "-1.50",
-                            SortOrder = 6
-                        },
-                        new
-                        {
-                            Id = new Guid("b0000000-0000-0000-0000-000000000050"),
-                            Category = 6,
-                            Code = "minus_2_00",
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            IsActive = true,
-                            IsDeleted = false,
-                            IsOtherOption = false,
-                            Label = "-2.00",
-                            SortOrder = 7
-                        },
-                        new
-                        {
-                            Id = new Guid("b0000000-0000-0000-0000-000000000051"),
-                            Category = 6,
-                            Code = "minus_2_50",
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            IsActive = true,
-                            IsDeleted = false,
-                            IsOtherOption = false,
-                            Label = "-2.50",
-                            SortOrder = 8
-                        },
-                        new
-                        {
-                            Id = new Guid("b0000000-0000-0000-0000-000000000052"),
-                            Category = 6,
-                            Code = "minus_3_00",
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            IsActive = true,
-                            IsDeleted = false,
-                            IsOtherOption = false,
-                            Label = "-3.00",
-                            SortOrder = 9
-                        },
-                        new
-                        {
-                            Id = new Guid("b0000000-0000-0000-0000-000000000053"),
-                            Category = 6,
-                            Code = "minus_4_00",
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            IsActive = true,
-                            IsDeleted = false,
-                            IsOtherOption = false,
-                            Label = "-4.00",
-                            SortOrder = 10
-                        },
-                        new
-                        {
-                            Id = new Guid("b0000000-0000-0000-0000-000000000054"),
-                            Category = 6,
-                            Code = "minus_4_50",
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            IsActive = true,
-                            IsDeleted = false,
-                            IsOtherOption = false,
-                            Label = "-4.50",
-                            SortOrder = 11
-                        },
-                        new
-                        {
-                            Id = new Guid("b0000000-0000-0000-0000-000000000055"),
-                            Category = 6,
-                            Code = "bifocal_0_00_3_00",
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            IsActive = true,
-                            IsDeleted = false,
-                            IsOtherOption = false,
-                            Label = "+0.00 / +3.00 (Bifocal)",
-                            SortOrder = 12
-                        },
-                        new
-                        {
-                            Id = new Guid("b0000000-0000-0000-0000-000000000056"),
-                            Category = 6,
-                            Code = "bifocal_0_00_2_50",
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            IsActive = true,
-                            IsDeleted = false,
-                            IsOtherOption = false,
-                            Label = "+0.00 / +2.50 (Bifocal)",
-                            SortOrder = 13
-                        },
-                        new
-                        {
-                            Id = new Guid("b0000000-0000-0000-0000-000000000057"),
-                            Category = 6,
-                            Code = "bifocal_0_00_2_00",
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            IsActive = true,
-                            IsDeleted = false,
-                            IsOtherOption = false,
-                            Label = "+0.00 / +2.00 (Bifocal)",
-                            SortOrder = 14
-                        },
-                        new
-                        {
-                            Id = new Guid("b0000000-0000-0000-0000-000000000058"),
-                            Category = 6,
-                            Code = "bifocal_0_00_1_25",
-                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            IsActive = true,
-                            IsDeleted = false,
-                            IsOtherOption = false,
-                            Label = "+0.00 / +1.25 (Bifocal)",
-                            SortOrder = 15
-                        },
-                        new
-                        {
                             Id = new Guid("b0000000-0000-0000-0000-000000000059"),
                             Category = 7,
                             Code = "bifocal",
@@ -1553,8 +1156,24 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<decimal?>("AddLeft")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<decimal?>("AddRight")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
                     b.Property<int?>("AgeYears")
                         .HasColumnType("integer");
+
+                    b.Property<decimal?>("AxisLeft")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<decimal?>("AxisRight")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
 
                     b.Property<bool>("ChildrensFrame")
                         .HasColumnType("boolean");
@@ -1569,40 +1188,16 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<decimal?>("CustomAddPowerLeft")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomAddPowerRight")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomAxisLeft")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomAxisRight")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomCylinderLeft")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomCylinderRight")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomSphereLeft")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomSphereRight")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uuid");
+
+                    b.Property<decimal?>("CylinderLeft")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<decimal?>("CylinderRight")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
 
                     b.Property<DateTimeOffset?>("DeletedAtUtc")
                         .HasColumnType("timestamp with time zone");
@@ -1644,12 +1239,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
-
-                    b.Property<Guid?>("LensOptionLeftId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("LensOptionRightId")
-                        .HasColumnType("uuid");
 
                     b.Property<int>("LensRangeType")
                         .HasColumnType("integer");
@@ -1705,6 +1294,14 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("SourceLeadId")
                         .HasColumnType("uuid");
 
+                    b.Property<decimal?>("SphereLeft")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<decimal?>("SphereRight")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
                     b.Property<Guid>("TechnicianUserId")
                         .HasColumnType("uuid");
 
@@ -1751,8 +1348,24 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<decimal?>("AddLeft")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<decimal?>("AddRight")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
                     b.Property<int?>("AgeYears")
                         .HasColumnType("integer");
+
+                    b.Property<decimal?>("AxisLeft")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<decimal?>("AxisRight")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
 
                     b.Property<bool>("ChildrensFrame")
                         .HasColumnType("boolean");
@@ -1770,35 +1383,11 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<decimal?>("CustomAddPowerLeft")
+                    b.Property<decimal?>("CylinderLeft")
                         .HasPrecision(5, 2)
                         .HasColumnType("numeric(5,2)");
 
-                    b.Property<decimal?>("CustomAddPowerRight")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomAxisLeft")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomAxisRight")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomCylinderLeft")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomCylinderRight")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomSphereLeft")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<decimal?>("CustomSphereRight")
+                    b.Property<decimal?>("CylinderRight")
                         .HasPrecision(5, 2)
                         .HasColumnType("numeric(5,2)");
 
@@ -1819,12 +1408,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
-
-                    b.Property<Guid?>("LensOptionLeftId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("LensOptionRightId")
-                        .HasColumnType("uuid");
 
                     b.Property<int?>("LensRangeType")
                         .HasColumnType("integer");
@@ -1876,6 +1459,14 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("ReferredOrTreated")
                         .HasColumnType("boolean");
+
+                    b.Property<decimal?>("SphereLeft")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<decimal?>("SphereRight")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
 
                     b.Property<Guid>("TechnicianUserId")
                         .HasColumnType("uuid");
@@ -2133,6 +1724,24 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.HasKey("UserId", "LoginProvider", "Name");
 
                     b.ToTable("AspNetUserTokens", (string)null);
+                });
+
+            modelBuilder.Entity("DotGlasses.Domain.Entities.LensOptionCoating", b =>
+                {
+                    b.HasOne("DotGlasses.Domain.Entities.LensOption", null)
+                        .WithMany()
+                        .HasForeignKey("LensOptionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("DotGlasses.Domain.Entities.LensOptionCoatingPairing", b =>
+                {
+                    b.HasOne("DotGlasses.Domain.Entities.LensOption", null)
+                        .WithMany()
+                        .HasForeignKey("LensOptionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("DotGlasses.Domain.Entities.OrganisationNode", b =>

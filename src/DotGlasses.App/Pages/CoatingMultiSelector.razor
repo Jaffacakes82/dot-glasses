@@ -1,5 +1,8 @@
+@using DotGlasses.App.ReferenceData
 @using DotGlasses.App.Validation
 @using DotGlasses.Contracts.ReferenceData
+@using DotGlasses.Rules.LensSets
+@using DotGlasses.Rules.ReferenceData
 
 <div class="dg-field">
     <label>@Label</label>
@@ -11,10 +14,24 @@
     {
         @foreach (var item in Items.OrderBy(i => i.SortOrder))
         {
+            var lockedBy = PairedCoatings.LockedBy(item.Id, SelectedIds, RequiredPairings);
+            var excludedBy = lockedBy is null && !SelectedIds.Contains(item.Id) ? FindConflict(item.Id, SelectedIds) : null;
             <label style="display:flex; align-items:center; gap:6px; font-weight:normal; margin-bottom:2px;" @key="(item.Id, _toggleVersion)">
-                <input type="checkbox" style="width:auto;" checked="@SelectedIds.Contains(item.Id)" @onchange="e => ToggleAsync(item.Id, e.Value is true)" />
+                <input type="checkbox" style="width:auto;" checked="@SelectedIds.Contains(item.Id)"
+                       disabled="@(lockedBy is not null || excludedBy is not null)"
+                       @onchange="e => ToggleAsync(item.Id, e.Value is true)" />
                 @item.Label
             </label>
+            @if (lockedBy is { } trigger)
+            {
+                @* A paired coating: ticked for the technician and held there while its trigger is
+                   ticked, because the lens is made with it (a Sale without it is refused). *@
+                <p class="dg-lens-hint" style="margin:0 0 4px 22px;">Comes with @LabelFor(trigger) on this lens</p>
+            }
+            else if (excludedBy is { } other)
+            {
+                <p class="dg-lens-hint" style="margin:0 0 4px 22px;">Can't be combined with @LabelFor(other)</p>
+            }
         }
     }
     @if (_conflictMessage is not null)
@@ -35,8 +52,13 @@
     [Parameter, EditorRequired] public IReadOnlyList<Guid> SelectedIds { get; set; } = [];
     [Parameter] public EventCallback<List<Guid>> SelectedIdsChanged { get; set; }
 
-    [Parameter] public IReadOnlyList<CoatingPairingDto> Pairings { get; set; } = [];
     [Parameter] public IReadOnlyList<CoatingExclusionDto> Exclusions { get; set; } = [];
+
+    /// <summary>The chosen lenses' pairings (<c>LensSetLenses.CoatingsFor(...).RequiredPairings</c>):
+    /// ticking a trigger ticks its paired coating too, and the paired coating stays locked, with
+    /// "Comes with &lt;trigger&gt; on this lens", while the trigger is ticked. Empty on a Custom
+    /// prescription, which has no pairings.</summary>
+    [Parameter] public IReadOnlyList<CoatingPairingRule> RequiredPairings { get; set; } = [];
 
     [Parameter] public FormErrors? Errors { get; set; }
     [Parameter] public string Field { get; set; } = "CoatingRefIds";
@@ -59,11 +81,11 @@
     /// <summary>
     /// Checking a coating that would violate an exclusion with something already selected is
     /// blocked outright (never silently resolved by removing the existing pick) — see ADR-0001.
-    /// Checking a valid coating also auto-adds any coating it directionally pairs with, skipping
-    /// (not blocking) any paired target that would itself conflict with the existing set, so the
-    /// user's explicit choice always succeeds even when a convenience auto-add can't be applied.
-    /// Unchecking never cascades — removing a coating that triggered a pairing leaves the
-    /// paired-in coating exactly where it is.
+    /// A coating that conflicts with a ticked one is also disabled in the list, so this block is the
+    /// fallback for what only shows up on ticking: a trigger whose paired coating conflicts with
+    /// another tick. Ticking a trigger ticks its paired coating(s) with it (the lens's own
+    /// pairings, ADR-0007); a locked paired coating is disabled, so it never reaches the untick
+    /// branch.
     /// </summary>
     private async Task ToggleAsync(Guid coatingId, bool isChecked)
     {
@@ -81,13 +103,17 @@
 
             selection.Add(coatingId);
 
-            foreach (var pairedId in Pairings.Where(p => p.TriggerCoatingRefId == coatingId).Select(p => p.PairedCoatingRefId))
+            var withPaired = PairedCoatings.WithPairedCoatings(selection, Items.Select(i => i.Id).ToList(), RequiredPairings);
+            foreach (var pairedId in withPaired.Except(selection))
             {
-                if (!selection.Contains(pairedId) && FindConflict(pairedId, selection) is null)
+                if (FindConflict(pairedId, withPaired.Where(id => id != pairedId).ToList()) is { } pairedConflictId)
                 {
-                    selection.Add(pairedId);
+                    _conflictMessage = $"Can't add \"{LabelFor(coatingId)}\" — it comes with \"{LabelFor(pairedId)}\", which conflicts with \"{LabelFor(pairedConflictId)}\".";
+                    return;
                 }
             }
+
+            selection = withPaired;
         }
         else
         {
@@ -97,7 +123,7 @@
         await SelectedIdsChanged.InvokeAsync(selection);
     }
 
-    private Guid? FindConflict(Guid candidateId, List<Guid> currentSelection)
+    private Guid? FindConflict(Guid candidateId, IReadOnlyCollection<Guid> currentSelection)
     {
         foreach (var existingId in currentSelection)
         {

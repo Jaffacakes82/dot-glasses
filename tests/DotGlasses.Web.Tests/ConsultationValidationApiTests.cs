@@ -124,9 +124,185 @@ public class ConsultationValidationApiTests(CustomWebApplicationFactory factory)
         Assert.DoesNotContain("OrderFromDotGlasses", errors.Keys);
         Assert.Equal("'Frame Coverage' has a range of values which does not include '99'.", errors["FrameCoverage"].Single());
         Assert.Equal(
-            "CustomSphereLeft and CustomSphereRight are required for a Custom LensRangeType.",
+            "SphereLeft and SphereRight are required for a Custom LensRangeType.",
             errors["LensRangeType"].Single());
         Assert.Equal("Choose at least one coating.", errors["CoatingRefIds"].Single());
+    }
+
+    /// <summary>The per-eye lens power fields carry range-neutral names (lens-power ticket 01), and
+    /// a rejection has to come back keyed on them — FormErrors and the Admin Portal's
+    /// Form.{PropertyName} remap key off exactly these strings.</summary>
+    [Fact]
+    public async Task ACustomPrescriptionOutOfRange_IsReportedAgainstTheRangeNeutralFieldNames()
+    {
+        var client = CreateAuthenticatedClient();
+
+        var response = await client.PostAsJsonAsync("api/v1/tests", new CreateTestRequest
+        {
+            Id = Guid.NewGuid(),
+            Gender = Gender.Female,
+            Outcome = TestOutcome.NeedsGlasses,
+            LensRangeType = LensRangeType.Custom,
+            SphereLeft = 10.10m,
+            SphereRight = 0m,
+            CylinderLeft = -0.30m,
+            CylinderRight = -1.00m,
+            AxisRight = 180.5m,
+            AddLeft = 3.25m,
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var errors = await ErrorsAsync(response);
+
+        AssertKeys(["SphereLeft", "CylinderLeft", "AxisRight", "AddLeft", "LensTypeRefId"], errors);
+        Assert.Equal("SphereLeft must be between -10 and 10 in 0.25 increments.", errors["SphereLeft"].Single());
+        Assert.Equal("AxisRight must be a whole number of degrees between 0 and 180.", errors["AxisRight"].Single());
+    }
+
+    /// <summary>
+    /// A device can still hold records queued before the rename: the outbox posts each payload's
+    /// stored JSON as-is, so it arrives spelled sphereLeft and so on. Unknown names are
+    /// ignored by the binder, so without the legacy aliases the prescription would vanish and the
+    /// record be refused for having no spheres. Asserted through a rejection, because a value that
+    /// comes back keyed on SphereLeft is proof the old name was bound to the new property.
+    /// </summary>
+    [Fact]
+    public async Task AQueuedPayloadWithThePreRenameFieldNames_StillBindsItsPrescription()
+    {
+        var client = CreateAuthenticatedClient();
+        var payload = $$"""
+            {
+              "id": "{{Guid.NewGuid()}}",
+              "gender": {{(int)Gender.Female}},
+              "outcome": {{(int)TestOutcome.NeedsGlasses}},
+              "lensRangeType": {{(int)LensRangeType.Custom}},
+              "customSphereLeft": 10.10,
+              "customSphereRight": 0,
+              "customCylinderLeft": -0.30,
+              "customCylinderRight": -1.00,
+              "customAxisRight": 180.5,
+              "customAddPowerLeft": 3.25
+            }
+            """;
+
+        var response = await client.PostAsync("api/v1/tests", new StringContent(payload, System.Text.Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var errors = await ErrorsAsync(response);
+
+        AssertKeys(["SphereLeft", "CylinderLeft", "AxisRight", "AddLeft", "LensTypeRefId"], errors);
+    }
+
+    /// <summary>Allowed values (lens-power ticket 02): the shop sells no positive cylinder. A
+    /// device that queued one before the release lands it on Failed records against the cylinder
+    /// control, which this key is what makes possible.</summary>
+    [Fact]
+    public async Task APositiveCylinder_IsRefusedAgainstThatEyesCylinder()
+    {
+        var client = CreateAuthenticatedClient();
+
+        var response = await client.PostAsJsonAsync("api/v1/tests", CustomTest(test =>
+        {
+            test.CylinderLeft = 0.50m;
+            test.AxisLeft = 90m;
+        }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var errors = await ErrorsAsync(response);
+
+        AssertKeys(["CylinderLeft"], errors);
+        Assert.Equal("CylinderLeft must be between -6 and 0 in 0.25 increments.", errors["CylinderLeft"].Single());
+    }
+
+    /// <summary>Axis (lens-power ticket 02): required with a cylinder, refused without one.</summary>
+    [Fact]
+    public async Task AnAxisThatDisagreesWithItsCylinder_IsRefusedAgainstThatEyesAxis()
+    {
+        var client = CreateAuthenticatedClient();
+
+        var response = await client.PostAsJsonAsync("api/v1/tests", CustomTest(test =>
+        {
+            test.CylinderLeft = -1.25m;
+            test.AxisRight = 45m;
+        }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var errors = await ErrorsAsync(response);
+
+        AssertKeys(["AxisLeft", "AxisRight"], errors);
+        Assert.Equal("AxisLeft is required when CylinderLeft isn't 0.00 — choose an axis from 0 to 180.", errors["AxisLeft"].Single());
+        Assert.Equal("AxisRight must be empty when CylinderRight is 0.00 — an axis only applies to a cylinder.", errors["AxisRight"].Single());
+    }
+
+    /// <summary>Lens type (lens-power ticket 02): an add of 0.00 is no add, so it takes no lens
+    /// type — the shop's behaviour, and the reverse of what the Field App used to ask.</summary>
+    [Fact]
+    public async Task ALensTypeWithAnAddOfZero_IsRefusedAgainstTheLensType()
+    {
+        var client = CreateAuthenticatedClient();
+
+        var response = await client.PostAsJsonAsync("api/v1/tests", CustomTest(test =>
+        {
+            test.AddLeft = 0.00m;
+            test.AddRight = 0.00m;
+            test.LensTypeRefId = Guid.NewGuid();
+        }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var errors = await ErrorsAsync(response);
+
+        AssertKeys(["LensTypeRefId"], errors);
+        Assert.Equal("LensTypeRefId/LensTypeOtherText must be empty unless an add power is set.", errors["LensTypeRefId"].Single());
+    }
+
+    [Fact]
+    public async Task AShopStylePrescription_WithAnAddOfZeroAndNoLensType_IsStored()
+    {
+        var client = CreateAuthenticatedClient();
+
+        var response = await client.PostAsJsonAsync("api/v1/tests", new CreateTestRequest
+        {
+            Id = Guid.NewGuid(),
+            Gender = Gender.Female,
+            Outcome = TestOutcome.NeedsGlasses,
+            LensRangeType = LensRangeType.Custom,
+            SphereLeft = -2.25m,
+            SphereRight = 1.50m,
+            CylinderLeft = -6.00m,
+            AxisLeft = 0m,
+            AddLeft = 0.00m,
+        });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var stored = await response.Content.ReadFromJsonAsync<TestDto>();
+        Assert.Equal(-6.00m, stored!.CylinderLeft);
+        Assert.Equal(0m, stored.AxisLeft);
+        Assert.Null(stored.LensTypeRefId);
+    }
+
+    /// <summary>A Custom-prescription Test nothing objects to, adjusted by each case to break only
+    /// the rule it is about. A Test rather than a Sale because it carries the same lens fields
+    /// with no frame colour or coating set whose reference data would muddy the exact key
+    /// assertions.</summary>
+    private static CreateTestRequest CustomTest(Action<CreateTestRequest> adjust)
+    {
+        var test = new CreateTestRequest
+        {
+            Id = Guid.NewGuid(),
+            Gender = Gender.Female,
+            Outcome = TestOutcome.NeedsGlasses,
+            LensRangeType = LensRangeType.Custom,
+            SphereLeft = -1.00m,
+            SphereRight = -1.25m,
+        };
+        adjust(test);
+        return test;
     }
 
     /// <summary>The ValidationProblemDetails body as key → messages.</summary>

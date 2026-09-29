@@ -1,15 +1,5 @@
 namespace DotGlasses.Contracts.ReferenceData;
 
-/// <summary>Directional: selecting TriggerCoatingRefId auto-adds PairedCoatingRefId — see
-/// ADR-0001. Fetched/cached by the Field App alongside reference data so the pairing/exclusion
-/// UI works offline.</summary>
-public class CoatingPairingDto
-{
-    public Guid Id { get; set; }
-    public Guid TriggerCoatingRefId { get; set; }
-    public Guid PairedCoatingRefId { get; set; }
-}
-
 /// <summary>Symmetric: CoatingRefIdA and CoatingRefIdB can never both be selected at once — see
 /// ADR-0001.</summary>
 public class CoatingExclusionDto
@@ -19,8 +9,10 @@ public class CoatingExclusionDto
     public Guid CoatingRefIdB { get; set; }
 }
 
+/// <summary>The global coating rules the Field App fetches and caches alongside reference data, so
+/// the coating picker works offline. Exclusions only: pairings left this payload when they moved
+/// onto each lens set lens (ADR-0007, "Coatings") — see LensOptionDto.Pairings.</summary>
 public class CoatingRulesDto
 {
-    public List<CoatingPairingDto> Pairings { get; set; } = [];
     public List<CoatingExclusionDto> Exclusions { get; set; } = [];
 }

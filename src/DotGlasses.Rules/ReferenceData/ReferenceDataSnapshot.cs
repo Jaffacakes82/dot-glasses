@@ -36,18 +36,15 @@ public sealed class ReferenceDataSnapshot
     private readonly Dictionary<Guid, ReferenceItemSnapshot> _itemsById = [];
     private readonly Dictionary<Guid, PresetCatalogueSnapshot> _cataloguesById = [];
     private readonly Dictionary<Guid, LensOptionSnapshot> _lensOptionsById = [];
-    private readonly Dictionary<Guid, Guid> _catalogueIdByLensOptionId = [];
     private readonly HashSet<(Guid Lower, Guid Higher)> _exclusions = [];
 
     public ReferenceDataSnapshot(
         IReadOnlyList<ReferenceItemSnapshot> items,
         IReadOnlyList<PresetCatalogueSnapshot> presetCatalogues,
-        IReadOnlyList<CoatingPairingRule> coatingPairings,
         IReadOnlyList<CoatingExclusionRule> coatingExclusions)
     {
         Items = items;
         PresetCatalogues = presetCatalogues;
-        CoatingPairings = coatingPairings;
         CoatingExclusions = coatingExclusions;
 
         // Indexer assignment rather than ToDictionary: a hand-written test literal that repeats an
@@ -64,7 +61,6 @@ public sealed class ReferenceDataSnapshot
             foreach (var lensOption in catalogue.LensOptions)
             {
                 _lensOptionsById[lensOption.Id] = lensOption;
-                _catalogueIdByLensOptionId[lensOption.Id] = catalogue.Id;
             }
         }
 
@@ -76,13 +72,11 @@ public sealed class ReferenceDataSnapshot
 
     /// <summary>No reference data at all — a caller that has never been online, and a convenient
     /// starting point for a test that only cares about one topic.</summary>
-    public static ReferenceDataSnapshot Empty { get; } = new([], [], [], []);
+    public static ReferenceDataSnapshot Empty { get; } = new([], [], []);
 
     public IReadOnlyList<ReferenceItemSnapshot> Items { get; }
 
     public IReadOnlyList<PresetCatalogueSnapshot> PresetCatalogues { get; }
-
-    public IReadOnlyList<CoatingPairingRule> CoatingPairings { get; }
 
     public IReadOnlyList<CoatingExclusionRule> CoatingExclusions { get; }
 
@@ -99,7 +93,7 @@ public sealed class ReferenceDataSnapshot
     /// placed reaches nothing — see <see cref="ReachesLocation"/>.
     /// </summary>
     public ReferenceDataSnapshot AtLocation(string hierarchyPath) =>
-        new(Items, PresetCatalogues, CoatingPairings, CoatingExclusions) { Location = hierarchyPath };
+        new(Items, PresetCatalogues, CoatingExclusions) { Location = hierarchyPath };
 
     /// <summary>Whether a lens set can be chosen at <see cref="Location"/>: present, active, and
     /// assigned at or above it. The lens sets a retail point is offered, and whether a Lead's lens
@@ -126,7 +120,6 @@ public sealed class ReferenceDataSnapshot
     public static ReferenceDataSnapshot FromCachedReferenceData(
         IReadOnlyList<ReferenceDataItemDto> activeItems,
         IReadOnlyList<PresetCatalogueDto> catalogues,
-        IReadOnlyList<CoatingPairingDto> coatingPairings,
         IReadOnlyList<CoatingExclusionDto> coatingExclusions) =>
         new(
             activeItems.Select(x => new ReferenceItemSnapshot(x.Id, x.Category, x.Label, IsActive: true, x.IsOtherOption)).ToList(),
@@ -134,11 +127,16 @@ public sealed class ReferenceDataSnapshot
                 c.Id,
                 c.Name,
                 IsActive: true,
-                c.LensOptions.Select(l => new LensOptionSnapshot(l.Id, l.Label, l.SortOrder, l.AvailableCoatingIds)).ToList(),
+                // The null guards are for a device's IndexedDB cache, which this code never wrote in
+                // its current shape: a payload that spells a collection out as null would otherwise
+                // throw here, on every form, until the next online load.
+                (c.LensOptions ?? []).Select(l => new LensOptionSnapshot(
+                    l.Id, l.Label, l.Sphere, l.CoatingIds ?? [],
+                    l.Cylinder, l.Axis, l.Add, l.LensTypeRefId, l.LensTypeOtherText,
+                    (l.Pairings ?? []).Select(p => new CoatingPairingRule(p.TriggerCoatingRefId, p.PairedCoatingRefId)).ToList())).ToList(),
                 // Unknown on the device, and not needed: the server sent only the lens sets that
                 // reach this device's retail point.
                 AssignedOrgPaths: null)).ToList(),
-            coatingPairings.Select(p => new CoatingPairingRule(p.TriggerCoatingRefId, p.PairedCoatingRefId)).ToList(),
             coatingExclusions.Select(e => new CoatingExclusionRule(e.CoatingRefIdA, e.CoatingRefIdB)).ToList());
 
     /// <summary>Null if nothing carries this id — including a null id, so a caller holding an
@@ -179,30 +177,16 @@ public sealed class ReferenceDataSnapshot
     public LensOptionSnapshot? FindLensOption(Guid? lensOptionId) =>
         lensOptionId is { } id ? _lensOptionsById.GetValueOrDefault(id) : null;
 
-    /// <summary>A lens option's label is the linked LensStrength item's label, already resolved
-    /// when the snapshot was filled — same <see cref="MissingLabel"/> fallback as everything
-    /// else.</summary>
-    public string ResolveLensOptionLabel(Guid? lensOptionId) =>
-        FindLensOption(lensOptionId)?.Label ?? MissingLabel;
-
-    public bool LensOptionBelongsToCatalogue(Guid lensOptionId, Guid presetCatalogueId) =>
-        _catalogueIdByLensOptionId.TryGetValue(lensOptionId, out var catalogueId) && catalogueId == presetCatalogueId;
-
-    /// <summary>False (never an exception) if the lens option doesn't exist, or its lens strength
-    /// has no coatings configured yet — a real interim state for most non-bifocal strengths, which
-    /// tickets 10/11 report against the lens rather than the Coating set.</summary>
+    /// <summary>Whether this lens set lens comes in this coating — read from the lens's own
+    /// coatings (ADR-0007, "Coatings"). False (never an exception) if the lens doesn't exist or has
+    /// no coatings at all.</summary>
     public bool IsCoatingAvailableForLensOption(Guid lensOptionId, Guid coatingRefId) =>
-        FindLensOption(lensOptionId) is { } lensOption && lensOption.AvailableCoatingIds.Contains(coatingRefId);
+        FindLensOption(lensOptionId) is { } lensOption && lensOption.CoatingIds.Contains(coatingRefId);
 
     /// <summary>Symmetric, per <c>CONTEXT.md</c>'s <b>Coating exclusion</b> — the pair is
     /// canonicalized on the way in and on the way out, so argument order never matters.</summary>
     public bool AreCoatingsExcluded(Guid coatingRefIdA, Guid coatingRefIdB) =>
         _exclusions.Contains(Canonicalize(coatingRefIdA, coatingRefIdB));
-
-    /// <summary>The Coatings a <b>Coating pairing</b> auto-adds when this one is selected.
-    /// Directional, per <c>CONTEXT.md</c>: the reverse selection does not pair back.</summary>
-    public IReadOnlyList<Guid> PairedCoatingsFor(Guid triggerCoatingRefId) =>
-        CoatingPairings.Where(p => p.TriggerCoatingRefId == triggerCoatingRefId).Select(p => p.PairedCoatingRefId).ToList();
 
     /// <summary>Mirrors Domain.Entities.CoatingExclusion.Canonicalize — restated rather than
     /// referenced because Rules must not reference Domain (see this project's csproj).</summary>
@@ -225,12 +209,31 @@ public sealed record PresetCatalogueSnapshot(
     Guid Id, string Name, bool IsActive, IReadOnlyList<LensOptionSnapshot> LensOptions,
     IReadOnlyList<string>? AssignedOrgPaths);
 
-/// <summary>Label is the linked LensStrength reference item's label (e.g. <c>+2.50</c>);
-/// AvailableCoatingIds is which Coatings that strength is sellable in, empty meaning "not
-/// configured yet".</summary>
-public sealed record LensOptionSnapshot(Guid Id, string Label, int SortOrder, IReadOnlyList<Guid> AvailableCoatingIds);
+/// <summary>
+/// One lens in a lens set (ADR-0007): its typed <paramref name="Label"/>, its <b>lens power</b>
+/// (<paramref name="Sphere"/>, <paramref name="Cylinder"/>, <paramref name="Axis"/>,
+/// <paramref name="Add"/>, with the same types and meaning as a record's per-eye fields — see
+/// LensPowerRules), its lens type (null means single vision), the Coatings it comes in, and its own
+/// <b>coating pairings</b>. Everything after the coatings is optional only so that a test about
+/// coatings can leave the rest out.
+/// </summary>
+public sealed record LensOptionSnapshot(
+    Guid Id,
+    string Label,
+    decimal Sphere,
+    IReadOnlyList<Guid> CoatingIds,
+    decimal? Cylinder = null,
+    decimal? Axis = null,
+    decimal? Add = null,
+    Guid? LensTypeRefId = null,
+    string? LensTypeOtherText = null,
+    IReadOnlyList<CoatingPairingRule>? Pairings = null)
+{
+    public IReadOnlyList<CoatingPairingRule> Pairings { get; init; } = Pairings ?? [];
+}
 
-/// <summary>Directional — see <c>CONTEXT.md</c>'s <b>Coating pairing</b>.</summary>
+/// <summary>Directional, and since ADR-0007 carried by one lens set lens rather than global — see
+/// <c>CONTEXT.md</c>'s <b>Coating pairing</b>.</summary>
 public sealed record CoatingPairingRule(Guid TriggerCoatingRefId, Guid PairedCoatingRefId);
 
 /// <summary>Symmetric — see <c>CONTEXT.md</c>'s <b>Coating exclusion</b>.</summary>

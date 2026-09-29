@@ -5,6 +5,7 @@ using DotGlasses.Contracts.Common;
 using DotGlasses.Contracts.Leads;
 using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Entities;
+using DotGlasses.Rules.LensPowers;
 
 namespace DotGlasses.Application.Leads;
 
@@ -81,6 +82,10 @@ public class LeadService(
 
         var customer = await FindOrCreateCustomerAsync(hierarchyPath, request.FullName, request.PhoneNumber, cancellationToken);
 
+        // Stored the way a lens set's lens is (LensPowerRules.Normalise) — see VisionTestService.
+        var left = LensPowerRules.Normalise(request.CylinderLeft, request.AxisLeft, request.AddLeft);
+        var right = LensPowerRules.Normalise(request.CylinderRight, request.AxisRight, request.AddRight);
+
         var entity = new Lead
         {
             Id = request.Id,
@@ -102,16 +107,14 @@ public class LeadService(
             ReasonNotPurchasedOtherText = request.ReasonNotPurchasedOtherText,
             LensRangeType = request.LensRangeType?.ToDomain(),
             PresetCatalogueId = request.PresetCatalogueId,
-            LensOptionLeftId = request.LensOptionLeftId,
-            LensOptionRightId = request.LensOptionRightId,
-            CustomSphereLeft = request.CustomSphereLeft,
-            CustomCylinderLeft = request.CustomCylinderLeft,
-            CustomAxisLeft = request.CustomAxisLeft,
-            CustomAddPowerLeft = request.CustomAddPowerLeft,
-            CustomSphereRight = request.CustomSphereRight,
-            CustomCylinderRight = request.CustomCylinderRight,
-            CustomAxisRight = request.CustomAxisRight,
-            CustomAddPowerRight = request.CustomAddPowerRight,
+            SphereLeft = request.SphereLeft,
+            CylinderLeft = left.Cylinder,
+            AxisLeft = left.Axis,
+            AddLeft = left.Add,
+            SphereRight = request.SphereRight,
+            CylinderRight = right.Cylinder,
+            AxisRight = right.Axis,
+            AddRight = right.Add,
             LensTypeRefId = request.LensTypeRefId,
             LensTypeOtherText = request.LensTypeOtherText,
             PupilDistanceMm = request.PupilDistanceMm,
@@ -202,16 +205,14 @@ public class LeadService(
         ReasonNotPurchasedOtherText = entity.ReasonNotPurchasedOtherText,
         LensRangeType = entity.LensRangeType?.ToContract(),
         PresetCatalogueId = entity.PresetCatalogueId,
-        LensOptionLeftId = entity.LensOptionLeftId,
-        LensOptionRightId = entity.LensOptionRightId,
-        CustomSphereLeft = entity.CustomSphereLeft,
-        CustomCylinderLeft = entity.CustomCylinderLeft,
-        CustomAxisLeft = entity.CustomAxisLeft,
-        CustomAddPowerLeft = entity.CustomAddPowerLeft,
-        CustomSphereRight = entity.CustomSphereRight,
-        CustomCylinderRight = entity.CustomCylinderRight,
-        CustomAxisRight = entity.CustomAxisRight,
-        CustomAddPowerRight = entity.CustomAddPowerRight,
+        SphereLeft = entity.SphereLeft,
+        CylinderLeft = entity.CylinderLeft,
+        AxisLeft = entity.AxisLeft,
+        AddLeft = entity.AddLeft,
+        SphereRight = entity.SphereRight,
+        CylinderRight = entity.CylinderRight,
+        AxisRight = entity.AxisRight,
+        AddRight = entity.AddRight,
         LensTypeRefId = entity.LensTypeRefId,
         LensTypeOtherText = entity.LensTypeOtherText,
         PupilDistanceMm = entity.PupilDistanceMm,

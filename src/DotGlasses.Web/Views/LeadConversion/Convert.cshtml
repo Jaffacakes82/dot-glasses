@@ -1,6 +1,90 @@
 @model DotGlasses.Web.Models.LeadConversionViewModel
+@using DotGlasses.Contracts.Common
+@using DotGlasses.Rules.LensPowers
+@using DotGlasses.Rules.LensRanges
+@using Microsoft.AspNetCore.Html
+@using Microsoft.AspNetCore.Mvc.Rendering
 @{
     ViewData["Title"] = "Convert lead to sale";
+
+    var form = Model.Form;
+
+    // Which half of the lens section shows follows the lens range as it stands — the Lead's, or what
+    // was just posted. The browser script keeps it in step afterwards; without it (see the noscript
+    // style below) every block shows, and the server's rules refuse what doesn't apply.
+    var (rangeType, rangeSetId) = LensRangeChoice.Parse(form.LensRange);
+    var isLensSet = rangeType is LensRangeType.LensSet;
+    var isCustom = rangeType is LensRangeType.Custom;
+    var chosenSet = Model.LensSets.FirstOrDefault(s => s.Id == rangeSetId);
+    var same = form.SameLensForBothEyes;
+    var setLenses = chosenSet?.Lenses ?? [];
+    var leftLens = setLenses.FirstOrDefault(l => l.Id == form.LensLeftId);
+    var rightLens = setLenses.FirstOrDefault(l => l.Id == (same ? form.LensLeftId : form.LensRightId));
+
+    // The right eye is limited to the lenses the left can pair with (LensChoice.PairsWith, from
+    // LensSetLenses.RightEyeChoices) — a pair has one lens type, and a mixed pair can't be sold. A
+    // right lens already chosen stays listed so a refusal has something to point at.
+    var rightChoices = setLenses.Where(l => leftLens is null || leftLens.PairsWith.Contains(l.Id) || l.Id == form.LensRightId).ToList();
+
+    var (tickedCoatings, comesWith) = Model.TickedCoatings();
+    var coatingLabels = Model.Coatings.ToDictionary(c => c.Id, c => c.Label);
+
+    var jsonOptions = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
+    var lensData = System.Text.Json.JsonSerializer.Serialize(
+        Model.LensSets.Select(s => new { id = s.Id, lenses = s.Lenses.Select(l => new { id = l.Id, label = l.Label, power = l.Power, pairsWith = l.PairsWith }) }),
+        jsonOptions);
+    var tickEffectData = System.Text.Json.JsonSerializer.Serialize(Model.TickEffects(), jsonOptions);
+
+    // A lens set's pupil distance buckets (LensPowerValues): each option says whether it is still
+    // allowed with a children's frame, and the label's ceiling is written for both, so the script
+    // only switches between what the server rendered.
+    var adultPdMax = LensPowerValues.MaxPresetPupilDistanceBucket(childrensFrame: false);
+    var childrensPdMax = LensPowerValues.MaxPresetPupilDistanceBucket(childrensFrame: true);
+    var childrensBuckets = LensPowerValues.PresetPupilDistanceBuckets(childrensFrame: true);
+}
+@functions {
+    // One of a Custom prescription's dropdowns, over the shop's value list (LensPowerValues). Option
+    // values use the request culture's own decimal format — the same culture the form binder parses
+    // them back with — and the option is marked selected by comparing the decimals, not the text.
+    // Plain HTML rather than the option tag helper so "selected" is written exactly when it applies.
+    // Role and eye let the script find the cylinder and add dropdowns, which gate the axis and the
+    // lens type; the option that means "none" there (LensPowerRules: a 0.00 cylinder, a 0.00 add)
+    // carries data-none, so the script reads the answer rather than working it out.
+    private IHtmlContent PowerSelect(string name, IEnumerable<decimal> values, decimal? selected, Func<decimal, string> text, string? role = null, string? eye = null, Func<decimal, bool>? none = null)
+    {
+        var html = new System.Text.StringBuilder();
+        var encoder = System.Text.Encodings.Web.HtmlEncoder.Default;
+        html.Append($"<select class=\"form-select\" name=\"{encoder.Encode(name)}\" id=\"{encoder.Encode(name)}\"");
+        if (role is not null)
+        {
+            html.Append($" data-{role}=\"{eye}\"");
+        }
+
+        html.Append("><option value=\"\">—</option>");
+        foreach (var value in values)
+        {
+            html.Append($"<option value=\"{encoder.Encode(value.ToString())}\"{(selected == value ? " selected=\"selected\"" : "")}{(none?.Invoke(value) == true ? " data-none" : "")}>{encoder.Encode(text(value))}</option>");
+        }
+
+        html.Append("</select>");
+        return new HtmlString(html.ToString());
+    }
+
+    // The message for one rule failure, under the control it is about (the Form.{PropertyName}
+    // remap), shown only where the control is on the page for the range the admin submitted.
+    private IHtmlContent ErrorSlot(string key, bool show) =>
+        show ? Html.ValidationMessage(key, new { style = "color:#c00; font-size:12px; display:block;" }) : HtmlString.Empty;
+
+    private static IEnumerable<SelectListItem> PupilDistanceOptions() =>
+        LensPowerValues.PupilDistanceMm.Select(v => new SelectListItem(v.ToString("0.##"), v.ToString()));
+
+    // A bare bool bound to an attribute renders as an HTML boolean attribute whatever its name
+    // (CLAUDE.md, Common pitfalls) — these are explicit strings, or null to drop the attribute.
+    private static string? Hidden(bool hidden) => hidden ? "hidden" : null;
+}
+
+@section Scripts {
+    <script src="~/js/lead-conversion.js" asp-append-version="true"></script>
 }
 
 @await Html.PartialAsync("_PageHeader", new DotGlasses.Web.Models.PageHeaderViewModel
@@ -8,6 +92,10 @@
     Crumb = "Event History",
     Title = "Convert lead to sale",
 })
+
+@* Without the script nothing can show or hide, so every block the script would toggle is shown and
+   the server's rules refuse what doesn't apply. *@
+<noscript><style>.dg-js-toggle[hidden] { display: block !important; }</style></noscript>
 
 @if (!ViewData.ModelState.IsValid)
 {
@@ -31,6 +119,12 @@
             (retired or unassigned since) — choose a lens range below.
         </p>
     }
+    else if (Model.LensNoLongerInSetName is { } lensSetName)
+    {
+        <p style="font-size:13px; color:var(--text-muted-2); margin:8px 0 0;">
+            This lead chose the lens set “@lensSetName” — pick its lens again below.
+        </p>
+    }
     else
     {
         <p style="font-size:13px; color:var(--text-muted-2); margin:8px 0 0;">
@@ -39,90 +133,200 @@
     }
 </div>
 
-<form asp-controller="LeadConversion" asp-action="Convert" asp-route-id="@Model.Lead.Id" method="post" class="dg-card" style="max-width:640px; display:flex; flex-direction:column; gap:var(--space-3);">
+<form asp-controller="LeadConversion" asp-action="Convert" asp-route-id="@Model.Lead.Id" method="post" class="dg-card" style="max-width:640px; display:flex; flex-direction:column; gap:var(--space-3);" data-lens-conversion>
     @Html.AntiForgeryToken()
+    <script type="application/json" data-lens-sets>@Html.Raw(lensData)</script>
 
-    @if (!Model.LensCarriedOver)
-    {
-        <div>
-            <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin:0 0 8px; font-size:15px;">Lens range</h3>
+    @* The lens section, in the Field App's order (ADR-0007): lens range, lens, children's frame, pupil
+       distance, then the coatings and "Order this lens from Dot Glasses" (Custom only, last). *@
+    <div>
+        <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin:0 0 8px; font-size:15px;">Lens</h3>
+
+        @if (!Model.LensCarriedOver)
+        {
             @* The lens sets reaching the Lead's retail point, alphabetically, then Custom — ADR-0005. *@
             <label>Lens range</label>
-            <select class="form-select" asp-for="Form.LensRange">
+            <select class="form-select" asp-for="Form.LensRange" data-range-select>
                 <option value="">— Choose a lens range —</option>
-                @foreach (var catalogue in Model.AvailableCatalogues)
+                @foreach (var lensSet in Model.LensSets)
                 {
-                    <option value="@catalogue.Id">@catalogue.Name</option>
+                    <option value="@lensSet.Id">@lensSet.Name</option>
                 }
-                <option value="@DotGlasses.Rules.LensRanges.LensRangeChoice.Custom">Custom prescription</option>
+                <option value="@LensRangeChoice.Custom">Custom prescription</option>
             </select>
-            @if (Model.AvailableCatalogues.Count == 0)
+            @if (Model.LensSets.Count == 0)
             {
                 <p class="dg-crumb" style="margin-top:4px;">No lens sets are assigned to this lead's retail point — only a Custom prescription can be recorded.</p>
             }
 
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
-                <div>
-                    <label>Lens set pupil distance (0-4)</label>
-                    <input class="form-control" type="number" min="0" max="4" asp-for="Form.PresetPupilDistanceBucket" />
-                </div>
-                <div>
-                    <label>Left lens option</label>
-                    <select class="form-select" asp-for="Form.LensOptionLeftId">
-                        <option value="">—</option>
-                        @foreach (var catalogue in Model.AvailableCatalogues)
+            @* A lens set: "Same lens for both eyes" (ticked to start), one "Lens" dropdown or a left and
+               a right, each with the chosen lens's power underneath. A record holds the lens's power
+               and lens type, never the lens (ADR-0007), so a refusal about a lens comes back keyed on
+               that eye's sphere, and a lens type mismatch on the lens type. *@
+            <div class="dg-js-toggle" data-set-block hidden="@Hidden(!isLensSet)" style="margin-top:8px;">
+                <label style="display:block; margin-bottom:8px;"><input type="checkbox" asp-for="Form.SameLensForBothEyes" data-same-lens style="width:auto; margin-right:6px;" />Same lens for both eyes</label>
+
+                <div data-left-lens-field>
+                    <label data-label-same hidden="@Hidden(!same)">Lens</label>
+                    <label data-label-separate hidden="@Hidden(same)">Lens — left eye</label>
+                    <select class="form-select" asp-for="Form.LensLeftId" data-lens-select="left">
+                        <option value="">Select...</option>
+                        @foreach (var lens in setLenses)
                         {
-                            @foreach (var option in catalogue.LensOptions)
-                            {
-                                <option value="@option.Id">@catalogue.Name — @option.Label</option>
-                            }
+                            <option value="@lens.Id">@lens.Label</option>
                         }
                     </select>
-                </div>
-                <div>
-                    <label>Right lens option</label>
-                    <select class="form-select" asp-for="Form.LensOptionRightId">
-                        <option value="">—</option>
-                        @foreach (var catalogue in Model.AvailableCatalogues)
+                    <p data-power-line="left" style="font-size:12px; color:var(--text-muted-2); margin:4px 0 0;" hidden="@Hidden(leftLens is null)">@leftLens?.Power</p>
+                    @* Both notes are always written — an empty one means "no note" — so the script
+                       switches between them when "Same lens for both eyes" changes. *@
+                    <p data-lens-note="left" data-note-same="@(Model.LensNoteLeft ?? Model.LensNoteRight ?? "")" data-note-separate="@(Model.LensNoteLeft ?? "")" role="status"
+                       style="font-size:12px; color:#c00; margin:4px 0 0;" hidden="@Hidden(leftLens is not null || (same ? Model.LensNoteLeft ?? Model.LensNoteRight : Model.LensNoteLeft) is null)">@(same ? Model.LensNoteLeft ?? Model.LensNoteRight : Model.LensNoteLeft)</p>
+                    @if (isLensSet)
+                    {
+                        <span asp-validation-for="Form.SphereLeft" style="color:#c00; font-size:12px;"></span>
+                        @if (same)
                         {
-                            @foreach (var option in catalogue.LensOptions)
-                            {
-                                <option value="@option.Id">@catalogue.Name — @option.Label</option>
-                            }
+                            <span asp-validation-for="Form.SphereRight" style="color:#c00; font-size:12px;"></span>
+                        }
+                    }
+                </div>
+
+                <div data-right-lens-field class="dg-js-toggle" hidden="@Hidden(same)" style="margin-top:8px;">
+                    <label>Lens — right eye</label>
+                    <select class="form-select" asp-for="Form.LensRightId" data-lens-select="right">
+                        <option value="">Select...</option>
+                        @foreach (var lens in rightChoices)
+                        {
+                            <option value="@lens.Id">@lens.Label</option>
                         }
                     </select>
+                    <p data-right-hint style="font-size:12px; color:var(--text-muted-2); margin:4px 0 0;" hidden="@Hidden(leftLens is null)">Only lenses of the left eye's lens type are listed.</p>
+                    <p data-power-line="right" style="font-size:12px; color:var(--text-muted-2); margin:4px 0 0;" hidden="@Hidden(rightLens is null)">@rightLens?.Power</p>
+                    <p data-lens-note="right" data-note-separate="@(Model.LensNoteRight ?? "")" role="status"
+                       style="font-size:12px; color:#c00; margin:4px 0 0;" hidden="@Hidden(rightLens is not null || Model.LensNoteRight is null)">@Model.LensNoteRight</p>
+                    @if (isLensSet && !same)
+                    {
+                        <span asp-validation-for="Form.SphereRight" style="color:#c00; font-size:12px;"></span>
+                    }
+                </div>
+                @if (isLensSet)
+                {
+                    <span asp-validation-for="Form.LensTypeRefId" style="color:#c00; font-size:12px; display:block;"></span>
+                }
+            </div>
+
+            @* A Custom prescription: the shop's own value lists (LensPowerValues), the axis only with a
+               cylinder, the lens type (radios) only with an add above 0.00. Every field is named as on
+               CreateSaleRequest so a refusal lands against it. *@
+            <div class="dg-js-toggle" data-custom-block hidden="@Hidden(!isCustom)" style="margin-top:8px;">
+                @foreach (var eye in new[] { "Left", "Right" })
+                {
+                    var (sphere, cylinder, axis, add) = eye == "Left"
+                        ? (form.SphereLeft, form.CylinderLeft, form.AxisLeft, form.AddLeft)
+                        : (form.SphereRight, form.CylinderRight, form.AxisRight, form.AddRight);
+                    var lower = eye.ToLowerInvariant();
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8px; margin-bottom:8px;">
+                        <div>
+                            <label>Sphere — @lower</label>
+                            @PowerSelect($"Form.Sphere{eye}", LensPowerValues.Sphere, sphere, LensPowerValues.FormatPower)
+                            @ErrorSlot($"Form.Sphere{eye}", isCustom)
+                        </div>
+                        <div>
+                            <label>Cylinder — @lower</label>
+                            @PowerSelect($"Form.Cylinder{eye}", LensPowerValues.Cylinder, cylinder, LensPowerValues.FormatPower, role: "cylinder", eye: lower, none: v => !LensPowerRules.HasCylinder(v))
+                            @ErrorSlot($"Form.Cylinder{eye}", isCustom)
+                        </div>
+                        <div data-axis-field="@lower" class="dg-js-toggle" hidden="@Hidden(!LensPowerRules.HasCylinder(cylinder) && axis is null)">
+                            <label>Axis — @lower</label>
+                            @PowerSelect($"Form.Axis{eye}", LensPowerValues.Axis, axis, v => v.ToString("0"))
+                            @ErrorSlot($"Form.Axis{eye}", isCustom)
+                        </div>
+                        <div>
+                            <label>Add power — @lower</label>
+                            @PowerSelect($"Form.Add{eye}", LensPowerValues.Add, add, LensPowerValues.FormatPower, role: "add", eye: lower, none: v => !LensPowerRules.HasAdd(v))
+                            @ErrorSlot($"Form.Add{eye}", isCustom)
+                        </div>
+                    </div>
+                }
+
+                @* An add of 0.00 is no add (LensPowerRules.HasAdd), so it doesn't ask for a lens type. *@
+                <div data-lens-type-field class="dg-js-toggle" hidden="@Hidden(!LensPowerRules.HasAdd(form.AddLeft) && !LensPowerRules.HasAdd(form.AddRight) && form.LensTypeRefId is null)">
+                    <label>Lens type</label>
+                    @foreach (var lensType in Model.LensTypes)
+                    {
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="Form.LensTypeRefId" value="@lensType.Id" id="lens-type-@lensType.Id"
+                                   data-other="@(lensType.IsOtherOption ? "true" : "false")"
+                                   checked="@(form.LensTypeRefId == lensType.Id ? "checked" : null)" />
+                            <label class="form-check-label" for="lens-type-@lensType.Id">@lensType.Label</label>
+                        </div>
+                    }
+                    @ErrorSlot("Form.LensTypeRefId", isCustom)
+                    <div data-other-text class="dg-js-toggle" hidden="@Hidden(!Model.LensTypes.Any(t => t.IsOtherOption && t.Id == form.LensTypeRefId))" style="margin-top:4px;">
+                        <label>Lens type — "Other" text</label>
+                        <input class="form-control" asp-for="Form.LensTypeOtherText" />
+                    </div>
                 </div>
             </div>
 
-            <p style="font-size:12px; color:var(--text-muted-2); margin:8px 0 4px;">— or, for a Custom range —</p>
-            <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:8px;">
-                <div><label>Sphere (R)</label><input class="form-control" type="number" step="0.25" asp-for="Form.CustomSphereRight" /></div>
-                <div><label>Cylinder (R)</label><input class="form-control" type="number" step="0.25" asp-for="Form.CustomCylinderRight" /></div>
-                <div><label>Axis (R)</label><input class="form-control" type="number" step="1" asp-for="Form.CustomAxisRight" /></div>
-                <div><label>Add power (R)</label><input class="form-control" type="number" step="0.25" asp-for="Form.CustomAddPowerRight" /></div>
-                <div><label>Sphere (L)</label><input class="form-control" type="number" step="0.25" asp-for="Form.CustomSphereLeft" /></div>
-                <div><label>Cylinder (L)</label><input class="form-control" type="number" step="0.25" asp-for="Form.CustomCylinderLeft" /></div>
-                <div><label>Axis (L)</label><input class="form-control" type="number" step="1" asp-for="Form.CustomAxisLeft" /></div>
-                <div><label>Add power (L)</label><input class="form-control" type="number" step="0.25" asp-for="Form.CustomAddPowerLeft" /></div>
-                <div><label>Pupil distance (mm)</label><input class="form-control" type="number" min="54" max="74" asp-for="Form.PupilDistanceMm" /></div>
-                <div style="display:flex; align-items:flex-end;"><label><input type="checkbox" asp-for="Form.ChildrensFrame" style="width:auto; margin-right:6px;" />Children's frame</label></div>
-                <div>
-                    <label>Lens type (required if an add power is set)</label>
-                    <select class="form-select" asp-for="Form.LensTypeRefId">
-                        <option value="">—</option>
-                        @foreach (var lensType in Model.LensTypes)
-                        {
-                            <option value="@lensType.Id">@lensType.Label</option>
-                        }
-                    </select>
-                </div>
-                <div>
-                    <label>Lens type — "Other" text</label>
-                    <input class="form-control" asp-for="Form.LensTypeOtherText" />
-                </div>
+            <label style="display:block; margin-top:8px;"><input type="checkbox" asp-for="Form.ChildrensFrame" data-childrens-frame style="width:auto; margin-right:6px;" />Children's frame</label>
+
+            <div class="dg-js-toggle" data-set-pd hidden="@Hidden(!isLensSet)" style="margin-top:8px;">
+                <label>Pupil distance (0–<span data-pd-max data-max-adult="@adultPdMax" data-max-childrens="@childrensPdMax">@LensPowerValues.MaxPresetPupilDistanceBucket(form.ChildrensFrame)</span>, 0–@childrensPdMax with a children's frame)</label>
+                <select class="form-select" asp-for="Form.PresetPupilDistanceBucket" data-pd-bucket>
+                    <option value="">Select...</option>
+                    @foreach (var bucket in LensPowerValues.PresetPupilDistanceBuckets(childrensFrame: false))
+                    {
+                        var adultOnly = !childrensBuckets.Contains(bucket);
+                        <option value="@bucket" data-childrens-frame-allows="@(adultOnly ? "false" : "true")" hidden="@Hidden(form.ChildrensFrame && adultOnly)" disabled="@(form.ChildrensFrame && adultOnly ? "disabled" : null)">@bucket</option>
+                    }
+                </select>
+                @if (isLensSet)
+                {
+                    <span asp-validation-for="Form.PresetPupilDistanceBucket" style="color:#c00; font-size:12px;"></span>
+                }
             </div>
+            <div class="dg-js-toggle" data-custom-pd hidden="@Hidden(!isCustom)" style="margin-top:8px;">
+                <label>Pupil distance (mm, @LensPowerValues.PupilDistanceMmRange.Min–@LensPowerValues.PupilDistanceMmRange.Max)</label>
+                <select class="form-select" asp-for="Form.PupilDistanceMm" asp-items="PupilDistanceOptions()"><option value="">Select...</option></select>
+                @if (isCustom)
+                {
+                    <span asp-validation-for="Form.PupilDistanceMm" style="color:#c00; font-size:12px;"></span>
+                }
+            </div>
+        }
+
+        @* Coatings: the ones both chosen lenses come in (LensSetLenses.CoatingsFor — the same rules the
+           server checks with), with a pairing's coating ticked and locked once its trigger is ticked.
+           Every coating is rendered so the script can offer it again after a lens change; one the pair
+           doesn't offer is hidden and disabled. With no pair chosen — Custom, or a lens still to
+           pick — every coating is listed and the server's rules decide on submit. *@
+        <div style="margin-top:12px;" data-coatings data-url="@Url.Action("Coatings", "LeadConversion", new { id = Model.Lead.Id })" data-effects="@tickEffectData"
+             data-none-offered="No coating can be made on both of these lenses, so they can't be sold together on a lens set — choose another lens.">
+            <label>Coating (choose at least one)</label>
+            @foreach (var coating in Model.Coatings)
+            {
+                var offered = Model.OfferedCoatingIds is null || Model.OfferedCoatingIds.Contains(coating.Id);
+                var lockedTo = comesWith.TryGetValue(coating.Id, out var trigger) ? coatingLabels.GetValueOrDefault(trigger) : null;
+                <div class="form-check" data-coating-item data-coating-id="@coating.Id" hidden="@Hidden(!offered)">
+                    <input class="form-check-input" type="checkbox" name="Form.CoatingRefIds" value="@coating.Id" id="coating-@coating.Id"
+                           data-locked="@(lockedTo is null ? "false" : "true")"
+                           checked="@(tickedCoatings.Contains(coating.Id) ? "checked" : null)"
+                           disabled="@(offered ? null : "disabled")" />
+                    <label class="form-check-label" for="coating-@coating.Id">@coating.Label</label>
+                    <span data-lock-note style="font-size:12px; color:var(--text-muted-2); margin-left:6px;" hidden="@Hidden(lockedTo is null)">@(lockedTo is null ? "" : $"Comes with {lockedTo} on this lens")</span>
+                </div>
+            }
+            <p data-coatings-note role="status" style="font-size:12px; color:#c00; margin:4px 0 0;" hidden="@Hidden(Model.CoatingsNote is null)">@Model.CoatingsNote</p>
+            <p data-coatings-removed role="status" style="font-size:12px; color:var(--text-muted-2); margin:4px 0 0;" hidden="hidden"></p>
+            <span asp-validation-for="Form.CoatingRefIds" style="color:#c00; font-size:12px; display:block;"></span>
         </div>
-    }
+
+        @* Last in the lens section. Rendered unconditionally with its condition in the label — the
+           Admin Portal wants ConsultationRules to say "Custom range only" on submit, unlike the Field
+           App, which hides it outside a Custom range (CLAUDE.md: deliberately not unified). *@
+        <label style="display:block; margin-top:12px;"><input type="checkbox" asp-for="Form.OrderFromDotGlasses" style="width:auto; margin-right:6px;" />Order this lens from Dot Glasses (Custom range only)</label>
+    </div>
 
     <div>
         <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin:0 0 8px; font-size:15px;">Sale details</h3>
@@ -130,17 +334,6 @@
         <label><input type="checkbox" asp-for="Form.ConsentGiven" style="width:auto; margin-right:6px;" />Customer consents to be contacted for follow-ups/marketing</label>
 
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
-            <div>
-                <label>Coating (choose at least one)</label>
-                @foreach (var coating in Model.Coatings)
-                {
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" name="Form.CoatingRefIds" value="@coating.Id" id="coating-@coating.Id"
-                               checked="@(Model.Form.CoatingRefIds.Contains(coating.Id) ? "checked" : null)" />
-                        <label class="form-check-label" for="coating-@coating.Id">@coating.Label</label>
-                    </div>
-                }
-            </div>
             <div>
                 <label>Frame colour</label>
                 <select class="form-select" asp-for="Form.FrameColourRefId">
@@ -174,8 +367,6 @@
                 <input class="form-control" asp-for="Form.HardCaseOtherColourText" />
             </div>
         </div>
-
-        <label style="display:block; margin-top:8px;"><input type="checkbox" asp-for="Form.OrderFromDotGlasses" style="width:auto; margin-right:6px;" />Order this lens from Dot Glasses (Custom range only)</label>
     </div>
 
     @* "Referred or treated" — asked here as it is on every other capture path. Every field is

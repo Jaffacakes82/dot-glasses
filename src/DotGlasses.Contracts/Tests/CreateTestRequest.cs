@@ -33,18 +33,19 @@ public class CreateTestRequest
     /// Optional throughout, same shape as Lead's equivalent block.</summary>
     public LensRangeType? LensRangeType { get; set; }
 
+    /// <summary>Which lens set, on a LensSet range. The lenses themselves are the per-eye powers
+    /// and the lens type below, exactly as on a Custom prescription — a record holds no pointer to
+    /// the lens it came from (ADR-0007).</summary>
     public Guid? PresetCatalogueId { get; set; }
-    public Guid? LensOptionLeftId { get; set; }
-    public Guid? LensOptionRightId { get; set; }
 
-    public decimal? CustomSphereLeft { get; set; }
-    public decimal? CustomCylinderLeft { get; set; }
-    public decimal? CustomAxisLeft { get; set; }
-    public decimal? CustomAddPowerLeft { get; set; }
-    public decimal? CustomSphereRight { get; set; }
-    public decimal? CustomCylinderRight { get; set; }
-    public decimal? CustomAxisRight { get; set; }
-    public decimal? CustomAddPowerRight { get; set; }
+    public decimal? SphereLeft { get; set; }
+    public decimal? CylinderLeft { get; set; }
+    public decimal? AxisLeft { get; set; }
+    public decimal? AddLeft { get; set; }
+    public decimal? SphereRight { get; set; }
+    public decimal? CylinderRight { get; set; }
+    public decimal? AxisRight { get; set; }
+    public decimal? AddRight { get; set; }
 
     public Guid? LensTypeRefId { get; set; }
     public string? LensTypeOtherText { get; set; }

@@ -154,11 +154,57 @@ public class SaleAssemblyTests
         var seeded = SaleAssembly.Seed(lead);
 
         Assert.Equal(LensRangeType.Custom, seeded.LensRangeType);
-        Assert.Equal(-1.25m, seeded.CustomSphereLeft);
-        Assert.Equal(-2.75m, seeded.CustomSphereRight);
+        Assert.Equal(-1.25m, seeded.SphereLeft);
+        Assert.Equal(-2.75m, seeded.SphereRight);
         Assert.Equal(LensType, seeded.LensTypeRefId);
         Assert.Equal(62.5m, seeded.PupilDistanceMm);
         Assert.True(seeded.ChildrensFrame);
+    }
+
+    /// <summary>ADR-0007: a lens-set record holds each eye's lens power and one lens type, with no
+    /// pointer to the lens it came from — so what carries over from a lens-set Lead is exactly what
+    /// carries over from a Custom one. Which lens that is in the set is the form's question
+    /// (LensSetLenses.Match), asked at load time, not the seed's.</summary>
+    [Fact]
+    public void Seed_carries_a_lens_set_leads_powers_and_lens_type()
+    {
+        var lensSet = Guid.Parse("00000000-0000-0000-0000-000000000c01");
+        var lead = LeadWithLens();
+        lead.LensRangeType = LensRangeType.LensSet;
+        lead.PresetCatalogueId = lensSet;
+        lead.SphereLeft = 0.00m;
+        lead.CylinderLeft = null;
+        lead.AxisLeft = null;
+        lead.AddLeft = 2.50m;
+        lead.SphereRight = 0.00m;
+        lead.CylinderRight = null;
+        lead.AxisRight = null;
+        lead.AddRight = 2.50m;
+        lead.LensTypeOtherText = null;
+        lead.PupilDistanceMm = null;
+        lead.PresetPupilDistanceBucket = 2;
+
+        var seeded = SaleAssembly.Seed(lead);
+
+        Assert.Equal(LensRangeType.LensSet, seeded.LensRangeType);
+        Assert.Equal(lensSet, seeded.PresetCatalogueId);
+        Assert.Equal((0.00m, (decimal?)null, (decimal?)null, (decimal?)2.50m), (seeded.SphereLeft!.Value, seeded.CylinderLeft, seeded.AxisLeft, seeded.AddLeft));
+        Assert.Equal((0.00m, (decimal?)null, (decimal?)null, (decimal?)2.50m), (seeded.SphereRight!.Value, seeded.CylinderRight, seeded.AxisRight, seeded.AddRight));
+        Assert.Equal(LensType, seeded.LensTypeRefId);
+        Assert.Equal(2, seeded.PresetPupilDistanceBucket);
+
+        var request = SaleAssembly.Build(Guid.NewGuid(), lead.Id, seeded);
+        Assert.Equal(2.50m, request.AddLeft);
+        Assert.Equal(LensType, request.LensTypeRefId);
+    }
+
+    /// <summary>The lens-set lens ids went with ADR-0007 — on the answers as on the request, so
+    /// nothing can carry one over.</summary>
+    [Fact]
+    public void Neither_the_answers_nor_the_request_name_a_lens_by_id()
+    {
+        Assert.DoesNotContain(typeof(SaleAnswers).GetProperties(), p => p.Name.StartsWith("LensOption", StringComparison.Ordinal));
+        Assert.DoesNotContain(typeof(CreateSaleRequest).GetProperties(), p => p.Name.StartsWith("LensOption", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -174,7 +220,7 @@ public class SaleAssemblyTests
         // Not merely the range: the whole block stays unset, so a Lead that half-recorded a
         // prescription cannot leak stray powers into a Sale whose range the form is about to ask for.
         Assert.Null(seeded.LensRangeType);
-        Assert.Null(seeded.CustomSphereLeft);
+        Assert.Null(seeded.SphereLeft);
         Assert.Null(seeded.LensTypeRefId);
         Assert.Null(seeded.PupilDistanceMm);
         Assert.False(seeded.ChildrensFrame);
@@ -375,9 +421,9 @@ public class SaleAssemblyTests
             HardCaseSold = true,
             HardCaseColourRefId = HardCaseColour,
         }.WithLens(
-            seeded.LensRangeType, seeded.PresetCatalogueId, seeded.LensOptionLeftId, seeded.LensOptionRightId,
-            seeded.CustomSphereLeft, seeded.CustomCylinderLeft, seeded.CustomAxisLeft, seeded.CustomAddPowerLeft,
-            seeded.CustomSphereRight, seeded.CustomCylinderRight, seeded.CustomAxisRight, seeded.CustomAddPowerRight,
+            seeded.LensRangeType, seeded.PresetCatalogueId,
+            seeded.SphereLeft, seeded.CylinderLeft, seeded.AxisLeft, seeded.AddLeft,
+            seeded.SphereRight, seeded.CylinderRight, seeded.AxisRight, seeded.AddRight,
             seeded.LensTypeRefId, seeded.LensTypeOtherText,
             seeded.PupilDistanceMm, seeded.PresetPupilDistanceBucket, seeded.ChildrensFrame);
 
@@ -421,7 +467,6 @@ public class SaleAssemblyTests
             HardCaseOtherColourText = "Hard case other",
         }.WithLens(
             LensRangeType.Custom, Guid.Parse("00000000-0000-0000-0000-000000000c01"),
-            Guid.Parse("00000000-0000-0000-0000-000000000c02"), Guid.Parse("00000000-0000-0000-0000-000000000c03"),
             -1.25m, -0.75m, 90m, 2.00m,
             -2.75m, -1.50m, 180m, 2.50m,
             LensType, "Lens type other",
@@ -444,14 +489,14 @@ public class SaleAssemblyTests
         ConsentGiven = true,
         CoatingPreferenceRefId = CoatingPreference,
         LensRangeType = LensRangeType.Custom,
-        CustomSphereLeft = -1.25m,
-        CustomCylinderLeft = -0.75m,
-        CustomAxisLeft = 90m,
-        CustomAddPowerLeft = 2.00m,
-        CustomSphereRight = -2.75m,
-        CustomCylinderRight = -1.50m,
-        CustomAxisRight = 180m,
-        CustomAddPowerRight = 2.50m,
+        SphereLeft = -1.25m,
+        CylinderLeft = -0.75m,
+        AxisLeft = 90m,
+        AddLeft = 2.00m,
+        SphereRight = -2.75m,
+        CylinderRight = -1.50m,
+        AxisRight = 180m,
+        AddRight = 2.50m,
         LensTypeRefId = LensType,
         LensTypeOtherText = "Lens type other",
         PupilDistanceMm = 62.5m,

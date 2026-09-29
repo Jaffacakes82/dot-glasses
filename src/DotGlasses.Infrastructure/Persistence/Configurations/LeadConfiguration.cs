@@ -23,8 +23,8 @@ public class LeadConfiguration : IEntityTypeConfiguration<Lead>
 
         foreach (var propertyName in new[]
                  {
-                     nameof(Lead.CustomSphereLeft), nameof(Lead.CustomCylinderLeft), nameof(Lead.CustomAxisLeft), nameof(Lead.CustomAddPowerLeft),
-                     nameof(Lead.CustomSphereRight), nameof(Lead.CustomCylinderRight), nameof(Lead.CustomAxisRight), nameof(Lead.CustomAddPowerRight),
+                     nameof(Lead.SphereLeft), nameof(Lead.CylinderLeft), nameof(Lead.AxisLeft), nameof(Lead.AddLeft),
+                     nameof(Lead.SphereRight), nameof(Lead.CylinderRight), nameof(Lead.AxisRight), nameof(Lead.AddRight),
                  })
         {
             builder.Property(propertyName).HasPrecision(5, 2);

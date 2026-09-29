@@ -28,12 +28,10 @@ public class ReferenceDataQueryService(DotGlassesDbContext dbContext) : IReferen
 
     public async Task<CoatingRulesDto> GetCoatingRulesAsync(CancellationToken cancellationToken = default)
     {
-        var pairings = await dbContext.CoatingPairings.ToListAsync(cancellationToken);
         var exclusions = await dbContext.CoatingExclusions.ToListAsync(cancellationToken);
 
         return new CoatingRulesDto
         {
-            Pairings = pairings.Select(p => new CoatingPairingDto { Id = p.Id, TriggerCoatingRefId = p.TriggerCoatingRefId, PairedCoatingRefId = p.PairedCoatingRefId }).ToList(),
             Exclusions = exclusions.Select(e => new CoatingExclusionDto { Id = e.Id, CoatingRefIdA = e.CoatingRefIdA, CoatingRefIdB = e.CoatingRefIdB }).ToList(),
         };
     }

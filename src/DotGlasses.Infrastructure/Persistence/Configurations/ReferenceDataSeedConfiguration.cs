@@ -10,7 +10,7 @@ namespace DotGlasses.Infrastructure.Persistence.Configurations;
 /// Point Data Collection" choices export, per the 2026-08-04 decisions:
 ///  - Occupation / ReasonNotPurchased / ReferralReason are taken verbatim from the Kobo
 ///    income_source / why_no_purchase / referral lists (each already includes an "Other" row).
-///  - Coating uses the client's 5-item list from the CEO call, NOT Kobo's 7-item coating_types list
+///  - Coating uses the client's own 5-item list, NOT Kobo's 7-item coating_types list
 ///    (no Antiglare, no separate "None").
 ///  - HardCaseColour is Orange/Green/Other — the actual manufactured colours — NOT Kobo's
 ///    Blue/Pink/Purple/Black (stale legacy data).
@@ -23,29 +23,15 @@ namespace DotGlasses.Infrastructure.Persistence.Configurations;
 /// </summary>
 public class ReferenceDataSeedConfiguration : IEntityTypeConfiguration<ReferenceDataItem>
 {
-    // Exposed for PresetCatalogueSeedConfiguration, which needs to pin each seeded LensOption to
-    // one of these.
+    // Exposed for ExampleLensSets, which gives each example lens its coatings and lens type from
+    // these.
     public static readonly Guid CoatingPhotochromicId = new("b0000000-0000-0000-0000-000000000023");
     public static readonly Guid CoatingClearId = new("b0000000-0000-0000-0000-000000000024");
+    public static readonly Guid CoatingBlueBlockId = new("b0000000-0000-0000-0000-000000000025");
+    public static readonly Guid LensTypeBifocalId = new("b0000000-0000-0000-0000-000000000059");
 
-    // Exposed for PresetCatalogueSeedConfiguration/LensOptionSeedConfiguration, which build each
-    // catalogue's LensOption roster from these.
-    public static readonly Guid LensStrength300Id = new("b0000000-0000-0000-0000-000000000043");
-    public static readonly Guid LensStrength250Id = new("b0000000-0000-0000-0000-000000000044");
-    public static readonly Guid LensStrength200Id = new("b0000000-0000-0000-0000-000000000045");
-    public static readonly Guid LensStrength125Id = new("b0000000-0000-0000-0000-000000000046");
-    public static readonly Guid LensStrength000Id = new("b0000000-0000-0000-0000-000000000047");
-    public static readonly Guid LensStrengthMinus100Id = new("b0000000-0000-0000-0000-000000000048");
-    public static readonly Guid LensStrengthMinus150Id = new("b0000000-0000-0000-0000-000000000049");
-    public static readonly Guid LensStrengthMinus200Id = new("b0000000-0000-0000-0000-000000000050");
-    public static readonly Guid LensStrengthMinus250Id = new("b0000000-0000-0000-0000-000000000051");
-    public static readonly Guid LensStrengthMinus300Id = new("b0000000-0000-0000-0000-000000000052");
-    public static readonly Guid LensStrengthMinus400Id = new("b0000000-0000-0000-0000-000000000053");
-    public static readonly Guid LensStrengthMinus450Id = new("b0000000-0000-0000-0000-000000000054");
-    public static readonly Guid LensStrengthBifocal300Id = new("b0000000-0000-0000-0000-000000000055");
-    public static readonly Guid LensStrengthBifocal250Id = new("b0000000-0000-0000-0000-000000000056");
-    public static readonly Guid LensStrengthBifocal200Id = new("b0000000-0000-0000-0000-000000000057");
-    public static readonly Guid LensStrengthBifocal125Id = new("b0000000-0000-0000-0000-000000000058");
+    // b0000000-…-000000000043 to …-000000000058 were the sixteen "Lens strength" items, deleted
+    // with that category (ADR-0007, migration ResetLensSetsToLensPowers). Don't reuse them.
 
     public void Configure(EntityTypeBuilder<ReferenceDataItem> builder)
     {
@@ -105,13 +91,13 @@ public class ReferenceDataSeedConfiguration : IEntityTypeConfiguration<Reference
         Add(new("b0000000-0000-0000-0000-000000000033"), ReferenceDataCategory.ReferralReason, "young_child", "Child under eligible age without approval from a specialist");
         Add(new("b0000000-0000-0000-0000-000000000034"), ReferenceDataCategory.ReferralReason, "other", "Other", isOther: true);
 
-        // Coating ← the client's 5-item list from the call (not Kobo's 7-item coating_types), plus
+        // Coating ← the client's own 5-item list (not Kobo's 7-item coating_types), plus
         // Anti-glare (2026-09-03, ticket 05/ADR-0001) — seeded with no pairing/exclusion rules
         // of its own.
         sort = 0;
         Add(CoatingPhotochromicId, ReferenceDataCategory.Coating, "photochromic", "Photochromic");
         Add(CoatingClearId, ReferenceDataCategory.Coating, "clear", "Clear");
-        Add(new("b0000000-0000-0000-0000-000000000025"), ReferenceDataCategory.Coating, "blue_block", "Blue block");
+        Add(CoatingBlueBlockId, ReferenceDataCategory.Coating, "blue_block", "Blue block");
         Add(new("b0000000-0000-0000-0000-000000000026"), ReferenceDataCategory.Coating, "polarized", "Polarized");
         Add(new("b0000000-0000-0000-0000-000000000027"), ReferenceDataCategory.Coating, "sunglasses", "Sunglasses");
         Add(new("b0000000-0000-0000-0000-000000000062"), ReferenceDataCategory.Coating, "anti_glare", "Anti-glare");
@@ -143,34 +129,13 @@ public class ReferenceDataSeedConfiguration : IEntityTypeConfiguration<Reference
         Add(new("b0000000-0000-0000-0000-000000000041"), ReferenceDataCategory.HardCaseColour, "green", "Green");
         Add(new("b0000000-0000-0000-0000-000000000042"), ReferenceDataCategory.HardCaseColour, "other", "Other", isOther: true);
 
-        // LensStrength ← the 16 distinct values across the two seeded preset catalogues (2026-08-05
-        // rework — see CLAUDE.md's Admin Portal wiring (Preset Catalogues screen) section), taken
-        // verbatim from the user-supplied screenshot of the real 6-Lens/9-Lens rosters. No coating
-        // is baked into the label — which coatings each strength is available in is a separate
-        // LensStrengthCoatingOption relationship, seeded (or left unconfigured) in
-        // PresetCatalogueSeedConfiguration.
-        sort = 0;
-        Add(LensStrength300Id, ReferenceDataCategory.LensStrength, "plus_3_00", "+3.00");
-        Add(LensStrength250Id, ReferenceDataCategory.LensStrength, "plus_2_50", "+2.50");
-        Add(LensStrength200Id, ReferenceDataCategory.LensStrength, "plus_2_00", "+2.00");
-        Add(LensStrength125Id, ReferenceDataCategory.LensStrength, "plus_1_25", "+1.25");
-        Add(LensStrength000Id, ReferenceDataCategory.LensStrength, "plus_0_00", "+0.00");
-        Add(LensStrengthMinus100Id, ReferenceDataCategory.LensStrength, "minus_1_00", "-1.00");
-        Add(LensStrengthMinus150Id, ReferenceDataCategory.LensStrength, "minus_1_50", "-1.50");
-        Add(LensStrengthMinus200Id, ReferenceDataCategory.LensStrength, "minus_2_00", "-2.00");
-        Add(LensStrengthMinus250Id, ReferenceDataCategory.LensStrength, "minus_2_50", "-2.50");
-        Add(LensStrengthMinus300Id, ReferenceDataCategory.LensStrength, "minus_3_00", "-3.00");
-        Add(LensStrengthMinus400Id, ReferenceDataCategory.LensStrength, "minus_4_00", "-4.00");
-        Add(LensStrengthMinus450Id, ReferenceDataCategory.LensStrength, "minus_4_50", "-4.50");
-        Add(LensStrengthBifocal300Id, ReferenceDataCategory.LensStrength, "bifocal_0_00_3_00", "+0.00 / +3.00 (Bifocal)");
-        Add(LensStrengthBifocal250Id, ReferenceDataCategory.LensStrength, "bifocal_0_00_2_50", "+0.00 / +2.50 (Bifocal)");
-        Add(LensStrengthBifocal200Id, ReferenceDataCategory.LensStrength, "bifocal_0_00_2_00", "+0.00 / +2.00 (Bifocal)");
-        Add(LensStrengthBifocal125Id, ReferenceDataCategory.LensStrength, "bifocal_0_00_1_25", "+0.00 / +1.25 (Bifocal)");
+        // No "Lens strength" list any more: a lens set lens is a lens power with its own typed
+        // label (ADR-0007), and the category was retired with its sixteen items.
 
-        // LensType ← Bifocal/Progressive/Other, asked on a custom lens carrying two distinct
-        // powers (2026-09-03 triage — see CLAUDE.md's Reference Data category list).
+        // LensType ← Bifocal/Progressive/Other, asked when a lens has an add (2026-09-03 triage;
+        // ADR-0007).
         sort = 0;
-        Add(new("b0000000-0000-0000-0000-000000000059"), ReferenceDataCategory.LensType, "bifocal", "Bifocal");
+        Add(LensTypeBifocalId, ReferenceDataCategory.LensType, "bifocal", "Bifocal");
         Add(new("b0000000-0000-0000-0000-000000000060"), ReferenceDataCategory.LensType, "progressive", "Progressive");
         Add(new("b0000000-0000-0000-0000-000000000061"), ReferenceDataCategory.LensType, "other", "Other", isOther: true);
 

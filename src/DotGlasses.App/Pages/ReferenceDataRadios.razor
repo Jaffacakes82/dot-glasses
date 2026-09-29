@@ -1,0 +1,77 @@
+@using DotGlasses.App.Validation
+@using DotGlasses.Contracts.ReferenceData
+
+@* The radio-button counterpart of ReferenceDataDropdown: every option visible at once, one
+   ticked. Lens type and coating preference are radios, never dropdowns (ADR-0007). NoneLabel adds
+   a first option that means "nothing chosen" — coating preference offers "No preference" first;
+   lens type has none, since single vision is inferred from there being no add, never chosen. *@
+<div class="dg-field" role="radiogroup" aria-label="@Label">
+    <label>@Label</label>
+    @if (NoneLabel is not null)
+    {
+        <label class="dg-choice" @key="(Guid.Empty, SelectedId)">
+            <input type="radio" name="@_group" checked="@(SelectedId is null)" @onchange="() => SelectAsync(null)" />
+            @NoneLabel
+        </label>
+    }
+    @foreach (var item in Items.OrderBy(i => i.SortOrder))
+    {
+        @* Keyed on the current selection as well: a native radio flips its own DOM state when
+           clicked, and when the form then clears the choice (a lens change clears the coating
+           preference) Blazor's diff sees an unchanged `checked` and leaves the browser's ticked
+           radio in place. A new key recreates the element with the right state — the same reason
+           CoatingMultiSelector re-keys its checkboxes. *@
+        <label class="dg-choice" @key="(item.Id, SelectedId)">
+            <input type="radio" name="@_group" checked="@(SelectedId == item.Id)" @onchange="() => SelectAsync(item.Id)" />
+            @item.Label
+        </label>
+    }
+    <FieldError Errors="Errors" For="@Field" />
+</div>
+@if (SelectedIsOther)
+{
+    <div class="dg-field">
+        <label>@(OtherLabel ?? $"{Label} — please specify")</label>
+        <input value="@OtherText" @oninput="e => OtherTextChanged.InvokeAsync(e.Value?.ToString())" />
+        <FieldError Errors="Errors" For="@OtherField" />
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string? OtherLabel { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<ReferenceDataItemDto> Items { get; set; } = [];
+
+    /// <summary>The text of a first option that clears the choice ("No preference"); null offers
+    /// no such option.</summary>
+    [Parameter] public string? NoneLabel { get; set; }
+
+    [Parameter] public Guid? SelectedId { get; set; }
+    [Parameter] public EventCallback<Guid?> SelectedIdChanged { get; set; }
+
+    [Parameter] public string? OtherText { get; set; }
+    [Parameter] public EventCallback<string?> OtherTextChanged { get; set; }
+
+    /// <summary>Request DTO property names this control maps to, so client-side and server-side
+    /// errors both render here — see FormErrors.</summary>
+    [Parameter] public FormErrors? Errors { get; set; }
+    [Parameter] public string Field { get; set; } = string.Empty;
+    [Parameter] public string OtherField { get; set; } = string.Empty;
+
+    private readonly string _group = $"radios-{Guid.NewGuid():N}";
+
+    private bool SelectedIsOther => SelectedId is { } id && Items.FirstOrDefault(i => i.Id == id)?.IsOtherOption == true;
+
+    private async Task SelectAsync(Guid? id)
+    {
+        await SelectedIdChanged.InvokeAsync(id);
+
+        // Asked of the id just chosen, not of SelectedId: the parameter still holds the old choice
+        // until the parent has re-rendered.
+        var chosenIsOther = id is { } chosen && Items.FirstOrDefault(i => i.Id == chosen)?.IsOtherOption == true;
+        if (!chosenIsOther && !string.IsNullOrEmpty(OtherText))
+        {
+            await OtherTextChanged.InvokeAsync(null);
+        }
+    }
+}

@@ -6,8 +6,9 @@ namespace DotGlasses.Domain.Entities;
 /// canonicalized (lower Guid first, by CompareTo) at write time so a pair is never stored twice
 /// under swapped order, and every read site normalizes the same way before querying rather than
 /// checking both orderings. Both FKs point at ReferenceDataItem (Category = Coating); category/
-/// active correctness is enforced in the Application layer, matching CoatingPairing.
-/// Admin-configurable from the Reference Data screen's Coating category, not hardcoded.
+/// active correctness is enforced in the Application layer, matching LensOptionCoatingPairing.
+/// Admin-configurable from the Reference Data screen's Coating category, not hardcoded — and
+/// still global after ADR-0007 moved pairings onto each lens set lens.
 /// </summary>
 public class CoatingExclusion
 {

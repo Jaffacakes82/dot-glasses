@@ -38,7 +38,9 @@ public static class SaleAssembly
     ///
     /// Three groups, and the boundaries are the point. <b>Carried:</b> the customer's identity and
     /// demographics, the consent already given, and — when <see cref="CarriesLens"/> — the whole
-    /// lens block. The Sale's <b>Coating set</b> is seeded from the Lead's single <b>Coating
+    /// lens block: on either lens range that is each eye's lens power and the one lens type
+    /// (ADR-0007), never a lens id, so which lens it is in the set is the form's own question
+    /// (<see cref="LensSets.LensSetLenses.Match"/>, asked where the form pre-selects it). The Sale's <b>Coating set</b> is seeded from the Lead's single <b>Coating
     /// preference</b>, which is the one place those two different concepts meet (CONTEXT.md); a
     /// Lead with no preference seeds an empty set, and the technician picks one. <b>Not carried:</b>
     /// frame colour, hard case, and the coating decisions beyond that seed — genuinely new choices
@@ -72,9 +74,9 @@ public static class SaleAssembly
 
         return CarriesLens(lead)
             ? seeded.WithLens(
-                lead.LensRangeType, lead.PresetCatalogueId, lead.LensOptionLeftId, lead.LensOptionRightId,
-                lead.CustomSphereLeft, lead.CustomCylinderLeft, lead.CustomAxisLeft, lead.CustomAddPowerLeft,
-                lead.CustomSphereRight, lead.CustomCylinderRight, lead.CustomAxisRight, lead.CustomAddPowerRight,
+                lead.LensRangeType, lead.PresetCatalogueId,
+                lead.SphereLeft, lead.CylinderLeft, lead.AxisLeft, lead.AddLeft,
+                lead.SphereRight, lead.CylinderRight, lead.AxisRight, lead.AddRight,
                 lead.LensTypeRefId, lead.LensTypeOtherText,
                 lead.PupilDistanceMm, lead.PresetPupilDistanceBucket, lead.ChildrensFrame)
             : seeded;
@@ -145,16 +147,14 @@ public static class SaleAssembly
         // improving — but the failure keys and copy are settled (ADR-0002), so not here.
         LensRangeType = answers.LensRangeType ?? Contracts.Common.LensRangeType.Custom,
         PresetCatalogueId = answers.PresetCatalogueId,
-        LensOptionLeftId = answers.LensOptionLeftId,
-        LensOptionRightId = answers.LensOptionRightId,
-        CustomSphereLeft = answers.CustomSphereLeft,
-        CustomCylinderLeft = answers.CustomCylinderLeft,
-        CustomAxisLeft = answers.CustomAxisLeft,
-        CustomAddPowerLeft = answers.CustomAddPowerLeft,
-        CustomSphereRight = answers.CustomSphereRight,
-        CustomCylinderRight = answers.CustomCylinderRight,
-        CustomAxisRight = answers.CustomAxisRight,
-        CustomAddPowerRight = answers.CustomAddPowerRight,
+        SphereLeft = answers.SphereLeft,
+        CylinderLeft = answers.CylinderLeft,
+        AxisLeft = answers.AxisLeft,
+        AddLeft = answers.AddLeft,
+        SphereRight = answers.SphereRight,
+        CylinderRight = answers.CylinderRight,
+        AxisRight = answers.AxisRight,
+        AddRight = answers.AddRight,
         LensTypeRefId = answers.LensTypeRefId,
         LensTypeOtherText = answers.LensTypeOtherText,
         OrderFromDotGlasses = answers.OrderFromDotGlasses,

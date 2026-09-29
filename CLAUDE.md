@@ -29,6 +29,22 @@ are the record of *how* things got built; don't restate that here.
   correct under both fillings. Rule failure keys are request-DTO property names and that is
   load-bearing — `FormErrors`, `ValidationProblemDetails` and `LeadConversionController`'s
   `Form.{PropertyName}` remap all key off it. See ADR-0002.
+- **A lens power is a value, and `Rules` owns everything that reads one** (ADR-0007). `LensPowers`
+  holds the definition: `LensPowerValues` is the one list of allowed sphere/cylinder/axis/add/pupil
+  distance values (change one and every screen, dropdown and rule follows — it ships with a release,
+  it is not admin data), and `LensPowerRules` is what makes one power valid (axis only with a
+  cylinder, lens type only with an add, a 0.00 add is no add). `LensSets.LensSetLenses` is how a
+  lens set's lenses are read: `InDisplayOrder` (the one display order), `Match` (a lens is found by
+  power **and** lens type — a record holds no pointer to a lens, so never look one up by Id),
+  `CoatingsFor(left, right)` (the coatings *both* lenses come in, minus any that could never pass
+  a pairing, plus every pairing from either lens) and `RecordedAs` (the one place a chosen pair
+  becomes what a record stores). The lens-set branch of `ConsultationRules` matches each eye
+  through these, and the Field App, the Admin Portal's lead conversion and the Add lens dialog's
+  validator call the same helpers — don't restate a bound, a comparison or a coating rule in a
+  view, script or component (a script reads what the server rendered from Rules).
+  `LensPowerValues.FormatPower`/`FormatLensPower` are the one display format,
+  `LensSets.PairedCoatings` is what a pairing ticks and locks, and a record stores each eye as
+  `LensPowerRules.Normalise` spells it.
 - **There is no consultation request validator.** `ConsultationRules.Check` holds *every* rule for
   a `Test`/`Lead`/`Sale` create — including the scalar ones (`NotEmpty`, length caps, `IsInEnum`,
   the age range), whose messages are FluentValidation's generated copy reproduced verbatim because
@@ -121,16 +137,17 @@ are the record of *how* things got built; don't restate that here.
   `InviteAtomicityTests`. Anything a user-visible operation *emits* (an email, a set-password
   link) is produced **after** the commit — a live invite link for an account the rollback removed
   is worse than the failure it came from.
-- FluentValidation still backs the **ten remaining validators** (Organisations, Lens Sets,
-  Reference Data, User Directory) and is deliberately **not** wired up via
+- FluentValidation still backs the **nine remaining Admin Portal validators** (Organisations, Lens
+  Sets, Reference Data, User Directory) and is deliberately **not** wired up via
   `AddFluentValidationAutoValidation()` — that runs FluentValidation synchronously inside ASP.NET's
   model-binding pipeline, which can't invoke the async rules several of them need for DB-backed
   checks (throws `AsyncValidatorInvokedSynchronouslyException`). Every controller holding an
-  `IValidator<T>` calls `ValidateAsync` explicitly instead. Two of those validators
-  (`AddLensOptionRequestValidator`, `SetCoatingAvailabilityRequestValidator`) use
-  `IReferenceDataLookupService` rather than the memoized snapshot on purpose: they run inside a
-  *write* to the reference-data library, which is exactly where the per-request snapshot must not
-  be used.
+  `IValidator<T>` calls `ValidateAsync` explicitly instead. `SaveLensRequestValidator` (the Add lens
+  dialog) uses `IReferenceDataLookupService` and a direct read of the set's lenses rather than the
+  memoized snapshot on purpose: it runs inside a *write* to the lens-set library, which is exactly
+  where the per-request snapshot must not be used. It reuses the `Rules` helpers by handing them a
+  small literal snapshot built from those reads, so it checks a lens with the same code the device
+  and the server use.
 
 ## Data scoping vs RBAC — do not conflate
 
@@ -147,8 +164,8 @@ are the record of *how* things got built; don't restate that here.
   the Leads list, the conversion Lead match, reference data and lens-set availability come out
   location-scoped with no extra code. `ScopePaths` is read from the database per request and
   fails closed — no scope paths means no rows, never "everything."
-  `ReferenceDataItem`/`PresetCatalogue`/`LensOption`/`LensStrengthCoatingOption` are **not**
-  hierarchy-scoped — they're a single global library, visible to every authenticated user.
+  `ReferenceDataItem`/`PresetCatalogue`/`LensOption` (with its `LensOptionCoating`/
+  `LensOptionCoatingPairing` children) are **not** hierarchy-scoped — they're a single global library, visible to every authenticated user.
   `ApplicationUser` is an Identity type, outside the automatic filter entirely — any screen
   listing users (User Directory) applies the same scope-paths rule manually in code, matched
   against each user's *assignment* paths rather than the user row itself: a user is listed if
@@ -218,18 +235,24 @@ Real domain entities, in `DotGlasses.Domain/Entities` and `/Enums`:
   name would collide with the `DotGlasses.Application.Tests` xUnit project's own root namespace.
   The Domain entity itself is still `Test`.
 - **`PresetCatalogue`/`LensOption`** — a **lens set** in product language (`CONTEXT.md`). A
-  catalogue's roster is "which curated `LensStrength` reference items are included, in what
-  order" — the actual power/bifocal-ness lives in the reference item's own label (e.g. `+2.50`,
-  `+0.00 / +2.50 (Bifocal)`), not typed columns on `LensOption`. Lens sets are data-driven
-  (ADR-0005): there is no per-set role or kind, and the Field App offers every non-empty lens set
-  assigned at or above the retail point. A record's `LensRangeType` is only `LensSet` or `Custom`
-  — *which* lens set is `PresetCatalogueId`; never reintroduce a 6-Lens/9-Lens distinction as a
-  type. `LensStrengthCoatingOption` is the many-to-many "this lens strength is sellable in this
-  coating" — a strength with zero configured coatings can't be sold on a lens set (see
-  `docs/open-issues.md`).
+  lens set's lens is a **lens power** (sphere, and optionally cylinder/axis/add — typed columns on
+  `LensOption`) with a typed label (unique within the set), a lens type when it has an add
+  (`LensTypeRefId`/`LensTypeOtherText`; null is single vision, never asked or stored as reference
+  data), and its own **coatings** (`LensOptionCoating`, at least one) and **pairings**
+  (`LensOptionCoatingPairing`, "ticking A adds B, which then can't be unticked" — enforced by the
+  server on lens-set records). There is no Lens strength reference item, no global coating grid
+  and no global pairing; exclusions are the only global coating rule (ADR-0001, ADR-0007). A set
+  may repeat a power only with a different lens type. Removing a lens hard-deletes it and its
+  children: records keep their own copy of the power. Lens sets are data-driven (ADR-0005): there
+  is no per-set role or kind, and the Field App offers every non-empty lens set assigned at or
+  above the retail point. A record's `LensRangeType` is only `LensSet` or `Custom` — *which* lens
+  set is `PresetCatalogueId`; never reintroduce a 6-Lens/9-Lens distinction as a type. A `Test`,
+  `Lead` or `Sale` stores each eye's lens power and one lens type for the pair whichever range it
+  came from, and holds no pointer to a `LensOption`.
 - **`ReferenceDataItem`** — one generic table backing every admin-managed dropdown, keyed by
   `ReferenceDataCategory` (Reasons not purchased, Referral reasons, Coatings & tints, Frame
-  colours, Hard case colours, Occupations, Lens strengths). Retiring an option sets `IsActive =
+  colours, Hard case colours, Occupations, Lens types; the old Lens strengths category is retired
+  and its enum value reserved, never to be reused). Retiring an option sets `IsActive =
   false`, never a hard delete — historical `Test`/`Lead`/`Sale` rows may reference it by Id, and
   Event History resolves labels against retired items too. At most one *active* `IsOtherOption`
   item per category (server-enforced), which is what makes a dropdown reveal a free-text field.
@@ -245,7 +268,7 @@ functionally distinct from Admin anywhere).
 | Policy | Rule | Gates |
 |---|---|---|
 | `ReferenceData.Manage` | Admin, DGI level only | Reference Data screen |
-| `PresetCatalogue.Manage` | Admin, Country level+ | Lens Sets screen (incl. the global lens-strength coating grid) |
+| `PresetCatalogue.Manage` | Admin, Country level+ | Lens Sets screen and its read-only Lens powers page |
 | `PresetCatalogue.EditInScope` | `PresetCatalogue.Manage`, resource-based (lens set's *owning* org at/below caller) | Editing a lens set: name/description, lens powers, retire/reactivate |
 | `PresetCatalogue.AssignInScope` | `PresetCatalogue.Manage`, resource-based (target org at/below caller) | Assigning/unassigning any active lens set |
 | `CustomOrders.View` | Any role, Country level+ | Custom Orders screen + its advance-status action |
@@ -289,7 +312,10 @@ table — used for both client-side pre-submit checks and mapping a server rejec
 The JWT (`AuthTokenStore`) and reference data/preset catalogues (`ReferenceDataClient`) are both
 persisted/cached in IndexedDB (write-through on a successful load, fallback to last-cached copy
 on failure) — a technician who's been online at least once can keep working, and stay signed in
-across a refresh, with no connectivity. First-ever use still needs one online session.
+across a refresh, with no connectivity. First-ever use still needs one online session. The cache
+outlives releases, so a change to the *meaning* of a cached shape (not just adding a field) bumps
+`ReferenceDataClient.LensSetShape`: a cache written before it loses its lens sets on an offline load
+rather than presenting old lenses as zero-power ones.
 
 Known accepted risk, not yet fixed: offline records are attributed to whoever is signed in
 *when they sync*, not when they were created (`TechnicianUserId`/`HierarchyPath` come from the
@@ -427,8 +453,11 @@ once in this codebase:
   regardless of the attribute's actual name — Razor emits `value="value"` when true and omits the
   attribute entirely when false, **never** the string `"True"`/`"False"`. Model binding silently
   receives the wrong value or nothing. Fix: `.ToString()` or a ternary to a real string. Bitten
-  two separate screens (Organisations' flag toggles, Lens Sets' coating-availability
-  grid) — treat any bare-bool-bound attribute as a standing red flag in review.
+  two separate screens (Organisations' flag toggles, and the since-removed Lens Sets coating grid)
+  — treat any bare-bool-bound attribute as a standing red flag in review. `data-*` attributes are
+  the exception in the other direction: a `bool` renders as `"True"`/`"False"` and a `null` renders
+  as an empty attribute (`data-x=""`) rather than being omitted, so a script reading
+  `dataset.x` can't tell "absent" from "empty". Write the string you mean (`"true"`/`"false"`).
 - **A `DateOnly`/`DateTime` value placed into a URL** (`asp-route-*`, a query string) via plain
   Razor interpolation calls `.ToString()` with the request's culture, which can render day/month
   in a different order than the model binder parses it back — silently swapping day and month

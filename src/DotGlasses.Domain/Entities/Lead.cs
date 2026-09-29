@@ -58,18 +58,16 @@ public class Lead : IAuditable, ISoftDeletable, IHierarchyScoped
     public LensRangeType? LensRangeType { get; set; }
 
     public Guid? PresetCatalogueId { get; set; }
-    public Guid? LensOptionLeftId { get; set; }
-    public Guid? LensOptionRightId { get; set; }
 
     // Custom-range prescription, set only when LensRangeType == Custom.
-    public decimal? CustomSphereLeft { get; set; }
-    public decimal? CustomCylinderLeft { get; set; }
-    public decimal? CustomAxisLeft { get; set; }
-    public decimal? CustomAddPowerLeft { get; set; }
-    public decimal? CustomSphereRight { get; set; }
-    public decimal? CustomCylinderRight { get; set; }
-    public decimal? CustomAxisRight { get; set; }
-    public decimal? CustomAddPowerRight { get; set; }
+    public decimal? SphereLeft { get; set; }
+    public decimal? CylinderLeft { get; set; }
+    public decimal? AxisLeft { get; set; }
+    public decimal? AddLeft { get; set; }
+    public decimal? SphereRight { get; set; }
+    public decimal? CylinderRight { get; set; }
+    public decimal? AxisRight { get; set; }
+    public decimal? AddRight { get; set; }
 
     /// <summary>FK to ReferenceDataItem (Category = LensType) — asked when a Custom lens carries
     /// two distinct powers (an add power alongside its base sphere) on either eye.</summary>

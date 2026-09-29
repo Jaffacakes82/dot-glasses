@@ -10,10 +10,12 @@ namespace DotGlasses.Contracts.Sales;
 /// CoatingRefIds requires at least one entry for every LensRangeType (2026-08-05 — previously
 /// ignored for lens sets, server-derived from a single forced coating per lens; see
 /// LensOption's doc comment for why that was replaced; 2026-09-03 — became a set rather than a
-/// single value, see ADR-0001). For Custom, any active Coating item is valid; for a lens set,
-/// every entry must be one of the coatings configured as available for the chosen left-eye
-/// LensOption's lens strength — see SaleService/ConsultationRules. Coating pairing/
-/// exclusion rules (also ADR-0001) apply to the set regardless of LensRangeType.
+/// single value, see ADR-0001). For Custom, any active Coating item is valid and no pairing
+/// applies; for a lens set, every entry must be one both chosen lenses (the lenses in the set
+/// matching each eye's power and LensTypeRefId) can be sold in, and every pairing from either
+/// lens applies — a trigger coating needs its paired coating in the set too (ADR-0007; see
+/// ConsultationRules and LensSetLenses.CoatingsFor). Coating exclusions (ADR-0001) apply to the
+/// set regardless of LensRangeType.
 /// </summary>
 public class CreateSaleRequest
 {
@@ -42,21 +44,22 @@ public class CreateSaleRequest
 
     public LensRangeType LensRangeType { get; set; }
 
+    /// <summary>Which lens set, on a LensSet range. The lenses themselves are the per-eye powers
+    /// and the lens type below, for both lens ranges (ADR-0007).</summary>
     public Guid? PresetCatalogueId { get; set; }
-    public Guid? LensOptionLeftId { get; set; }
-    public Guid? LensOptionRightId { get; set; }
 
-    public decimal? CustomSphereLeft { get; set; }
-    public decimal? CustomCylinderLeft { get; set; }
-    public decimal? CustomAxisLeft { get; set; }
-    public decimal? CustomAddPowerLeft { get; set; }
-    public decimal? CustomSphereRight { get; set; }
-    public decimal? CustomCylinderRight { get; set; }
-    public decimal? CustomAxisRight { get; set; }
-    public decimal? CustomAddPowerRight { get; set; }
+    public decimal? SphereLeft { get; set; }
+    public decimal? CylinderLeft { get; set; }
+    public decimal? AxisLeft { get; set; }
+    public decimal? AddLeft { get; set; }
+    public decimal? SphereRight { get; set; }
+    public decimal? CylinderRight { get; set; }
+    public decimal? AxisRight { get; set; }
+    public decimal? AddRight { get; set; }
 
-    /// <summary>Required when either add power is set (two distinct powers on that eye) — see
-    /// ConsultationRules.</summary>
+    /// <summary>One per pair; null means single vision. Required when either add power is set
+    /// (two distinct powers on that eye) — see ConsultationRules. On a lens set it is the chosen
+    /// lenses' own lens type.</summary>
     public Guid? LensTypeRefId { get; set; }
     public string? LensTypeOtherText { get; set; }
 

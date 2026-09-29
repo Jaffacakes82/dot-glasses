@@ -22,8 +22,8 @@ public class TestConfiguration : IEntityTypeConfiguration<Test>
 
         foreach (var propertyName in new[]
                  {
-                     nameof(Test.CustomSphereLeft), nameof(Test.CustomCylinderLeft), nameof(Test.CustomAxisLeft), nameof(Test.CustomAddPowerLeft),
-                     nameof(Test.CustomSphereRight), nameof(Test.CustomCylinderRight), nameof(Test.CustomAxisRight), nameof(Test.CustomAddPowerRight),
+                     nameof(Test.SphereLeft), nameof(Test.CylinderLeft), nameof(Test.AxisLeft), nameof(Test.AddLeft),
+                     nameof(Test.SphereRight), nameof(Test.CylinderRight), nameof(Test.AxisRight), nameof(Test.AddRight),
                  })
         {
             builder.Property(propertyName).HasPrecision(5, 2);

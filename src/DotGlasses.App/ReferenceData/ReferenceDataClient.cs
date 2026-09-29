@@ -19,6 +19,10 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
 {
     private const string StorageKey = "reference-data-cache";
 
+    /// <summary>The shape of the lens sets in the cache: 1 is ADR-0007's (each lens a lens power
+    /// with its own coatings and pairings). A payload with no such field was written before it.</summary>
+    private const int LensSetShape = 1;
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -33,8 +37,6 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
     public DateTimeOffset? CachedAtUtc { get; private set; }
 
     public IReadOnlyList<PresetCatalogueDto> Catalogues { get; private set; } = [];
-
-    public IReadOnlyList<CoatingPairingDto> CoatingPairings { get; private set; } = [];
 
     public IReadOnlyList<CoatingExclusionDto> CoatingExclusions { get; private set; } = [];
 
@@ -63,7 +65,6 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
 
                 _items = items ?? [];
                 Catalogues = catalogues ?? [];
-                CoatingPairings = coatingRules?.Pairings ?? [];
                 CoatingExclusions = coatingRules?.Exclusions ?? [];
                 LoadError = null;
                 IsFromCache = false;
@@ -95,7 +96,7 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
 
     private async Task WriteCacheAsync()
     {
-        var payload = new CachedPayload(DateTimeOffset.UtcNow, _items, Catalogues.ToList(), CoatingPairings.ToList(), CoatingExclusions.ToList());
+        var payload = new CachedPayload(DateTimeOffset.UtcNow, _items, Catalogues.ToList(), CoatingExclusions.ToList(), LensSetShape);
         try
         {
             await jsRuntime.InvokeVoidAsync("dotGlassesIdb.kvSet", StorageKey, JsonSerializer.Serialize(payload, JsonOptions));
@@ -124,8 +125,12 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
             }
 
             _items = payload.Items;
-            Catalogues = payload.Catalogues;
-            CoatingPairings = payload.CoatingPairings;
+            // A cache written before lens-set lenses were lens powers holds lenses that are a label and
+            // nothing else — every one would read as a lens with sphere 0.00 and no coatings, and
+            // choosing one would record a prescription nobody made. Those lens sets are dropped
+            // (the technician sees "no lens sets" until they next go online, which replaces the
+            // whole payload); the rest of the cache — reference items, exclusions — is still good.
+            Catalogues = payload.LensSetShape >= LensSetShape ? payload.Catalogues ?? [] : [];
             CoatingExclusions = payload.CoatingExclusions;
             IsFromCache = true;
             CachedAtUtc = payload.CachedAtUtc;
@@ -144,17 +149,24 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
 
     public IReadOnlyList<ReferenceDataItemDto> AllItems => _items;
 
-    /// <summary>CoatingPairings/CoatingExclusions default to an empty list so a cache payload
-    /// written before those fields existed still deserializes safely (missing JSON properties
-    /// fall back to the constructor's default parameter value).</summary>
+    /// <summary>
+    /// CoatingExclusions defaults to an empty list so a cache payload written before that field
+    /// existed still deserializes safely (missing JSON properties fall back to the constructor's
+    /// default parameter value).
+    ///
+    /// Older payloads are read, never rejected, but their lens sets are not used: a payload cached
+    /// before ADR-0007 carries no <see cref="LensSetShape"/> (so 0), and TryLoadFromCacheAsync drops
+    /// its lens sets rather than presenting each lens as a zero-power one with no coatings. Its
+    /// reference items and exclusions are still used, and the next online load replaces the whole
+    /// payload.
+    /// </summary>
     private sealed record CachedPayload(
         DateTimeOffset CachedAtUtc,
         List<ReferenceDataItemDto> Items,
         List<PresetCatalogueDto> Catalogues,
-        List<CoatingPairingDto> CoatingPairings = null!,
-        List<CoatingExclusionDto> CoatingExclusions = null!)
+        List<CoatingExclusionDto> CoatingExclusions = null!,
+        int LensSetShape = 0)
     {
-        public List<CoatingPairingDto> CoatingPairings { get; init; } = CoatingPairings ?? [];
         public List<CoatingExclusionDto> CoatingExclusions { get; init; } = CoatingExclusions ?? [];
     }
 }

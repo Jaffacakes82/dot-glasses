@@ -1,10 +1,13 @@
+using System.Globalization;
 using DotGlasses.Application.Common;
 using DotGlasses.Application.Organisations;
 using DotGlasses.Application.PresetCatalogues;
 using DotGlasses.Application.ReferenceData;
 using DotGlasses.Application.Reporting;
 using DotGlasses.Application.Users;
+using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Enums;
+using DotGlasses.Rules.LensPowers;
 using DotGlasses.Web.Authorization;
 using DotGlasses.Web.Models;
 using FluentValidation;
@@ -18,19 +21,29 @@ namespace DotGlasses.Web.Controllers;
 public class CataloguesController(
     IPresetCatalogueAdminService catalogueAdminService,
     IOrganisationAdminService organisationAdminService,
-    IReferenceDataAdminService referenceDataAdminService,
     IUserAssignmentsQueryService userAssignmentsQueryService,
     ICurrentUserContext currentUserContext,
     IAuthorizationService authorizationService,
     IUnscopedReportQueryService unscopedReportQueryService,
     IValidator<CreateCatalogueRequest> createValidator,
     IValidator<UpdateCatalogueRequest> updateValidator,
-    IValidator<AddLensOptionRequest> addLensOptionValidator,
     IValidator<AssignCataloguesRequest> assignValidator,
-    IValidator<SetCoatingAvailabilityBatchRequest> coatingAvailabilityValidator) : Controller
+    IValidator<SaveLensRequest> saveLensValidator,
+    IReferenceDataSnapshotProvider referenceDataSnapshotProvider) : Controller
 {
     public async Task<IActionResult> Index(string? search, CancellationToken cancellationToken) =>
         View(await BuildViewModelAsync(search, cancellationToken));
+
+    /// <summary>The read-only Lens powers page (ticket 08), behind the same policy as the rest of
+    /// this screen: every value list and the display format come from
+    /// <see cref="LensPowerValues"/> — the single definition the Field App, the Add lens dialog
+    /// and the server all read (ADR-0007). The view holds none of these bounds itself.</summary>
+    public IActionResult LensPowers() => View(new LensPowersViewModel(
+        LensPowerValues.Sphere.Select(LensPowerValues.FormatPower).ToList(),
+        LensPowerValues.Cylinder.Select(LensPowerValues.FormatPower).ToList(),
+        LensPowerValues.Axis.Select(a => a.ToString("0", CultureInfo.InvariantCulture)).ToList(),
+        LensPowerValues.Add.Select(LensPowerValues.FormatPower).ToList(),
+        LensPowerValues.PupilDistanceMm.Select(mm => mm.ToString("0", CultureInfo.InvariantCulture)).ToList()));
 
     [HttpPost]
     [ValidateAntiForgeryToken]
@@ -82,23 +95,59 @@ public class CataloguesController(
         return RedirectToAction(nameof(Index));
     }
 
+    /// <summary>
+    /// The Add lens dialog's save, for a new lens and for an edit alike (ADR-0007).
+    ///
+    /// <para>
+    /// The round trip. A save that passes is written and redirected back to Index with a banner
+    /// (POST-redirect-GET). A refused one comes back the way every other refused form on this
+    /// screen does (CreateCatalogue, UpdateCatalogue, AssignCatalogues): the screen is rendered
+    /// straight from this POST with the validator's failures in ModelState — no redirect. What
+    /// that adds here is the admin's own posted form, handed to the view as
+    /// <see cref="LensDialogViewModel.Reopen"/>, so _LensDialog renders open on their input with
+    /// each problem in the slot for the field it is keyed on (the request's property names are
+    /// the dialog's field names). Rendering rather than redirecting is deliberate: a redirect
+    /// would have to carry the whole form, pairing rows and every keyed message through TempData
+    /// to rebuild exactly this. Nothing has been written when it renders, so reading the memoised
+    /// snapshot for the page is safe.
+    /// </para>
+    ///
+    /// <para>
+    /// A business-rule rejection (the lens set retired, or the lens removed, since the page was
+    /// loaded) goes through DomainRuleViolationFilter's POST-redirect-GET like every other
+    /// screen's.
+    /// </para>
+    /// </summary>
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> AddLensOption(AddLensOptionRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> SaveLens(SaveLensRequest request, CancellationToken cancellationToken)
     {
         if (!await CanEditLensSetAsync(request.CatalogueId, cancellationToken))
         {
             return Forbid();
         }
 
-        var validationResult = await addLensOptionValidator.ValidateAsync(request, cancellationToken);
-        if (!validationResult.IsValid)
+        if (request.LensOptionId is { } lensOptionId)
         {
-            validationResult.AddToModelState(ModelState);
-            return View(nameof(Index), await BuildViewModelAsync(null, cancellationToken));
+            // A lens is only ever edited through its own lens set — the permission above was
+            // checked against that set, not whichever one the lens really sits in.
+            var owningCatalogueId = await catalogueAdminService.FindCatalogueIdForLensOptionAsync(lensOptionId, cancellationToken)
+                ?? throw new DomainRuleViolationException("This lens is no longer in the lens set — it may have been removed. Add it again if it is still needed.");
+            if (owningCatalogueId != request.CatalogueId)
+            {
+                return Forbid();
+            }
         }
 
-        await catalogueAdminService.AddLensOptionAsync(request.CatalogueId, request.LensStrengthRefId, cancellationToken);
+        var validationResult = await saveLensValidator.ValidateAsync(request, cancellationToken);
+        if (!validationResult.IsValid || !ModelState.IsValid)
+        {
+            validationResult.AddToModelState(ModelState);
+            return View(nameof(Index), await BuildViewModelAsync(null, cancellationToken, reopenLensDialog: request));
+        }
+
+        await catalogueAdminService.SaveLensAsync(request.CatalogueId, request.LensOptionId, request.ToInput(), cancellationToken);
+        TempData["Info"] = request.LensOptionId is null ? $"Lens \"{request.Label!.Trim()}\" added." : $"Lens \"{request.Label!.Trim()}\" saved.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -137,6 +186,7 @@ public class CataloguesController(
             await catalogueAdminService.AssignCatalogueToOrgAsync(catalogueId, request.OrgNodeId, cancellationToken);
         }
 
+        TempData["Info"] = request.CatalogueIds.Count == 1 ? "Lens set assigned." : $"{request.CatalogueIds.Count} lens sets assigned.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -179,52 +229,6 @@ public class CataloguesController(
         return RedirectToAction(nameof(Index));
     }
 
-    /// <summary>The coating-availability grid posts its whole checked-set in one request (see
-    /// SetCoatingAvailabilityBatchRequest) rather than one request per cell — this diffs the
-    /// submitted set against what's currently available and only writes the cells that actually
-    /// changed.</summary>
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> SaveCoatingAvailability(SetCoatingAvailabilityBatchRequest request, CancellationToken cancellationToken)
-    {
-        var validationResult = await coatingAvailabilityValidator.ValidateAsync(request, cancellationToken);
-        if (!validationResult.IsValid)
-        {
-            validationResult.AddToModelState(ModelState);
-            return View(nameof(Index), await BuildViewModelAsync(null, cancellationToken));
-        }
-
-        var selectedPairs = new HashSet<(Guid LensStrengthRefId, Guid CoatingRefId)>();
-        foreach (var raw in request.Selected)
-        {
-            if (SetCoatingAvailabilityBatchRequest.TryParsePair(raw, out var lensStrengthRefId, out var coatingRefId))
-            {
-                selectedPairs.Add((lensStrengthRefId, coatingRefId));
-            }
-        }
-
-        var (lensStrengths, coatings) = await GetLensStrengthAndCoatingOptionsAsync(cancellationToken);
-        foreach (var lensStrength in lensStrengths)
-        {
-            var currentlyAvailable = (await catalogueAdminService.ListAvailableCoatingsAsync(lensStrength.Id, cancellationToken)).ToHashSet();
-            foreach (var coating in coatings)
-            {
-                var shouldBeAvailable = selectedPairs.Contains((lensStrength.Id, coating.Id));
-                var isCurrentlyAvailable = currentlyAvailable.Contains(coating.Id);
-                if (shouldBeAvailable && !isCurrentlyAvailable)
-                {
-                    await catalogueAdminService.AddAvailableCoatingAsync(lensStrength.Id, coating.Id, cancellationToken);
-                }
-                else if (!shouldBeAvailable && isCurrentlyAvailable)
-                {
-                    await catalogueAdminService.RemoveAvailableCoatingAsync(lensStrength.Id, coating.Id, cancellationToken);
-                }
-            }
-        }
-
-        return RedirectToAction(nameof(Index));
-    }
-
     // --- Lens set permissions (ADR-0005) -------------------------------------------------------
     //
     // Both checks resolve an org's path through IUnscopedReportQueryService: a lens set's owning
@@ -250,15 +254,7 @@ public class CataloguesController(
         (await unscopedReportQueryService.GetOrganisationNodePathsUnscopedAsync(cancellationToken))
             .ToDictionary(x => x.Id, x => x.HierarchyPath);
 
-    private async Task<(IReadOnlyList<(Guid Id, string Label)> LensStrengths, IReadOnlyList<(Guid Id, string Label)> Coatings)> GetLensStrengthAndCoatingOptionsAsync(CancellationToken cancellationToken)
-    {
-        var referenceItems = await referenceDataAdminService.ListAllAsync(cancellationToken);
-        var lensStrengths = referenceItems.Where(x => x.Category == ReferenceDataCategory.LensStrength && x.IsActive).OrderBy(x => x.SortOrder).Select(x => (x.Id, x.Label)).ToList();
-        var coatings = referenceItems.Where(x => x.Category == ReferenceDataCategory.Coating && x.IsActive).OrderBy(x => x.SortOrder).Select(x => (x.Id, x.Label)).ToList();
-        return (lensStrengths, coatings);
-    }
-
-    private async Task<CataloguesIndexViewModel> BuildViewModelAsync(string? search, CancellationToken cancellationToken)
+    private async Task<CataloguesIndexViewModel> BuildViewModelAsync(string? search, CancellationToken cancellationToken, SaveLensRequest? reopenLensDialog = null)
     {
         var catalogues = await catalogueAdminService.ListAsync(cancellationToken);
         if (!string.IsNullOrWhiteSpace(search))
@@ -269,13 +265,6 @@ public class CataloguesController(
             catalogues = catalogues.Where(c => c.Name.Contains(search, StringComparison.OrdinalIgnoreCase)).ToList();
         }
         var orgs = await organisationAdminService.ListAsync(cancellationToken);
-        var (lensStrengths, coatings) = await GetLensStrengthAndCoatingOptionsAsync(cancellationToken);
-
-        var availableCoatingsByStrength = new Dictionary<Guid, IReadOnlyList<Guid>>();
-        foreach (var strength in lensStrengths)
-        {
-            availableCoatingsByStrength[strength.Id] = await catalogueAdminService.ListAvailableCoatingsAsync(strength.Id, cancellationToken);
-        }
 
         var assignableOrgs = orgs
             .Where(o => o.Level is OrganisationLevel.Intermediate or OrganisationLevel.RetailPoint)
@@ -302,7 +291,7 @@ public class CataloguesController(
 
             catalogueCards.Add(new CatalogueCard(
                 c.Id, c.Name, c.Description,
-                c.LensOptions.Select(l => new LensOptionCard(l.Id, l.LensStrengthRefId, l.Label, l.SortOrder)).ToList(),
+                c.LensOptions.Select(LensOptionCard.From).ToList(),
                 assignedOrgCards,
                 CanEdit: await IsAuthorizedAtAsync(c.OwningOrgNodeId, AuthorizationPolicies.PresetCatalogueEditInScope, orgPaths)));
         }
@@ -317,11 +306,41 @@ public class CataloguesController(
         return new CataloguesIndexViewModel(
             catalogueCards,
             retired,
-            lensStrengths,
-            coatings,
-            availableCoatingsByStrength,
             assignableOrgs,
             owningOrgOptions,
-            search);
+            search,
+            await BuildLensDialogAsync(reopenLensDialog, catalogues, cancellationToken));
+    }
+
+    /// <summary>The dialog's choices come off the memoised snapshot: this is a page render, never
+    /// the write path (the validator reads its own rows).</summary>
+    private async Task<LensDialogViewModel> BuildLensDialogAsync(
+        SaveLensRequest? reopen, IEnumerable<PresetCatalogueAdminDto> catalogues, CancellationToken cancellationToken)
+    {
+        var referenceData = await referenceDataSnapshotProvider.GetAsync(cancellationToken);
+        IReadOnlyList<LensDialogChoice> Active(Contracts.Common.ReferenceDataCategory category) =>
+            referenceData.Items
+                .Where(i => i.Category == category && i.IsActive)
+                .Select(i => new LensDialogChoice(i.Id, i.Label, i.IsOtherOption))
+                .ToList();
+
+        var exclusions = referenceData.CoatingExclusions
+            .Select(e => $"{referenceData.ResolveLabel(e.CoatingRefIdA)} and {referenceData.ResolveLabel(e.CoatingRefIdB)}")
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        string? title = null;
+        if (reopen is not null)
+        {
+            var lensSetName = catalogues.FirstOrDefault(c => c.Id == reopen.CatalogueId)?.Name;
+            title = reopen.LensOptionId is null ? $"Add lens to {lensSetName}" : $"Edit lens in {lensSetName}";
+        }
+
+        return new LensDialogViewModel(
+            Active(Contracts.Common.ReferenceDataCategory.Coating),
+            Active(Contracts.Common.ReferenceDataCategory.LensType),
+            exclusions,
+            reopen,
+            title);
     }
 }

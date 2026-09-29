@@ -38,7 +38,9 @@ public class LensSetAvailabilityTests(PostgresContainerFixture postgres)
 
         if (withLensPowers)
         {
-            context.LensOptions.Add(new LensOption { Id = Guid.NewGuid(), PresetCatalogueId = id, LensStrengthRefId = ReferenceDataSeedConfiguration.LensStrength250Id, SortOrder = 0 });
+            var lensId = Guid.NewGuid();
+            context.LensOptions.Add(new LensOption { Id = lensId, PresetCatalogueId = id, Label = "+2.50", Sphere = 2.50m });
+            context.LensOptionCoatings.Add(new LensOptionCoating { Id = Guid.NewGuid(), LensOptionId = lensId, CoatingRefId = ReferenceDataSeedConfiguration.CoatingClearId });
         }
 
         await context.SaveChangesAsync();
@@ -107,7 +109,7 @@ public class LensSetAvailabilityTests(PostgresContainerFixture postgres)
         Assert.NotNull(lensSet);
         Assert.Equal("Seasonal Readers", lensSet.Name);
         Assert.False(lensSet.IsActive);
-        Assert.Equal("+2.50", snapshot.ResolveLensOptionLabel(lensOptionId));
+        Assert.Equal("+2.50", snapshot.FindLensOption(lensOptionId)?.Label);
     }
 
     [Fact]
@@ -162,7 +164,8 @@ public class LensSetAvailabilityTests(PostgresContainerFixture postgres)
     [Fact]
     public async Task EveryLensSetReachingTheRetailPointIsOffered_Alphabetically()
     {
-        // Seeded: "6-Lens Set" and "9-Lens Set", both assigned to Kenya. Added in non-alphabetical
+        // The fixture's example "6-Lens Set" and "9-Lens Set", both assigned to Kenya (the migrated
+        // seeds themselves are retired — ADR-0007). Added in non-alphabetical
         // order, at two different levels above the retail point.
         var connectionString = await postgres.CreateDatabaseAsync();
         await AddLensSetAsync(connectionString, "Zeta Reading", OrganisationSeedConfiguration.KenyaRetailerId);

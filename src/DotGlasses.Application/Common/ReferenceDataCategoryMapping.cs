@@ -13,7 +13,6 @@ public static class ReferenceDataCategoryMapping
         Domain.Enums.ReferenceDataCategory.Coating => Contracts.Common.ReferenceDataCategory.Coating,
         Domain.Enums.ReferenceDataCategory.FrameColour => Contracts.Common.ReferenceDataCategory.FrameColour,
         Domain.Enums.ReferenceDataCategory.HardCaseColour => Contracts.Common.ReferenceDataCategory.HardCaseColour,
-        Domain.Enums.ReferenceDataCategory.LensStrength => Contracts.Common.ReferenceDataCategory.LensStrength,
         Domain.Enums.ReferenceDataCategory.LensType => Contracts.Common.ReferenceDataCategory.LensType,
         _ => throw new ArgumentOutOfRangeException(nameof(category), category, null),
     };

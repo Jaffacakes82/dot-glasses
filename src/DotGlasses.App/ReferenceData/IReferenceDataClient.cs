@@ -37,9 +37,8 @@ public interface IReferenceDataClient
 
     IReadOnlyList<PresetCatalogueDto> Catalogues { get; }
 
-    /// <summary>Coating pairing/exclusion rules (see ADR-0001) — cached the same way as the rest
-    /// of reference data, for the same offline reasons.</summary>
-    IReadOnlyList<CoatingPairingDto> CoatingPairings { get; }
-
+    /// <summary>Coating exclusions (see ADR-0001) — cached the same way as the rest of reference
+    /// data, for the same offline reasons. Pairings are per lens set lens now (ADR-0007) and
+    /// arrive on each lens in <see cref="Catalogues"/>.</summary>
     IReadOnlyList<CoatingExclusionDto> CoatingExclusions { get; }
 }
