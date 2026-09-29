@@ -154,11 +154,11 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
     /// existed still deserializes safely (missing JSON properties fall back to the constructor's
     /// default parameter value).
     ///
-    /// Older payloads are read, never rejected: a payload cached before ADR-0007 still carries a
-    /// <c>coatingPairings</c> list and lens-set lenses with <c>sortOrder</c>/<c>availableCoatingIds</c>.
-    /// System.Text.Json ignores the names this type no longer has, and each lens comes back with
-    /// its label, a zero sphere and no coatings (LensOptionDto's defaults) — the lens sets it names
-    /// were all retired by the reset anyway, and the next online load replaces the whole payload.
+    /// Older payloads are read, never rejected, but their lens sets are not used: a payload cached
+    /// before ADR-0007 carries no <see cref="LensSetShape"/> (so 0), and TryLoadFromCacheAsync drops
+    /// its lens sets rather than presenting each lens as a zero-power one with no coatings. Its
+    /// reference items and exclusions are still used, and the next online load replaces the whole
+    /// payload.
     /// </summary>
     private sealed record CachedPayload(
         DateTimeOffset CachedAtUtc,

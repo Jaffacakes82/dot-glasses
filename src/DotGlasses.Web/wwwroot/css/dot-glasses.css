@@ -22,6 +22,8 @@
     --text-inverse: var(--dot-white);
     --text-muted: #888888;
     --text-muted-2: #666666;
+    --surface-notice: #fff8e1;
+    --text-notice: #8a6d00;
     --border-default: rgba(0, 0, 0, 0.12);
     --focus-ring: var(--dot-blue);
 
