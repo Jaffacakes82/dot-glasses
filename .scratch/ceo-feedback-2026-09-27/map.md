@@ -29,6 +29,12 @@ where they qualify. This map is for planning only; nothing is implemented from i
 
 <!-- one line per resolved ticket: [title](issues/NN-slug.md) — gist -->
 
+**Shipped, 2026-09-29:** every decision below is built. Tickets 01 and 02 shipped as the
+[multi-org access spec](../multi-org-access-and-retail-points/spec.md) (PR #30), and tickets 05–10
+as the [lens power spec](../lens-power-and-lens-sets/spec.md) (PR #31). Each spec's `issues/` folder
+records what each build ticket delivered, and its `run-plan.md` or PR lists what still needs a
+person: Field App browser checklists, and telling the CEO before lens sets are reset on staging.
+
 - [How several org assignments combine into one user's access](issues/01-multi-org-access-model.md) — the Admin Portal uses the union of all assignments, and the Field App records at one remembered current location. "Primary org" is gone, and access is rechecked on every request. See ADR-0006.
 - [Recording tests, leads and sales only at retail points](issues/02-record-only-at-retail-points.md) — a current location must be an active retail point the user is *directly* assigned to, and the server enforces it. No new records at a deactivated retail point. A user with no retail point sees a "can't record here" screen. Dummy retail points need no marker.
 - [What a lens is: one lens database for lens sets and custom lenses](issues/06-what-a-lens-is.md) — a lens power is a value: sphere, cylinder, axis and add for one eye. Its allowed values copy the online shop and are fixed. Records store powers, not pointers to set entries. A lens-set entry is a power, a typed label and its coatings. Lens strength is retired. See ADR-0007.
@@ -40,14 +46,8 @@ where they qualify. This map is for planning only; nothing is implemented from i
 
 ## Not yet specified
 
-- **Handing decisions on as specs.**
-  - Tickets 01 and 02 are specified in
-    [`multi-org-access-and-retail-points/spec.md`](../multi-org-access-and-retail-points/spec.md),
-    which is `ready-for-agent`.
-  - Ticket 03's form work follows the rules that spec sets.
-  - Tickets 05–10 are specified in
-    [`lens-power-and-lens-sets/spec.md`](../lens-power-and-lens-sets/spec.md), which is
-    `ready-for-agent` and follows the multi-org spec.
+- **Ticket 03's form work** follows the rules the multi-org access spec set. The server already
+  has a change-role endpoint with no form behind it.
 - **Custom Orders after the redesign.** If custom lenses come from the lens database and leads can
   order, the Custom Orders queue and its fulfilment status may need to change shape.
 - **MI that doesn't tally.** The call expects small reporting discrepancies after these changes.
