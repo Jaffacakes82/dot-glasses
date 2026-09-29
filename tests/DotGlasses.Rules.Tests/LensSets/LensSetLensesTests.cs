@@ -270,4 +270,63 @@ public class LensSetLensesTests
         Assert.Equal(new decimal?[] { null, null, null, null }, [recorded.SphereRight, recorded.CylinderRight, recorded.AxisRight, recorded.AddRight]);
         Assert.Equal(new LensPairPowers(null, null, null, null, null, null, null, null, null, null), LensSetLenses.RecordedAs(null, null));
     }
+
+    [Fact]
+    public void SameLens_ReadsPowersTheWayMatchDoes()
+    {
+        // A blank and a 0.00 cylinder, a stray axis without one, and a 0.00 and a blank add are the
+        // same lens; a different cylinder or add is not.
+        Assert.True(LensSetLenses.SameLens(2.50m, null, null, null, 2.5m, 0.00m, 90m, 0.00m));
+        Assert.True(LensSetLenses.SameLens(1.00m, -0.75m, 90m, 2.00m, 1.00m, -0.75m, 90m, 2.00m));
+        Assert.False(LensSetLenses.SameLens(1.00m, -0.75m, 90m, null, 1.00m, -0.75m, 80m, null));
+        Assert.False(LensSetLenses.SameLens(1.00m, null, null, 2.00m, 1.00m, null, null, null));
+    }
+
+    [Fact]
+    public void SameLens_TwoEmptyEyesMatch_OneEmptyEyeDoesNot()
+    {
+        Assert.True(LensSetLenses.SameLens(null, null, null, null, null, null, null, null));
+        Assert.False(LensSetLenses.SameLens(1.00m, null, null, null, null, null, null, null));
+        Assert.False(LensSetLenses.SameLens(null, null, null, null, 1.00m, null, null, null));
+    }
+
+    [Fact]
+    public void RightEyeChoices_AreTheLensesOfTheLeftLensesType_OrEveryLensWithNoLeft()
+    {
+        var single = Lens("+1.00", 1.00m);
+        var single2 = Lens("+2.00", 2.00m);
+        var bifocal = Lens("Bifocal +1.50", 0.00m, add: 1.50m, lensType: Bifocal);
+        var progressive = Lens("Progressive +1.50", 0.00m, add: 1.50m, lensType: Progressive);
+        var lenses = new[] { single, bifocal, single2, progressive };
+
+        Assert.Equal([single, single2], LensSetLenses.RightEyeChoices(lenses, single));
+        Assert.Equal([bifocal], LensSetLenses.RightEyeChoices(lenses, bifocal));
+        Assert.Equal(lenses, LensSetLenses.RightEyeChoices(lenses, null));
+        Assert.False(LensSetLenses.CanPairWith(bifocal, progressive));
+    }
+
+    [Fact]
+    public void NoLongerInSetNote_NamesThePowerTheRecordAndTheSet_OnlyForAnEyeWhoseLensIsGone()
+    {
+        Assert.Equal(
+            "The SPH +3.50 · CYL -0.75 × 90 on this Lead is no longer in Readers. Choose a lens.",
+            LensSetLenses.NoLongerInSetNote("Lead", "Readers", 3.50m, -0.75m, 90m, null, matched: null));
+        Assert.Null(LensSetLenses.NoLongerInSetNote("Lead", "Readers", 3.50m, null, null, null, matched: Lens("+3.50", 3.50m)));
+        Assert.Null(LensSetLenses.NoLongerInSetNote("record", "Readers", null, null, null, null, matched: null));
+    }
+
+    [Fact]
+    public void WithActiveCoatingsOnly_DropsRetiredCoatings_AndEveryPairingThatNamesOne()
+    {
+        var lens = Lens("+1.00", 1.00m,
+            coatings: [Clear, BlueBlock, Photochromic],
+            pairings: [new(BlueBlock, Photochromic), new(Clear, BlueBlock)]);
+
+        var sold = LensSetLenses.WithActiveCoatingsOnly(lens, new HashSet<Guid> { Clear, BlueBlock });
+
+        Assert.Equal([Clear, BlueBlock], sold.CoatingIds);
+        Assert.Equal([new CoatingPairingRule(Clear, BlueBlock)], sold.Pairings);
+        // With the pairing to the retired Photochromic gone, Blue block is offered again.
+        Assert.Equal([Clear, BlueBlock], LensSetLenses.CoatingsFor(sold, sold).Offered);
+    }
 }

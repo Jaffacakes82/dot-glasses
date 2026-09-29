@@ -121,4 +121,22 @@ public class LensPowerValuesTests
         Assert.Equal(allowed, LensPowerValues.AddRange.Allows(value));
         Assert.Equal(allowed, LensPowerValues.Add.Contains(value));
     }
+
+    [Theory]
+    [InlineData(2.50, null, null, null, "SPH +2.50")]
+    [InlineData(2.50, 0.00, null, 0.00, "SPH +2.50")]
+    [InlineData(-1.25, -0.75, 90.0, null, "SPH -1.25 · CYL -0.75 × 90")]
+    [InlineData(0.00, -0.50, null, 2.00, "SPH 0.00 · CYL -0.50 · ADD +2.00")]
+    [InlineData(1.00, null, null, 1.50, "SPH +1.00 · ADD +1.50")]
+    public void FormatLensPower_ShowsCylinderAndAddOnlyWhenTheLensHasThem(double sphere, double? cylinder, double? axis, double? add, string expected) =>
+        Assert.Equal(expected, LensPowerValues.FormatLensPower((decimal)sphere, (decimal?)cylinder, (decimal?)axis, (decimal?)add));
+
+    [Fact]
+    public void PresetPupilDistanceBuckets_AreZeroToFour_OrZeroToTwoOnAChildrensFrame()
+    {
+        Assert.Equal([0, 1, 2, 3, 4], LensPowerValues.PresetPupilDistanceBuckets(childrensFrame: false));
+        Assert.Equal([0, 1, 2], LensPowerValues.PresetPupilDistanceBuckets(childrensFrame: true));
+        Assert.Equal(4, LensPowerValues.MaxPresetPupilDistanceBucket(childrensFrame: false));
+        Assert.Equal(2, LensPowerValues.MaxPresetPupilDistanceBucket(childrensFrame: true));
+    }
 }

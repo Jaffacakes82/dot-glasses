@@ -102,14 +102,13 @@ public class LensRangeSelection
     }
 
     /// <summary>The left eye's lens when the eyes are chosen separately. The right eye is limited
-    /// to lenses of the left's lens type, so a right lens of another type is dropped rather than
-    /// left as a mixed pair the rules would refuse.</summary>
+    /// to the lenses the left can pair with (<see cref="LensSetLenses.RightEyeChoices"/>), so a
+    /// right lens it can't is dropped rather than left as a mixed pair the rules would refuse.</summary>
     public void ChooseLeftLens(IReadOnlyList<LensOptionSnapshot> setLenses, Guid? lensId)
     {
         var left = setLenses.FirstOrDefault(lens => lens.Id == lensId);
-        var right = setLenses.FirstOrDefault(lens => lens.Id == LensRightId);
-        var keepRight = left is null || right is null || right.LensTypeRefId == left.LensTypeRefId;
-        ChooseLenses(setLenses, lensId, keepRight ? right?.Id : null);
+        var right = LensSetLenses.RightEyeChoices(setLenses, left).FirstOrDefault(lens => lens.Id == LensRightId);
+        ChooseLenses(setLenses, lensId, right?.Id);
     }
 
     public void ChooseRightLens(IReadOnlyList<LensOptionSnapshot> setLenses, Guid? lensId) =>
@@ -118,26 +117,6 @@ public class LensRangeSelection
     /// <summary>Records that a record's lens for an eye is no longer in its lens set (the note
     /// text, or null for an eye that has no such problem) — see the seeding in ConsultationForm.</summary>
     public void NoteMissingLenses(string? left, string? right) => (LensNoteLeft, LensNoteRight) = (left, right);
-
-    /// <summary>
-    /// Whether two eyes' lens powers are the same lens — the definition the rules and the Admin
-    /// Portal use (<see cref="LensSetLenses.Match"/>: a blank cylinder is 0.00, an add of 0.00 is
-    /// none, an axis only counts with a cylinder), so a record starts with "Same lens for both
-    /// eyes" ticked exactly when its eyes match. Two eyes with nothing chosen count as matching.
-    /// </summary>
-    public static bool EyesMatch(
-        decimal? sphereLeft, decimal? cylinderLeft, decimal? axisLeft, decimal? addLeft,
-        decimal? sphereRight, decimal? cylinderRight, decimal? axisRight, decimal? addRight,
-        Guid? lensTypeRefId)
-    {
-        if (sphereLeft is not { } left)
-        {
-            return sphereRight is null;
-        }
-
-        var leftAsLens = new LensOptionSnapshot(Guid.Empty, string.Empty, left, [], cylinderLeft, axisLeft, addLeft, lensTypeRefId);
-        return LensSetLenses.Match([leftAsLens], sphereRight, cylinderRight, axisRight, addRight, lensTypeRefId) is not null;
-    }
 
     /// <summary>Forgets the chosen lenses (switching lens range, or loading a record whose lens
     /// set this device doesn't offer) without touching the powers, and goes back to the default of

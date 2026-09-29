@@ -1,6 +1,7 @@
 @using DotGlasses.App.ReferenceData
 @using DotGlasses.App.Validation
 @using DotGlasses.Contracts.ReferenceData
+@using DotGlasses.Rules.LensSets
 @using DotGlasses.Rules.ReferenceData
 
 <div class="dg-field">
@@ -13,7 +14,7 @@
     {
         @foreach (var item in Items.OrderBy(i => i.SortOrder))
         {
-            var lockedBy = CoatingSelection.LockedBy(item.Id, SelectedIds, RequiredPairings);
+            var lockedBy = PairedCoatings.LockedBy(item.Id, SelectedIds, RequiredPairings);
             var excludedBy = lockedBy is null && !SelectedIds.Contains(item.Id) ? FindConflict(item.Id, SelectedIds) : null;
             <label style="display:flex; align-items:center; gap:6px; font-weight:normal; margin-bottom:2px;" @key="(item.Id, _toggleVersion)">
                 <input type="checkbox" style="width:auto;" checked="@SelectedIds.Contains(item.Id)"
@@ -102,7 +103,7 @@
 
             selection.Add(coatingId);
 
-            var withPaired = CoatingSelection.WithPairedCoatings(selection, Items.Select(i => i.Id).ToList(), RequiredPairings);
+            var withPaired = PairedCoatings.WithPairedCoatings(selection, Items.Select(i => i.Id).ToList(), RequiredPairings);
             foreach (var pairedId in withPaired.Except(selection))
             {
                 if (FindConflict(pairedId, withPaired.Where(id => id != pairedId).ToList()) is { } pairedConflictId)

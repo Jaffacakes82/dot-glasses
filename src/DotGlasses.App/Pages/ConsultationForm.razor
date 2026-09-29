@@ -598,16 +598,11 @@
             // Read off the record's own powers, which ChooseLenses has just emptied for an eye with
             // no lens. An eye with no power at all (a record that never chose one) has nothing to
             // be "no longer in the set", so it gets no note.
-            string? Missing(decimal? sphere, decimal? cylinder, decimal? axis, decimal? add, LensOptionSnapshot? found) =>
-                sphere is { } s && found is null
-                    ? $"The {LensPowerText.Format(s, cylinder, axis, add)} on this {source} is no longer in {lensSet.Name}. Choose a lens."
-                    : null;
-
             _lensRange.NoteMissingLenses(
-                Missing(sphereLeft, cylinderLeft, axisLeft, addLeft, left),
-                Missing(sphereRight, cylinderRight, axisRight, addRight, right));
-            _lensRange.SameLensForBothEyes = LensRangeSelection.EyesMatch(
-                sphereLeft, cylinderLeft, axisLeft, addLeft, sphereRight, cylinderRight, axisRight, addRight, lensTypeRefId);
+                LensSetLenses.NoLongerInSetNote(source, lensSet.Name, sphereLeft, cylinderLeft, axisLeft, addLeft, left),
+                LensSetLenses.NoLongerInSetNote(source, lensSet.Name, sphereRight, cylinderRight, axisRight, addRight, right));
+            _lensRange.SameLensForBothEyes = LensSetLenses.SameLens(
+                sphereLeft, cylinderLeft, axisLeft, addLeft, sphereRight, cylinderRight, axisRight, addRight);
         }
 
         // The coatings the record carried (a Lead's preference seeded as the Sale's coating set, or

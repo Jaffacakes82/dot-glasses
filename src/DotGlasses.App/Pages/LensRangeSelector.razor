@@ -175,9 +175,9 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         <label>Pupil distance (0–@MaxPresetPdBucket@(Model.ChildrensFrame ? ", children's frame" : ""))</label>
         <select value="@Model.PresetPupilDistanceBucket" @onchange="e => Model.PresetPupilDistanceBucket = ParseInt(e.Value)">
             <option value="">Select...</option>
-            @for (var i = 0; i <= MaxPresetPdBucket; i++)
+            @foreach (var bucket in LensPowerValues.PresetPupilDistanceBuckets(Model.ChildrensFrame))
             {
-                <option value="@i">@i</option>
+                <option value="@bucket">@bucket</option>
             }
         </select>
         <FieldError Errors="Errors" For="PresetPupilDistanceBucket" />
@@ -255,10 +255,10 @@ else if (Model.LensRangeType == LensRangeType.Custom)
 
     private LensOptionSnapshot? LeftLens => SetLenses.FirstOrDefault(l => l.Id == Model.LensLeftId);
 
-    /// <summary>The right eye is limited to lenses of the left eye's lens type — a pair has one
-    /// lens type, and a mixed pair can't be sold. Every lens is offered until the left is chosen.</summary>
-    private IEnumerable<LensOptionSnapshot> RightLensChoices =>
-        LeftLens is { } left ? OrderedLenses.Where(l => l.LensTypeRefId == left.LensTypeRefId) : OrderedLenses;
+    /// <summary>The right eye is limited to the lenses the left can pair with — a pair has one
+    /// lens type, and a mixed pair can't be sold (LensSetLenses.RightEyeChoices). Every lens is
+    /// offered until the left is chosen.</summary>
+    private IEnumerable<LensOptionSnapshot> RightLensChoices => LensSetLenses.RightEyeChoices(OrderedLenses, LeftLens);
 
     /// <summary>A chosen lens that comes in no coating can't be sold — say so up front.</summary>
     private bool ChosenLensesWithoutCoatings =>
@@ -272,7 +272,7 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         {
             builder.OpenElement(0, "p");
             builder.AddAttribute(1, "class", "dg-lens-power");
-            builder.AddContent(2, LensPowerText.Format(lens.Sphere, lens.Cylinder, lens.Axis, lens.Add));
+            builder.AddContent(2, LensPowerValues.FormatLensPower(lens.Sphere, lens.Cylinder, lens.Axis, lens.Add));
             builder.CloseElement();
         }
     };
@@ -324,8 +324,9 @@ else if (Model.LensRangeType == LensRangeType.Custom)
     private static int? ParseInt(object? value) =>
         int.TryParse(value?.ToString(), out var i) ? i : null;
 
-    /// <summary>0-4 normally, 0-2 for a children's frame — see Sale/Lead.PresetPupilDistanceBucket.</summary>
-    private int MaxPresetPdBucket => Model.ChildrensFrame ? 2 : 4;
+    /// <summary>The bucket ceiling, lowered for a children's frame — LensPowerValues, the one the
+    /// rules check against.</summary>
+    private int MaxPresetPdBucket => LensPowerValues.MaxPresetPupilDistanceBucket(Model.ChildrensFrame);
 
     private void OnChildrensFrameChanged(ChangeEventArgs e)
     {
