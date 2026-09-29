@@ -19,11 +19,12 @@ public class LeadConversionFormModel
 {
     public bool ConsentGiven { get; set; }
 
-    /// <summary>At least one required — see CreateSaleRequest.CoatingRefIds/ADR-0001. No live
-    /// pairing-auto-add or exclusion-blocking in this admin form (Day-2 nicety for this
-    /// occasional manual-entry path); the exclusion rule is still enforced server-side via the
-    /// same ConsultationRules module the Field App posts through, surfaced as a validation
-    /// error on submit like every other field here.</summary>
+    /// <summary>At least one required — see CreateSaleRequest.CoatingRefIds/ADR-0001. A pairing's
+    /// coating is ticked and locked on screen (PairedCoatings), but there is no live
+    /// exclusion-blocking in this admin form (Day-2 nicety for this occasional manual-entry path);
+    /// the exclusion rule is still enforced server-side via the same ConsultationRules module the
+    /// Field App posts through, surfaced as a validation error on submit like every other field
+    /// here.</summary>
     public List<Guid> CoatingRefIds { get; set; } = [];
     public Guid? FrameColourRefId { get; set; }
     public string? FrameColourOtherText { get; set; }
@@ -166,28 +167,27 @@ public class LeadConversionViewModel
     public string? CoatingsNote { get; init; }
 
     /// <summary>The coatings ticked once the pairings are applied, and — for each one a ticked
-    /// trigger brought with it — which trigger it comes with. Chains resolve to a fixed point.</summary>
+    /// trigger locks — which trigger it comes with. Both are Rules' (<see cref="PairedCoatings"/>),
+    /// the definition the Field App's coating picker applies too.</summary>
     public (IReadOnlySet<Guid> Ticked, IReadOnlyDictionary<Guid, Guid> ComesWith) TickedCoatings()
     {
-        var ticked = new HashSet<Guid>(Form.CoatingRefIds);
+        var ticked = PairedCoatings.WithPairedCoatings(Form.CoatingRefIds, OfferedCoatingIds, CoatingPairings);
         var comesWith = new Dictionary<Guid, Guid>();
-        bool changed;
-        do
+        foreach (var coating in ticked)
         {
-            changed = false;
-            foreach (var pairing in CoatingPairings)
+            if (PairedCoatings.LockedBy(coating, ticked, CoatingPairings) is { } trigger)
             {
-                if (ticked.Contains(pairing.TriggerCoatingRefId) && !comesWith.ContainsKey(pairing.PairedCoatingRefId))
-                {
-                    comesWith[pairing.PairedCoatingRefId] = pairing.TriggerCoatingRefId;
-                    changed |= ticked.Add(pairing.PairedCoatingRefId);
-                }
+                comesWith[coating] = trigger;
             }
         }
-        while (changed);
 
-        return (ticked, comesWith);
+        return (ticked.ToHashSet(), comesWith);
     }
+
+    /// <summary>What ticking each trigger does, for the screen's script — see
+    /// <see cref="CoatingTickEffects"/>.</summary>
+    public IReadOnlyDictionary<Guid, CoatingTickEffect> TickEffects() =>
+        CoatingTickEffects.For(OfferedCoatingIds, CoatingPairings);
     public required IReadOnlyList<ReferenceDataItemDto> FrameColours { get; init; }
     public required IReadOnlyList<ReferenceDataItemDto> Coatings { get; init; }
     public required IReadOnlyList<ReferenceDataItemDto> HardCaseColours { get; init; }
@@ -201,5 +201,28 @@ public class LeadConversionViewModel
 public sealed record LensSetChoice(Guid Id, string Name, IReadOnlyList<LensChoice> Lenses);
 
 /// <summary>One lens in a lens dropdown: its typed label, the power line shown under the dropdown
-/// once it is chosen, and its lens type — which limits the right eye to the left eye's.</summary>
-public sealed record LensChoice(Guid Id, string Label, string Power, Guid? LensTypeRefId);
+/// once it is chosen (LensPowerValues.FormatLensPower), and — when it is the left eye's lens — the
+/// lenses the right eye may then choose from (LensSetLenses.RightEyeChoices), so neither the view
+/// nor the script restates which lenses pair.</summary>
+public sealed record LensChoice(Guid Id, string Label, string Power, IReadOnlyList<Guid> PairsWith);
+
+/// <summary>What ticking one trigger coating does on the chosen pair of lenses: the coatings it
+/// brings with it (its pairings, chained, limited to what the pair offers) and the ones among them
+/// it locks — a pairing that runs both ways brings but never locks. Worked out by Rules
+/// (<see cref="PairedCoatings"/>) for every trigger up front, so the screen's script only looks the
+/// answer up: the coatings a selection brings are the union of what each ticked coating brings,
+/// and a coating is locked while any ticked coating locks it.</summary>
+public sealed record CoatingTickEffect(IReadOnlyList<Guid> Brings, IReadOnlyList<Guid> Locks);
+
+public static class CoatingTickEffects
+{
+    public static IReadOnlyDictionary<Guid, CoatingTickEffect> For(IReadOnlyList<Guid>? offered, IReadOnlyList<CoatingPairingRule> pairings) =>
+        pairings
+            .Select(p => p.TriggerCoatingRefId)
+            .Distinct()
+            .ToDictionary(
+                trigger => trigger,
+                trigger => new CoatingTickEffect(
+                    PairedCoatings.WithPairedCoatings([trigger], offered, pairings).Where(id => id != trigger).ToList(),
+                    PairedCoatings.LockedByTicking(trigger, pairings)));
+}

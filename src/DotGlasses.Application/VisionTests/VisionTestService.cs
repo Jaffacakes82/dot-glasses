@@ -2,6 +2,7 @@ using DotGlasses.Application.Common;
 using DotGlasses.Contracts.Tests;
 using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Entities;
+using DotGlasses.Rules.LensPowers;
 using DomainOutcome = DotGlasses.Domain.Enums.TestOutcome;
 using ContractOutcome = DotGlasses.Contracts.Tests.TestOutcome;
 
@@ -34,6 +35,11 @@ public class VisionTestService(IVisionTestRepository repository, IUnitOfWork uni
             return ToDto(existing);
         }
 
+        // Stored the way a lens set's lens is (LensPowerRules.Normalise), so a Custom +3.00 and a
+        // lens set's +3.00 are the same row shape whichever way the client spelled "none".
+        var left = LensPowerRules.Normalise(request.CylinderLeft, request.AxisLeft, request.AddLeft);
+        var right = LensPowerRules.Normalise(request.CylinderRight, request.AxisRight, request.AddRight);
+
         var entity = new Test
         {
             Id = request.Id,
@@ -52,13 +58,13 @@ public class VisionTestService(IVisionTestRepository repository, IUnitOfWork uni
             LensRangeType = request.LensRangeType?.ToDomain(),
             PresetCatalogueId = request.PresetCatalogueId,
             SphereLeft = request.SphereLeft,
-            CylinderLeft = request.CylinderLeft,
-            AxisLeft = request.AxisLeft,
-            AddLeft = request.AddLeft,
+            CylinderLeft = left.Cylinder,
+            AxisLeft = left.Axis,
+            AddLeft = left.Add,
             SphereRight = request.SphereRight,
-            CylinderRight = request.CylinderRight,
-            AxisRight = request.AxisRight,
-            AddRight = request.AddRight,
+            CylinderRight = right.Cylinder,
+            AxisRight = right.Axis,
+            AddRight = right.Add,
             LensTypeRefId = request.LensTypeRefId,
             LensTypeOtherText = request.LensTypeOtherText,
             PupilDistanceMm = request.PupilDistanceMm,

@@ -173,6 +173,76 @@ public class LensSetRecordApiTests(CustomWebApplicationFactory factory)
         Assert.Null(stored.PresetCatalogueId);
     }
 
+    [Fact]
+    public async Task ACustomSaleSpellingNoneAsZero_StoresTheSameShapeAsALensSetLens()
+    {
+        // A Custom +3.00 posted with a 0.00 cylinder and a 0.00 add is stored with neither, exactly
+        // as the lens set's +3.00 is (LensPowerRules.Normalise on write) — so the two can't be told
+        // apart by how a client happened to spell "none".
+        var fixture = SeedLensSet();
+
+        var custom = await Client().PostAsJsonAsync("api/v1/sales", Sale(sale =>
+        {
+            sale.LensRangeType = LensRangeType.Custom;
+            sale.SphereLeft = 3.00m;
+            sale.CylinderLeft = 0.00m;
+            sale.AddLeft = 0.00m;
+            sale.SphereRight = 3.00m;
+            sale.CylinderRight = 0.00m;
+            sale.AddRight = 0.00m;
+            sale.PupilDistanceMm = 62m;
+        }));
+        var lensSet = await Client().PostAsJsonAsync("api/v1/sales", Sale(sale =>
+        {
+            sale.LensRangeType = LensRangeType.LensSet;
+            sale.PresetCatalogueId = fixture.LensSetId;
+            sale.SphereLeft = 3.00m;
+            sale.SphereRight = 3.00m;
+            sale.PresetPupilDistanceBucket = 2;
+            sale.CoatingRefIds = [fixture.CoatingId];
+        }));
+
+        Assert.True(custom.StatusCode == HttpStatusCode.Created, await custom.Content.ReadAsStringAsync());
+        Assert.True(lensSet.StatusCode == HttpStatusCode.Created, await lensSet.Content.ReadAsStringAsync());
+        var customId = (await custom.Content.ReadFromJsonAsync<SaleDto>())!.Id;
+        var lensSetId = (await lensSet.Content.ReadFromJsonAsync<SaleDto>())!.Id;
+
+        (decimal? Sphere, decimal? Cylinder, decimal? Axis, decimal? Add, decimal? SphereR, decimal? CylinderR, decimal? AxisR, decimal? AddR) Powers(Guid id) =>
+            Row(db => db.Sales.IgnoreQueryFilters().Where(s => s.Id == id)
+                .Select(s => new { s.SphereLeft, s.CylinderLeft, s.AxisLeft, s.AddLeft, s.SphereRight, s.CylinderRight, s.AxisRight, s.AddRight })
+                .AsEnumerable()
+                .Select(s => (s.SphereLeft, s.CylinderLeft, s.AxisLeft, s.AddLeft, s.SphereRight, s.CylinderRight, s.AxisRight, s.AddRight))
+                .Single());
+
+        var customPowers = Powers(customId);
+        Assert.Equal(((decimal?)3.00m, (decimal?)3.00m), (customPowers.Sphere, customPowers.SphereR));
+        Assert.All(
+            new[] { customPowers.Cylinder, customPowers.Axis, customPowers.Add, customPowers.CylinderR, customPowers.AxisR, customPowers.AddR },
+            value => Assert.Null(value));
+        Assert.Equal(Powers(lensSetId), customPowers);
+    }
+
+    [Fact]
+    public async Task AnOverLongLensTypeText_OnALead_IsAKeyedRefusal_NotADatabaseError()
+    {
+        var response = await Client().PostAsJsonAsync("api/v1/leads", new CreateLeadRequest
+        {
+            Id = Guid.NewGuid(),
+            FullName = "Amina Okoro",
+            PhoneNumber = "0700111222",
+            ReasonNotPurchasedRefId = ActiveItem(DomainReferenceDataCategory.ReasonNotPurchased),
+            LensRangeType = LensRangeType.Custom,
+            SphereLeft = 1.00m,
+            AddLeft = 2.00m,
+            SphereRight = 1.00m,
+            LensTypeRefId = ReferenceDataSeedConfiguration.LensTypeBifocalId,
+            LensTypeOtherText = new string('a', 201),
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertKeys([nameof(CreateLeadRequest.LensTypeOtherText)], await ErrorsAsync(response));
+    }
+
     /// <summary>
     /// A device can still hold a lens-set record queued before this release: the outbox posts the
     /// stored JSON as-is, so it names its lenses by id and sends no powers. The binder ignores the

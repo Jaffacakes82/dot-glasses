@@ -42,7 +42,8 @@ public class CataloguesController(
         LensPowerValues.Sphere.Select(LensPowerValues.FormatPower).ToList(),
         LensPowerValues.Cylinder.Select(LensPowerValues.FormatPower).ToList(),
         LensPowerValues.Axis.Select(a => a.ToString("0", CultureInfo.InvariantCulture)).ToList(),
-        LensPowerValues.Add.Select(LensPowerValues.FormatPower).ToList()));
+        LensPowerValues.Add.Select(LensPowerValues.FormatPower).ToList(),
+        LensPowerValues.PupilDistanceMm.Select(mm => mm.ToString("0", CultureInfo.InvariantCulture)).ToList()));
 
     [HttpPost]
     [ValidateAntiForgeryToken]

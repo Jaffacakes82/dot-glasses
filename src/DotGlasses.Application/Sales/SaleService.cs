@@ -4,6 +4,7 @@ using DotGlasses.Application.Leads;
 using DotGlasses.Contracts.Sales;
 using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Entities;
+using DotGlasses.Rules.LensPowers;
 using DomainFrameCoverage = DotGlasses.Domain.Enums.FrameCoverage;
 using ContractFrameCoverage = DotGlasses.Contracts.Sales.FrameCoverage;
 
@@ -55,6 +56,10 @@ public class SaleService(
         var customerId = await FindOrCreateCustomerAsync(hierarchyPath, request.FullName, request.PhoneNumber, cancellationToken);
         var lensRangeType = request.LensRangeType.ToDomain();
 
+        // Stored the way a lens set's lens is (LensPowerRules.Normalise) — see VisionTestService.
+        var left = LensPowerRules.Normalise(request.CylinderLeft, request.AxisLeft, request.AddLeft);
+        var right = LensPowerRules.Normalise(request.CylinderRight, request.AxisRight, request.AddRight);
+
         var entity = new Sale
         {
             Id = request.Id,
@@ -75,13 +80,13 @@ public class SaleService(
             LensRangeType = lensRangeType,
             PresetCatalogueId = request.PresetCatalogueId,
             SphereLeft = request.SphereLeft,
-            CylinderLeft = request.CylinderLeft,
-            AxisLeft = request.AxisLeft,
-            AddLeft = request.AddLeft,
+            CylinderLeft = left.Cylinder,
+            AxisLeft = left.Axis,
+            AddLeft = left.Add,
             SphereRight = request.SphereRight,
-            CylinderRight = request.CylinderRight,
-            AxisRight = request.AxisRight,
-            AddRight = request.AddRight,
+            CylinderRight = right.Cylinder,
+            AxisRight = right.Axis,
+            AddRight = right.Add,
             LensTypeRefId = request.LensTypeRefId,
             LensTypeOtherText = request.LensTypeOtherText,
             OrderFromDotGlasses = request.OrderFromDotGlasses,

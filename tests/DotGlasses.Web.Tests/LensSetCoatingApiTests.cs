@@ -158,6 +158,67 @@ public class LensSetCoatingApiTests(CustomWebApplicationFactory factory)
         Assert.Equal([nameof(CreateLeadRequest.CoatingPreferenceRefId)], errors.Keys);
     }
 
+    /// <summary>
+    /// A lens set whose lenses carry a coating retired since: +1.00 comes only in it, and +2.50 in
+    /// Clear and it, with Clear → the retired coating paired. The retired coating is a fresh item
+    /// of this test's own, so retiring it touches no other test's reference data.
+    /// </summary>
+    private (Guid LensSetId, Guid RetiredCoating) SeedLensSetWithARetiredCoating()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<DotGlassesDbContext>();
+
+        var retired = new ReferenceDataItem
+        {
+            Id = Guid.NewGuid(), Category = DomainReferenceDataCategory.Coating, Code = $"retired-{Guid.NewGuid():N}",
+            Label = "Retired tint", SortOrder = 999, IsActive = false,
+        };
+        db.ReferenceDataItems.Add(retired);
+
+        var lensSet = new PresetCatalogue { Id = Guid.NewGuid(), Name = $"Retired Coating Readers {Guid.NewGuid():N}", OwningOrgNodeId = OrganisationSeedConfiguration.DgiId };
+        db.PresetCatalogues.Add(lensSet);
+        AddLens(db, lensSet.Id, "+1.00", 1.00m, retired.Id);
+        var plus250 = AddLens(db, lensSet.Id, "+2.50", 2.50m, Clear, retired.Id);
+        db.LensOptionCoatingPairings.Add(new LensOptionCoatingPairing
+        {
+            Id = Guid.NewGuid(), LensOptionId = plus250, TriggerCoatingRefId = Clear, PairedCoatingRefId = retired.Id,
+        });
+        db.PresetCatalogueAssignments.Add(new PresetCatalogueAssignment { Id = Guid.NewGuid(), PresetCatalogueId = lensSet.Id, OrgNodeId = OrganisationSeedConfiguration.KenyaRetailerId });
+        db.SaveChanges();
+
+        return (lensSet.Id, retired.Id);
+    }
+
+    [Fact]
+    public async Task ALensWhoseCoatingsAreAllRetired_IsRefusedAgainstTheLens_NotAskedForACoating()
+    {
+        var (lensSetId, _) = SeedLensSetWithARetiredCoating();
+
+        var response = await Client().PostAsJsonAsync("api/v1/sales", LensSetSale(lensSetId, 1.00m, 2.50m));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var errors = await ErrorsAsync(response);
+        Assert.Equal([nameof(CreateSaleRequest.SphereLeft)], errors.Keys);
+        Assert.Equal("This lens has no coatings configured yet, so it can't be sold on a lens set.", errors[nameof(CreateSaleRequest.SphereLeft)].Single());
+    }
+
+    [Fact]
+    public async Task ARetiredCoating_IsNotOffered_AndItsPairingNoLongerHoldsItsTriggerBack()
+    {
+        var (lensSetId, retired) = SeedLensSetWithARetiredCoating();
+
+        // What the Field App caches: the lens comes in Clear only, with no pairing.
+        var catalogues = await Client().GetFromJsonAsync<List<Contracts.PresetCatalogues.PresetCatalogueDto>>("api/v1/preset-catalogues");
+        var lens = catalogues!.Single(c => c.Id == lensSetId).LensOptions.Single(l => l.Sphere == 2.50m);
+        Assert.Equal([Clear], lens.CoatingIds);
+        Assert.Empty(lens.Pairings);
+
+        // And the server accepts Clear alone on it — the retired paired coating no longer counts.
+        var sold = await Client().PostAsJsonAsync("api/v1/sales", LensSetSale(lensSetId, 2.50m, 2.50m, Clear));
+        Assert.True(sold.StatusCode == HttpStatusCode.Created, await sold.Content.ReadAsStringAsync());
+        Assert.DoesNotContain(retired, (await sold.Content.ReadFromJsonAsync<SaleDto>())!.CoatingRefIds);
+    }
+
     private static async Task<IReadOnlyDictionary<string, IReadOnlyList<string>>> ErrorsAsync(HttpResponseMessage response)
     {
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
