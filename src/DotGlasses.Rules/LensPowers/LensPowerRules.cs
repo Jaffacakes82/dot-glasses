@@ -32,6 +32,16 @@ public static class LensPowerRules
     /// required.</summary>
     public static decimal? NormaliseAdd(decimal? add) => add is 0m ? null : add;
 
+    /// <summary>
+    /// One eye's cylinder, axis and add as a record stores them: a 0.00 (or blank) cylinder is no
+    /// cylinder, an axis only goes with a cylinder, and a 0.00 add is no add. A lens set's lenses
+    /// are stored this way, so a record normalised through here stores a Custom +3.00 exactly as
+    /// it stores a lens set's +3.00. Applied on write, after the rules have passed: it never turns
+    /// a refused power into an accepted one, only picks one spelling of an accepted power.
+    /// </summary>
+    public static (decimal? Cylinder, decimal? Axis, decimal? Add) Normalise(decimal? cylinder, decimal? axis, decimal? add) =>
+        HasCylinder(cylinder) ? (cylinder, axis, NormaliseAdd(add)) : (null, null, NormaliseAdd(add));
+
     /// <summary>Whether this eye has an add above 0 — the thing that makes a lens type
     /// required.</summary>
     public static bool HasAdd(decimal? add) => add > 0m;

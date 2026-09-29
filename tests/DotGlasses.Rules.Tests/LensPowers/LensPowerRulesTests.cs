@@ -197,4 +197,13 @@ public class LensPowerRulesTests
         Assert.Equal("LensTypeRefId", failure.Key);
         Assert.Equal("LensTypeRefId must reference an existing, active LensType reference-data item.", failure.Message);
     }
+
+    [Fact]
+    public void Normalise_StoresNoCylinderNoAxisAndNoAddAsNull()
+    {
+        // A Custom +3.00 posted with 0.00s stores exactly what a lens set's +3.00 does.
+        Assert.Equal(((decimal?)null, (decimal?)null, (decimal?)null), LensPowerRules.Normalise(0.00m, null, 0.00m));
+        Assert.Equal(((decimal?)null, (decimal?)null, (decimal?)null), LensPowerRules.Normalise(null, 90m, null));
+        Assert.Equal(((decimal?)-0.75m, (decimal?)90m, (decimal?)2.00m), LensPowerRules.Normalise(-0.75m, 90m, 2.00m));
+    }
 }
