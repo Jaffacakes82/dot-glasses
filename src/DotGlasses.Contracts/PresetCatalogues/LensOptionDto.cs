@@ -7,9 +7,14 @@ namespace DotGlasses.Contracts.PresetCatalogues;
 /// its own coating pairings.
 ///
 /// Every collection defaults to empty, so a payload cached before this shape existed (which
-/// carried <c>SortOrder</c> and <c>AvailableCoatingIds</c> instead) still deserializes: the unknown
-/// names are ignored and the lens simply offers no coatings until the next online load refreshes
-/// the cache.
+/// carried <c>SortOrder</c> and <c>AvailableCoatingIds</c> instead) still deserializes rather than
+/// throwing — but the Field App then drops those lens sets (its cache records which shape it was
+/// written in) instead of offering lenses that would read as zero-power with no coatings, until the
+/// next online load refreshes the cache.
+///
+/// <see cref="CoatingIds"/> and <see cref="Pairings"/> hold only coatings that are still active:
+/// the server reads its lens sets that way (LensSetLenses.WithActiveCoatingsOnly) before building
+/// this.
 /// </summary>
 public class LensOptionDto
 {

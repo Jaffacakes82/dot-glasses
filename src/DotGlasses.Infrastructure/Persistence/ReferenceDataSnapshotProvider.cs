@@ -73,6 +73,14 @@ public class ReferenceDataSnapshotProvider(DotGlassesDbContext dbContext, IUnsco
             .Select(x => new ReferenceItemSnapshot(x.Id, x.Category.ToContract(), x.Label, x.IsActive, x.IsOtherOption))
             .ToList();
 
+        // A lens offers only its coatings that are still active (LensSetLenses.WithActiveCoatingsOnly).
+        // This is the one place that is decided: the rules, the Admin Portal and the lens-set API the
+        // Field App caches all read the lenses off this snapshot.
+        var activeCoatingIds = itemSnapshots
+            .Where(x => x.Category == Contracts.Common.ReferenceDataCategory.Coating && x.IsActive)
+            .Select(x => x.Id)
+            .ToHashSet();
+
         _snapshot = new ReferenceDataSnapshot(
             itemSnapshots,
             catalogues.Select(c => new PresetCatalogueSnapshot(
@@ -83,10 +91,12 @@ public class ReferenceDataSnapshotProvider(DotGlassesDbContext dbContext, IUnsco
                 // lens-set API read the lenses in this order off the snapshot.
                 LensSetLenses.InDisplayOrder(
                     lensOptions.Where(l => l.PresetCatalogueId == c.Id)
-                        .Select(l => new LensOptionSnapshot(
-                            l.Id, l.Label, l.Sphere, lensCoatings[l.Id].ToList(),
-                            l.Cylinder, l.Axis, l.Add, l.LensTypeRefId, l.LensTypeOtherText,
-                            lensPairings[l.Id].ToList())),
+                        .Select(l => LensSetLenses.WithActiveCoatingsOnly(
+                            new LensOptionSnapshot(
+                                l.Id, l.Label, l.Sphere, lensCoatings[l.Id].ToList(),
+                                l.Cylinder, l.Axis, l.Add, l.LensTypeRefId, l.LensTypeOtherText,
+                                lensPairings[l.Id].ToList()),
+                            activeCoatingIds)),
                     itemSnapshots),
                 AssignedOrgPaths: assignedPathsByCatalogue.GetValueOrDefault(c.Id, []))).ToList(),
             exclusions.Select(e => new CoatingExclusionRule(e.CoatingRefIdA, e.CoatingRefIdB)).ToList());
