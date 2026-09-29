@@ -354,15 +354,7 @@
     private Guid? _hardCaseColourRefId;
     private string? _hardCaseOtherColourText;
 
-    // PreRenameLensPowerNames: a Failed record queued before the lens power fields were renamed
-    // reloads with its prescription intact. It only reads the old names; enqueuing writes the new.
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver
-        {
-            Modifiers = { DotGlasses.Contracts.Common.PreRenameLensPowerNames.Accept },
-        },
-    };
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     // Which server error keys this form has a control for. Anything outside these lands in the
     // summary band instead of being silently dropped — see FormErrors.Merge.

@@ -1054,9 +1054,7 @@ create endpoints refuse a live submission (§7).
 
 **A lens-set record queued before the lens power redesign is rejected, not lost.** It names a lens by
 Id, which the server no longer reads, and a set the redesign retired; it lands on `/failed-records`
-against the lens dropdowns. A Custom record queued under the old field names (`customSphereLeft`,
-…) is still read correctly — the server and the Failed-records reload accept the eight old names as
-aliases. A device whose offline cache predates the new lens shape has its lens sets dropped on an
+against the lens dropdowns. A device whose offline cache predates the new lens shape has its lens sets dropped on an
 offline load, rather than showing zero-power lenses, until its next online refresh.
 
 **Sign-out and location-switching are both blocked while anything is queued**, with an inline
