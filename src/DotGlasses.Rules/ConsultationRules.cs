@@ -123,10 +123,12 @@ public static class ConsultationRules
     /// hand-written copy elsewhere in this file, and that is the cost of not changing them.
     ///
     /// Which check applies to which request is <em>not</em> uniform, and the gaps are pre-existing
-    /// drift preserved on purpose rather than tidied: only a Test length-caps LensTypeOtherText,
-    /// only a Lead requires PhoneNumber, and only a Sale range-checks its LensRangeType — a Lead
+    /// drift preserved on purpose rather than tidied: only a Lead requires PhoneNumber, and only a
+    /// Sale range-checks its LensRangeType — a Lead
     /// carries the same nullable enum and has never checked it. Harmonise them as their own
-    /// decision if it is ever worth making.
+    /// decision if it is ever worth making. (LensTypeOtherText used to be capped on a Test only;
+    /// since a lens set's lens carries it onto all three records, every one now caps it, so an
+    /// over-long text is a keyed failure rather than a database error.)
     /// </summary>
     private static IEnumerable<RuleFailure> Scalars(CreateTestRequest request) =>
         NotEmpty(request.Id, IdKey, "Id")
@@ -150,7 +152,8 @@ public static class ConsultationRules
             .Concat(MaximumLength(request.OccupationOtherText, OccupationOtherTextKey, "Occupation Other Text", 200))
             .Concat(MaximumLength(request.ReasonNotPurchasedOtherText, nameof(CreateLeadRequest.ReasonNotPurchasedOtherText), "Reason Not Purchased Other Text", 200))
             .Concat(MaximumLength(request.ReferralOtherText, ReferralOtherTextKey, "Referral Other Text", 200))
-            .Concat(MaximumLength(request.ReferralLocationFreeText, ReferralLocationFreeTextKey, "Referral Location Free Text", 500));
+            .Concat(MaximumLength(request.ReferralLocationFreeText, ReferralLocationFreeTextKey, "Referral Location Free Text", 500))
+            .Concat(MaximumLength(request.LensTypeOtherText, LensTypeOtherTextKey, "Lens Type Other Text", 200));
 
     /// <summary>See <see cref="Scalars(CreateTestRequest)"/>. OrderFromDotGlasses is the one
     /// scalar carrying hand-written copy rather than FluentValidation's: it always had a
@@ -170,6 +173,7 @@ public static class ConsultationRules
             .Concat(MaximumLength(request.HardCaseOtherColourText, nameof(CreateSaleRequest.HardCaseOtherColourText), "Hard Case Other Colour Text", 200))
             .Concat(MaximumLength(request.ReferralOtherText, ReferralOtherTextKey, "Referral Other Text", 200))
             .Concat(MaximumLength(request.ReferralLocationFreeText, ReferralLocationFreeTextKey, "Referral Location Free Text", 500))
+            .Concat(MaximumLength(request.LensTypeOtherText, LensTypeOtherTextKey, "Lens Type Other Text", 200))
             .Concat(request.OrderFromDotGlasses && request.LensRangeType != LensRangeType.Custom
                 ? [new RuleFailure(nameof(CreateSaleRequest.OrderFromDotGlasses), "OrderFromDotGlasses is only meaningful when LensRangeType is Custom.")]
                 : []);
@@ -356,7 +360,7 @@ public static class ConsultationRules
                     presetCatalogueId,
                     sphereLeft, cylinderLeft, axisLeft, addLeft,
                     sphereRight, cylinderRight, axisRight, addRight,
-                    lensTypeRefId,
+                    lensTypeRefId, lensTypeOtherText,
                     pupilDistanceMm, presetPupilDistanceBucket, childrensFrame,
                     pupilDistanceRequired, presetBucketMessageNamesTheBranch, snapshot))
                 {
@@ -399,7 +403,7 @@ public static class ConsultationRules
         Guid? presetCatalogueId,
         decimal? sphereLeft, decimal? cylinderLeft, decimal? axisLeft, decimal? addLeft,
         decimal? sphereRight, decimal? cylinderRight, decimal? axisRight, decimal? addRight,
-        Guid? lensTypeRefId,
+        Guid? lensTypeRefId, string? lensTypeOtherText,
         decimal? pupilDistanceMm, int? presetPupilDistanceBucket, bool childrensFrame,
         bool pupilDistanceRequired, bool bucketMessageNamesTheBranch, ReferenceDataSnapshot snapshot)
     {
@@ -452,7 +456,7 @@ public static class ConsultationRules
             lensSet?.LensOptions ?? [],
             leftSphere, cylinderLeft, axisLeft, addLeft,
             rightSphere, cylinderRight, axisRight, addRight,
-            lensTypeRefId))
+            lensTypeRefId, lensTypeOtherText))
         {
             yield return failure;
         }
@@ -462,7 +466,7 @@ public static class ConsultationRules
             yield return new RuleFailure(PupilDistanceMmKey, "PupilDistanceMm must be empty for a LensSet LensRangeType — use PresetPupilDistanceBucket instead.");
         }
 
-        var maxBucket = childrensFrame ? 2 : 4;
+        var maxBucket = LensPowerValues.MaxPresetPupilDistanceBucket(childrensFrame);
         var bucketIsWrong = presetPupilDistanceBucket is { } bucket
             ? bucket < 0 || bucket > maxBucket
             : pupilDistanceRequired;
@@ -483,7 +487,7 @@ public static class ConsultationRules
             : $"PresetPupilDistanceBucket must be between 0 and {maxBucket}";
 
         return namesTheBranch
-            ? $"{opening} for a LensSet LensRangeType{(childrensFrame ? " (0-2 for a children's frame)" : "")}."
+            ? $"{opening} for a LensSet LensRangeType{(childrensFrame ? $" (0-{LensPowerValues.MaxPresetPupilDistanceBucket(childrensFrame: true)} for a children's frame)" : "")}."
             : $"{opening}.";
     }
 
@@ -502,13 +506,17 @@ public static class ConsultationRules
     /// <item>Both eyes share a lens type, but the request names another — a client that sent the
     /// wrong lens type for the lenses it chose (null for a bifocal pair, say). Reported against the
     /// lens type itself.</item>
+    /// <item>The lens type is right but its free text isn't the lens's own. A lens set record
+    /// records its lens type — "Other" text included — off the lens (the left one, as
+    /// <see cref="LensSetLenses.RecordedAs"/> does), so the text must be exactly what that lens
+    /// carries: empty unless the lens's type is "Other". Reported against the text.</item>
     /// </list>
     /// </summary>
     private static IEnumerable<RuleFailure> ChosenLenses(
         IReadOnlyList<LensOptionSnapshot> lenses,
         decimal sphereLeft, decimal? cylinderLeft, decimal? axisLeft, decimal? addLeft,
         decimal sphereRight, decimal? cylinderRight, decimal? axisRight, decimal? addRight,
-        Guid? lensTypeRefId)
+        Guid? lensTypeRefId, string? lensTypeOtherText)
     {
         var lensTypesInTheSet = lenses.Select(lens => lens.LensTypeRefId).Distinct().ToList();
 
@@ -544,6 +552,13 @@ public static class ConsultationRules
         {
             yield return new RuleFailure(LensTypeRefIdKey, "LensTypeRefId must be the chosen lenses' own lens type.");
         }
+        else if (LensSetLenses.Match(lenses, sphereLeft, cylinderLeft, axisLeft, addLeft, lensTypeRefId) is { } leftLens
+            && !string.Equals(TextOrNull(leftLens.LensTypeOtherText), TextOrNull(lensTypeOtherText), StringComparison.Ordinal))
+        {
+            yield return new RuleFailure(LensTypeOtherTextKey, "LensTypeOtherText must be the chosen lenses' own lens type text (empty unless their lens type is \"Other\").");
+        }
+
+        static string? TextOrNull(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
     }
 
     /// <summary>
