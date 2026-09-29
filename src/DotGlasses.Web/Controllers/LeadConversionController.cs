@@ -157,6 +157,16 @@ public class LeadConversionController(
         form.ApplyLensRange(atLeadsLocation);
         var answers = BuildSaleAnswers(lead, form, LeadLensCarriesOver(lead, atLeadsLocation));
 
+        // A carried-over lens-set Lead is recorded from its lenses as they are now, the way the
+        // Field App re-records on conversion: an "Other" lens whose text an admin has since edited
+        // would otherwise be refused on LensTypeOtherText with no field on this screen to fix it.
+        if (lead.LensRangeType is LensRangeType.LensSet
+            && LeadLensCarriesOver(lead, atLeadsLocation)
+            && LeadsLenses(lead, atLeadsLocation) is ({ } leftLens, { } rightLens))
+        {
+            answers = answers with { LensTypeOtherText = LensSetLenses.RecordedAs(leftLens, rightLens).LensTypeOtherText };
+        }
+
         // No default lens range (ADR-0005) — the same rule the Field App asks through.
         if (SaleAssembly.LensRangeNotChosen(answers) is { } notChosen)
         {
