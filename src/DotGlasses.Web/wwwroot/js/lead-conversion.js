@@ -5,8 +5,11 @@
 //
 // This only saves the admin from being asked for things that mean nothing. The server renders the
 // same state itself and checks every rule again on submit (ConsultationRules), so the screen still
-// works — and a refusal still lands on its control — with this script off. What each pair of lenses
-// offers is asked of the server (LeadConversionController.Coatings) rather than worked out here.
+// works — and a refusal still lands on its control — with this script off. Nothing here restates a
+// rule (CLAUDE.md): which lenses the right eye may choose, which cylinder/add option means "none",
+// the pupil distance buckets a children's frame allows, and what ticking a coating brings and locks
+// are all rendered by the server from Rules; what each pair of lenses offers is asked of the server
+// (LeadConversionController.Coatings). The script only looks those answers up.
 (() => {
     const form = document.querySelector('[data-lens-conversion]');
     if (!form) {
@@ -23,9 +26,8 @@
     const customRange = 'custom';
     const field = name => one(`[name="${name}"]`);
     const hasValue = select => !!select && select.value !== '';
-    // 0.00 is "none" for a cylinder and an add; the value is in the request's culture, so a comma
-    // decimal is read too.
-    const isNone = select => !select || select.value === '' || parseFloat(select.value.replace(',', '.')) === 0;
+    // A cylinder or add option that means "none" carries data-none (rendered from LensPowerRules).
+    const isNone = select => !select || select.value === '' || !!select.selectedOptions[0]?.hasAttribute('data-none');
 
     // ---- What the lens range and the choices so far say is showing ----
 
@@ -75,23 +77,23 @@
         // A left/right/same-lens change can change which of the Lead's notes is the one to show.
         renderLensLines();
 
-        // A children's frame narrows the pupil distance to 0-2.
+        // A children's frame narrows the pupil distance buckets; each option says whether it allows it.
         const childrens = !!one('[data-childrens-frame]')?.checked;
         const bucket = one('[data-pd-bucket]');
         if (bucket) {
             for (const option of bucket.options) {
-                const off = childrens && Number(option.value) > 2 && option.value !== '';
+                const off = childrens && option.dataset.childrensFrameAllows === 'false';
                 option.hidden = off;
                 option.disabled = off;
             }
 
-            if (childrens && Number(bucket.value) > 2) {
+            if (bucket.selectedOptions[0]?.disabled) {
                 bucket.value = '';
             }
 
             const max = one('[data-pd-max]');
             if (max) {
-                max.textContent = childrens ? '2' : '4';
+                max.textContent = childrens ? max.dataset.maxChildrens : max.dataset.maxAdult;
             }
         }
     }
@@ -105,8 +107,8 @@
         select.value = lenses.some(l => l.id === keepId) ? keepId : '';
     }
 
-    // The right eye is limited to the left eye's lens type — a pair has one, and a mixed pair can't
-    // be sold. Every lens is offered until the left is chosen.
+    // The right eye is limited to the lenses the left can pair with (each lens's pairsWith, from
+    // LensSetLenses.RightEyeChoices). Every lens is offered until the left is chosen.
     function fillRightChoices() {
         const set = currentSet();
         const right = one('[data-lens-select="right"]');
@@ -115,7 +117,7 @@
         }
 
         const left = lensIn(set, one('[data-lens-select="left"]').value);
-        const choices = left ? set.lenses.filter(l => l.type === left.type) : set.lenses;
+        const choices = left ? set.lenses.filter(l => left.pairsWith.includes(l.id)) : set.lenses;
         fillLenses(right, choices, right.value);
         const hint = one('[data-right-hint]');
         if (hint) {
@@ -146,7 +148,9 @@
 
     // ---- The coatings both lenses come in ----
 
-    let pairings = JSON.parse(coatings?.dataset.pairings || '[]');
+    // For each trigger coating on the chosen pair: what ticking it brings, and which of those it locks
+    // (PairedCoatings, worked out by the server — a pairing that runs both ways brings but never locks).
+    let effects = JSON.parse(coatings?.dataset.effects || '{}');
     let request = 0;
     const items = () => all('[data-coating-item]', coatings);
     const boxOf = item => one('input[type="checkbox"]', item);
@@ -169,7 +173,7 @@
         const pair = chosenPair();
         if (!pair) {
             request++;
-            applyOffered(null, []);
+            applyOffered(null, {});
             return;
         }
 
@@ -182,7 +186,7 @@
 
             const data = await response.json();
             if (mine === request) {
-                applyOffered(data.offered, data.pairings ?? []);
+                applyOffered(data.offered, data.effects ?? {});
             }
         } catch {
             // Offline or failed: leave the list as it is — the server checks the coatings on submit.
@@ -190,8 +194,8 @@
     }
 
     // A lens change that takes a coating off the offered list unticks it, and says so.
-    function applyOffered(offered, pairs) {
-        pairings = pairs;
+    function applyOffered(offered, tickEffects) {
+        effects = tickEffects;
         const removed = [];
         for (const item of items()) {
             const id = item.dataset.coatingId;
@@ -213,43 +217,43 @@
         none.textContent = offered !== null && offered.length === 0 ? coatings.dataset.noneOffered : '';
         none.hidden = !none.textContent;
 
-        applyLocks();
+        // A new pair can bring coatings with ones already ticked, as the Field App's reconcile does.
+        applyLocks(items().filter(item => boxOf(item).checked).map(item => item.dataset.coatingId));
     }
 
-    // Ticking a trigger ticks its paired coating and locks it ("Comes with <trigger> on this lens");
-    // a pairing chains, so this runs to a fixed point. Unticking the trigger frees the paired one,
-    // which stays as ticked as the admin left it.
-    function applyLocks() {
-        for (const item of items()) {
-            boxOf(item).dataset.locked = 'false';
-            const note = one('[data-lock-note]', item);
-            note.hidden = true;
-            note.textContent = '';
-        }
+    // Ticking a coating ticks what it brings (chains already resolved by the server) — only as it is
+    // ticked, the way the Field App does, so a pairing that runs both ways can still be unticked — and
+    // each coating a ticked one locks is held ("Comes with <trigger> on this lens"). Unticking the
+    // trigger frees the paired one, which stays as ticked as the admin left it.
+    function applyLocks(justTicked) {
+        const itemOf = id => one(`[data-coating-id="${id}"]`, coatings);
+        const ticked = () => items().filter(item => boxOf(item).checked).map(item => item.dataset.coatingId);
 
-        let changed = true;
-        while (changed) {
-            changed = false;
-            for (const { trigger, paired } of pairings) {
-                const triggerItem = one(`[data-coating-id="${trigger}"]`, coatings);
-                const pairedItem = one(`[data-coating-id="${paired}"]`, coatings);
-                if (!triggerItem || !pairedItem || !boxOf(triggerItem).checked || boxOf(pairedItem).disabled) {
-                    continue;
-                }
-
-                const box = boxOf(pairedItem);
-                if (!box.checked) {
-                    box.checked = true;
-                    changed = true;
-                }
-
-                if (box.dataset.locked !== 'true') {
-                    box.dataset.locked = 'true';
-                    const note = one('[data-lock-note]', pairedItem);
-                    note.textContent = `Comes with ${labelOf(trigger)} on this lens`;
-                    note.hidden = false;
+        for (const trigger of justTicked) {
+            for (const id of effects[trigger]?.brings ?? []) {
+                const item = itemOf(id);
+                if (item && !boxOf(item).disabled) {
+                    boxOf(item).checked = true;
                 }
             }
+        }
+
+        const lockedBy = new Map();
+        for (const trigger of ticked()) {
+            for (const id of effects[trigger]?.locks ?? []) {
+                if (!lockedBy.has(id)) {
+                    lockedBy.set(id, trigger);
+                }
+            }
+        }
+
+        for (const item of items()) {
+            const trigger = lockedBy.get(item.dataset.coatingId);
+            const locked = !!trigger && boxOf(item).checked;
+            boxOf(item).dataset.locked = locked ? 'true' : 'false';
+            const note = one('[data-lock-note]', item);
+            note.textContent = locked ? `Comes with ${labelOf(trigger)} on this lens` : '';
+            note.hidden = !locked;
         }
     }
 
@@ -262,7 +266,7 @@
     });
     coatings?.addEventListener('change', event => {
         if (event.target.matches('input[type="checkbox"]')) {
-            applyLocks();
+            applyLocks(event.target.checked ? [event.target.value] : []);
         }
     });
 

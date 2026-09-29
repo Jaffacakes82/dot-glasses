@@ -47,11 +47,44 @@ public static class LensPowerValues
 
     public static IReadOnlyList<decimal> PupilDistanceMm { get; } = PupilDistanceMmRange.Values().ToList();
 
+    /// <summary>A lens set's pupil distance is a coarse bucket rather than millimetres: 0 up to
+    /// this, which a children's frame lowers from 4 to 2. The consultation rules, the Field App's
+    /// dropdown and the Admin Portal's all read the ceiling here.</summary>
+    public static int MaxPresetPupilDistanceBucket(bool childrensFrame) => childrensFrame ? 2 : 4;
+
+    /// <summary>Every bucket a lens set's pupil distance can take, ascending from 0.</summary>
+    public static IReadOnlyList<int> PresetPupilDistanceBuckets(bool childrensFrame) =>
+        Enumerable.Range(0, MaxPresetPupilDistanceBucket(childrensFrame) + 1).ToList();
+
     /// <summary>The display format for a sphere, cylinder or add: <c>+</c> on a positive value,
     /// always two decimals (<c>+2.50</c>, <c>0.00</c>, <c>-1.25</c>). Culture-invariant, so a
     /// device set to a comma-decimal locale shows the same text as the shop.</summary>
     public static string FormatPower(decimal value) =>
         (value > 0 ? "+" : "") + value.ToString("0.00", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// One eye's whole lens power as a line of text — the one wording every screen shows it in
+    /// (the Lens Sets table, the line under a chosen lens, the "no longer in the lens set" note):
+    /// "SPH +2.50", then "CYL -0.75 × 90" and "ADD +2.00" only when the lens has them. A blank or
+    /// 0.00 cylinder and a blank or 0.00 add are absent, the way <see cref="LensPowerRules"/> reads
+    /// them.
+    /// </summary>
+    public static string FormatLensPower(decimal sphere, decimal? cylinder, decimal? axis, decimal? add)
+    {
+        var parts = new List<string> { $"SPH {FormatPower(sphere)}" };
+        if (LensPowerRules.HasCylinder(cylinder))
+        {
+            var cyl = FormatPower(cylinder!.Value);
+            parts.Add(axis is { } a ? $"CYL {cyl} × {a.ToString("0", CultureInfo.InvariantCulture)}" : $"CYL {cyl}");
+        }
+
+        if (LensPowerRules.HasAdd(add))
+        {
+            parts.Add($"ADD {FormatPower(add!.Value)}");
+        }
+
+        return string.Join(" · ", parts);
+    }
 
     private static IReadOnlyList<decimal> ZeroFirst(AllowedRange range) =>
         [0.00m, .. range.Values().Where(v => v != 0)];

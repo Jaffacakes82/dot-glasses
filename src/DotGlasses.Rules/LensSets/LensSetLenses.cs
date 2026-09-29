@@ -158,6 +158,70 @@ public static class LensSetLenses
             lensTypeFrom?.LensTypeRefId, lensTypeFrom?.LensTypeOtherText);
     }
 
+    /// <summary>
+    /// Whether two eyes' lens powers are the same lens, read the way <see cref="Match"/> reads a
+    /// power (a blank cylinder is 0.00, an axis only counts with a cylinder, an add of 0.00 is
+    /// none). A record has one lens type for the pair, so the powers are all there is to compare.
+    /// Used to start a record's "Same lens for both eyes" ticked exactly when its eyes match. Two
+    /// eyes with nothing recorded count as matching; one eye without the other doesn't.
+    /// </summary>
+    public static bool SameLens(
+        decimal? sphereLeft, decimal? cylinderLeft, decimal? axisLeft, decimal? addLeft,
+        decimal? sphereRight, decimal? cylinderRight, decimal? axisRight, decimal? addRight) =>
+        (sphereLeft, sphereRight) switch
+        {
+            (null, null) => true,
+            ({ } left, { } right) => Comparable(left, cylinderLeft, axisLeft, addLeft) == Comparable(right, cylinderRight, axisRight, addRight),
+            _ => false,
+        };
+
+    /// <summary>Whether <paramref name="right"/> can be the right-eye lens beside
+    /// <paramref name="left"/>: a pair has one lens type, so both lenses must share it (a mixed
+    /// pair is refused — see <see cref="RecordedAs"/>).</summary>
+    public static bool CanPairWith(LensOptionSnapshot left, LensOptionSnapshot right) =>
+        left.LensTypeRefId == right.LensTypeRefId;
+
+    /// <summary>The lenses the right eye may choose from once <paramref name="left"/> is chosen —
+    /// those it <see cref="CanPairWith"/> — or every lens while the left eye has none. Keeps
+    /// <paramref name="lenses"/>' order.</summary>
+    public static IReadOnlyList<LensOptionSnapshot> RightEyeChoices(IEnumerable<LensOptionSnapshot> lenses, LensOptionSnapshot? left) =>
+        left is null ? lenses.ToList() : lenses.Where(lens => CanPairWith(left, lens)).ToList();
+
+    /// <summary>
+    /// The note for an eye of a record whose lens has gone from its lens set: "The SPH +3.50 on
+    /// this Lead is no longer in Readers. Choose a lens." — <paramref name="recordNoun"/> names
+    /// what the lens came from ("Lead", or "record" for a Failed record). Null when there's nothing
+    /// to say: the eye has no power recorded (nothing to be "no longer in the set"), or
+    /// <paramref name="matched"/> — the eye's <see cref="Match"/> in the set — found its lens. The
+    /// Field App and the Admin Portal both show this note, so they word it the same way.
+    /// </summary>
+    public static string? NoLongerInSetNote(
+        string recordNoun, string lensSetName,
+        decimal? sphere, decimal? cylinder, decimal? axis, decimal? add, LensOptionSnapshot? matched) =>
+        sphere is { } s && matched is null
+            ? $"The {LensPowerValues.FormatLensPower(s, cylinder, axis, add)} on this {recordNoun} is no longer in {lensSetName}. Choose a lens."
+            : null;
+
+    /// <summary>
+    /// <paramref name="lens"/> as it can be sold now: only the coatings still active, and only the
+    /// pairings whose trigger and paired coating are both still active. A retired coating stays on
+    /// the lens's rows (reactivating it restores it, until the lens is next saved) but offers
+    /// nothing — not on its own, and not through a pairing, where a retired paired coating would
+    /// otherwise make its trigger unsellable (<see cref="CoatingsFor"/> drops a trigger whose pair
+    /// isn't offered). A lens whose every coating is retired so comes in none, which the rules
+    /// report against the lens rather than asking for a coating nobody can choose. Applied once,
+    /// where the server builds its snapshot of the lens sets — which is what the rules, the Admin
+    /// Portal's screens and the Field App's cached copy are all read from.
+    /// </summary>
+    public static LensOptionSnapshot WithActiveCoatingsOnly(LensOptionSnapshot lens, IReadOnlySet<Guid> activeCoatingIds) =>
+        lens with
+        {
+            CoatingIds = lens.CoatingIds.Where(activeCoatingIds.Contains).ToList(),
+            Pairings = lens.Pairings
+                .Where(p => activeCoatingIds.Contains(p.TriggerCoatingRefId) && activeCoatingIds.Contains(p.PairedCoatingRefId))
+                .ToList(),
+        };
+
     /// <summary>One eye's lens power reduced to what makes it the same lens: blank cylinder as
     /// 0.00, no axis without a cylinder, a 0.00 add as none. Decimal equality ignores trailing
     /// zeros, so 2.5 and 2.50 are equal.</summary>

@@ -416,8 +416,12 @@ public class LeadConversionLensSectionTests(AdminPortalFactory factory) : IClass
         {
             var offered = doc.RootElement.GetProperty("offered").EnumerateArray().Select(e => e.GetGuid()).Order().ToList();
             Assert.Equal(new[] { Clear, BlueBlock }.Order().ToList(), offered);
-            var pairing = Assert.Single(doc.RootElement.GetProperty("pairings").EnumerateArray());
-            Assert.Equal((BlueBlock, Clear), (pairing.GetProperty("trigger").GetGuid(), pairing.GetProperty("paired").GetGuid()));
+            // What ticking each trigger does, worked out by the server (PairedCoatings): Blue block
+            // brings Clear and locks it.
+            var effect = Assert.Single(doc.RootElement.GetProperty("effects").EnumerateObject());
+            Assert.Equal(BlueBlock, Guid.Parse(effect.Name));
+            Assert.Equal([Clear], effect.Value.GetProperty("brings").EnumerateArray().Select(e => e.GetGuid()));
+            Assert.Equal([Clear], effect.Value.GetProperty("locks").EnumerateArray().Select(e => e.GetGuid()));
         }
 
         var mixed = await client.GetStringAsync($"/Leads/Convert/{leadId}/coatings?left={set.Plus250}&right={set.Plus300}");
@@ -429,6 +433,67 @@ public class LeadConversionLensSectionTests(AdminPortalFactory factory) : IClass
         var unknown = await client.GetStringAsync($"/Leads/Convert/{leadId}/coatings?left={Guid.NewGuid()}");
         using var none = JsonDocument.Parse(unknown);
         Assert.Equal(JsonValueKind.Null, none.RootElement.GetProperty("offered").ValueKind);
+    }
+
+    [Fact]
+    public async Task APairingThatRunsBothWays_TicksBothCoatings_ButLocksNeither()
+    {
+        // Blue block → Clear and Clear → Blue block on one lens: each would hold the other ticked for
+        // ever, so — as on the Field App (PairedCoatings) — neither is locked.
+        var setId = Guid.NewGuid();
+        var lensId = Guid.NewGuid();
+        factory.Seed(db =>
+        {
+            db.PresetCatalogues.Add(new PresetCatalogue { Id = setId, Name = $"Both Ways {setId:N}", OwningOrgNodeId = OrganisationSeedConfiguration.DgiId });
+            db.PresetCatalogueAssignments.Add(new PresetCatalogueAssignment { Id = Guid.NewGuid(), PresetCatalogueId = setId, OrgNodeId = OrganisationSeedConfiguration.KenyaRetailerId });
+            db.LensOptions.Add(new LensOption { Id = lensId, PresetCatalogueId = setId, Label = "Reader 2.5", Sphere = 2.50m });
+            db.LensOptionCoatings.Add(new LensOptionCoating { Id = Guid.NewGuid(), LensOptionId = lensId, CoatingRefId = Clear });
+            db.LensOptionCoatings.Add(new LensOptionCoating { Id = Guid.NewGuid(), LensOptionId = lensId, CoatingRefId = BlueBlock });
+            db.LensOptionCoatingPairings.Add(new LensOptionCoatingPairing { Id = Guid.NewGuid(), LensOptionId = lensId, TriggerCoatingRefId = BlueBlock, PairedCoatingRefId = Clear });
+            db.LensOptionCoatingPairings.Add(new LensOptionCoatingPairing { Id = Guid.NewGuid(), LensOptionId = lensId, TriggerCoatingRefId = Clear, PairedCoatingRefId = BlueBlock });
+        });
+        var leadId = SeedLead(l =>
+        {
+            l.LensRangeType = LensRangeType.LensSet;
+            l.PresetCatalogueId = setId;
+            l.SphereLeft = 2.50m;
+            l.SphereRight = 2.50m;
+            l.PresetPupilDistanceBucket = 2;
+            l.CoatingPreferenceRefId = BlueBlock;
+        });
+
+        var html = await PageAsync(leadId);
+
+        Assert.Equal(new[] { BlueBlock, Clear }.Select(g => g.ToString()).Order(), CheckedCoatings(html).Order());
+        Assert.DoesNotContain("Comes with", html);
+        Assert.DoesNotContain("data-locked=\"true\"", html);
+
+        var effects = await factory.CreateAdminClient().GetStringAsync($"/Leads/Convert/{leadId}/coatings?left={lensId}");
+        using var doc = JsonDocument.Parse(effects);
+        Assert.All(doc.RootElement.GetProperty("effects").EnumerateObject(), effect => Assert.Empty(effect.Value.GetProperty("locks").EnumerateArray()));
+    }
+
+    [Fact]
+    public async Task TheScriptReadsTheRulesFromThePage_NotFromItsOwnCopy()
+    {
+        // The cylinder/add option meaning "none", the buckets a children's frame allows, and the
+        // lenses each left lens pairs with are all rendered by the server from Rules.
+        var set = SeedLensSet();
+        var leadId = SeedLead();
+
+        var html = await PageAsync(leadId);
+
+        Assert.Matches(new Regex("<select[^>]*name=\"Form.CylinderLeft\"[^>]*>.*?<option value=\"0[.,]00\"[^>]*data-none", RegexOptions.Singleline), html);
+        Assert.Matches(new Regex("<select[^>]*name=\"Form.AddRight\"[^>]*>.*?<option value=\"0[.,]00\"[^>]*data-none", RegexOptions.Singleline), html);
+        Assert.Matches(new Regex("<option value=\"2\" data-childrens-frame-allows=\"true\""), html);
+        Assert.Matches(new Regex("<option value=\"3\" data-childrens-frame-allows=\"false\""), html);
+
+        var data = Regex.Match(html, "<script type=\"application/json\" data-lens-sets>(.*?)</script>", RegexOptions.Singleline).Groups[1].Value;
+        using var doc = JsonDocument.Parse(data);
+        var lenses = doc.RootElement.EnumerateArray().Single(s => s.GetProperty("id").GetGuid() == set.Id).GetProperty("lenses").EnumerateArray()
+            .ToDictionary(l => l.GetProperty("id").GetGuid(), l => l.GetProperty("pairsWith").EnumerateArray().Select(e => e.GetGuid()).Order().ToList());
+        Assert.Equal(new[] { set.Plus250, set.Plus300 }.Order(), lenses[set.Plus250]);
+        Assert.Equal([set.BifocalLens], lenses[set.BifocalLens]);
     }
 
     [Fact]
