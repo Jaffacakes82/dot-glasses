@@ -1079,6 +1079,49 @@ public class ConsultationRulesTests
         Assert.Equal("LensTypeRefId must be the chosen lenses' own lens type.", failure.Message);
     }
 
+    /// <summary>A lens set holding one lens of the "Other" lens type, with its own text — the only
+    /// lens a lens-set record's LensTypeOtherText can be anything but empty for.</summary>
+    private static ReferenceDataSnapshot SnapshotWithAnOtherLens(Guid lensSetId) => new(
+        Snapshot().Items,
+        [
+            new PresetCatalogueSnapshot(lensSetId, "Other lens set", IsActive: true, [
+                new LensOptionSnapshot(Guid.NewGuid(), "Trifocal +1.00", 1.00m, [ActiveCoating], Add: 2.00m, LensTypeRefId: OtherLensType, LensTypeOtherText: "Trifocal"),
+            ], AssignedOrgPaths: null),
+        ],
+        []);
+
+    [Fact]
+    public void LensSet_TheLensTypeTextMustBeTheChosenLensesOwn()
+    {
+        var lensSetId = Guid.NewGuid();
+        var request = BifocalSale();
+        request.PresetCatalogueId = lensSetId;
+        request.LensTypeRefId = OtherLensType;
+        request.LensTypeOtherText = "Trifocal";
+
+        Assert.True(ConsultationRules.Check(request, SnapshotWithAnOtherLens(lensSetId)).IsValid);
+
+        request.LensTypeOtherText = "Varifocal";
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, SnapshotWithAnOtherLens(lensSetId)));
+
+        Assert.Equal("LensTypeOtherText", failure.Key);
+        Assert.Equal("LensTypeOtherText must be the chosen lenses' own lens type text (empty unless their lens type is \"Other\").", failure.Message);
+    }
+
+    [Fact]
+    public void LensSet_ALensTypeTextOnALensWithoutOne_IsRefused()
+    {
+        // The lens set branch used to ignore the text entirely, so a record could carry free text
+        // its Bifocal lens never had.
+        var sale = BifocalSale();
+        sale.LensTypeOtherText = "Trifocal";
+        var test = PresetTest();
+        test.LensTypeOtherText = "Trifocal";
+
+        Assert.Equal("LensTypeOtherText", AssertSingleFailure(ConsultationRules.Check(sale, Snapshot())).Key);
+        Assert.Equal("LensTypeOtherText", AssertSingleFailure(ConsultationRules.Check(test, Snapshot())).Key);
+    }
+
     [Fact]
     public void LensSet_ALensTypeOnSingleVisionLenses_IsAMismatchedLensType()
     {
@@ -1889,6 +1932,56 @@ public class ConsultationRulesTests
         Assert.Equal("This lens has no coatings configured yet, so it can't be sold on a lens set.", failure.Message);
     }
 
+    /// <summary>A lens set whose lenses are read the way the server's snapshot reads them — each
+    /// through LensSetLenses.WithActiveCoatingsOnly against Snapshot()'s active coatings: +1.00 comes
+    /// only in the retired Anti-glare, +2.50 in Photochromic and the retired Anti-glare, with
+    /// Photochromic → Anti-glare paired.</summary>
+    private static ReferenceDataSnapshot SnapshotWithRetiredCoatingsOnLenses(Guid lensSetId)
+    {
+        var items = Snapshot().Items;
+        var active = items.Where(i => i.Category == ReferenceDataCategory.Coating && i.IsActive).Select(i => i.Id).ToHashSet();
+        LensOptionSnapshot Read(LensOptionSnapshot lens) => Rules.LensSets.LensSetLenses.WithActiveCoatingsOnly(lens, active);
+        return new(
+            items,
+            [
+                new PresetCatalogueSnapshot(lensSetId, "Retired coatings", IsActive: true, [
+                    Read(new LensOptionSnapshot(Guid.NewGuid(), "+1.00", 1.00m, [RetiredCoating])),
+                    Read(new LensOptionSnapshot(Guid.NewGuid(), "+2.50", 2.50m, [ActiveCoating, RetiredCoating],
+                        Pairings: [new CoatingPairingRule(ActiveCoating, RetiredCoating)])),
+                ], AssignedOrgPaths: null),
+            ],
+            []);
+    }
+
+    [Fact]
+    public void CoatingSet_OnALensWhoseCoatingsAreAllRetired_IsReportedAgainstTheLens()
+    {
+        // Not "Choose at least one coating": nothing on this lens can be chosen.
+        var lensSetId = Guid.NewGuid();
+        var request = ValidSale();
+        request.PresetCatalogueId = lensSetId;
+        request.CoatingRefIds = [];
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, SnapshotWithRetiredCoatingsOnLenses(lensSetId)));
+
+        Assert.Equal("SphereLeft", failure.Key);
+        Assert.Equal("This lens has no coatings configured yet, so it can't be sold on a lens set.", failure.Message);
+    }
+
+    [Fact]
+    public void CoatingSet_APairingWithARetiredCoating_NoLongerMakesItsTriggerUnsellable()
+    {
+        // Photochromic → Anti-glare with Anti-glare retired: read as it is sold now, the pairing is
+        // gone rather than taking Photochromic off the lens.
+        var lensSetId = Guid.NewGuid();
+        var request = ValidSale();
+        request.PresetCatalogueId = lensSetId;
+        request.SphereLeft = 2.50m;
+        request.CoatingRefIds = [ActiveCoating];
+
+        Assert.True(ConsultationRules.Check(request, SnapshotWithRetiredCoatingsOnLenses(lensSetId)).IsValid);
+    }
+
     [Fact]
     public void CoatingSet_TwoCoatingsThatExcludeOneAnother_IsRejected()
     {
@@ -2273,27 +2366,40 @@ public class ConsultationRulesTests
     }
 
     [Fact]
-    public void OnlyATestCapsItsLensTypeOtherText_AndOnlyASaleRangeChecksItsLensRangeType()
+    public void EveryRequestCapsItsLensTypeOtherText()
     {
-        // Two pieces of pre-existing drift, preserved rather than tidied when the scalars moved
-        // here (ticket 12). A Test length-caps LensTypeOtherText and a Lead never has; a Sale
-        // range-checks LensRangeType and a Lead never has, though it carries the same enum. Pinned
-        // so that harmonising either becomes a deliberate decision rather than an accident.
+        // Once only a Test did; a lens set's lens now carries the text onto all three records, so
+        // an over-long one is a keyed failure everywhere rather than a database error on a Lead or
+        // Sale.
+        var tooLong = new string('a', 201);
+        var expected = new RuleFailure("LensTypeOtherText", "The length of 'Lens Type Other Text' must be 200 characters or fewer. You entered 201 characters.");
+
         var test = CustomTest();
         test.AddLeft = 1.00m;
         test.LensTypeRefId = ActiveLensType;
-        test.LensTypeOtherText = new string('a', 201);
+        test.LensTypeOtherText = tooLong;
 
         var lead = CustomLead();
         lead.AddLeft = 1.00m;
         lead.LensTypeRefId = ActiveLensType;
-        lead.LensTypeOtherText = new string('a', 201);
+        lead.LensTypeOtherText = tooLong;
 
-        Assert.Equal(
-            new RuleFailure("LensTypeOtherText", "The length of 'Lens Type Other Text' must be 200 characters or fewer. You entered 201 characters."),
-            Assert.Single(ConsultationRules.Check(test, Snapshot()).Failures));
-        Assert.True(ConsultationRules.Check(lead, Snapshot()).IsValid);
+        var sale = CustomSale();
+        sale.AddLeft = 1.00m;
+        sale.LensTypeRefId = ActiveLensType;
+        sale.LensTypeOtherText = tooLong;
 
+        Assert.Equal(expected, Assert.Single(ConsultationRules.Check(test, Snapshot()).Failures));
+        Assert.Equal(expected, Assert.Single(ConsultationRules.Check(lead, Snapshot()).Failures));
+        Assert.Equal(expected, Assert.Single(ConsultationRules.Check(sale, Snapshot()).Failures));
+    }
+
+    [Fact]
+    public void OnlyASaleRangeChecksItsLensRangeType()
+    {
+        // Pre-existing drift, preserved rather than tidied when the scalars moved here (ticket 12):
+        // a Sale range-checks LensRangeType and a Lead never has, though it carries the same enum.
+        // Pinned so that harmonising it becomes a deliberate decision rather than an accident.
         var outOfEnumLead = ValidLead();
         outOfEnumLead.LensRangeType = (LensRangeType)99;
         var outOfEnumSale = ValidSale();
