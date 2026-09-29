@@ -10,7 +10,7 @@ namespace DotGlasses.Infrastructure.Persistence.Configurations;
 /// Point Data Collection" choices export, per the 2026-08-04 decisions:
 ///  - Occupation / ReasonNotPurchased / ReferralReason are taken verbatim from the Kobo
 ///    income_source / why_no_purchase / referral lists (each already includes an "Other" row).
-///  - Coating uses the client's 5-item list from the CEO call, NOT Kobo's 7-item coating_types list
+///  - Coating uses the client's own 5-item list, NOT Kobo's 7-item coating_types list
 ///    (no Antiglare, no separate "None").
 ///  - HardCaseColour is Orange/Green/Other — the actual manufactured colours — NOT Kobo's
 ///    Blue/Pink/Purple/Black (stale legacy data).
@@ -91,7 +91,7 @@ public class ReferenceDataSeedConfiguration : IEntityTypeConfiguration<Reference
         Add(new("b0000000-0000-0000-0000-000000000033"), ReferenceDataCategory.ReferralReason, "young_child", "Child under eligible age without approval from a specialist");
         Add(new("b0000000-0000-0000-0000-000000000034"), ReferenceDataCategory.ReferralReason, "other", "Other", isOther: true);
 
-        // Coating ← the client's 5-item list from the call (not Kobo's 7-item coating_types), plus
+        // Coating ← the client's own 5-item list (not Kobo's 7-item coating_types), plus
         // Anti-glare (2026-09-03, ticket 05/ADR-0001) — seeded with no pairing/exclusion rules
         // of its own.
         sort = 0;

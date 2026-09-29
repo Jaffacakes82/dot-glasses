@@ -8,9 +8,9 @@ namespace DotGlasses.Infrastructure.Persistence;
 /// <summary>
 /// Example 6-Lens and 9-Lens sets in the lens-power shape (ADR-0007), so local dev and the test
 /// suites have something to sell from without an admin building sets by hand. The powers are the
-/// rosters the two original seeded sets carried (as the client gave them on the CEO call); each lens
+/// rosters the two original seeded sets carried; each lens
 /// has a typed label, real coatings (every bifocal Photochromic-only, the one coating fact known
-/// from that call), and the 6-Lens +2.50 carries the one example pairing, Blue block →
+/// for them), and the 6-Lens +2.50 carries the one example pairing, Blue block →
 /// Photochromic. Both are owned by DGI and assigned to Kenya, as the original seeded sets were.
 ///
 /// <b>Never part of a migration, and never run against staging or production</b>: those
