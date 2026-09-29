@@ -61,6 +61,17 @@
             }
         </div>
     </div>
+
+    <div class="dg-card">
+        <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin-top:0; font-size:15px;">Pupil distance</h3>
+        <p class="dg-stat-label">Whole millimetres, on a Custom prescription. A lens set records a coarse bucket instead.</p>
+        <div id="lens-power-pupil-distance" style="display:flex; flex-wrap:wrap; gap:6px;">
+            @foreach (var value in Model.PupilDistanceMm)
+            {
+                <span class="dg-badge">@value</span>
+            }
+        </div>
+    </div>
 </div>
 
 <div class="dg-card">

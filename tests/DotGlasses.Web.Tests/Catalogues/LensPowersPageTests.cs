@@ -35,6 +35,12 @@ public class LensPowersPageTests(AdminPortalFactory factory) : IClassFixture<Adm
         // Axis: 0 to 180 whole degrees.
         var axisSection = Section(html, "lens-power-axis");
         Assert.Contains("180", axisSection);
+
+        // Pupil distance: 54 to 74 whole millimetres (LensPowerValues.PupilDistanceMm).
+        var pupilDistanceSection = Section(html, "lens-power-pupil-distance");
+        Assert.Contains(">54<", pupilDistanceSection);
+        Assert.Contains(">74<", pupilDistanceSection);
+        Assert.DoesNotContain(">75<", pupilDistanceSection);
     }
 
     [Fact]

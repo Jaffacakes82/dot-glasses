@@ -65,7 +65,7 @@ public record AssignedOrgCard(Guid OrgNodeId, string OrgName, bool CanUnassign);
 
 /// <summary>One row of a lens set's lens table (ADR-0007): label, lens power, lens type, coatings
 /// and pairings, each already rendered as text. The power is formatted by the Rules definition
-/// (<see cref="LensPowerValues.FormatPower"/>), the one place the display format lives.</summary>
+/// (<see cref="LensPowerValues.FormatLensPower"/>), the one place the display format lives.</summary>
 public record LensOptionCard(Guid Id, string Label, string LensPower, string LensType, IReadOnlyList<string> Coatings, IReadOnlyList<string> Pairings, LensEditValues Edit)
 {
     /// <summary>Single vision is inferred when there is no lens type, never chosen — see
@@ -75,7 +75,7 @@ public record LensOptionCard(Guid Id, string Label, string LensPower, string Len
     public static LensOptionCard From(PresetCatalogueLensOptionAdminDto lens) => new(
         lens.Id,
         lens.Label,
-        FormatLensPower(lens.Sphere, lens.Cylinder, lens.Axis, lens.Add),
+        LensPowerValues.FormatLensPower(lens.Sphere, lens.Cylinder, lens.Axis, lens.Add),
         lens.LensTypeLabel ?? SingleVision,
         lens.Coatings.Select(c => c.Label).ToList(),
         lens.Pairings.Select(p => $"{p.TriggerLabel} → {p.PairedLabel}").ToList(),
@@ -90,24 +90,6 @@ public record LensOptionCard(Guid Id, string Label, string LensPower, string Len
             lens.LensTypeOtherText,
             lens.Coatings.Select(c => c.CoatingRefId).ToList(),
             lens.Pairings.Select(p => new LensPairingField { TriggerCoatingRefId = p.TriggerCoatingRefId, PairedCoatingRefId = p.PairedCoatingRefId }).ToList()));
-
-    /// <summary>"SPH +2.50", then "CYL -0.75 × 90" and "ADD +2.00" only when the lens has them —
-    /// a blank or 0.00 cylinder and a blank or 0.00 add are absent, per LensPowerRules.</summary>
-    public static string FormatLensPower(decimal sphere, decimal? cylinder, decimal? axis, decimal? add)
-    {
-        var parts = new List<string> { $"SPH {LensPowerValues.FormatPower(sphere)}" };
-        if (LensPowerRules.HasCylinder(cylinder))
-        {
-            parts.Add(axis is { } a ? $"CYL {LensPowerValues.FormatPower(cylinder!.Value)} × {a:0}" : $"CYL {LensPowerValues.FormatPower(cylinder!.Value)}");
-        }
-
-        if (LensPowerRules.HasAdd(add))
-        {
-            parts.Add($"ADD {LensPowerValues.FormatPower(add!.Value)}");
-        }
-
-        return string.Join(" · ", parts);
-    }
 }
 
 public class CreateCatalogueRequest
@@ -181,11 +163,12 @@ public class AssignCataloguesRequest
 }
 
 /// <summary>The Lens powers page (ticket 08): each value already formatted by
-/// <see cref="LensPowerValues.FormatPower"/> (sphere, cylinder, add) or as a plain whole-degree
-/// string (axis), in the shop's order — the view renders these lists as given and states no
-/// bound of its own.</summary>
+/// <see cref="LensPowerValues.FormatPower"/> (sphere, cylinder, add) or as a plain whole-number
+/// string (axis in degrees, a Custom prescription's pupil distance in millimetres), in the shop's
+/// order — the view renders these lists as given and states no bound of its own.</summary>
 public record LensPowersViewModel(
     IReadOnlyList<string> Sphere,
     IReadOnlyList<string> Cylinder,
     IReadOnlyList<string> Axis,
-    IReadOnlyList<string> Add);
+    IReadOnlyList<string> Add,
+    IReadOnlyList<string> PupilDistanceMm);
