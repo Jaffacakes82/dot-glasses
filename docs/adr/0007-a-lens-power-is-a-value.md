@@ -56,3 +56,8 @@ every allowed combination for every lens.
   data. Bifocal, Progressive and Other remain reference data.
 - This refines ADR-0005. Lens sets stay data-driven, and a lens range is still "a lens set" or
   "Custom prescription", but what is *inside* a lens set changes.
+- Lens-set records made before this change lose which lens was sold. The switch resets lens sets
+  rather than converting them, and the records' old pointer to a lens is dropped without copying
+  its power across, so such a record keeps only its set's name. This was accepted knowingly: the
+  old lens-set data was test data, and parsing powers out of free-text labels wasn't worth it. The
+  old Lens strength reference items are deleted, not retired, for the same reason.
