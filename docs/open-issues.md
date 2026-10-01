@@ -120,6 +120,18 @@ machine" rule.
 - **The Organisations screen's reactivate was not retested by hand.** The reported glitch (the
   page left in an odd state after Reactivate) is covered by an automated test that reads the page
   after reactivating a group; nobody has clicked through it in a browser since.
+- **Before go-live: the children's frame colours and the adult pictures are DGI's to enter.** The
+  child frame colour list ships with "Other" only, so until DGI adds the colours a children's frame
+  can only be sold as "Other". The six adult colours still point at pictures on the online shop's
+  website: they display online, are not copied onto devices (so they don't show offline), and break
+  if that site changes. DGI uploads each one on Reference Data to fix both.
+- **Frame pictures offline were checked in a browser online only** (Spec E). On 2026-10-01 an
+  uploaded picture was seen stored on the device and rendered from that copy, and a replaced
+  picture was picked up. Opening the Sale form with the device actually offline has not been done.
+- **Uploaded pictures in a deployed environment are untested.** The upload, serving and delete were
+  exercised against the local storage emulator. The first deploy should confirm the Admin Portal's
+  identity can write to the `reference-data-images` container (AppHost grants it through the
+  container reference).
 - **Before go-live: production has no active lens sets until DGI builds them.** The lens-set
   redesign retired every earlier set and created none, so the Field App offers only *Custom
   prescription* at every outlet until an admin builds real lens sets on Lens Sets and assigns them.
@@ -128,10 +140,6 @@ machine" rule.
 
 ## Deliberately deferred (not started, not forgotten)
 
-- **No upload feature for reference-data images.** `ReferenceDataItem.ImageUrl` is a plain
-  admin-pasted URL (Frame colours only). The blob storage *infrastructure* to build a real upload
-  against already exists (`AppHost`'s `reference-data-images` container, RBAC-wired to Web's
-  identity) — building the actual upload UI/API is separate, unstarted application-layer work.
 - **No frame-coverage question anywhere.** `Sale.FrameCoverage` is kept on the record but is not
   editable from any screen — the Field App's dropdown was removed at the reviewer's explicit
   request (commit `3fdf9be`, it was reading as "you're only selling eye frames"), and the Admin

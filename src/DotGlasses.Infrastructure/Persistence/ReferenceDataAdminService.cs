@@ -52,14 +52,26 @@ public partial class ReferenceDataAdminService(DotGlassesDbContext dbContext, IR
         return ToAdminItem(entity);
     }
 
-    public async Task<ReferenceDataAdminItem> UpdateAsync(Guid id, string label, string? imageUrl, CancellationToken cancellationToken = default)
+    public async Task<string?> UpdateAsync(Guid id, string label, ReferenceDataPictureChange picture, CancellationToken cancellationToken = default)
     {
         var entity = await dbContext.ReferenceDataItems.FirstAsync(x => x.Id == id, cancellationToken);
         entity.Label = label;
-        entity.ImageUrl = string.IsNullOrWhiteSpace(imageUrl) ? null : imageUrl;
-        await dbContext.SaveChangesAsync(cancellationToken);
 
-        return ToAdminItem(entity);
+        string? replaced = null;
+        switch (picture)
+        {
+            case ReferenceDataPictureChange.Remove:
+                replaced = entity.ImageUrl;
+                entity.ImageUrl = null;
+                break;
+            case ReferenceDataPictureChange.Replace replace:
+                replaced = entity.ImageUrl;
+                entity.ImageUrl = replace.ImageUrl;
+                break;
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return replaced;
     }
 
     public async Task MoveUpAsync(Guid id, CancellationToken cancellationToken = default)

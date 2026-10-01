@@ -336,11 +336,15 @@
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
             <div>
                 <label>Frame colour</label>
-                <select class="form-select" asp-for="Form.FrameColourRefId">
+                @* Both lists are rendered; the one that doesn't match "Children's frame" is hidden
+                   and disabled (by the script as the tick changes, by the server on a re-render).
+                   A colour from the wrong list is refused by ConsultationRules either way. *@
+                <select class="form-select" asp-for="Form.FrameColourRefId" data-frame-colour>
                     <option value="">— Choose —</option>
-                    @foreach (var colour in Model.FrameColours)
+                    @foreach (var (colour, forChildren) in Model.FrameColours.Select(c => (c, false)).Concat(Model.ChildFrameColours.Select(c => (c, true))))
                     {
-                        <option value="@colour.Id">@colour.Label</option>
+                        var off = forChildren != Model.ChildrensFrame;
+                        <option value="@colour.Id" data-for-childrens-frame="@(forChildren ? "true" : "false")" hidden="@Hidden(off)" disabled="@(off ? "disabled" : null)">@colour.Label</option>
                     }
                 </select>
             </div>

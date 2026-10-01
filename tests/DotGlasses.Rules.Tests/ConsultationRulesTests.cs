@@ -41,6 +41,8 @@ public class ConsultationRulesTests
     private static readonly Guid ActiveFrameColour = Guid.Parse("00000000-0000-0000-0000-0000000000d1");
     private static readonly Guid RetiredFrameColour = Guid.Parse("00000000-0000-0000-0000-0000000000d2");
     private static readonly Guid OtherFrameColour = Guid.Parse("00000000-0000-0000-0000-0000000000d3");
+    private static readonly Guid ActiveChildFrameColour = Guid.Parse("00000000-0000-0000-0000-0000000000d4");
+    private static readonly Guid OtherChildFrameColour = Guid.Parse("00000000-0000-0000-0000-0000000000d5");
 
     private static readonly Guid ActiveHardCaseColour = Guid.Parse("00000000-0000-0000-0000-0000000000e1");
     private static readonly Guid RetiredHardCaseColour = Guid.Parse("00000000-0000-0000-0000-0000000000e2");
@@ -116,6 +118,8 @@ public class ConsultationRulesTests
             new ReferenceItemSnapshot(ActiveFrameColour, ReferenceDataCategory.FrameColour, "Black", IsActive: true, IsOtherOption: false),
             new ReferenceItemSnapshot(RetiredFrameColour, ReferenceDataCategory.FrameColour, "Tortoiseshell", IsActive: false, IsOtherOption: false),
             new ReferenceItemSnapshot(OtherFrameColour, ReferenceDataCategory.FrameColour, "Other", IsActive: true, IsOtherOption: true),
+            new ReferenceItemSnapshot(ActiveChildFrameColour, ReferenceDataCategory.FrameColourChild, "Yellow", IsActive: true, IsOtherOption: false),
+            new ReferenceItemSnapshot(OtherChildFrameColour, ReferenceDataCategory.FrameColourChild, "Other", IsActive: true, IsOtherOption: true),
 
             new ReferenceItemSnapshot(ActiveHardCaseColour, ReferenceDataCategory.HardCaseColour, "Navy", IsActive: true, IsOtherOption: false),
             new ReferenceItemSnapshot(RetiredHardCaseColour, ReferenceDataCategory.HardCaseColour, "Maroon", IsActive: false, IsOtherOption: false),
@@ -741,6 +745,70 @@ public class ConsultationRulesTests
         Assert.Equal("Say what the other frame colour is.", failure.Message);
     }
 
+    // Adult and children's frames come in different colours: the colour has to be from the list
+    // that matches the "children's frame" tick.
+
+    [Fact]
+    public void FrameColour_AChildColourOnAChildrensFrame_IsAccepted()
+    {
+        var request = ValidSale();
+        request.ChildrensFrame = true;
+        request.FrameColourRefId = ActiveChildFrameColour;
+
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void FrameColour_AnAdultColourOnAChildrensFrame_IsRejected()
+    {
+        var request = ValidSale();
+        request.ChildrensFrame = true;
+        request.FrameColourRefId = ActiveFrameColour;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("FrameColourRefId", failure.Key);
+        Assert.Equal("Choose a children's frame colour.", failure.Message);
+    }
+
+    [Fact]
+    public void FrameColour_AChildColourOnAnAdultFrame_IsRejected()
+    {
+        var request = ValidSale();
+        request.FrameColourRefId = ActiveChildFrameColour;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("FrameColourRefId", failure.Key);
+        Assert.Equal("Choose a frame colour.", failure.Message);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void FrameColour_OtherFromTheMatchingList_NeedsItsText_AndIsAcceptedWithIt(bool childrensFrame)
+    {
+        var request = ValidSale();
+        request.ChildrensFrame = childrensFrame;
+        request.FrameColourRefId = childrensFrame ? OtherChildFrameColour : OtherFrameColour;
+
+        Assert.Equal("FrameColourOtherText", AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Key);
+
+        request.FrameColourOtherText = "Two-tone blue and grey";
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void FrameColour_OtherFromTheWrongList_IsRejectedAgainstTheColour()
+    {
+        var request = ValidSale();
+        request.ChildrensFrame = true;
+        request.FrameColourRefId = OtherFrameColour;
+        request.FrameColourOtherText = "Two-tone blue and grey";
+
+        Assert.Equal("FrameColourRefId", AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Key);
+    }
+
     [Fact]
     public void FrameColour_OtherWithFreeText_IsAccepted()
     {
@@ -1276,6 +1344,7 @@ public class ConsultationRulesTests
         lead.PresetPupilDistanceBucket = 3;
         var sale = ValidSale();
         sale.ChildrensFrame = true;
+        sale.FrameColourRefId = ActiveChildFrameColour;
         sale.PresetPupilDistanceBucket = null;
 
         Assert.Equal(

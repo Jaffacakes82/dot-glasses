@@ -264,11 +264,17 @@ Real domain entities, in `DotGlasses.Domain/Entities` and `/Enums`:
   came from, and holds no pointer to a `LensOption`.
 - **`ReferenceDataItem`** — one generic table backing every admin-managed dropdown, keyed by
   `ReferenceDataCategory` (Reasons not purchased, Referral reasons, Coatings & tints, Frame
-  colours, Hard case colours, Occupations, Lens types; the old Lens strengths category is retired
+  colours (adult), Frame colours (child), Hard case colours, Occupations, Lens types; the old Lens strengths category is retired
   and its enum value reserved, never to be reused). Retiring an option sets `IsActive =
   false`, never a hard delete — historical `Test`/`Lead`/`Sale` rows may reference it by Id, and
   Event History resolves labels against retired items too. At most one *active* `IsOtherOption`
   item per category (server-enforced), which is what makes a dropdown reveal a free-text field.
+  A Sale's frame colour comes from the list matching its "children's frame" tick —
+  `ConsultationRules.FrameColourCategory` is the one definition both forms offer from and the rule
+  checks. A frame colour's picture is an upload held in the private `reference-data-images` blob
+  container (`IReferenceDataPictureStore`); `ImageUrl` holds the *path* the Admin Portal serves it
+  from (`/reference-data/pictures/<generated name>`), not a full address, so a row works on every
+  host. The type is read from the file's signature (`ReferenceDataPictures.Detect`), never its name.
 - **`Customer`** — internal-only, matched by exact name + phone within an outlet, find-or-create,
   no public API, no fuzzy matching.
 
@@ -330,7 +336,9 @@ table — used for both client-side pre-submit checks and mapping a server rejec
 The JWT (`AuthTokenStore`) and reference data/preset catalogues (`ReferenceDataClient`) are both
 persisted/cached in IndexedDB (write-through on a successful load, fallback to last-cached copy
 on failure) — a technician who's been online at least once can keep working, and stay signed in
-across a refresh, with no connectivity. First-ever use still needs one online session. The cache
+across a refresh, with no connectivity. The frame colour pictures follow the lists onto the device
+(`FramePictureCache`, as data URLs): only pictures the Admin Portal serves are copied — never an
+address on another website, which would send the app's bearer token there. First-ever use still needs one online session. The cache
 outlives releases, so a change to the *meaning* of a cached shape (not just adding a field) bumps
 `ReferenceDataClient.LensSetShape`: a cache written before it loses its lens sets on an offline load
 rather than presenting old lenses as zero-power ones. The cached lens sets belong to the location

@@ -14,6 +14,7 @@ public static class ReferenceDataCategoryMapping
         Domain.Enums.ReferenceDataCategory.FrameColour => Contracts.Common.ReferenceDataCategory.FrameColour,
         Domain.Enums.ReferenceDataCategory.HardCaseColour => Contracts.Common.ReferenceDataCategory.HardCaseColour,
         Domain.Enums.ReferenceDataCategory.LensType => Contracts.Common.ReferenceDataCategory.LensType,
+        Domain.Enums.ReferenceDataCategory.FrameColourChild => Contracts.Common.ReferenceDataCategory.FrameColourChild,
         _ => throw new ArgumentOutOfRangeException(nameof(category), category, null),
     };
 }

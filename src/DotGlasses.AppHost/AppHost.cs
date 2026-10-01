@@ -95,9 +95,9 @@ postgres.ConfigureInfrastructure(infra =>
 
 var dotglassesdb = postgres.AddDatabase("dotglassesdb");
 
-// Provisions the storage account this Bicep needs (Reference Data's ImageUrl field is still a
-// plain admin-pasted URL — see CLAUDE.md's [OPEN] items; a real upload feature consuming this
-// blob container is separate application-layer work, deliberately not part of this pass).
+// Provisions the storage account and the private container that hold the pictures uploaded for
+// frame colours on the Reference Data screen (IReferenceDataPictureStore). The container has no
+// public access; the Admin Portal serves a picture back by its generated name.
 // RunAsEmulator keeps local `dotnet run` using Azurite (no real Azure Storage account touched in
 // dev) while still generating real Azure Storage Bicep at publish time, same pattern as Postgres
 // above.

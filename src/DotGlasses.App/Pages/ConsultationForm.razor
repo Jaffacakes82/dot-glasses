@@ -169,7 +169,8 @@
                 {
                     <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues" ReferenceData="Snapshot"
                                        LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
-                                       AllowNoPreference="false" Errors="_errors" SelectionChanged="OnLensSelectionChanged" />
+                                       AllowNoPreference="false" Errors="_errors" SelectionChanged="OnLensSelectionChanged"
+                                       ChildrensFrameChanged="OnChildrensFrameChanged" />
 
                     @RenderCoatingRemovedNote()
 
@@ -821,6 +822,17 @@
         _coatingRemovedNote = $"Removed {string.Join(", ", names)} — not available on the lens you've now chosen.";
     }
 
+    /// <summary>Adult and children's frames come in different colours, so a colour chosen for
+    /// one is not a colour for the other: changing the tick clears the choice and its "Other"
+    /// text rather than saving a colour from the wrong list.</summary>
+    private void OnChildrensFrameChanged()
+    {
+        _frameColourRefId = null;
+        _frameColourOtherText = null;
+        ClearErrors(FrameColourFields);
+        StateHasChanged();
+    }
+
     private async Task RetryReferenceDataAsync() => await ReferenceDataClient.RefreshAsync();
 
     /// <summary>Heuristic "has the technician started filling this in" check — not a field-by-field
@@ -1242,7 +1254,18 @@
         <label>Frame colour</label>
         <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-start;">
             @{
-                var frameColours = ReferenceDataClient.GetByCategory(ReferenceDataCategory.FrameColour);
+                // The list that matches the "children's frame" tick — the rule's own choice of
+                // category. A device whose cached lists predate the children's list has none to
+                // offer for a children's frame; it says so rather than fall back to adult colours.
+                var frameColours = ReferenceDataClient.GetByCategory(ConsultationRules.FrameColourCategory(_lensRange.ChildrensFrame));
+            }
+            @if (frameColours.Count == 0)
+            {
+                <p class="dg-lens-note" role="status">
+                    @(_lensRange.ChildrensFrame
+                        ? "The children's frame colours aren't on this device yet. Connect to load them."
+                        : "The frame colours aren't on this device yet. Connect to load them.")
+                </p>
             }
             @foreach (var colour in frameColours.OrderBy(c => c.SortOrder))
             {
@@ -1250,9 +1273,9 @@
                 <button type="button" title="@colour.Label" @onclick="() => { ClearErrors(FrameColourFields); _frameColourRefId = colour.Id; }"
                         style="display:flex; flex-direction:column; align-items:center; gap:4px; width:64px; padding:4px; background:none; cursor:pointer;
                                border-radius:var(--radius-md); border: @(selected ? "2px solid var(--dot-orange)" : "1px solid var(--border-default)");">
-                    @if (colour.ImageUrl is { } imageUrl)
+                    @if (ReferenceDataClient.PictureSource(colour) is { } picture)
                     {
-                        <img src="@imageUrl" alt="@colour.Label" style="width:48px; height:48px; object-fit:contain;"
+                        <img src="@picture" alt="@colour.Label" style="width:48px; height:48px; object-fit:contain;"
                              onerror="this.style.visibility='hidden'" />
                     }
                     else

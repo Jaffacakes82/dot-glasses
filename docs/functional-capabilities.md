@@ -721,15 +721,16 @@ selected).
 **Route** `/ReferenceData` · **Access** `ReferenceData.Manage` — **Admin at DGI only.** The single
 most restricted screen in the product.
 
-Seven category cards in a fixed display order, each with an explanatory scope note:
+Eight category cards in a fixed display order, each with an explanatory scope note:
 
 | Category | Where the values are consumed |
 |---|---|
 | Reasons not purchased | Field App Lead form (required) |
-| Referral reasons | Field App Test form when outcome is *Referred* |
+| Referral reasons | Every recording form, when "Referred or treated" is ticked |
 | Coatings & tints | Lead coating preference and Sale coating, and the coatings each lens set lens is ticked for on Lens Sets |
-| Frame colors | Sale frame-colour swatches |
-| Hard case colors | Sale, when a hard case is sold |
+| Frame colours (adult) | Sale frame-colour swatches, unless "children's frame" is ticked |
+| Frame colours (child) | Sale frame-colour swatches when "children's frame" is ticked |
+| Hard case colours | Sale, when a hard case is sold |
 | Occupations | Optional on Test, Lead and Sale |
 | Lens types | Bifocal / Progressive / Other, asked when a lens has an add — on a Custom prescription and on a lens set lens alike |
 
@@ -740,9 +741,9 @@ hold together, added and removed here and enforced everywhere, on a lens set and
 prescription alike. Adding an exclusion is refused if a lens set lens pairs those two coatings
 ("Can't add this exclusion — a lens in a lens set pairs these two coatings."). None ship.
 
-**Each card shows** its active options as chips — with a circular 18px thumbnail where an image URL
-is set, on the Frame colors card only — each carrying a **pencil icon to edit** (label and image
-URL only — category, code and the Other flag stay fixed after creation), **↑/↓ buttons to
+**Each card shows** its active options as chips — with a circular 18px thumbnail where the option
+has a picture, on the two Frame colours cards only — each carrying a **pencil icon to edit** (label
+and picture only — category, code and the Other flag stay fixed after creation), **↑/↓ buttons to
 reorder**, and a × to retire it, plus a collapsed "Retired (N)" section with a Restore link per
 option.
 
@@ -755,8 +756,17 @@ Retired options disappear from every Field App dropdown immediately but remain r
 | Field | Rules |
 |---|---|
 | Label | Required, ≤ 200 characters. The machine code is auto-slugified from it (lowercased, non-alphanumeric runs → hyphens). Sort order is assigned as (current maximum in category + 1). |
-| Image URL | ≤ 2000 characters. **Rendered on the Frame colors card only.** A pasted URL — there is no upload. |
+| Picture | **On the two Frame colours cards only.** A file upload: PNG, JPEG or WebP, up to 1 MB, checked by reading the file's own signature rather than its name. Refused with "Upload a PNG, JPEG or WebP picture." or "Upload a picture of 1 MB or smaller." There is no address to type. |
 | "Mark as this category's Other option" | A checkbox. Disabled with the note "(already set — retire it first)" when the category already has an active Other option, and independently enforced server-side. |
+
+**Pictures.** An uploaded picture goes into the private `reference-data-images` storage container
+under a newly generated name, and the option's picture address becomes
+`/reference-data/pictures/<name>` — a path the Admin Portal serves anonymously (the Field App shows
+these with no session) with a year-long cache lifetime, for generated names only; anything else is
+a 404. The container itself has no public access. The edit dialog shows the current picture, takes
+a replacement file, and has a **Remove picture** tick; replacing or removing deletes the old file.
+The six adult colours seeded with pictures on the online shop's website keep those addresses and
+keep displaying until DGI uploads replacements.
 
 The Other flag matters functionally: every consuming dropdown in the Field App keys off it to
 reveal a free-text "please specify" field, and the API requires that free text whenever an
@@ -764,20 +774,18 @@ Other-flagged option is chosen. Two active Others in one category would be ambig
 one-per-category rule.
 
 **Out of the box** the system seeds: 12 Occupations, 9 Reasons not purchased, 6 Referral reasons,
-5 Coatings (Photochromic, Clear, Blue block, Polarized, Sunglasses), 7 Frame colors, 3 Hard case
-colors, and 3 Lens types (Bifocal, Progressive, Other). Every category except Coatings ships with
+5 Coatings (Photochromic, Clear, Blue block, Polarized, Sunglasses), 7 adult Frame colours, one
+child Frame colour ("Other" — DGI enters the children's colours), 3 Hard case colours, and 3 Lens
+types (Bifocal, Progressive, Other). Every category except Coatings ships with
 an "Other" row.
 
 **Not built**
 - No hard delete for a mistyped entry (edit covers a mislabel; retire covers removal).
-- Image is a URL only. No upload, no validation that the URL resolves, no image for any category
-  other than Frame colors.
-- Seven identical forms share a single page-level error banner, so a validation failure does not
+- No picture for any category other than the two Frame colours lists; no resizing or cropping.
+- Eight identical forms share a single page-level error banner, so a validation failure does not
   indicate which card produced it.
 - Gender, frame coverage, lens range type and fulfilment status are hard-coded enumerations and
   are not editable here or anywhere else.
-- The Frame colors swatch shown in the *Field App* is not driven by the image URL — it uses a
-  hard-coded hex table matched against six known colour names, falling back to grey.
 
 ---
 
@@ -942,10 +950,13 @@ more control appears, last in the lens section:
   Server-rejected if the range is not Custom.
 
 Then, for every sale:
-- **Frame colour** — a row of circular colour swatches, one per active Frame colour reference item.
-  The colour shown comes from a hard-coded six-entry hex table matched by name substring, falling
-  back to grey; the admin-entered image URL is not used here. Selecting the "Other" swatch reveals
-  a "please specify" text field. Required server-side.
+- **Frame colour** — a row of swatches, each with the colour's picture (a "?" placeholder where it
+  has none). The swatches come from the **adult** list, or from the **children's** list when
+  "Children's frame" is ticked; changing the tick clears a colour already chosen, and the server
+  refuses a colour from the wrong list ("Choose a children's frame colour."). The pictures are
+  copied onto the device whenever reference data loads, so they show offline; a picture still
+  hosted on another website shows online only. Selecting the "Other" swatch reveals a "say which"
+  text field. Required server-side.
 - **Hard case sold** — a checkbox; ticking it reveals a **Hard case colour** reference dropdown
   with Other free-text. Server-enforced both ways: colour required when sold, and both colour
   fields must be empty when not.

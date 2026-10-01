@@ -79,6 +79,22 @@
 
         // A children's frame narrows the pupil distance buckets; each option says whether it allows it.
         const childrens = !!one('[data-childrens-frame]')?.checked;
+
+        // ...and has its own frame colours: each option says which frame it is for, and a colour
+        // chosen for the other one is cleared.
+        const colour = one('[data-frame-colour]');
+        if (colour) {
+            for (const option of colour.options) {
+                const off = option.value !== '' && (option.dataset.forChildrensFrame === 'true') !== childrens;
+                option.hidden = off;
+                option.disabled = off;
+            }
+
+            if (colour.selectedOptions[0]?.disabled) {
+                colour.value = '';
+            }
+        }
+
         const bucket = one('[data-pd-bucket]');
         if (bucket) {
             for (const option of bucket.options) {

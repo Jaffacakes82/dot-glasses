@@ -19,7 +19,23 @@ public class CreateReferenceDataItemRequestValidator : AbstractValidator<CreateR
         RuleFor(x => x.Label)
             .NotEmpty().WithMessage("Enter a label for the option.")
             .MaximumLength(200).WithMessage("Keep the label to 200 characters or fewer.");
-        RuleFor(x => x.ImageUrl).MaximumLength(2000).WithMessage("Keep the image address to 2000 characters or fewer.");
+
+        RuleFor(x => x.Picture).CustomAsync(async (picture, context, cancellationToken) =>
+        {
+            if (picture is null)
+            {
+                return;
+            }
+
+            if (!ReferenceDataPictureUpload.TakesPictures(context.InstanceToValidate.Category))
+            {
+                context.AddFailure(ReferenceDataPictureUpload.WrongListMessage);
+            }
+            else if ((await ReferenceDataPictureUpload.CheckAsync(picture, cancellationToken)).Error is { } error)
+            {
+                context.AddFailure(error);
+            }
+        });
 
         RuleFor(x => x).CustomAsync(async (request, context, cancellationToken) =>
         {

@@ -15,4 +15,7 @@ public enum ReferenceDataCategory
     // 6 — retired ("Lens strength", ADR-0007). Reserved; do not reuse.
 
     LensType = 7,
+
+    /// <summary>Children's frame colours; <see cref="FrameColour"/> is the adult list.</summary>
+    FrameColourChild = 8,
 }

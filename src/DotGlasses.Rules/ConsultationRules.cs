@@ -87,7 +87,7 @@ public static class ConsultationRules
             Scalars(request)
                 .Concat(Occupation(request.OccupationRefId, request.OccupationOtherText, snapshot))
                 .Concat(Referral(request.ReferredOrTreated, request.ReferralReasonRefId, request.ReferralOtherText, request.ReferralLocationFreeText, request.TreatedInFacility, snapshot))
-                .Concat(FrameColour(request.FrameColourRefId, request.FrameColourOtherText, snapshot))
+                .Concat(FrameColour(request.FrameColourRefId, request.FrameColourOtherText, request.ChildrensFrame, snapshot))
                 .Concat(HardCase(request.HardCaseSold, request.HardCaseColourRefId, request.HardCaseOtherColourText, snapshot))
                 // LensRangeType is non-nullable on a Sale, so the "not chosen yet" branch below is
                 // unreachable from here — a Sale always names its lens range.
@@ -277,12 +277,21 @@ public static class ConsultationRules
             nameof(CreateLeadRequest.ReasonNotPurchasedRefId), "Choose a reason not purchased.",
             nameof(CreateLeadRequest.ReasonNotPurchasedOtherText), "Say what the other reason is.");
 
-    /// <summary>Sale only, and required — a sold pair of glasses always has a frame colour.</summary>
-    private static IEnumerable<RuleFailure> FrameColour(Guid frameColourRefId, string? frameColourOtherText, ReferenceDataSnapshot snapshot) =>
+    /// <summary>Sale only, and required — a sold pair of glasses always has a frame colour. Adult
+    /// and children's frames come in different colours, so the colour has to be from the list
+    /// that matches the "children's frame" tick (<see cref="FrameColourCategory"/>): an adult
+    /// colour on a children's frame is refused like a colour that doesn't exist.</summary>
+    private static IEnumerable<RuleFailure> FrameColour(Guid frameColourRefId, string? frameColourOtherText, bool childrensFrame, ReferenceDataSnapshot snapshot) =>
         ChosenItem(
-            frameColourRefId, frameColourOtherText, ReferenceDataCategory.FrameColour, snapshot,
-            nameof(CreateSaleRequest.FrameColourRefId), "Choose a frame colour.",
+            frameColourRefId, frameColourOtherText, FrameColourCategory(childrensFrame), snapshot,
+            nameof(CreateSaleRequest.FrameColourRefId),
+            childrensFrame ? "Choose a children's frame colour." : "Choose a frame colour.",
             nameof(CreateSaleRequest.FrameColourOtherText), "Say what the other frame colour is.");
+
+    /// <summary>Which frame colour list a Sale's colour comes from. The one definition both forms
+    /// offer colours from and the rule checks against.</summary>
+    public static ReferenceDataCategory FrameColourCategory(bool childrensFrame) =>
+        childrensFrame ? ReferenceDataCategory.FrameColourChild : ReferenceDataCategory.FrameColour;
 
     /// <summary>Sale only. The colour is required exactly when a hard case was sold, and both
     /// colour fields must stay empty when one wasn't.</summary>

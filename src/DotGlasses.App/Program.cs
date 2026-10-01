@@ -30,6 +30,7 @@ builder.Services.AddSingleton<ISyncQueueStore, IndexedDbOutboxStore>();
 builder.Services.AddSingleton<ISyncService, SyncService>();
 builder.Services.AddSingleton<ConnectivitySyncTrigger>();
 
+builder.Services.AddSingleton<FramePictureCache>();
 builder.Services.AddSingleton<IReferenceDataClient, ReferenceDataClient>();
 builder.Services.AddSingleton<IUserLocationClient, UserLocationClient>();
 builder.Services.AddSingleton<ILeadsClient, LeadsClient>();

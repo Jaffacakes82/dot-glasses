@@ -402,7 +402,11 @@ public class LeadConversionController(
             CoatingsNote = coatings is { Offered.Count: 0 }
                 ? "No coating can be made on both of these lenses, so they can't be sold together on a lens set — choose another lens."
                 : null,
+            // Both lists: the form shows the one matching "children's frame" (Rules' choice of
+            // category) and the server checks the same thing on submit.
             FrameColours = referenceData.Where(x => x.Category == ReferenceDataCategory.FrameColour).OrderBy(x => x.SortOrder).ToList(),
+            ChildFrameColours = referenceData.Where(x => x.Category == ReferenceDataCategory.FrameColourChild).OrderBy(x => x.SortOrder).ToList(),
+            ChildrensFrame = lensCarriesOver ? lead.ChildrensFrame : form.ChildrensFrame,
             Coatings = referenceData.Where(x => x.Category == ReferenceDataCategory.Coating).OrderBy(x => x.SortOrder).ToList(),
             HardCaseColours = referenceData.Where(x => x.Category == ReferenceDataCategory.HardCaseColour).OrderBy(x => x.SortOrder).ToList(),
             ReferralReasons = referenceData.Where(x => x.Category == ReferenceDataCategory.ReferralReason).OrderBy(x => x.SortOrder).ToList(),

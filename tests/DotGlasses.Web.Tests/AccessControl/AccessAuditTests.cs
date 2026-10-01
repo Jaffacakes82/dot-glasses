@@ -241,6 +241,8 @@ public class AccessAuditTests(AccessAuditFixture fixture) : IClassFixture<Access
         new("Portal.Catalogues.UnassignCatalogue POST", _ => "/Catalogues/UnassignCatalogue", Expect.Denied, Expect.Denied,
             (_, _) => [("catalogueId", ExampleLensSets.SixLensSetId.ToString()), ("orgNodeId", OrganisationSeedConfiguration.DgiId.ToString())]),
 
+        // Anonymous by design (the Field App shows frame colour pictures), and holds nothing scoped.
+        new("Portal.ReferenceDataPictures.Get GET", _ => "/reference-data/pictures/" + new string('0', 32) + ".png", Expect.NotFound, Expect.NotFound),
         new("Portal.ReferenceData.Index GET", _ => "/ReferenceData", Expect.Denied, Expect.Denied),
         new("Portal.ReferenceData.Create POST", _ => "/ReferenceData/Create", Expect.Denied, Expect.Denied,
             (_, _) => [("Category", "Occupation"), ("Label", "Added by the audit")],

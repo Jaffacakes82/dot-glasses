@@ -226,6 +226,10 @@ else if (Model.LensRangeType == LensRangeType.Custom)
     /// state at all, see ADR-0001.</summary>
     [Parameter] public EventCallback SelectionChanged { get; set; }
 
+    /// <summary>Fired when "Children's frame" is ticked or unticked — the Sale form offers a
+    /// different frame colour list for each, so it clears a colour chosen from the other one.</summary>
+    [Parameter] public EventCallback ChildrensFrameChanged { get; set; }
+
     // A Sale has no default lens range (ADR-0005): the first entry is an explicit "Select a lens
     // range…" whose value maps to a null model, so what the browser shows and what the model holds
     // agree from the start. (An earlier version defaulted a Sale to the 6-Lens set, and before
@@ -345,6 +349,8 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         {
             Model.PresetPupilDistanceBucket = null;
         }
+
+        _ = ChildrensFrameChanged.InvokeAsync();
     }
 
     /// <summary>Clears the now-hidden LensType pick the moment neither eye carries an add above
