@@ -64,3 +64,13 @@ Decided by grilling, 2026-10-01.
 **Other languages**
 
 - English only. Translation is a separate project.
+
+## Comments
+
+- 2026-10-01, found when merging `origin/main`: most of the recording-rule messages had already
+  been reworded the same day, under
+  `.scratch/lens-set-feedback-2026-10-01/issues/06-developer-wording-in-form-errors.md`. That
+  ticket deliberately left the messages no form can cause in technical wording. The decision
+  above still stands (one plain message per group), so Spec D's ticket 04 covers only what is
+  left: those messages, two on the controllers, the few that don't yet match the voice, and the
+  Field App's labels. `CLAUDE.md` also now counts eight Admin Portal validators, not nine.

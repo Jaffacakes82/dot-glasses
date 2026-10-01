@@ -11,7 +11,7 @@ conversion form, and the server enforces it.
 
 **Model:** Opus 5.5 — `SaleAssembly`, two forms and a server check that must agree.
 
-**Seam:** `Application.Tests` (`SaleAssemblyTests`); `DotGlasses.Web.Tests` over HTTP; the Field
+**Seam:** `DotGlasses.Rules.Tests` (`SaleAssemblyTests`); `DotGlasses.Web.Tests` over HTTP; the Field
 App by hand.
 
 **Don't run alongside:** Spec D tickets 01, 03 and 04; Spec E ticket 02.

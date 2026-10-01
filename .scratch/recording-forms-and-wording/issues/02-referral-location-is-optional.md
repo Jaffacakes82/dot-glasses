@@ -10,7 +10,7 @@ Portal's form also moves "Referred or treated" to the end.
 
 **Model:** Sonnet 5.5.
 
-**Seam:** `Application.Tests` for the rule; `DotGlasses.Web.Tests` over HTTP for the endpoints and
+**Seam:** `DotGlasses.Rules.Tests` for the rule; `DotGlasses.Web.Tests` over HTTP for the endpoints and
 the conversion form.
 
 ## Acceptance criteria

@@ -10,7 +10,7 @@ answer saves, and the answer is stored on the Lead.
 
 **Model:** Sonnet 5.5.
 
-**Seam:** `Application.Tests` for the rule; `DotGlasses.Web.Tests` over HTTP for the Lead
+**Seam:** `DotGlasses.Rules.Tests` for the rule; `DotGlasses.Web.Tests` over HTTP for the Lead
 endpoint; the form by hand.
 
 **Don't run alongside:** 01.

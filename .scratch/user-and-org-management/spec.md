@@ -91,6 +91,9 @@ set-password page, and returns the person to the app they came from.
   read-only with a reason. Out-of-scope assignments are counted, never named, and never touched.
 - "At least one assignment" counts assignments the admin can't see.
 - Email is not editable.
+- A user with no assignment at all is listed for DGI-level admins only, as "No organisation"
+  (2026-10-01). The Edit page opens for such a user, and saving at least one assignment repairs
+  them.
 - A confirmation is shown before saving when a retail-point assignment is removed or an Admin
   becomes a User.
 - Row actions stay on the directory: Edit, Reset password, Suspend/Unsuspend.
@@ -173,6 +176,8 @@ set-password page, and returns the person to the app they came from.
   - Forgot password: the same response for a known, unknown and suspended address; one email for
     an active account; none for a suspended one; none within five minutes; the set-password page
     redirects to the right app.
+- **`AccessAuditTests`** audits every controller action for three kinds of caller. Every new
+  action here (the Edit page, bulk assign, forgot password) is added to it.
 - **`Application.Tests`** may unit-test any pure helper, such as "does this removal shrink the
   scope", with no new dependencies.
 - **Field App** forgot-password screen is checked by hand; there is no Field App test project.

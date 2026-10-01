@@ -140,7 +140,8 @@ journey.
 - **`DotGlasses.Infrastructure.Tests`** (real Postgres, real migrations): the migration turns each
   Sale with a fulfilment status into one order with the same status; a Lead and its order commit
   or roll back together; a retried create places no second order.
-- **`Application.Tests`**: the ordering-Lead rules; `SaleAssemblyTests` for the ordered-Lead seed;
+- **`DotGlasses.Rules.Tests`**: the ordering-Lead rules; `SaleAssemblyTests` for the ordered-Lead seed.
+- **`DotGlasses.Application.Tests`**:
   pure helpers for the referral chains and per-key conversion, with hand-written fakes.
 - **`DotGlasses.Web.Tests`** over HTTP:
   - a Custom Lead with the tick creates an order; a lens-set Lead with the tick is refused; an
@@ -154,6 +155,8 @@ journey.
     reorders them; a Test and its Lead both marked referred count once;
   - Event History renders the lens columns and the Training badge; the CSV carries the separate
     columns.
+- **`AccessAuditTests`** audits every controller action for three kinds of caller. Every new
+  action in this spec is added to it.
 - **Field App** — the Lead form's order tick and coating selector, the locked conversion, the
   refused match path and the Leads list badge — is checked by hand, with checklists in the
   tickets' Comments.

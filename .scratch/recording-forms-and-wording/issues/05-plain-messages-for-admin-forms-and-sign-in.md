@@ -14,7 +14,7 @@ apart from a real failure.
 
 ## Acceptance criteria
 
-- [ ] The nine Admin Portal validators (Organisations, Lens Sets, Reference Data, User Directory)
+- [ ] The eight Admin Portal validators (Organisations, Lens Sets, Reference Data, User Directory)
       carry messages in the spec's voice.
 - [ ] `DomainRuleViolationException` messages that still read as developer copy are reworded.
       Those already written as plain sentences are left alone.

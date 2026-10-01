@@ -15,8 +15,12 @@ Pressing Save on a Lead or a Sale brings up "Has the customer been told the pric
 Answering "Not yet" returns to the form without saving, and the answer is stored nowhere. On a Sale
 the question makes no sense: the customer has paid.
 
-Most error messages were written for developers: "ReferralReasonRefId is required when
-ReferredOrTreated is true." The sign-in pages say "username" when the sign-in name is an email
+The recording forms' error messages were written for developers ("ReferralReasonRefId is required
+when ReferredOrTreated is true."). Most were reworded on 2026-10-01
+(`.scratch/lens-set-feedback-2026-10-01/issues/06-developer-wording-in-form-errors.md`). What is
+left: about a dozen messages deliberately kept technical because no form can cause them, though a
+technician can still meet them on Failed records; two messages on the controllers; and a few that
+don't yet follow the agreed voice. The sign-in pages say "username" when the sign-in name is an email
 address, and switching location says "check your connection" for every kind of failure. The Admin
 Portal's own forms use the framework's stock wording.
 
@@ -94,16 +98,19 @@ and the location-switch message tells being offline apart from a real failure.
 - The voice: say what to do in a short sentence; use the words on the screen, never a field's
   internal name; no "must", "invalid" or "required when"; no "please"; no blame; limits stated
   plainly; British spelling, sentence case, a full stop.
-- Every `RuleFailure` message in `ConsultationRules` is rewritten to it. **Failure keys do not
-  change**: they are request property names and `FormErrors`, `ValidationProblemDetails` and
-  `LeadConversionController`'s remap all key off them (CLAUDE.md, ADR-0002).
-- The scalar messages stop reproducing FluentValidation's generated copy. CLAUDE.md's "reproduced
-  verbatim" sentence is revised in the same change.
-- Failures that can't be caused from the form (fields that must be empty for the other lens range,
+- The messages a form control can cause were reworded by the earlier ticket; this spec checks them
+  against the voice and fixes the few that differ, including the lens power sentences shared with
+  the Add lens dialog and three that quote Field App labels the Admin Portal's conversion form
+  words differently. **Failure keys do not change**: they are request property names and
+  `FormErrors`, `ValidationProblemDetails` and `LeadConversionController`'s remap all key off them
+  (CLAUDE.md, ADR-0002).
+- The two source-record messages on `LeadsController` and `SalesController` are reworded.
+- CLAUDE.md says the messages no form can produce "stay technical". That changes: failures that
+  can't be caused from the form (fields that must be empty for the other lens range,
   a lens type that doesn't match the chosen lenses, and the like) share one plain message per
   group, for example "This record's lens details don't match its lens range. Open it and choose
   the lens again."
-- The nine Admin Portal validators get messages in the same voice (`WithMessage`), and so do the
+- The eight Admin Portal validators get messages in the same voice (`WithMessage`), and so do the
   `DomainRuleViolationException` messages that still read as developer copy.
 - Both sign-in pages label the field "Email" and say "Email or password is incorrect."
 - Location switching distinguishes offline ("You're offline. Connect to switch location.") from
@@ -112,7 +119,7 @@ and the location-switch message tells being offline apart from a real failure.
 
 ## Testing Decisions
 
-- **`Application.Tests`** holds the rule tests, with no new dependencies. Update every test that
+- **`DotGlasses.Rules.Tests`** holds the rule tests, with no new dependencies. Update every test that
   pins a message; add cases for: a blank referral location accepted; a location with "Treated in
   facility" still refused; a Lead with no price answer refused, with Yes accepted and with No
   accepted.

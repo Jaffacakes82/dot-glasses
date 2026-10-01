@@ -11,7 +11,7 @@ order is placed with the Lead. The order appears in the Custom Orders queue mark
 **Model:** Opus 5.5 — new rules shared by the device and the server, and a Lead gaining a coating
 set.
 
-**Seam:** `Application.Tests` for the rules; `DotGlasses.Web.Tests` over HTTP; the Field App by hand.
+**Seam:** `DotGlasses.Rules.Tests` for the rules; `DotGlasses.Web.Tests` over HTTP; the Field App by hand.
 
 **Don't run alongside:** Spec D tickets 01, 03 and 04; Spec E ticket 02.
 

@@ -104,7 +104,7 @@ copies so pictures show offline.
 
 ## Testing Decisions
 
-- **`Application.Tests`**: the frame colour rule — an adult colour on an adult frame accepted; a
+- **`DotGlasses.Rules.Tests`**: the frame colour rule — an adult colour on an adult frame accepted; a
   child colour on an adult frame refused; the reverse; "Other" from the right list with its text
   accepted.
 - **`DotGlasses.Web.Tests`** over HTTP: the Sale create endpoint refuses a colour from the wrong
@@ -112,6 +112,8 @@ copies so pictures show offline.
   lists both categories; an upload of an accepted type is stored and served back byte for byte; an
   oversized file and a non-picture file are refused with their messages; removing a picture clears
   it; the serving endpoint returns 404 for a name that doesn't match the pattern.
+- **`AccessAuditTests`** audits every controller action for three kinds of caller. Every new
+  action in this spec is added to it.
 - **Field App** swatches following the tick and pictures showing offline are checked by hand, with
   the checklist in the ticket's Comments.
 - No mocking library; the storage fake is hand-written.

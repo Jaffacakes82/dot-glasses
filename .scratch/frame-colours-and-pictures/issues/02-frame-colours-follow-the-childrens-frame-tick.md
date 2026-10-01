@@ -10,7 +10,7 @@ Changing the tick clears the chosen colour. The server refuses a colour from the
 
 **Model:** Opus 5.5 — one rule shared by the device, the server and the conversion form.
 
-**Seam:** `Application.Tests` for the rule; `DotGlasses.Web.Tests` over HTTP; the Field App by hand.
+**Seam:** `DotGlasses.Rules.Tests` for the rule; `DotGlasses.Web.Tests` over HTTP; the Field App by hand.
 
 **Don't run alongside:** Spec D tickets 01, 03 and 04, which edit the same form and rules file.
 

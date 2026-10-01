@@ -1,36 +1,46 @@
-# 04 — Plain messages for the Test, Lead and Sale rules
+# 04 — Finish the plain wording of the Test, Lead and Sale rules
 
-**What to build:** Every error a technician can meet on the recording forms, on Failed records or
-on the Admin Portal's Lead conversion form says what to do, in the words on the screen. Failures
-that can't be caused from the form share one plain message per group. The Field App's labels on the
-three forms are tidied in the same voice.
+**What to build:** Most recording-rule messages were already reworded on 2026-10-01
+(`.scratch/lens-set-feedback-2026-10-01/issues/06-developer-wording-in-form-errors.md`, which lists
+every message changed and every one left technical). This ticket finishes the job to the voice
+agreed in map ticket 22: the messages that were left technical get one plain message per group,
+the remaining developer copy is reworded, and the Field App's labels on the three forms are tidied.
 
 **Blocked by:** 02, 03
 
 **Status:** ready-for-agent
 
-**Model:** Opus 5.5 — every message in `ConsultationRules` changes while every key must not.
+**Model:** Sonnet 5.5 — the hard part is done; keys must still not change.
 
-**Seam:** `Application.Tests`; `DotGlasses.Web.Tests` over HTTP for the response shape.
+**Seam:** `DotGlasses.Rules.Tests`; `DotGlasses.Web.Tests` over HTTP for the response shape.
 
 **Don't run alongside:** any ticket in Specs E and F that adds a rule to `ConsultationRules`.
 
 ## Acceptance criteria
 
-- [ ] Every `RuleFailure` message in `ConsultationRules` follows the voice in the spec: what to
-      do, the screen's own words, no internal field names, no "must", "invalid" or "required
-      when", British spelling, a full stop.
+- [ ] The messages the earlier ticket lists under "Left technical" can still reach a technician
+      on Failed records (a record queued under older rules). They are grouped, and each group
+      gets one plain message saying what to do, for example "This record's lens details don't
+      match its lens range. Open it and choose the lens again." The grouping is listed in
+      Comments.
+- [ ] `LeadsController` and `SalesController`'s "SourceTestId must reference an existing Test." and
+      "SourceLeadId must reference an existing Lead." are reworded in the same voice. They stay on
+      the controllers and stay field-keyed.
+- [ ] The three rule messages that quote Field App labels which read differently on the Admin
+      Portal's Lead conversion form are made to read correctly on both.
+- [ ] Messages reachable from a form are checked against the voice in the spec (what to do, the
+      screen's own words, no "must", "invalid" or "required when", a full stop). The lens power
+      sentences shared with the Add lens dialog are brought into line in both places, or the
+      reason for leaving them is recorded in Comments.
 - [ ] No failure key changes. `FormErrors`, the `ValidationProblemDetails` shape and
       `LeadConversionController`'s `Form.{PropertyName}` remap behave as before.
-- [ ] Failures that can't be caused from the form are grouped, each group with one message that
-      says what to do. The grouping is listed in this ticket's Comments.
 - [ ] A guard test walks the failures produced for a set of bad Test, Lead and Sale requests and
-      asserts no message contains a request property name.
+      asserts no message contains a request property name or an enum member name.
 - [ ] Every existing test that pins a message is updated; none is deleted.
 - [ ] The Field App's labels and prompts on the three forms are reviewed against the same voice.
-- [ ] `CLAUDE.md`'s "There is no consultation request validator" bullet no longer says the scalar
-      messages reproduce FluentValidation's copy verbatim.
-- [ ] A before-and-after table of every message is added to this ticket's Comments.
+- [ ] `CLAUDE.md`'s "There is no consultation request validator" bullet no longer says some
+      messages "stay technical".
+- [ ] A before-and-after table of every message changed here is added to Comments.
 
 ## Notes
 
