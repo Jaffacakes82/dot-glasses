@@ -375,7 +375,9 @@ equivalent for — coating, frame colour, hard case, "order from DOT Glasses", a
 where the Lead captured no preference — plus **referred or treated**, with a referral reason, its
 "Other" free text, a treated-in-facility flag and an optional referral location, following exactly
 the same rules as every other capture path. That block is the form's last section, after hard case,
-as on the Field App. Frame coverage is **not** asked here,
+as on the Field App. The frame colour dropdown offers the adult list, or the children's list when
+"Children's frame" is ticked (the Lead's own answer when its lens carries over), and a colour from
+the other list is refused on submit. Frame coverage is **not** asked here,
 matching the Field App's Sale form; the sale records the Full frame default. Outside the lens
 section every field is rendered unconditionally with its condition stated in the label — the
 rules are enforced server-side and reported as a validation summary on submit, not by live

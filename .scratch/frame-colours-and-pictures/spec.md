@@ -1,6 +1,6 @@
 # Spec E — Frame colours and their pictures
 
-Status: ready-for-agent
+Status: resolved
 Source: wayfinder map `.scratch/ceo-feedback-2026-09-27/` — tickets 15 (separate frame colours for
 adult and child frames) and 16 (reference data images: URL or upload).
 
