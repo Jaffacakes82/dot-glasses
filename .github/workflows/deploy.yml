@@ -100,6 +100,8 @@ jobs:
           AZURE_POSTGRES_AAD_USERNAME: ${{ vars.AZURE_POSTGRES_AAD_USERNAME }}
         run: |
           set -euo pipefail
+          # A blank username falls back to the runner's OS user and signs in only by coincidence.
+          : "${AZURE_POSTGRES_AAD_USERNAME:?AZURE_POSTGRES_AAD_USERNAME is not set on this GitHub Environment}"
           POSTGRES_HOST=$(azd env get-value POSTGRES_HOSTNAME)
           PG_TOKEN=$(az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv)
           export ConnectionStrings__dotglassesdb="Host=${POSTGRES_HOST};Port=5432;Database=dotglassesdb;Username=${AZURE_POSTGRES_AAD_USERNAME};Password=${PG_TOKEN};Ssl Mode=Require;Trust Server Certificate=true"
@@ -194,6 +196,8 @@ jobs:
           AZURE_POSTGRES_AAD_USERNAME: ${{ vars.AZURE_POSTGRES_AAD_USERNAME }}
         run: |
           set -euo pipefail
+          # A blank username falls back to the runner's OS user and signs in only by coincidence.
+          : "${AZURE_POSTGRES_AAD_USERNAME:?AZURE_POSTGRES_AAD_USERNAME is not set on this GitHub Environment}"
           POSTGRES_HOST=$(azd env get-value POSTGRES_HOSTNAME)
           PG_TOKEN=$(az account get-access-token --resource-type oss-rdbms --query accessToken -o tsv)
           export ConnectionStrings__dotglassesdb="Host=${POSTGRES_HOST};Port=5432;Database=dotglassesdb;Username=${AZURE_POSTGRES_AAD_USERNAME};Password=${PG_TOKEN};Ssl Mode=Require;Trust Server Certificate=true"
