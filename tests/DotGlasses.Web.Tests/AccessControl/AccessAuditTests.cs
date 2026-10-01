@@ -210,6 +210,7 @@ public class AccessAuditTests(AccessAuditFixture fixture) : IClassFixture<Access
             Written: (f, _, db) => db.Sales.IgnoreQueryFilters().AnyAsync(s => s.Id == f.Own.SaleId && s.FulfilmentStatus != Domain.Enums.FulfilmentStatus.Submitted)),
 
         new("Portal.Catalogues.Index GET", _ => "/Catalogues", Expect.Denied, Expect.Denied),
+        new("Portal.Catalogues.Details GET", _ => $"/Catalogues/Details/{ExampleLensSets.SixLensSetId}", Expect.Denied, Expect.Denied),
         new("Portal.Catalogues.LensPowers GET", _ => "/Catalogues/LensPowers", Expect.Denied, Expect.Denied),
         new("Portal.Catalogues.CreateCatalogue POST", _ => "/Catalogues/CreateCatalogue", Expect.Denied, Expect.Denied,
             (_, c) => [("Name", $"Lens set by {c.Account.UserId:N}"), ("OwningOrgNodeId", KenyaRetailPointId.ToString())],
@@ -222,8 +223,8 @@ public class AccessAuditTests(AccessAuditFixture fixture) : IClassFixture<Access
         new("Portal.Catalogues.RemoveLensOption POST", _ => "/Catalogues/RemoveLensOption", Expect.Denied, Expect.Denied,
             (_, _) => [("lensOptionId", ExampleLensSets.SixLensPlus250Id.ToString())],
             Written: async (_, _, db) => !await db.LensOptions.IgnoreQueryFilters().AnyAsync(l => l.Id == ExampleLensSets.SixLensPlus250Id)),
-        new("Portal.Catalogues.AssignCatalogues POST", _ => "/Catalogues/AssignCatalogues", Expect.Denied, Expect.Denied,
-            (_, _) => [("OrgNodeId", KenyaRetailPointId.ToString()), ("CatalogueIds", ExampleLensSets.SixLensSetId.ToString())]),
+        new("Portal.Catalogues.AssignCatalogue POST", _ => "/Catalogues/AssignCatalogue", Expect.Denied, Expect.Denied,
+            (_, _) => [("OrgNodeId", KenyaRetailPointId.ToString()), ("CatalogueId", ExampleLensSets.SixLensSetId.ToString())]),
         new("Portal.Catalogues.RetireCatalogue POST", _ => "/Catalogues/RetireCatalogue", Expect.Denied, Expect.Denied,
             (_, _) => [("catalogueId", ExampleLensSets.SixLensSetId.ToString())],
             Written: (_, _, db) => db.PresetCatalogues.IgnoreQueryFilters().AnyAsync(p => p.Id == ExampleLensSets.SixLensSetId && p.IsDeleted)),

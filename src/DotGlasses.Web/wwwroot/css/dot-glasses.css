@@ -295,7 +295,7 @@ body {
     border-bottom: 1px solid var(--border-default);
 }
 
-.dg-table td.dg-muted {
+.dg-muted {
     color: var(--text-muted-2);
 }
 

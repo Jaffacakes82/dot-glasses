@@ -6,22 +6,40 @@ using DotGlasses.Rules.ReferenceData;
 namespace DotGlasses.Web.Models;
 
 /// <summary>
-/// The "Lens sets" tab (prototype variant A): one lens set on screen at a time.
-/// <see cref="Catalogues"/> is every lens set the picker offers (narrowed by
-/// <see cref="Search"/>); <see cref="Selected"/> is the one being worked on — the one asked for
-/// in the query string, or the first — and null only when there is none to show.
+/// The "Lens sets" tab: every lens set as a row, narrowed by <see cref="Status"/> and
+/// <see cref="Search"/>. A row opens that lens set's own page (<see cref="LensSetDetailsViewModel"/>),
+/// which is where its lenses and assignments are changed.
 /// </summary>
-public record CataloguesIndexViewModel(
-    IReadOnlyList<LensSetPickerOption> Catalogues,
-    CatalogueCard? Selected,
-    IReadOnlyList<RetiredCatalogueCard> RetiredCatalogues,
-    IReadOnlyList<(Guid Id, string Name)> AssignableOrgs,
-    IReadOnlyList<(Guid Id, string Name)> OwningOrgOptions,
+public record LensSetsListViewModel(
+    IReadOnlyList<LensSetRow> LensSets,
+    LensSetStatusFilter Status,
     string? Search,
+    IReadOnlyList<(Guid Id, string Name)> OwningOrgOptions);
+
+/// <summary>Which lens sets the list shows. Retiring is a soft delete, so a lens set is one or
+/// the other.</summary>
+public enum LensSetStatusFilter
+{
+    Active,
+    Retired,
+    All,
+}
+
+/// <summary>One row of the list. <see cref="AssignedOrgCount"/> is direct assignments only, not
+/// the outlets they reach.</summary>
+public record LensSetRow(
+    Guid Id, string Name, string? Description, string OwningOrgName, int LensCount, int AssignedOrgCount, bool IsRetired, bool CanReactivate);
+
+/// <summary>One lens set's own page: its details, its lenses and the orgs it is assigned to.
+/// <see cref="AssignableOrgs"/> is what the "Assigned to" picker offers — the orgs in the
+/// caller's scope it isn't assigned to yet; empty for a retired lens set, which is read-only.</summary>
+public record LensSetDetailsViewModel(
+    CatalogueCard LensSet,
+    IReadOnlyList<(Guid Id, string Name)> AssignableOrgs,
     LensDialogViewModel LensDialog);
 
 /// <summary>
-/// The one Add lens dialog the screen renders (prototype variant A), shared by every lens set's
+/// The one Add lens dialog a lens set's page renders (prototype variant A), shared by its
 /// Add lens and Edit buttons, which fill it from their own data before showing it. The choices
 /// are the active Coating and LensType items in their list order, and the global exclusions as
 /// "A and B" for the note. <see cref="Reopen"/> is the admin's own posted form when a save was
@@ -64,12 +82,12 @@ public record LensEditValues(
     IReadOnlyList<Guid> CoatingIds,
     IReadOnlyList<LensPairingField> Pairings);
 
-public record RetiredCatalogueCard(Guid Id, string Name, bool CanReactivate);
-
-/// <summary>One entry of the "Lens set" picker (and of the assign form's list).</summary>
-public record LensSetPickerOption(Guid Id, string Name);
-
-public record CatalogueCard(Guid Id, string Name, string? Description, string OwningOrgName, IReadOnlyList<LensOptionCard> LensOptions, IReadOnlyList<AssignedOrgCard> AssignedOrgs, bool CanEdit);
+/// <summary>The lens set a page is about. <see cref="CanEdit"/> and every
+/// <see cref="AssignedOrgCard.CanUnassign"/> are false on a retired one, whose only action is
+/// <see cref="CanReactivate"/>.</summary>
+public record CatalogueCard(
+    Guid Id, string Name, string? Description, string OwningOrgName, IReadOnlyList<LensOptionCard> LensOptions,
+    IReadOnlyList<AssignedOrgCard> AssignedOrgs, bool CanEdit, bool IsRetired, bool CanReactivate);
 
 public record AssignedOrgCard(Guid OrgNodeId, string OrgName, bool CanUnassign);
 
@@ -166,17 +184,17 @@ public class LensPairingField
     public Guid? PairedCoatingRefId { get; set; }
 }
 
-public class AssignCataloguesRequest
+/// <summary>The "Assigned to" picker on a lens set's page: this lens set, to one more org.</summary>
+public class AssignCatalogueRequest
 {
+    public Guid CatalogueId { get; set; }
     public Guid OrgNodeId { get; set; }
-    public List<Guid> CatalogueIds { get; set; } = [];
 }
 
 /// <summary>The "Lens powers" tab: one list per value, in the shop's order, each already formatted
 /// and summarised from <see cref="LensPowerValues"/> — the view renders these as given and states
-/// no bound of its own. <see cref="CatalogueId"/> is the lens set the admin came from, carried so
-/// the "Lens sets" tab opens back on it.</summary>
-public record LensPowersViewModel(IReadOnlyList<LensPowerList> Lists, Guid? CatalogueId);
+/// no bound of its own.</summary>
+public record LensPowersViewModel(IReadOnlyList<LensPowerList> Lists);
 
 /// <summary>One value list of the "Lens powers" tab. <see cref="Summary"/> is its one-line range,
 /// worked out from the values themselves (lowest, highest, and the gap between neighbours) so it

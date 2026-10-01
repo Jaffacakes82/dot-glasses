@@ -1,6 +1,6 @@
 # 08 — Lens Sets becomes a list, with a page per lens set
 
-**Status:** ready-for-agent
+**Status:** resolved
 **Category:** enhancement
 **Blocked by:** None — can start immediately
 
@@ -60,18 +60,18 @@ set, where its lenses are configured and it is assigned to organisations.
 - A lens set id that does not exist returns to the list rather than erroring.
 
 **Acceptance criteria:**
-- [ ] The list shows every active lens set as a row with the columns above; no picker remains.
-- [ ] Status filter: Active by default; Retired and All work; search combines with it.
-- [ ] Opening a row lands on that lens set's page; the breadcrumb returns to the list.
-- [ ] Creating a lens set lands on its page; retiring one lands on the list.
-- [ ] Assign and unassign work from the lens set's page, one organisation at a time, and an
+- [x] The list shows every active lens set as a row with the columns above; no picker remains.
+- [x] Status filter: Active by default; Retired and All work; search combines with it.
+- [x] Opening a row lands on that lens set's page; the breadcrumb returns to the list.
+- [x] Creating a lens set lands on its page; retiring one lands on the list.
+- [x] Assign and unassign work from the lens set's page, one organisation at a time, and an
       already-assigned organisation is not offered again.
-- [ ] Each write on the lens set's page returns to the same page, including a refused lens.
-- [ ] A retired lens set's page offers no write except Reactivate; the server refuses the others.
-- [ ] A set owned above the caller is read-only for lenses and assignable within scope.
-- [ ] Every action still re-checks its policy server-side; nothing relies on a hidden button.
-- [ ] No horizontal page scroll at phone width on either page.
-- [ ] Existing lens set tests are updated to the new pages; the full suite passes.
+- [x] Each write on the lens set's page returns to the same page, including a refused lens.
+- [x] A retired lens set's page offers no write except Reactivate; the server refuses the others.
+- [x] A set owned above the caller is read-only for lenses and assignable within scope.
+- [x] Every action still re-checks its policy server-side; nothing relies on a hidden button.
+- [x] No horizontal page scroll at phone width on either page.
+- [x] Existing lens set tests are updated to the new pages; the full suite passes.
 
 **Out of scope:**
 - Which organisation levels a set may be assigned to (kept as today "for now").

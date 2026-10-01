@@ -471,20 +471,26 @@ which mints a new one.
 
 ### 4.6 Lens Sets
 
-**Route** `/Catalogues?catalogueId=…&search=…` · **Access** `PresetCatalogue.Manage` — Admin at DGI or Country
+**Routes** `/Catalogues?status=…&search=…` (the list) and `/Catalogues/Details/{id}` (one lens
+set) · **Access** `PresetCatalogue.Manage` — Admin at DGI or Country
 level. Everyone else is redirected to Access Denied.
 
 Catalogues themselves are **not** hierarchy-scoped: every user who reaches this page sees every
-catalogue in the system, regardless of who owns it. The screen has two tabs: **Lens sets** and the
-read-only **Lens powers** described at the end of this section.
+catalogue in the system, regardless of who owns it. The screen has two tabs: **Lens sets** (the
+list) and the read-only **Lens powers** described at the end of this section.
 
-**One lens set at a time.** A **Lens set** picker at the top chooses which lens set is on screen
-(`?catalogueId=`; the first one when none is asked for), and a name search box beside it narrows
-what the picker offers. Every write on the screen — adding, editing or removing a lens, renaming,
-assigning, unassigning, reactivating — comes back to the same lens set, and so does a refused lens
-that reopens the Add lens dialog; a newly created lens set becomes the selected one, and retiring
-the selected one falls back to the first. With no lens sets, or none matching the search, the
-screen says so.
+**The list.** One row per lens set: its name (a link to its page) with the description beneath,
+the org that owns it, how many lenses it has ("No lenses yet" for an empty one, which the Field
+App doesn't offer), how many orgs it is directly assigned to (not the outlets those assignments
+reach), and its status. A **Status** filter — Active (the default), Retired or All — and a name
+search narrow the rows, and combine. A retired row carries **Reactivate** for a caller who may
+edit that lens set. **Create lens set** is here; a created lens set opens on its own page.
+
+**A lens set's page.** Reached from the list, with a "Lens Sets › <name>" breadcrumb back instead
+of tabs. Every write made from it — adding, editing or removing a lens, renaming, assigning,
+unassigning, reactivating — comes back to the same page, and so does a refused lens that reopens
+the Add lens dialog. Retiring returns to the list. An id that names no lens set goes back to the
+list.
 
 **What a lens is.** A lens set is a list of lenses, and a lens is a **lens power** — a sphere and
 optionally a cylinder, axis and add, the same values a Custom prescription uses (ADR-0007) — with a
@@ -493,10 +499,10 @@ Other; a lens with no add is single vision and is never asked), the **coatings**
 (at least one) and its own **pairings**. A set may repeat a power only with a different lens type.
 Nothing links a lens to a reference-data list any more.
 
-**The selected lens set** (a `PresetCatalogue` in the code) — beside the picker, a line naming the
-org that owns it, the orgs it's assigned to (a chip each, with an un-assign action per org) and
-how many lenses it has, then its description and an **Edit lens set** button (name, description,
-Retire). Below that, one full-width card, "Lenses in <set>", with a table of the set's lenses —
+**What the page shows** (a lens set is a `PresetCatalogue` in the code) — a header with the name
+and, where the caller may change the set, **Edit lens set** (name, description) and **Retire**;
+a line naming the org that owns it and how many lenses it has, then its description. Below that,
+one full-width card, "Lenses in <set>", with a table of the set's lenses —
 Label, Lens power (`SPH +2.50 · CYL -0.75 × 90 · ADD +2.00`, only the parts the lens has), Lens
 type ("Single vision" when there is none), Coatings (a chip each) and Pairings (a chip each,
 `Blue block → Photochromic`, or "—") — in the fixed display order: single vision by
@@ -510,7 +516,7 @@ per-catalogue role: every non-empty lens set assigned at or above a retail point
 - **Editing a lens set** — Edit, add, edit or remove lenses, Retire/Reactivate — is limited to
   admins at or above its **owning org** (`PresetCatalogue.EditInScope`). A DGI-owned lens set
   reaches every country, so a country admin can't change what it contains. On a lens set the
-  caller can't edit, those actions aren't shown and the card says "Owned above your organisation —
+  caller can't edit, those actions aren't shown and the page says "Owned above your organisation —
   you can assign it, but not change it." The server refuses them regardless, with Access Denied.
 - **Assigning** any active lens set, and removing an assignment, is open to any admin who reaches
   the screen, but only for orgs within their own scope (`PresetCatalogue.AssignInScope`).
@@ -546,20 +552,22 @@ per-catalogue role: every non-empty lens set assigned at or above a retail point
 - **Remove lens** (a row's *Remove*, after a confirmation) — a **hard delete** of the lens and its
   coatings and pairings, not a retire. Records never point at a lens — each keeps its own copy of
   the power it was sold with — so no history is touched.
-- **Retire** (in the Edit modal, with a confirmation) — a soft delete. The lens set stops being
-  offered in the Field App (from its next reference-data refresh) and in the assign form, and a
-  hand-built assign POST is refused. Its **assignments are kept**. Records that used it still show
-  its name and lens powers, and the server refuses a *new* record on it ("This lens set has been
-  retired — choose another lens range."). Retired lens sets are listed separately under **Retired
-  lens sets**, each with **Reactivate**, which restores it exactly as it was.
+- **Retire** (in the page header, with a confirmation) — a soft delete. The lens set stops being
+  offered in the Field App (from its next reference-data refresh). Its **assignments are kept**.
+  Records that used it still show its name and lens powers, and the server refuses a *new* record
+  on it ("This lens set has been retired — choose another lens range."). A retired lens set's page
+  is **read-only**: its lenses and assignments are shown as they were, and the only action is
+  **Reactivate**, which restores it exactly as it was. The server refuses every other write to a
+  retired lens set — renaming, changing a lens, assigning, unassigning — with "This lens set is
+  retired — reactivate it before …".
 
-**Assign lens sets to a retailer** — a form with a single-select org dropdown (restricted to
-`Intermediate` and `RetailPoint` nodes only), a multi-select catalogue list, and an Assign button.
-Each selected catalogue produces one assignment; re-assigning an existing pair is a silent no-op.
-**Assignment cascades downward** — assigning to an Intermediate makes the catalogue available to
-every Retail Point beneath it. Each assignment can be individually removed from the catalogue
-card's assigned-orgs list. A successful assign returns to the screen with a green confirmation
-("Lens set assigned." or "N lens sets assigned.").
+**Assigned to** (a card on the lens set's page) — the orgs the lens set is directly assigned to, a
+chip each with an un-assign action where the caller may unassign there, and an **Assign to another
+organisation** picker with an Assign button: one org at a time, from the `Intermediate` and
+`RetailPoint` nodes in the caller's scope it isn't assigned to yet. Re-assigning an existing pair
+is a silent no-op. **Assignment cascades downward** — assigning to an Intermediate makes the lens
+set available to every Retail Point beneath it. A successful assign returns to the page with a
+green confirmation ("Lens set assigned.").
 
 **Coatings and pairings live on the lens.** There is no global coating grid and no global pairing
 list. A technician choosing lenses from a set is offered only the coatings **both** chosen lenses

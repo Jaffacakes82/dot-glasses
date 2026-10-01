@@ -22,8 +22,32 @@ public class PresetCatalogueAdminService(DotGlassesDbContext dbContext, IReferen
             await dbContext.PresetCatalogues.IgnoreQueryFilters().Where(x => x.IsDeleted).OrderBy(x => x.Name).ToListAsync(cancellationToken),
             cancellationToken);
 
+    public async Task<PresetCatalogueAdminDto?> FindAsync(Guid catalogueId, CancellationToken cancellationToken = default) =>
+        (await ToAdminDtosAsync(
+            await dbContext.PresetCatalogues.IgnoreQueryFilters().Where(x => x.Id == catalogueId).ToListAsync(cancellationToken),
+            cancellationToken)).SingleOrDefault();
+
+    public async Task<IReadOnlyDictionary<Guid, int>> CountAssignedOrgsAsync(CancellationToken cancellationToken = default) =>
+        await dbContext.PresetCatalogueAssignments
+            .GroupBy(a => a.PresetCatalogueId)
+            .Select(g => new { CatalogueId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.CatalogueId, x => x.Count, cancellationToken);
+
+    /// <summary>The soft-delete filter hides a retired lens set, so "not found here" is "retired"
+    /// for every caller below: each has already resolved the lens set through
+    /// <see cref="FindOwningOrgNodeIdAsync"/>, which sees retired ones. The screen offers none of
+    /// these actions on a retired lens set; this answers a stale page or a hand-built POST.</summary>
+    private async Task RefuseIfRetiredAsync(Guid catalogueId, string action, CancellationToken cancellationToken)
+    {
+        if (!await dbContext.PresetCatalogues.AnyAsync(c => c.Id == catalogueId, cancellationToken))
+        {
+            throw new DomainRuleViolationException($"This lens set is retired — reactivate it before {action}.");
+        }
+    }
+
     public async Task RetireAsync(Guid id, CancellationToken cancellationToken = default)
     {
+        await RefuseIfRetiredAsync(id, "retiring it again", cancellationToken);
         var entity = await dbContext.PresetCatalogues.FirstAsync(x => x.Id == id, cancellationToken);
 
         // Remove() on an ISoftDeletable entity is turned into a soft-delete by
@@ -87,7 +111,8 @@ public class PresetCatalogueAdminService(DotGlassesDbContext dbContext, IReferen
             c.Name,
             c.Description,
             c.OwningOrgNodeId,
-            (referenceData.FindCatalogue(c.Id)?.LensOptions ?? [])
+            IsRetired: c.IsDeleted,
+            LensOptions: (referenceData.FindCatalogue(c.Id)?.LensOptions ?? [])
                 .Select(l => new PresetCatalogueLensOptionAdminDto(
                     l.Id, l.Label, l.Sphere, l.Cylinder, l.Axis, l.Add,
                     l.LensTypeRefId,
@@ -125,6 +150,7 @@ public class PresetCatalogueAdminService(DotGlassesDbContext dbContext, IReferen
 
     public async Task UpdateAsync(Guid id, string name, string? description, CancellationToken cancellationToken = default)
     {
+        await RefuseIfRetiredAsync(id, "changing it", cancellationToken);
         var entity = await dbContext.PresetCatalogues.FirstAsync(x => x.Id == id, cancellationToken);
         entity.Name = name;
         entity.Description = description;
@@ -139,12 +165,7 @@ public class PresetCatalogueAdminService(DotGlassesDbContext dbContext, IReferen
 
     public async Task SaveLensAsync(Guid catalogueId, Guid? lensOptionId, LensSetLensInput lens, CancellationToken cancellationToken = default)
     {
-        // The soft-delete filter hides a retired lens set; the screen never offers its lenses for
-        // editing, so this answers a stale page or a hand-built POST.
-        if (!await dbContext.PresetCatalogues.AnyAsync(c => c.Id == catalogueId, cancellationToken))
-        {
-            throw new DomainRuleViolationException("This lens set is retired — reactivate it before changing its lenses.");
-        }
+        await RefuseIfRetiredAsync(catalogueId, "changing its lenses", cancellationToken);
 
         LensOption entity;
         List<LensOptionCoating> coatings = [];
@@ -204,17 +225,14 @@ public class PresetCatalogueAdminService(DotGlassesDbContext dbContext, IReferen
     public async Task RemoveLensOptionAsync(Guid lensOptionId, CancellationToken cancellationToken = default)
     {
         var entity = await dbContext.LensOptions.FirstAsync(x => x.Id == lensOptionId, cancellationToken);
+        await RefuseIfRetiredAsync(entity.PresetCatalogueId, "changing its lenses", cancellationToken);
         dbContext.LensOptions.Remove(entity);
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task AssignCatalogueToOrgAsync(Guid catalogueId, Guid orgNodeId, CancellationToken cancellationToken = default)
     {
-        // The assign form never offers a retired lens set; this answers a hand-built POST.
-        if (!await dbContext.PresetCatalogues.AnyAsync(x => x.Id == catalogueId, cancellationToken))
-        {
-            throw new DomainRuleViolationException("This lens set is retired — reactivate it before assigning it.");
-        }
+        await RefuseIfRetiredAsync(catalogueId, "assigning it", cancellationToken);
 
         var alreadyAssigned = await dbContext.PresetCatalogueAssignments
             .AnyAsync(a => a.PresetCatalogueId == catalogueId && a.OrgNodeId == orgNodeId, cancellationToken);
@@ -250,6 +268,7 @@ public class PresetCatalogueAdminService(DotGlassesDbContext dbContext, IReferen
 
     public async Task UnassignCatalogueFromOrgAsync(Guid catalogueId, Guid orgNodeId, CancellationToken cancellationToken = default)
     {
+        await RefuseIfRetiredAsync(catalogueId, "changing where it is assigned", cancellationToken);
         var entity = await dbContext.PresetCatalogueAssignments
             .FirstOrDefaultAsync(a => a.PresetCatalogueId == catalogueId && a.OrgNodeId == orgNodeId, cancellationToken);
         if (entity is null)
