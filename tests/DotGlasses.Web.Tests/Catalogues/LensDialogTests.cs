@@ -313,7 +313,7 @@ public class LensDialogTests(AdminPortalFactory factory) : IClassFixture<AdminPo
         Assert.Contains("already has a lens labelled \"READERS\"", ErrorFor(html, "Label"));
         Assert.Contains("Spherical power must be between -10 and 10", ErrorFor(html, "Sphere"));
         Assert.Contains("Axis is required when Cylindrical power isn't 0.00", ErrorFor(html, "Axis"));
-        Assert.Contains("Lens type is required", ErrorFor(html, "LensTypeRefId"));
+        Assert.Contains("Choose a lens type", ErrorFor(html, "LensTypeRefId"));
         Assert.Contains("Tick at least one coating", ErrorFor(html, "CoatingIds"));
         Assert.Contains("must be ticked", ErrorFor(html, "Pairings[0]"));
 
@@ -413,7 +413,7 @@ public class LensDialogTests(AdminPortalFactory factory) : IClassFixture<AdminPo
 
         var refused = await SaveAsync(client, Lens(" "));
         Assert.Equal(HttpStatusCode.OK, refused.StatusCode);
-        Assert.Contains("Other lens type is required", ErrorFor(await refused.Content.ReadAsStringAsync(), "LensTypeOtherText"));
+        Assert.Contains("Say what the other lens type is.", ErrorFor(await refused.Content.ReadAsStringAsync(), "LensTypeOtherText"));
 
         var saved = await SaveAsync(client, Lens("Trifocal"));
         Assert.Equal(HttpStatusCode.Found, saved.StatusCode);

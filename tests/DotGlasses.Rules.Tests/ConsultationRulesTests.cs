@@ -295,7 +295,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("OccupationRefId", failure.Key);
-        Assert.Equal("OccupationRefId must reference an existing, active Occupation reference-data item.", failure.Message);
+        Assert.Equal("Choose an occupation from the list.", failure.Message);
     }
 
     [Fact]
@@ -328,7 +328,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("OccupationOtherText", failure.Key);
-        Assert.Equal("OccupationOtherText is required when Occupation is \"Other\".", failure.Message);
+        Assert.Equal("Say what the other occupation is.", failure.Message);
     }
 
     [Fact]
@@ -392,7 +392,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("ReferredOrTreated", failure.Key);
-        Assert.Equal("Referral/treatment fields must be empty unless ReferredOrTreated is true.", failure.Message);
+        Assert.Equal("Tick \"Referred or treated\", or clear the referral details.", failure.Message);
     }
 
     [Fact]
@@ -421,7 +421,7 @@ public class ConsultationRulesTests
 
         Assert.Equal(2, result.Failures.Count);
         Assert.Equal("ReferralReasonRefId", result.Failures[0].Key);
-        Assert.Equal("ReferralReasonRefId is required when ReferredOrTreated is true.", result.Failures[0].Message);
+        Assert.Equal("Choose a reason for the referral or treatment.", result.Failures[0].Message);
         Assert.Equal("ReferralLocationFreeText", result.Failures[1].Key);
     }
 
@@ -448,7 +448,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("ReferralReasonRefId", failure.Key);
-        Assert.Equal("ReferralReasonRefId must reference an existing, active ReferralReason reference-data item.", failure.Message);
+        Assert.Equal("Choose a reason for the referral or treatment.", failure.Message);
     }
 
     [Fact]
@@ -473,7 +473,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("ReferralOtherText", failure.Key);
-        Assert.Equal("ReferralOtherText is required when ReferralReason is \"Other\".", failure.Message);
+        Assert.Equal("Say what the other referral reason is.", failure.Message);
     }
 
     [Fact]
@@ -514,7 +514,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("ReferralLocationFreeText", failure.Key);
-        Assert.Equal("ReferralLocationFreeText must be empty when TreatedInFacility is true.", failure.Message);
+        Assert.Equal("Clear the referral location, or untick \"Treated in facility\".", failure.Message);
     }
 
     [Fact]
@@ -538,7 +538,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("ReferralLocationFreeText", failure.Key);
-        Assert.Equal("ReferralLocationFreeText is required when ReferredOrTreated is true and TreatedInFacility is false.", failure.Message);
+        Assert.Equal("Enter the referral location, or tick \"Treated in facility\".", failure.Message);
     }
 
     [Fact]
@@ -616,7 +616,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("ReasonNotPurchasedRefId", failure.Key);
-        Assert.Equal("ReasonNotPurchasedRefId must reference an existing, active ReasonNotPurchased reference-data item.", failure.Message);
+        Assert.Equal("Choose a reason not purchased.", failure.Message);
     }
 
     [Fact]
@@ -637,7 +637,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("ReasonNotPurchasedOtherText", failure.Key);
-        Assert.Equal("ReasonNotPurchasedOtherText is required when ReasonNotPurchased is \"Other\".", failure.Message);
+        Assert.Equal("Say what the other reason is.", failure.Message);
     }
 
     [Fact]
@@ -668,7 +668,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("FrameColourRefId", failure.Key);
-        Assert.Equal("FrameColourRefId must reference an existing, active FrameColour reference-data item.", failure.Message);
+        Assert.Equal("Choose a frame colour.", failure.Message);
     }
 
     [Fact]
@@ -698,7 +698,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("FrameColourOtherText", failure.Key);
-        Assert.Equal("FrameColourOtherText is required when FrameColour is \"Other\".", failure.Message);
+        Assert.Equal("Say what the other frame colour is.", failure.Message);
     }
 
     [Fact]
@@ -728,7 +728,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("HardCaseSold", failure.Key);
-        Assert.Equal("HardCaseColourRefId/HardCaseOtherColourText must be empty when HardCaseSold is false.", failure.Message);
+        Assert.Equal("Clear the hard case colour, or tick that a hard case was sold.", failure.Message);
     }
 
     [Fact]
@@ -770,7 +770,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("HardCaseColourRefId", failure.Key);
-        Assert.Equal("HardCaseColourRefId is required when HardCaseSold is true.", failure.Message);
+        Assert.Equal("Choose a hard case colour.", failure.Message);
     }
 
     [Fact]
@@ -783,7 +783,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("HardCaseColourRefId", failure.Key);
-        Assert.Equal("HardCaseColourRefId must reference an existing, active HardCaseColour reference-data item.", failure.Message);
+        Assert.Equal("Choose a hard case colour.", failure.Message);
     }
 
     [Fact]
@@ -806,7 +806,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("HardCaseOtherColourText", failure.Key);
-        Assert.Equal("HardCaseOtherColourText is required when HardCaseColour is \"Other\".", failure.Message);
+        Assert.Equal("Say what the other hard case colour is.", failure.Message);
     }
 
     [Fact]
@@ -1206,11 +1206,10 @@ public class ConsultationRulesTests
     }
 
     [Fact]
-    public void Preset_OutOfRangeBucketKeepsEachRequestTypesOwnWording()
+    public void Preset_OutOfRangeBucketSaysTheSameThingOnEveryRequestType()
     {
-        // Pre-existing copy drift, pinned rather than harmonised: the rule is identical on all
-        // three, only the sentence differs. A test is the only thing stopping a future tidy-up
-        // from silently rewording copy a technician reads.
+        // One rule, one sentence: whichever record it is, the thing to do is choose a pupil
+        // distance from the list.
         var test = PresetTest();
         test.PresetPupilDistanceBucket = 9;
         var lead = PresetLead();
@@ -1219,13 +1218,13 @@ public class ConsultationRulesTests
         sale.PresetPupilDistanceBucket = 9;
 
         Assert.Equal(
-            "PresetPupilDistanceBucket must be between 0 and 4.",
+            "Choose a pupil distance between 0 and 4.",
             AssertSingleFailure(ConsultationRules.Check(test, Snapshot())).Message);
         Assert.Equal(
-            "PresetPupilDistanceBucket must be between 0 and 4 for a LensSet LensRangeType.",
+            "Choose a pupil distance between 0 and 4.",
             AssertSingleFailure(ConsultationRules.Check(lead, Snapshot())).Message);
         Assert.Equal(
-            "PresetPupilDistanceBucket is required and must be between 0 and 4 for a LensSet LensRangeType.",
+            "Choose a pupil distance between 0 and 4.",
             AssertSingleFailure(ConsultationRules.Check(sale, Snapshot())).Message);
     }
 
@@ -1240,10 +1239,10 @@ public class ConsultationRulesTests
         sale.PresetPupilDistanceBucket = null;
 
         Assert.Equal(
-            "PresetPupilDistanceBucket must be between 0 and 2 for a LensSet LensRangeType (0-2 for a children's frame).",
+            "Choose a pupil distance between 0 and 2 — the limit for a children's frame.",
             AssertSingleFailure(ConsultationRules.Check(lead, Snapshot())).Message);
         Assert.Equal(
-            "PresetPupilDistanceBucket is required and must be between 0 and 2 for a LensSet LensRangeType (0-2 for a children's frame).",
+            "Choose a pupil distance between 0 and 2 — the limit for a children's frame.",
             AssertSingleFailure(ConsultationRules.Check(sale, Snapshot())).Message);
     }
 
@@ -1277,7 +1276,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("LensRangeType", failure.Key);
-        Assert.Equal("SphereLeft and SphereRight are required for a Custom LensRangeType.", failure.Message);
+        Assert.Equal("Choose a sphere for each eye.", failure.Message);
     }
 
     [Theory]
@@ -1311,7 +1310,7 @@ public class ConsultationRulesTests
         request.SphereLeft = 0.30m;
 
         Assert.Equal(
-            "SphereLeft must be between -10 and 10 in 0.25 increments.",
+            "Sphere (left) must be between -10 and 10 in 0.25 increments.",
             AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Message);
     }
 
@@ -1337,7 +1336,7 @@ public class ConsultationRulesTests
         {
             var failure = Assert.Single(result.Failures);
             Assert.Equal("AddLeft", failure.Key);
-            Assert.Equal("AddLeft must be between 0 and 3 in 0.25 increments.", failure.Message);
+            Assert.Equal("Add power (left) must be between 0 and 3 in 0.25 increments.", failure.Message);
         }
     }
 
@@ -1361,7 +1360,7 @@ public class ConsultationRulesTests
         {
             var failure = Assert.Single(result.Failures);
             Assert.Equal("AxisLeft", failure.Key);
-            Assert.Equal("AxisLeft must be a whole number of degrees between 0 and 180.", failure.Message);
+            Assert.Equal("Axis (left) must be a whole number of degrees between 0 and 180.", failure.Message);
         }
     }
 
@@ -1393,7 +1392,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("CylinderRight", failure.Key);
-        Assert.Equal("CylinderRight must be between -6 and 0 in 0.25 increments.", failure.Message);
+        Assert.Equal("Cylinder (right) must be between -6 and 0 in 0.25 increments.", failure.Message);
     }
 
     [Theory]
@@ -1418,7 +1417,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("AxisLeft", failure.Key);
-        Assert.Equal("AxisLeft is required when CylinderLeft isn't 0.00 — choose an axis from 0 to 180.", failure.Message);
+        Assert.Equal("Axis (left) is required when Cylinder (left) isn't 0.00 — choose an axis from 0 to 180.", failure.Message);
     }
 
     [Theory]
@@ -1433,7 +1432,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("AxisRight", failure.Key);
-        Assert.Equal("AxisRight must be empty when CylinderRight is 0.00 — an axis only applies to a cylinder.", failure.Message);
+        Assert.Equal("Axis (right) must be empty when Cylinder (right) is 0.00 — an axis only applies to a cylinder.", failure.Message);
     }
 
     [Fact]
@@ -1457,7 +1456,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("LensTypeRefId", failure.Key);
-        Assert.Equal("LensTypeRefId is required when an add power is set (two distinct powers on that eye).", failure.Message);
+        Assert.Equal("Choose a lens type — a lens with an add power needs one.", failure.Message);
     }
 
     [Fact]
@@ -1489,7 +1488,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("LensTypeRefId", failure.Key);
-        Assert.Equal("LensTypeRefId/LensTypeOtherText must be empty unless an add power is set.", failure.Message);
+        Assert.Equal("A lens type only applies to a lens with an add power — remove the lens type.", failure.Message);
     }
 
     [Fact]
@@ -1513,7 +1512,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("LensTypeRefId", failure.Key);
-        Assert.Equal("LensTypeRefId/LensTypeOtherText must be empty unless an add power is set.", failure.Message);
+        Assert.Equal("A lens type only applies to a lens with an add power — remove the lens type.", failure.Message);
     }
 
     [Fact]
@@ -1539,7 +1538,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("LensTypeRefId", failure.Key);
-        Assert.Equal("LensTypeRefId must reference an existing, active LensType reference-data item.", failure.Message);
+        Assert.Equal("Choose a lens type from the list.", failure.Message);
     }
 
     [Fact]
@@ -1562,7 +1561,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("LensTypeOtherText", failure.Key);
-        Assert.Equal("LensTypeOtherText is required when LensType is \"Other\".", failure.Message);
+        Assert.Equal("Say what the other lens type is.", failure.Message);
     }
 
     [Fact]
@@ -1620,7 +1619,7 @@ public class ConsultationRulesTests
         nonWhole.PupilDistanceMm = 60.5m;
 
         Assert.Equal(
-            "PupilDistanceMm must be within the standard 54-74mm range for a Custom LensRangeType (manual override outside this range is a Day 2 feature).",
+            "Choose a pupil distance between 54 and 74 mm.",
             AssertSingleFailure(ConsultationRules.Check(outOfRange, Snapshot())).Message);
         Assert.Equal(
             "PupilDistanceMm must be a whole millimetre value.",
@@ -1640,20 +1639,19 @@ public class ConsultationRulesTests
 
         Assert.Equal("PupilDistanceMm", failure.Key);
         Assert.Equal(
-            "PupilDistanceMm is required and must be within the standard 54-74mm range for a Custom LensRangeType (manual override outside this range is a Day 2 feature).",
+            "Choose a pupil distance between 54 and 74 mm.",
             failure.Message);
     }
 
     [Fact]
-    public void Custom_OutOfRangePupilDistanceOnASaleSaysItIsRequiredToo()
+    public void Custom_OutOfRangePupilDistanceOnASaleSaysTheSameAsAMissingOne()
     {
-        // The Sale's range message is the required-variant whether the value is missing or merely
-        // out of range — one sentence covers both, exactly as it did before the move.
+        // Missing or out of range, one sentence covers both: choose one from the list.
         var sale = CustomSale();
         sale.PupilDistanceMm = 80m;
 
         Assert.Equal(
-            "PupilDistanceMm is required and must be within the standard 54-74mm range for a Custom LensRangeType (manual override outside this range is a Day 2 feature).",
+            "Choose a pupil distance between 54 and 74 mm.",
             AssertSingleFailure(ConsultationRules.Check(sale, Snapshot())).Message);
     }
 
@@ -1714,7 +1712,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("CoatingRefIds", failure.Key);
-        Assert.Equal("CoatingRefIds must only reference existing, active Coating reference-data items.", failure.Message);
+        Assert.Equal("One of the chosen coatings isn't available any more — choose the coatings again.", failure.Message);
     }
 
     [Fact]
@@ -1725,7 +1723,7 @@ public class ConsultationRulesTests
         request.CoatingRefIds = [ActiveFrameColour];
 
         Assert.Equal(
-            "CoatingRefIds must only reference existing, active Coating reference-data items.",
+            "One of the chosen coatings isn't available any more — choose the coatings again.",
             AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Message);
     }
 
@@ -2096,7 +2094,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(test, Snapshot()));
 
         Assert.Equal("CoatingPreferenceRefId", failure.Key);
-        Assert.Equal("CoatingPreferenceRefId must reference an existing, active Coating reference-data item.", failure.Message);
+        Assert.Equal("This coating preference isn't available any more — choose another, or no preference.", failure.Message);
     }
 
     [Fact]
@@ -2120,7 +2118,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(test, Snapshot()));
 
         Assert.Equal("CoatingPreferenceRefId", failure.Key);
-        Assert.Equal("CoatingPreferenceRefId is not configured as available for the chosen lenses (see Lens Sets).", failure.Message);
+        Assert.Equal("This coating preference isn't available for the chosen lenses — choose another, or no preference.", failure.Message);
     }
 
     [Theory]
@@ -2142,7 +2140,7 @@ public class ConsultationRulesTests
         {
             var failure = AssertSingleFailure(result);
             Assert.Equal("CoatingPreferenceRefId", failure.Key);
-            Assert.Equal("CoatingPreferenceRefId is not configured as available for the chosen lenses (see Lens Sets).", failure.Message);
+            Assert.Equal("This coating preference isn't available for the chosen lenses — choose another, or no preference.", failure.Message);
         }
 
         test.CoatingPreferenceRefId = ActiveCoating;
@@ -2212,12 +2210,12 @@ public class ConsultationRulesTests
         var leadFailures = ConsultationRules.Check(lead, Snapshot()).Failures;
 
         Assert.Equal(
-            ["CoatingPreferenceRefId is not configured as available for the chosen lenses (see Lens Sets).",
-             "CoatingPreferenceRefId must reference an existing, active Coating reference-data item."],
+            ["This coating preference isn't available for the chosen lenses — choose another, or no preference.",
+             "This coating preference isn't available any more — choose another, or no preference."],
             testFailures.Select(f => f.Message));
         Assert.Equal(
-            ["CoatingPreferenceRefId must reference an existing, active Coating reference-data item.",
-             "CoatingPreferenceRefId is not configured as available for the chosen lenses (see Lens Sets)."],
+            ["This coating preference isn't available any more — choose another, or no preference.",
+             "This coating preference isn't available for the chosen lenses — choose another, or no preference."],
             leadFailures.Select(f => f.Message));
     }
 
@@ -2233,14 +2231,14 @@ public class ConsultationRulesTests
 
     // --- Scalars --------------------------------------------------------------------------
     //
-    // These pin FluentValidation's generated copy character-for-character. The three validators
-    // that used to produce it were deleted in ticket 12, so nothing but these assertions now
-    // stands between a client and a silently reworded message — and the Field App renders these
-    // strings verbatim against the control that produced them. Each expected string below was
-    // captured from the real validators before they were deleted, not written from memory.
+    // These pin the copy character-for-character: nothing but these assertions stands between a
+    // client and a silently reworded message, and the Field App renders these strings verbatim
+    // against the control that produced them. What a form control can cause is a plain instruction
+    // naming the control; an empty Id and an out-of-enum value, which no form can cause, are still
+    // FluentValidation's generated copy.
 
     [Fact]
-    public void AnIdThatWasNeverFilledIn_IsRejectedInFluentValidationsWording()
+    public void AnIdThatWasNeverFilledIn_IsRejected()
     {
         var request = ValidTest();
         request.Id = Guid.Empty;
@@ -2264,10 +2262,10 @@ public class ConsultationRulesTests
         var result = ConsultationRules.Check(request, Snapshot());
 
         Assert.Contains(
-            new RuleFailure("OccupationOtherText", "The length of 'Occupation Other Text' must be 200 characters or fewer. You entered 201 characters."),
+            new RuleFailure("OccupationOtherText", "Keep the other occupation to 200 characters or fewer."),
             result.Failures);
         Assert.Contains(
-            new RuleFailure("ReferralLocationFreeText", "The length of 'Referral Location Free Text' must be 500 characters or fewer. You entered 501 characters."),
+            new RuleFailure("ReferralLocationFreeText", "Keep the referral location to 500 characters or fewer."),
             result.Failures);
     }
 
@@ -2307,7 +2305,7 @@ public class ConsultationRulesTests
         var result = ConsultationRules.Check(request, Snapshot());
 
         Assert.Equal(
-            new RuleFailure("AgeYears", $"'Age Years' must be between 0 and 120. You entered {ageYears}."),
+            new RuleFailure("AgeYears", "Enter an age between 0 and 120."),
             Assert.Single(result.Failures));
     }
 
@@ -2337,7 +2335,7 @@ public class ConsultationRulesTests
         var result = ConsultationRules.Check(request, Snapshot());
 
         Assert.Equal(
-            new RuleFailure("FullName", "'Full Name' must not be empty."),
+            new RuleFailure("FullName", "Enter the customer's full name."),
             Assert.Single(result.Failures));
     }
 
@@ -2352,7 +2350,7 @@ public class ConsultationRulesTests
         var result = ConsultationRules.Check(request, Snapshot());
 
         Assert.Equal(
-            new RuleFailure("OrderFromDotGlasses", "OrderFromDotGlasses is only meaningful when LensRangeType is Custom."),
+            new RuleFailure("OrderFromDotGlasses", "Only a Custom prescription can be ordered from Dot Glasses — untick \"Order this lens from Dot Glasses\"."),
             Assert.Single(result.Failures));
     }
 
@@ -2372,7 +2370,7 @@ public class ConsultationRulesTests
         // an over-long one is a keyed failure everywhere rather than a database error on a Lead or
         // Sale.
         var tooLong = new string('a', 201);
-        var expected = new RuleFailure("LensTypeOtherText", "The length of 'Lens Type Other Text' must be 200 characters or fewer. You entered 201 characters.");
+        var expected = new RuleFailure("LensTypeOtherText", "Keep the other lens type to 200 characters or fewer.");
 
         var test = CustomTest();
         test.AddLeft = 1.00m;

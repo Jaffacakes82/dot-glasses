@@ -5,11 +5,21 @@ namespace DotGlasses.Rules.LensPowers;
 
 /// <summary>
 /// The names one eye's four lens power fields go by in whatever is being checked — a consultation
-/// request's <c>SphereLeft</c>…<c>AddLeft</c>, or a lens-set lens's own fields. Each is used both
-/// as the <see cref="RuleFailure.Key"/> (so it must be the checked object's own property name — see
-/// RuleFailure) and inside the message, which is how the existing consultation copy reads.
+/// request's <c>SphereLeft</c>…<c>AddLeft</c>, or a lens-set lens's own fields. Each is the
+/// <see cref="RuleFailure.Key"/> (so it must be the checked object's own property name — see
+/// RuleFailure); the matching label is what the message calls the field.
 /// </summary>
-public sealed record LensPowerNames(string Sphere, string Cylinder, string Axis, string Add);
+public sealed record LensPowerNames(string Sphere, string Cylinder, string Axis, string Add)
+{
+    /// <summary>What each field is called inside a message. Defaults to the key, which is right
+    /// for a caller whose keys already are the names on screen (the Add lens dialog); the
+    /// consultation rules set these, because their keys are request property names and no
+    /// technician should have to read one.</summary>
+    public string SphereLabel { get; init; } = Sphere;
+    public string CylinderLabel { get; init; } = Cylinder;
+    public string AxisLabel { get; init; } = Axis;
+    public string AddLabel { get; init; } = Add;
+}
 
 /// <summary>
 /// Whether one eye's <b>lens power</b> is valid, and whether the pair's <b>lens type</b> fits it
@@ -55,7 +65,7 @@ public static class LensPowerRules
     public static IEnumerable<RuleFailure> Check(
         decimal? sphere, decimal? cylinder, decimal? axis, decimal? add, LensPowerNames names) =>
         sphere is null
-            ? [new RuleFailure(names.Sphere, $"{names.Sphere} is required."), .. CheckValues(sphere, cylinder, axis, add, names)]
+            ? [new RuleFailure(names.Sphere, $"{names.SphereLabel} is required."), .. CheckValues(sphere, cylinder, axis, add, names)]
             : CheckValues(sphere, cylinder, axis, add, names);
 
     /// <summary>
@@ -71,12 +81,12 @@ public static class LensPowerRules
     public static IEnumerable<RuleFailure> CheckValues(
         decimal? sphere, decimal? cylinder, decimal? axis, decimal? add, LensPowerNames names)
     {
-        foreach (var failure in Power(sphere, names.Sphere, LensPowerValues.SphereRange))
+        foreach (var failure in Power(sphere, names.Sphere, names.SphereLabel, LensPowerValues.SphereRange))
         {
             yield return failure;
         }
 
-        foreach (var failure in Power(cylinder, names.Cylinder, LensPowerValues.CylinderRange))
+        foreach (var failure in Power(cylinder, names.Cylinder, names.CylinderLabel, LensPowerValues.CylinderRange))
         {
             yield return failure;
         }
@@ -86,23 +96,23 @@ public static class LensPowerRules
         {
             if (cylinderIsAllowed && !HasCylinder(cylinder))
             {
-                yield return new RuleFailure(names.Axis, $"{names.Axis} must be empty when {names.Cylinder} is 0.00 — an axis only applies to a cylinder.");
+                yield return new RuleFailure(names.Axis, $"{names.AxisLabel} must be empty when {names.CylinderLabel} is 0.00 — an axis only applies to a cylinder.");
             }
             else if (!LensPowerValues.AxisRange.Allows(a))
             {
                 yield return new RuleFailure(
                     names.Axis,
-                    $"{names.Axis} must be a whole number of degrees between {AllowedRange.Describe(LensPowerValues.AxisRange.Min)} and {AllowedRange.Describe(LensPowerValues.AxisRange.Max)}.");
+                    $"{names.AxisLabel} must be a whole number of degrees between {AllowedRange.Describe(LensPowerValues.AxisRange.Min)} and {AllowedRange.Describe(LensPowerValues.AxisRange.Max)}.");
             }
         }
         else if (cylinderIsAllowed && HasCylinder(cylinder))
         {
             yield return new RuleFailure(
                 names.Axis,
-                $"{names.Axis} is required when {names.Cylinder} isn't 0.00 — choose an axis from {AllowedRange.Describe(LensPowerValues.AxisRange.Min)} to {AllowedRange.Describe(LensPowerValues.AxisRange.Max)}.");
+                $"{names.AxisLabel} is required when {names.CylinderLabel} isn't 0.00 — choose an axis from {AllowedRange.Describe(LensPowerValues.AxisRange.Min)} to {AllowedRange.Describe(LensPowerValues.AxisRange.Max)}.");
         }
 
-        foreach (var failure in Power(add, names.Add, LensPowerValues.AddRange))
+        foreach (var failure in Power(add, names.Add, names.AddLabel, LensPowerValues.AddRange))
         {
             yield return failure;
         }
@@ -126,29 +136,29 @@ public static class LensPowerRules
         if (!hasAdd)
         {
             return lensTypeRefId is not null || lensTypeOtherText is not null
-                ? [new RuleFailure(refIdKey, $"{refIdKey}/{otherTextKey} must be empty unless an add power is set.")]
+                ? [new RuleFailure(refIdKey, "A lens type only applies to a lens with an add power — remove the lens type.")]
                 : [];
         }
 
         if (lensTypeRefId is null)
         {
-            return [new RuleFailure(refIdKey, $"{refIdKey} is required when an add power is set (two distinct powers on that eye).")];
+            return [new RuleFailure(refIdKey, "Choose a lens type — a lens with an add power needs one.")];
         }
 
         if (snapshot.FindItem(lensTypeRefId, ReferenceDataCategory.LensType) is not { IsActive: true } item)
         {
-            return [new RuleFailure(refIdKey, $"{refIdKey} must reference an existing, active LensType reference-data item.")];
+            return [new RuleFailure(refIdKey, "Choose a lens type from the list.")];
         }
 
         return item.IsOtherOption && string.IsNullOrWhiteSpace(lensTypeOtherText)
-            ? [new RuleFailure(otherTextKey, $"{otherTextKey} is required when LensType is \"Other\".")]
+            ? [new RuleFailure(otherTextKey, "Say what the other lens type is.")]
             : [];
     }
 
     /// <summary>Range and step are one question with one message — see
     /// <see cref="AllowedRange"/>.</summary>
-    private static IEnumerable<RuleFailure> Power(decimal? value, string name, AllowedRange range) =>
+    private static IEnumerable<RuleFailure> Power(decimal? value, string name, string label, AllowedRange range) =>
         value is { } v && !range.Allows(v)
-            ? [new RuleFailure(name, $"{name} must be between {AllowedRange.Describe(range.Min)} and {AllowedRange.Describe(range.Max)} in {AllowedRange.Describe(range.Step)} increments.")]
+            ? [new RuleFailure(name, $"{label} must be between {AllowedRange.Describe(range.Min)} and {AllowedRange.Describe(range.Max)} in {AllowedRange.Describe(range.Step)} increments.")]
             : [];
 }
