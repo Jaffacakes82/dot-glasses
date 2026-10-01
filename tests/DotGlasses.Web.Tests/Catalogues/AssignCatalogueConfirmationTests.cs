@@ -16,19 +16,18 @@ public class AssignCatalogueConfirmationTests(AdminPortalFactory factory) : ICla
         var catalogueId = SeedActiveLensSet();
         var client = factory.CreateAdminClient();
 
-        // Plain page copy already says "Assign lens sets to a retailer" and "Assigned to N
-        // org(s)" — proving there's a real confirmation, not just those, means asserting on the
-        // TempData banner itself rather than the word "assigned" anywhere on the page. A plain
-        // GET first is the negative control: the banner must not be there before anything was
-        // assigned.
-        var beforeHtml = await client.GetStringAsync("/Catalogues");
+        // The page's own copy already says "Assigned to" — proving there's a real confirmation,
+        // not just that, means asserting on the TempData banner itself rather than the word
+        // "assigned" anywhere on the page. A plain GET first is the negative control: the banner
+        // must not be there before anything was assigned.
+        var beforeHtml = await client.GetStringAsync($"/Catalogues/Details/{catalogueId}");
         Assert.Null(SuccessBanner(beforeHtml));
 
         var token = await AdminPortalFactory.GetAntiforgeryTokenAsync(client, "/Catalogues");
-        var (_, landingHtml) = await AdminPortalFactory.PostAndFollowAsync(client, "/Catalogues/AssignCatalogues",
+        var (_, landingHtml) = await AdminPortalFactory.PostAndFollowAsync(client, "/Catalogues/AssignCatalogue",
             AdminPortalFactory.Form(token,
                 ("OrgNodeId", OrganisationSeedConfiguration.KenyaRetailPointId.ToString()),
-                ("CatalogueIds", catalogueId.ToString())));
+                ("CatalogueId", catalogueId.ToString())));
 
         var banner = SuccessBanner(landingHtml);
         Assert.NotNull(banner);

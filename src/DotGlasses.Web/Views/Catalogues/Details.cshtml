@@ -1,0 +1,245 @@
+@model DotGlasses.Web.Models.LensSetDetailsViewModel
+@{
+    var lensSet = Model.LensSet;
+    ViewData["Title"] = lensSet.Name;
+}
+
+<div class="dg-page-header">
+    <div style="min-width:0;">
+        <nav class="dg-crumb" aria-label="Breadcrumb"><a asp-action="Index" style="color:inherit;">Lens Sets</a> &rsaquo; @lensSet.Name</nav>
+        <h1 class="dg-page-title" style="overflow-wrap:anywhere;">
+            @lensSet.Name
+            @if (lensSet.IsRetired)
+            {
+                <span class="dg-badge" style="background:var(--dot-beige); vertical-align:middle;">Retired</span>
+            }
+        </h1>
+    </div>
+    @if (lensSet.CanEdit)
+    {
+        <div style="display:flex; gap:var(--space-3); flex-wrap:wrap;">
+            <button class="dg-btn dg-btn-ghost" type="button" data-bs-toggle="modal" data-bs-target="#editCatalogueModal-@lensSet.Id">Edit lens set</button>
+            <form asp-action="RetireCatalogue" method="post">
+                <input type="hidden" name="catalogueId" value="@lensSet.Id" />
+                <button class="dg-btn dg-btn-ghost" type="submit"
+                        data-confirm="Retire @lensSet.Name? It stops being offered in the Field App; records that used it keep its name, and you can reactivate it later."
+                        onclick="return confirm(this.dataset.confirm);">Retire</button>
+            </form>
+        </div>
+    }
+    @if (lensSet.CanReactivate)
+    {
+        <form asp-action="ReactivateCatalogue" method="post">
+            <input type="hidden" name="catalogueId" value="@lensSet.Id" />
+            <button class="dg-btn dg-btn-primary" type="submit">Reactivate</button>
+        </form>
+    }
+</div>
+
+@if (TempData["Info"] is string info)
+{
+    <div class="alert alert-success" style="border-radius:var(--radius-md); margin-bottom:var(--space-4);">@info</div>
+}
+
+@* A refused lens is reported inside the Add lens dialog, which reopens on it — not repeated here,
+   unless there is no dialog to reopen (the lens set was retired since the page was loaded). *@
+@if (!ViewData.ModelState.IsValid && (Model.LensDialog.Reopen is null || !lensSet.CanEdit))
+{
+    <div class="alert alert-danger" style="border-radius:var(--radius-md); margin-bottom:var(--space-4);" asp-validation-summary="All"></div>
+}
+
+<div class="dg-card" id="lensSetMeta" style="margin-bottom:var(--space-4); color:var(--text-muted-2); font-size:14px;">
+    <div style="display:flex; flex-wrap:wrap; gap:4px 8px;">
+        <span>Owned by <strong>@lensSet.OwningOrgName</strong></span>
+        <span aria-hidden="true">·</span>
+        <span>@lensSet.LensOptions.Count @(lensSet.LensOptions.Count == 1 ? "lens" : "lenses")</span>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(lensSet.Description))
+    {
+        <p style="margin:var(--space-3) 0 0;">@lensSet.Description</p>
+    }
+    @if (lensSet.IsRetired)
+    {
+        <p class="dg-crumb" style="margin:var(--space-3) 0 0;">Retired — not offered in the Field App. Records that used it still show its name. Reactivating restores it with its lenses and assignments as they are here.</p>
+    }
+    else if (!lensSet.CanEdit)
+    {
+        <p class="dg-crumb" style="margin:var(--space-3) 0 0;">Owned above your organisation — you can assign it, but not change it.</p>
+    }
+</div>
+
+<div class="dg-card" style="margin-bottom:var(--space-4);">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:var(--space-3); flex-wrap:wrap; margin-bottom:var(--space-3);">
+        <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin:0; font-size:18px; overflow-wrap:anywhere;">Lenses in @lensSet.Name</h3>
+        @if (lensSet.CanEdit)
+        {
+            <button class="dg-btn dg-btn-primary" style="padding:10px 20px;" type="button"
+                    data-lens-add data-catalogue-id="@lensSet.Id" data-catalogue-name="@lensSet.Name">Add lens</button>
+        }
+    </div>
+    @if (!lensSet.LensOptions.Any())
+    {
+        <div class="dg-empty-state">
+            <div class="dg-ring"></div>
+            <p>@(lensSet.CanEdit ? "No lenses yet. Add one to start." : "No lenses yet.")</p>
+        </div>
+    }
+    else
+    {
+        @* In the fixed Rules order (LensSetLenses.InDisplayOrder, applied where the snapshot
+           is built); Edit opens the one Add lens dialog below on this lens. The table scrolls
+           inside its card on a narrow screen, so the page itself never does — position:relative
+           is part of that: without it the absolutely-positioned visually-hidden "Actions"
+           heading escapes the scroll box and widens the page. *@
+        <div style="overflow-x:auto; position:relative;">
+            <table class="dg-table" aria-label="Lenses in @lensSet.Name">
+                <thead>
+                    <tr>
+                        <th>Label</th>
+                        <th>Lens power</th>
+                        <th>Lens type</th>
+                        <th>Coatings</th>
+                        <th>Pairings</th>
+                        @if (lensSet.CanEdit)
+                        {
+                            <th><span class="visually-hidden">Actions</span></th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var lens in lensSet.LensOptions)
+                    {
+                        <tr>
+                            <td style="font-weight:700;">@lens.Label</td>
+                            <td class="dg-muted" style="white-space:nowrap;">@lens.LensPower</td>
+                            <td>@lens.LensType</td>
+                            <td>
+                                @foreach (var coating in lens.Coatings)
+                                {
+                                    <span class="dg-chip">@coating</span>
+                                }
+                            </td>
+                            <td>
+                                @if (!lens.Pairings.Any())
+                                {
+                                    <span class="dg-muted">—</span>
+                                }
+                                @foreach (var pairing in lens.Pairings)
+                                {
+                                    <span class="dg-chip dg-chip-pair">@pairing</span>
+                                }
+                            </td>
+                            @if (lensSet.CanEdit)
+                            {
+                                <td style="white-space:nowrap;">
+                                    <button type="button" class="dg-btn dg-btn-ghost" style="padding:4px 12px; font-size:12px;"
+                                            data-lens-edit data-catalogue-id="@lensSet.Id" data-catalogue-name="@lensSet.Name"
+                                            data-lens="@Json.Serialize(lens.Edit).ToString()"
+                                            aria-label="Edit @lens.Label">Edit</button>
+                                    <form asp-action="RemoveLensOption" method="post" style="display:inline;">
+                                        <input type="hidden" name="lensOptionId" value="@lens.Id" />
+                                        <button type="submit" class="dg-btn dg-btn-ghost" style="padding:4px 12px; font-size:12px;"
+                                                aria-label="Remove @lens.Label"
+                                                data-confirm="Remove @lens.Label from @lensSet.Name? Records that used it keep their own copy of the lens."
+                                                onclick="return confirm(this.dataset.confirm);">Remove</button>
+                                    </form>
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@if (lensSet.CanEdit)
+{
+    <div class="modal fade" id="editCatalogueModal-@lensSet.Id" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content" style="border-radius:var(--radius-md); border:none;">
+                <form asp-action="UpdateCatalogue" method="post">
+                    <input type="hidden" name="Id" value="@lensSet.Id" />
+                    <div class="modal-header">
+                        <h2 class="dg-page-title" style="font-size:20px;">Edit @lensSet.Name</h2>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="dg-auth-field">
+                            <label>Lens set name</label>
+                            <input class="form-control" name="Name" value="@lensSet.Name" />
+                        </div>
+                        <div class="dg-auth-field">
+                            <label>Description</label>
+                            <input class="form-control" name="Description" value="@lensSet.Description" />
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="dg-btn dg-btn-ghost" type="button" data-bs-dismiss="modal">Cancel</button>
+                        <button class="dg-btn dg-btn-primary" type="submit">Save lens set</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+<div class="dg-card" id="lensSetAssignments" style="margin-bottom:var(--space-6);">
+    <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin-top:0; font-size:18px;">Assigned to</h3>
+    <p style="font-size:13px; color:var(--text-muted-2); margin-bottom:var(--space-3);">
+        Assigning this lens set to an organisation offers it at every outlet beneath that organisation.
+    </p>
+    @if (lensSet.AssignedOrgs.Any())
+    {
+        <div style="display:flex; flex-wrap:wrap; gap:8px;">
+            @foreach (var assignedOrg in lensSet.AssignedOrgs)
+            {
+                <span class="dg-chip">
+                    @assignedOrg.OrgName
+                    @if (assignedOrg.CanUnassign)
+                    {
+                        <form asp-action="UnassignCatalogue" method="post" style="display:inline;">
+                            <input type="hidden" name="catalogueId" value="@lensSet.Id" />
+                            <input type="hidden" name="orgNodeId" value="@assignedOrg.OrgNodeId" />
+                            <button type="submit" aria-label="Unassign from @assignedOrg.OrgName">&times;</button>
+                        </form>
+                    }
+                </span>
+            }
+        </div>
+    }
+    else
+    {
+        <p class="dg-muted" style="margin:0;">Not assigned to any organisation yet.</p>
+    }
+    @if (Model.AssignableOrgs.Any())
+    {
+        <form asp-action="AssignCatalogue" method="post" style="display:flex; gap:var(--space-3); flex-wrap:wrap; align-items:flex-end; margin-top:var(--space-4);">
+            <input type="hidden" name="CatalogueId" value="@lensSet.Id" />
+            <div style="flex:1 1 220px; max-width:360px; min-width:0;">
+                <label class="dg-stat-label" for="assignOrg" style="display:block; margin-bottom:4px;">Assign to another organisation</label>
+                <select class="form-select" id="assignOrg" name="OrgNodeId">
+                    @foreach (var org in Model.AssignableOrgs)
+                    {
+                        <option value="@org.Id">@org.Name</option>
+                    }
+                </select>
+            </div>
+            <button class="dg-btn dg-btn-primary" type="submit">Assign</button>
+        </form>
+    }
+</div>
+
+@* Only where a lens can be changed: a retired lens set, or one owned above the caller, has no
+   Add lens or Edit button to open it. *@
+@if (lensSet.CanEdit)
+{
+    <partial name="_LensDialog" model="Model.LensDialog" />
+}
+
+@section Scripts {
+    @if (lensSet.CanEdit)
+    {
+        <script src="~/js/lens-dialog.js" asp-append-version="true"></script>
+    }
+}

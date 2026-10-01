@@ -41,6 +41,34 @@ public class UserDirectoryScopeTests(AccessControlFixture fixture) : IClassFixtu
         Assert.False(IsListed(await DirectoryAsync(countryAdmin, ugandaOnly), ugandaOnly));
     }
 
+    [Fact]
+    public async Task AUserWithNoAssignment_IsListedForADgiAdminOnly_AndCanBeAssignedAnOrgAgain()
+    {
+        // The application never leaves a user with no assignment; the rows go behind its back,
+        // the way a database clear-down takes them.
+        var (userName, userId) = await fixture.CreateAccountAsync(RoleNames.User, OrganisationSeedConfiguration.KenyaRetailPointId);
+        using (var scope = fixture.Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<DotGlassesDbContext>();
+            db.UserOrgAssignments.RemoveRange(db.UserOrgAssignments.Where(x => x.UserId == userId));
+            await db.SaveChangesAsync();
+        }
+
+        var countryAdmin = await fixture.SignInAsync(AccessControlFixture.CountryAdmin);
+        var dgiAdmin = await fixture.SignInAsync(AccessControlFixture.DgiAdmin);
+
+        Assert.False(IsListed(await DirectoryAsync(countryAdmin, userName), userName));
+
+        var html = await DirectoryAsync(dgiAdmin, userName);
+        Assert.True(IsListed(html, userName));
+        Assert.Contains("No organisation", html);
+
+        // Repaired from the portal: assigning them an org is the per-org check, as for anyone.
+        var retailPoint = OrganisationSeedConfiguration.KenyaRetailPointId.ToString();
+        AssertRedirectedTo("/Organisations", await PostAsync(dgiAdmin, "/Organisations/AssignUser", ("orgNodeId", retailPoint), ("userId", userId.ToString())));
+        Assert.True(IsListed(await DirectoryAsync(countryAdmin, userName), userName));
+    }
+
     // --- Acting on the whole user needs all of their assignments in scope ----------------------
 
     [Fact]

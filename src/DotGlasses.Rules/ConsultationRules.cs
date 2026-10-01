@@ -49,7 +49,7 @@ public static class ConsultationRules
                     request.SphereRight, request.CylinderRight, request.AxisRight, request.AddRight,
                     request.LensTypeRefId, request.LensTypeOtherText,
                     request.PupilDistanceMm, request.PresetPupilDistanceBucket, request.ChildrensFrame,
-                    pupilDistanceRequired: false, presetBucketMessageNamesTheBranch: false, snapshot))
+                    pupilDistanceRequired: false, snapshot))
                 .Concat(CoatingPreference(
                     request.CoatingPreferenceRefId,
                     LensSetPair(
@@ -71,7 +71,7 @@ public static class ConsultationRules
                     request.SphereRight, request.CylinderRight, request.AxisRight, request.AddRight,
                     request.LensTypeRefId, request.LensTypeOtherText,
                     request.PupilDistanceMm, request.PresetPupilDistanceBucket, request.ChildrensFrame,
-                    pupilDistanceRequired: false, presetBucketMessageNamesTheBranch: true, snapshot))
+                    pupilDistanceRequired: false, snapshot))
                 .Concat(CoatingPreference(
                     request.CoatingPreferenceRefId,
                     LensSetPair(
@@ -96,7 +96,7 @@ public static class ConsultationRules
                     request.SphereRight, request.CylinderRight, request.AxisRight, request.AddRight,
                     request.LensTypeRefId, request.LensTypeOtherText,
                     request.PupilDistanceMm, request.PresetPupilDistanceBucket, request.ChildrensFrame,
-                    pupilDistanceRequired: true, presetBucketMessageNamesTheBranch: true, snapshot))
+                    pupilDistanceRequired: true, snapshot))
                 .Concat(CoatingSet(
                     request.CoatingRefIds,
                     request.LensRangeType,
@@ -115,12 +115,11 @@ public static class ConsultationRules
     /// every other topic: the Field App has to be able to answer them offline too, and a rule the
     /// device cannot check is a rule a technician discovers at sync time.
     ///
-    /// <b>The messages below are FluentValidation's generated copy, reproduced deliberately and
-    /// verbatim</b> — the spaced display name ("Full Name" for FullName), the interpolated actual
-    /// and permitted lengths, the trailing "You entered ..." clause. They are what clients already
-    /// receive, so reproducing them is what keeps this refactor invisible from outside; they are
-    /// pinned character-for-character by ConsultationRulesTests. They read oddly next to the
-    /// hand-written copy elsewhere in this file, and that is the cost of not changing them.
+    /// <b>The messages a form control can cause are plain instructions</b> naming the control as
+    /// the forms label it ("Enter the customer's full name."), like the rest of this file. Two
+    /// kinds are still FluentValidation's generated copy, because no form can cause them and the
+    /// value quoted back is the only clue to what a client sent: an empty Id, and an enum value
+    /// outside its enum. All are pinned character-for-character by ConsultationRulesTests.
     ///
     /// Which check applies to which request is <em>not</em> uniform, and the gaps are pre-existing
     /// drift preserved on purpose rather than tidied: only a Lead requires PhoneNumber, and only a
@@ -135,47 +134,46 @@ public static class ConsultationRules
             .Concat(InEnum(request.Gender, GenderKey, "Gender"))
             .Concat(InEnum(request.Outcome, nameof(CreateTestRequest.Outcome), "Outcome"))
             .Concat(AgeYears(request.AgeYears))
-            .Concat(MaximumLength(request.OccupationOtherText, OccupationOtherTextKey, "Occupation Other Text", 200))
-            .Concat(MaximumLength(request.ReferralOtherText, ReferralOtherTextKey, "Referral Other Text", 200))
-            .Concat(MaximumLength(request.ReferralLocationFreeText, ReferralLocationFreeTextKey, "Referral Location Free Text", 500))
-            .Concat(MaximumLength(request.LensTypeOtherText, LensTypeOtherTextKey, "Lens Type Other Text", 200));
+            .Concat(MaximumLength(request.OccupationOtherText, OccupationOtherTextKey, "the other occupation", 200))
+            .Concat(MaximumLength(request.ReferralOtherText, ReferralOtherTextKey, "the other referral reason", 200))
+            .Concat(MaximumLength(request.ReferralLocationFreeText, ReferralLocationFreeTextKey, "the referral location", 500))
+            .Concat(MaximumLength(request.LensTypeOtherText, LensTypeOtherTextKey, "the other lens type", 200));
 
     /// <summary>See <see cref="Scalars(CreateTestRequest)"/>.</summary>
     private static IEnumerable<RuleFailure> Scalars(CreateLeadRequest request) =>
         NotEmpty(request.Id, IdKey, "Id")
-            .Concat(NotEmpty(request.FullName, FullNameKey, "Full Name"))
-            .Concat(MaximumLength(request.FullName, FullNameKey, "Full Name", 200))
-            .Concat(NotEmpty(request.PhoneNumber, PhoneNumberKey, "Phone Number"))
-            .Concat(MaximumLength(request.PhoneNumber, PhoneNumberKey, "Phone Number", 32))
+            .Concat(NotEmpty(request.FullName, FullNameKey, "Enter the customer's full name."))
+            .Concat(MaximumLength(request.FullName, FullNameKey, "the full name", 200))
+            .Concat(NotEmpty(request.PhoneNumber, PhoneNumberKey, "Enter a phone number."))
+            .Concat(MaximumLength(request.PhoneNumber, PhoneNumberKey, "the phone number", 32))
             .Concat(InEnum(request.Gender, GenderKey, "Gender"))
             .Concat(AgeYears(request.AgeYears))
-            .Concat(MaximumLength(request.OccupationOtherText, OccupationOtherTextKey, "Occupation Other Text", 200))
-            .Concat(MaximumLength(request.ReasonNotPurchasedOtherText, nameof(CreateLeadRequest.ReasonNotPurchasedOtherText), "Reason Not Purchased Other Text", 200))
-            .Concat(MaximumLength(request.ReferralOtherText, ReferralOtherTextKey, "Referral Other Text", 200))
-            .Concat(MaximumLength(request.ReferralLocationFreeText, ReferralLocationFreeTextKey, "Referral Location Free Text", 500))
-            .Concat(MaximumLength(request.LensTypeOtherText, LensTypeOtherTextKey, "Lens Type Other Text", 200));
+            .Concat(MaximumLength(request.OccupationOtherText, OccupationOtherTextKey, "the other occupation", 200))
+            .Concat(MaximumLength(request.ReasonNotPurchasedOtherText, nameof(CreateLeadRequest.ReasonNotPurchasedOtherText), "the other reason", 200))
+            .Concat(MaximumLength(request.ReferralOtherText, ReferralOtherTextKey, "the other referral reason", 200))
+            .Concat(MaximumLength(request.ReferralLocationFreeText, ReferralLocationFreeTextKey, "the referral location", 500))
+            .Concat(MaximumLength(request.LensTypeOtherText, LensTypeOtherTextKey, "the other lens type", 200));
 
-    /// <summary>See <see cref="Scalars(CreateTestRequest)"/>. OrderFromDotGlasses is the one
-    /// scalar carrying hand-written copy rather than FluentValidation's: it always had a
-    /// WithMessage on it, because "must be equal to False" says nothing a technician can act
-    /// on.</summary>
+    /// <summary>See <see cref="Scalars(CreateTestRequest)"/>. OrderFromDotGlasses is reachable only
+    /// from the Admin Portal's conversion screen, which renders the checkbox whatever the lens
+    /// range; the Field App hides it outside a Custom prescription.</summary>
     private static IEnumerable<RuleFailure> Scalars(CreateSaleRequest request) =>
         NotEmpty(request.Id, IdKey, "Id")
-            .Concat(NotEmpty(request.FullName, FullNameKey, "Full Name"))
-            .Concat(MaximumLength(request.FullName, FullNameKey, "Full Name", 200))
-            .Concat(MaximumLength(request.PhoneNumber, PhoneNumberKey, "Phone Number", 32))
+            .Concat(NotEmpty(request.FullName, FullNameKey, "Enter the customer's full name."))
+            .Concat(MaximumLength(request.FullName, FullNameKey, "the full name", 200))
+            .Concat(MaximumLength(request.PhoneNumber, PhoneNumberKey, "the phone number", 32))
             .Concat(InEnum(request.Gender, GenderKey, "Gender"))
             .Concat(AgeYears(request.AgeYears))
             .Concat(InEnum(request.LensRangeType, LensRangeTypeKey, "Lens Range Type"))
             .Concat(InEnum(request.FrameCoverage, nameof(CreateSaleRequest.FrameCoverage), "Frame Coverage"))
-            .Concat(MaximumLength(request.OccupationOtherText, OccupationOtherTextKey, "Occupation Other Text", 200))
-            .Concat(MaximumLength(request.FrameColourOtherText, nameof(CreateSaleRequest.FrameColourOtherText), "Frame Colour Other Text", 200))
-            .Concat(MaximumLength(request.HardCaseOtherColourText, nameof(CreateSaleRequest.HardCaseOtherColourText), "Hard Case Other Colour Text", 200))
-            .Concat(MaximumLength(request.ReferralOtherText, ReferralOtherTextKey, "Referral Other Text", 200))
-            .Concat(MaximumLength(request.ReferralLocationFreeText, ReferralLocationFreeTextKey, "Referral Location Free Text", 500))
-            .Concat(MaximumLength(request.LensTypeOtherText, LensTypeOtherTextKey, "Lens Type Other Text", 200))
+            .Concat(MaximumLength(request.OccupationOtherText, OccupationOtherTextKey, "the other occupation", 200))
+            .Concat(MaximumLength(request.FrameColourOtherText, nameof(CreateSaleRequest.FrameColourOtherText), "the other frame colour", 200))
+            .Concat(MaximumLength(request.HardCaseOtherColourText, nameof(CreateSaleRequest.HardCaseOtherColourText), "the other hard case colour", 200))
+            .Concat(MaximumLength(request.ReferralOtherText, ReferralOtherTextKey, "the other referral reason", 200))
+            .Concat(MaximumLength(request.ReferralLocationFreeText, ReferralLocationFreeTextKey, "the referral location", 500))
+            .Concat(MaximumLength(request.LensTypeOtherText, LensTypeOtherTextKey, "the other lens type", 200))
             .Concat(request.OrderFromDotGlasses && request.LensRangeType != LensRangeType.Custom
-                ? [new RuleFailure(nameof(CreateSaleRequest.OrderFromDotGlasses), "OrderFromDotGlasses is only meaningful when LensRangeType is Custom.")]
+                ? [new RuleFailure(nameof(CreateSaleRequest.OrderFromDotGlasses), "Only a Custom prescription can be ordered from Dot Glasses — untick \"Order this lens from Dot Glasses\".")]
                 : []);
 
     /// <summary>An id the caller actually filled in. Guid.Empty is what a missing id deserialises
@@ -185,15 +183,15 @@ public static class ConsultationRules
 
     /// <summary>Whitespace counts as empty, matching the FluentValidation rule this replaces — a
     /// customer named " " is not a named customer.</summary>
-    private static IEnumerable<RuleFailure> NotEmpty(string? value, string key, string displayName) =>
-        string.IsNullOrWhiteSpace(value) ? [new RuleFailure(key, $"'{displayName}' must not be empty.")] : [];
+    private static IEnumerable<RuleFailure> NotEmpty(string? value, string key, string message) =>
+        string.IsNullOrWhiteSpace(value) ? [new RuleFailure(key, message)] : [];
 
     /// <summary>A column-width cap. Null and empty pass — absence is a different question, asked
     /// by <see cref="NotEmpty(string?, string, string)"/> where it is asked at all — and the limit
     /// itself is inclusive.</summary>
-    private static IEnumerable<RuleFailure> MaximumLength(string? value, string key, string displayName, int max) =>
+    private static IEnumerable<RuleFailure> MaximumLength(string? value, string key, string what, int max) =>
         value is { } text && text.Length > max
-            ? [new RuleFailure(key, $"The length of '{displayName}' must be {max} characters or fewer. You entered {text.Length} characters.")]
+            ? [new RuleFailure(key, $"Keep {what} to {max} characters or fewer.")]
             : [];
 
     /// <summary>An enum value that is one of the enum's own members. A number outside the set
@@ -210,7 +208,7 @@ public static class ConsultationRules
     /// plausibility ceiling, not a medical one.</summary>
     private static IEnumerable<RuleFailure> AgeYears(int? ageYears) =>
         ageYears is { } age && (age < 0 || age > 120)
-            ? [new RuleFailure(AgeYearsKey, $"'Age Years' must be between 0 and 120. You entered {age}.")]
+            ? [new RuleFailure(AgeYearsKey, "Enter an age between 0 and 120.")]
             : [];
 
     /// <summary>Optional on all three: no occupation recorded is a valid consultation.</summary>
@@ -219,8 +217,8 @@ public static class ConsultationRules
             ? []
             : ChosenItem(
                 occupationRefId, occupationOtherText, ReferenceDataCategory.Occupation, snapshot,
-                OccupationRefIdKey, "OccupationRefId must reference an existing, active Occupation reference-data item.",
-                OccupationOtherTextKey, "OccupationOtherText is required when Occupation is \"Other\".");
+                OccupationRefIdKey, "Choose an occupation from the list.",
+                OccupationOtherTextKey, "Say what the other occupation is.");
 
     /// <summary>"Referred or treated" per <c>CONTEXT.md</c>: an explicit flag, orthogonal to
     /// Outcome and not gated on any particular outcome/result. The reason is required whenever the
@@ -236,7 +234,7 @@ public static class ConsultationRules
             if (referralReasonRefId is not null || referralOtherText is not null
                 || referralLocationFreeText is not null || treatedInFacility)
             {
-                yield return new RuleFailure(ReferredOrTreatedKey, "Referral/treatment fields must be empty unless ReferredOrTreated is true.");
+                yield return new RuleFailure(ReferredOrTreatedKey, "Tick \"Referred or treated\", or clear the referral details.");
             }
 
             yield break;
@@ -244,14 +242,14 @@ public static class ConsultationRules
 
         if (referralReasonRefId is null)
         {
-            yield return new RuleFailure(ReferralReasonRefIdKey, "ReferralReasonRefId is required when ReferredOrTreated is true.");
+            yield return new RuleFailure(ReferralReasonRefIdKey, "Choose a reason for the referral or treatment.");
         }
         else
         {
             foreach (var failure in ChosenItem(
                 referralReasonRefId, referralOtherText, ReferenceDataCategory.ReferralReason, snapshot,
-                ReferralReasonRefIdKey, "ReferralReasonRefId must reference an existing, active ReferralReason reference-data item.",
-                ReferralOtherTextKey, "ReferralOtherText is required when ReferralReason is \"Other\"."))
+                ReferralReasonRefIdKey, "Choose a reason for the referral or treatment.",
+                ReferralOtherTextKey, "Say what the other referral reason is."))
             {
                 yield return failure;
             }
@@ -261,12 +259,12 @@ public static class ConsultationRules
         {
             if (!string.IsNullOrWhiteSpace(referralLocationFreeText))
             {
-                yield return new RuleFailure(ReferralLocationFreeTextKey, "ReferralLocationFreeText must be empty when TreatedInFacility is true.");
+                yield return new RuleFailure(ReferralLocationFreeTextKey, "Clear the referral location, or untick \"Treated in facility\".");
             }
         }
         else if (string.IsNullOrWhiteSpace(referralLocationFreeText))
         {
-            yield return new RuleFailure(ReferralLocationFreeTextKey, "ReferralLocationFreeText is required when ReferredOrTreated is true and TreatedInFacility is false.");
+            yield return new RuleFailure(ReferralLocationFreeTextKey, "Enter the referral location, or tick \"Treated in facility\".");
         }
     }
 
@@ -275,15 +273,15 @@ public static class ConsultationRules
     private static IEnumerable<RuleFailure> ReasonNotPurchased(Guid reasonNotPurchasedRefId, string? reasonNotPurchasedOtherText, ReferenceDataSnapshot snapshot) =>
         ChosenItem(
             reasonNotPurchasedRefId, reasonNotPurchasedOtherText, ReferenceDataCategory.ReasonNotPurchased, snapshot,
-            nameof(CreateLeadRequest.ReasonNotPurchasedRefId), "ReasonNotPurchasedRefId must reference an existing, active ReasonNotPurchased reference-data item.",
-            nameof(CreateLeadRequest.ReasonNotPurchasedOtherText), "ReasonNotPurchasedOtherText is required when ReasonNotPurchased is \"Other\".");
+            nameof(CreateLeadRequest.ReasonNotPurchasedRefId), "Choose a reason not purchased.",
+            nameof(CreateLeadRequest.ReasonNotPurchasedOtherText), "Say what the other reason is.");
 
     /// <summary>Sale only, and required — a sold pair of glasses always has a frame colour.</summary>
     private static IEnumerable<RuleFailure> FrameColour(Guid frameColourRefId, string? frameColourOtherText, ReferenceDataSnapshot snapshot) =>
         ChosenItem(
             frameColourRefId, frameColourOtherText, ReferenceDataCategory.FrameColour, snapshot,
-            nameof(CreateSaleRequest.FrameColourRefId), "FrameColourRefId must reference an existing, active FrameColour reference-data item.",
-            nameof(CreateSaleRequest.FrameColourOtherText), "FrameColourOtherText is required when FrameColour is \"Other\".");
+            nameof(CreateSaleRequest.FrameColourRefId), "Choose a frame colour.",
+            nameof(CreateSaleRequest.FrameColourOtherText), "Say what the other frame colour is.");
 
     /// <summary>Sale only. The colour is required exactly when a hard case was sold, and both
     /// colour fields must stay empty when one wasn't.</summary>
@@ -292,19 +290,19 @@ public static class ConsultationRules
         if (!hardCaseSold)
         {
             return hardCaseColourRefId is not null || hardCaseOtherColourText is not null
-                ? [new RuleFailure(nameof(CreateSaleRequest.HardCaseSold), "HardCaseColourRefId/HardCaseOtherColourText must be empty when HardCaseSold is false.")]
+                ? [new RuleFailure(nameof(CreateSaleRequest.HardCaseSold), "Clear the hard case colour, or tick that a hard case was sold.")]
                 : [];
         }
 
         if (hardCaseColourRefId is null)
         {
-            return [new RuleFailure(nameof(CreateSaleRequest.HardCaseColourRefId), "HardCaseColourRefId is required when HardCaseSold is true.")];
+            return [new RuleFailure(nameof(CreateSaleRequest.HardCaseColourRefId), "Choose a hard case colour.")];
         }
 
         return ChosenItem(
             hardCaseColourRefId, hardCaseOtherColourText, ReferenceDataCategory.HardCaseColour, snapshot,
-            nameof(CreateSaleRequest.HardCaseColourRefId), "HardCaseColourRefId must reference an existing, active HardCaseColour reference-data item.",
-            nameof(CreateSaleRequest.HardCaseOtherColourText), "HardCaseOtherColourText is required when HardCaseColour is \"Other\".");
+            nameof(CreateSaleRequest.HardCaseColourRefId), "Choose a hard case colour.",
+            nameof(CreateSaleRequest.HardCaseOtherColourText), "Say what the other hard case colour is.");
     }
 
     /// <summary>
@@ -323,12 +321,8 @@ public static class ConsultationRules
     /// range-checked if given. It governs both branches' PD field: the preset bucket and the
     /// Custom millimetre value.
     ///
-    /// <paramref name="presetBucketMessageNamesTheBranch"/> is <em>not</em> a rule — it is
-    /// pre-existing copy drift, preserved deliberately. The Test's out-of-range bucket message
-    /// stops at the number where the Lead's and Sale's go on to name the branch and the children's
-    /// frame allowance. The rule the three enforce is identical; only the sentence differs, and
-    /// these are user-facing strings shown verbatim, so this batch reproduces them rather than
-    /// quietly harmonising them. Harmonise it as its own decision if it is ever worth making.
+    /// The messages do not differ between the requests: missing or out of range, the instruction
+    /// is the same one — choose a pupil distance from the list.
     /// </summary>
     private static IEnumerable<RuleFailure> LensRange(
         LensRangeType? lensRangeType,
@@ -337,7 +331,7 @@ public static class ConsultationRules
         decimal? sphereRight, decimal? cylinderRight, decimal? axisRight, decimal? addRight,
         Guid? lensTypeRefId, string? lensTypeOtherText,
         decimal? pupilDistanceMm, int? presetPupilDistanceBucket, bool childrensFrame,
-        bool pupilDistanceRequired, bool presetBucketMessageNamesTheBranch,
+        bool pupilDistanceRequired,
         ReferenceDataSnapshot snapshot)
     {
         var lensSetChosen = presetCatalogueId is not null;
@@ -362,7 +356,7 @@ public static class ConsultationRules
                     sphereRight, cylinderRight, axisRight, addRight,
                     lensTypeRefId, lensTypeOtherText,
                     pupilDistanceMm, presetPupilDistanceBucket, childrensFrame,
-                    pupilDistanceRequired, presetBucketMessageNamesTheBranch, snapshot))
+                    pupilDistanceRequired, snapshot))
                 {
                     yield return failure;
                 }
@@ -405,7 +399,7 @@ public static class ConsultationRules
         decimal? sphereRight, decimal? cylinderRight, decimal? axisRight, decimal? addRight,
         Guid? lensTypeRefId, string? lensTypeOtherText,
         decimal? pupilDistanceMm, int? presetPupilDistanceBucket, bool childrensFrame,
-        bool pupilDistanceRequired, bool bucketMessageNamesTheBranch, ReferenceDataSnapshot snapshot)
+        bool pupilDistanceRequired, ReferenceDataSnapshot snapshot)
     {
         if (presetCatalogueId is not { } catalogueId)
         {
@@ -475,21 +469,17 @@ public static class ConsultationRules
         {
             yield return new RuleFailure(
                 PresetPupilDistanceBucketKey,
-                PresetBucketMessage(maxBucket, childrensFrame, pupilDistanceRequired, bucketMessageNamesTheBranch));
+                PresetBucketMessage(maxBucket, childrensFrame));
         }
     }
 
-    /// <summary>See <see cref="LensRange"/> on why one rule has three sentences.</summary>
-    private static string PresetBucketMessage(int maxBucket, bool childrensFrame, bool required, bool namesTheBranch)
-    {
-        var opening = required
-            ? $"PresetPupilDistanceBucket is required and must be between 0 and {maxBucket}"
-            : $"PresetPupilDistanceBucket must be between 0 and {maxBucket}";
-
-        return namesTheBranch
-            ? $"{opening} for a LensSet LensRangeType{(childrensFrame ? $" (0-{LensPowerValues.MaxPresetPupilDistanceBucket(childrensFrame: true)} for a children's frame)" : "")}."
-            : $"{opening}.";
-    }
+    /// <summary>One sentence for all three requests, whether the bucket is missing or out of
+    /// range: either way the thing to do is choose one from the list. A children's frame says why
+    /// its ceiling is lower.</summary>
+    private static string PresetBucketMessage(int maxBucket, bool childrensFrame) =>
+        childrensFrame
+            ? $"Choose a pupil distance between 0 and {maxBucket} — the limit for a children's frame."
+            : $"Choose a pupil distance between 0 and {maxBucket}.";
 
     /// <summary>
     /// Whether each eye's lens power, with the pair's one lens type, is a lens in the chosen set —
@@ -623,7 +613,7 @@ public static class ConsultationRules
 
         if (sphereLeft is null || sphereRight is null)
         {
-            yield return new RuleFailure(LensRangeTypeKey, "SphereLeft and SphereRight are required for a Custom LensRangeType.");
+            yield return new RuleFailure(LensRangeTypeKey, "Choose a sphere for each eye.");
         }
 
         var powers = LensPowerRules.CheckValues(sphereLeft, cylinderLeft, axisLeft, addLeft, LeftEyeNames)
@@ -656,10 +646,7 @@ public static class ConsultationRules
     private static IEnumerable<RuleFailure> CustomPupilDistance(decimal? pupilDistanceMm, bool required)
     {
         var range = LensPowerValues.PupilDistanceMmRange;
-        var bounds = $"{range.Min:0}-{range.Max:0}mm";
-        var rangeMessage = required
-            ? $"PupilDistanceMm is required and must be within the standard {bounds} range for a Custom LensRangeType (manual override outside this range is a Day 2 feature)."
-            : $"PupilDistanceMm must be within the standard {bounds} range for a Custom LensRangeType (manual override outside this range is a Day 2 feature).";
+        var rangeMessage = $"Choose a pupil distance between {range.Min:0} and {range.Max:0} mm.";
 
         if (pupilDistanceMm is not { } pd)
         {
@@ -785,7 +772,7 @@ public static class ConsultationRules
         {
             if (!snapshot.IsActiveItem(coatingRefId, ReferenceDataCategory.Coating))
             {
-                return [new RuleFailure(CoatingRefIdsKey, "CoatingRefIds must only reference existing, active Coating reference-data items.")];
+                return [new RuleFailure(CoatingRefIdsKey, "One of the chosen coatings isn't available any more — choose the coatings again.")];
             }
 
             if (lensSetPair is { } offeredOnThePair && !offeredOnThePair.Offered.Contains(coatingRefId))
@@ -840,8 +827,7 @@ public static class ConsultationRules
     /// so genuinely unsatisfiable, whereas a preference can always be cleared.
     ///
     /// <paramref name="availabilityBeforeActiveItem"/> is <em>not</em> a rule — it is pre-existing
-    /// ordering drift, preserved deliberately in the same spirit as
-    /// <see cref="LensRange"/>'s presetBucketMessageNamesTheBranch. Both failures report against
+    /// ordering drift, preserved deliberately. Both failures report against
     /// CoatingPreferenceRefId and a request can trip both at once, so which comes first is
     /// observable; a Test has always reported availability first and a Lead the active-item check
     /// first. Harmonise it as its own decision if it is ever worth making.
@@ -861,12 +847,12 @@ public static class ConsultationRules
             && !offeredOnThePair.Offered.Contains(coatingRefId);
 
         IEnumerable<RuleFailure> availability = unavailableForTheChosenLenses
-            ? [new RuleFailure(CoatingPreferenceRefIdKey, "CoatingPreferenceRefId is not configured as available for the chosen lenses (see Lens Sets).")]
+            ? [new RuleFailure(CoatingPreferenceRefIdKey, "This coating preference isn't available for the chosen lenses — choose another, or no preference.")]
             : [];
 
         IEnumerable<RuleFailure> activeItem = snapshot.IsActiveItem(coatingRefId, ReferenceDataCategory.Coating)
             ? []
-            : [new RuleFailure(CoatingPreferenceRefIdKey, "CoatingPreferenceRefId must reference an existing, active Coating reference-data item.")];
+            : [new RuleFailure(CoatingPreferenceRefIdKey, "This coating preference isn't available any more — choose another, or no preference.")];
 
         return availabilityBeforeActiveItem ? availability.Concat(activeItem) : activeItem.Concat(availability);
     }
@@ -931,8 +917,14 @@ public static class ConsultationRules
     private const string AddRightKey = nameof(CreateTestRequest.AddRight);
     private const string AxisLeftKey = nameof(CreateTestRequest.AxisLeft);
     private const string AxisRightKey = nameof(CreateTestRequest.AxisRight);
-    private static readonly LensPowerNames LeftEyeNames = new(SphereLeftKey, CylinderLeftKey, AxisLeftKey, AddLeftKey);
-    private static readonly LensPowerNames RightEyeNames = new(SphereRightKey, CylinderRightKey, AxisRightKey, AddRightKey);
+    private static readonly LensPowerNames LeftEyeNames = new(SphereLeftKey, CylinderLeftKey, AxisLeftKey, AddLeftKey)
+    {
+        SphereLabel = "Sphere (left)", CylinderLabel = "Cylinder (left)", AxisLabel = "Axis (left)", AddLabel = "Add power (left)",
+    };
+    private static readonly LensPowerNames RightEyeNames = new(SphereRightKey, CylinderRightKey, AxisRightKey, AddRightKey)
+    {
+        SphereLabel = "Sphere (right)", CylinderLabel = "Cylinder (right)", AxisLabel = "Axis (right)", AddLabel = "Add power (right)",
+    };
     private const string LensTypeRefIdKey = nameof(CreateTestRequest.LensTypeRefId);
     private const string LensTypeOtherTextKey = nameof(CreateTestRequest.LensTypeOtherText);
     private const string PupilDistanceMmKey = nameof(CreateTestRequest.PupilDistanceMm);

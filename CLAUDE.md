@@ -47,10 +47,12 @@ are the record of *how* things got built; don't restate that here.
   `LensPowerRules.Normalise` spells it.
 - **There is no consultation request validator.** `ConsultationRules.Check` holds *every* rule for
   a `Test`/`Lead`/`Sale` create — including the scalar ones (`NotEmpty`, length caps, `IsInEnum`,
-  the age range), whose messages are FluentValidation's generated copy reproduced verbatim because
-  clients already receive them. The three create endpoints call the module directly: load the
+  the age range). A message a form control can cause is a plain instruction naming the control by
+  its on-screen label ("Choose a reason not purchased."), never a property or enum name; only the
+  ones no form can produce (an empty `Id`, an out-of-enum value, fields the forms always blank)
+  stay technical. The three create endpoints call the module directly: load the
   snapshot once, `Check`, `ToModelStateDictionary()`, `ValidationProblem`. Don't reintroduce a
-  validator for these three DTOs, and don't reword a scalar message without treating it as the
+  validator for these three DTOs, and don't reword a message without treating it as the
   client-visible change it is.
   **Two exceptions can never live in `Rules`** and sit on the controllers instead: a Lead's
   `SourceTestId` and a Sale's `SourceLeadId` resolve a specific hierarchy-scoped row, which is I/O.
@@ -137,7 +139,7 @@ are the record of *how* things got built; don't restate that here.
   `InviteAtomicityTests`. Anything a user-visible operation *emits* (an email, a set-password
   link) is produced **after** the commit — a live invite link for an account the rollback removed
   is worse than the failure it came from.
-- FluentValidation still backs the **nine remaining Admin Portal validators** (Organisations, Lens
+- FluentValidation still backs the **eight remaining Admin Portal validators** (Organisations, Lens
   Sets, Reference Data, User Directory) and is deliberately **not** wired up via
   `AddFluentValidationAutoValidation()` — that runs FluentValidation synchronously inside ASP.NET's
   model-binding pipeline, which can't invoke the async rules several of them need for DB-backed
@@ -169,7 +171,9 @@ are the record of *how* things got built; don't restate that here.
   `ApplicationUser` is an Identity type, outside the automatic filter entirely — any screen
   listing users (User Directory) applies the same scope-paths rule manually in code, matched
   against each user's *assignment* paths rather than the user row itself: a user is listed if
-  *any* one of their assignments is in scope.
+  *any* one of their assignments is in scope. A user with no assignment at all (a state only
+  reachable from outside the application) is listed for DGI-level callers only, so it can be
+  repaired by assigning them an org.
 - **RBAC** (what a user can do with rows they can see) is separate, policy-based
   `IAuthorizationHandler`/`[Authorize(Policy = ...)]` — role-dependent, never touches the
   query filter.
@@ -315,7 +319,11 @@ on failure) — a technician who's been online at least once can keep working, a
 across a refresh, with no connectivity. First-ever use still needs one online session. The cache
 outlives releases, so a change to the *meaning* of a cached shape (not just adding a field) bumps
 `ReferenceDataClient.LensSetShape`: a cache written before it loses its lens sets on an offline load
-rather than presenting old lenses as zero-power ones.
+rather than presenting old lenses as zero-power ones. The cached lens sets belong to the location
+they were fetched at (the payload records it) and are not offered at any other; reference items
+and coating exclusions are global and are. In memory, `ReferenceDataClient` holds a copy only for
+the current session: sign-in, sign-out and a location switch discard it (`AuthTokenStore.Changed`),
+and a form refreshes it when it opens — never while it is being filled in.
 
 Known accepted risk, not yet fixed: offline records are attributed to whoever is signed in
 *when they sync*, not when they were created (`TechnicianUserId`/`HierarchyPath` come from the

@@ -21,7 +21,7 @@ A custom prescription offers any active coating.
 - [x] Paired coatings are ticked, locked, and carry "Comes with <trigger> on this lens".
 - [x] A lens change that removes an offered coating unticks it and shows a note.
 - [x] Coating preference (Tests and Leads) is limited to the offered coatings on a lens set.
-- [ ] Manual checklist, recorded in Comments when done: offered coatings follow both lenses; locked
+- [x] Manual checklist, recorded in Comments when done: offered coatings follow both lenses; locked
       pairing and its note; the removal note; a Sale saves without a server rejection.
 
 ## Notes
@@ -77,38 +77,38 @@ A custom prescription offers any active coating.
      (`LoadFailedRecordAsync` never read `CoatingPreferenceRefId` for a Test, so re-saving dropped it).
   6. The removal note names removed coatings but not "which lens" — wording is deliberately generic
      because the pair, not one lens, decides what is offered.
-- **Manual checklist — all UNVERIFIED, to be confirmed by a human in the browser.** (`Selector` =
+- **Manual checklist — confirmed by hand on staging, 2026-10-01; every item works as expected.** (`Selector` =
   `CoatingMultiSelector.razor`, `Form` = `ConsultationForm.razor`.) Needs a lens set with at least
   two lenses that differ in coatings, and one lens with a pairing (e.g. Blue block → Photochromic).
-  - [ ] Offered coatings follow both lenses: Sale, lens set, "Same lens" ticked — the coating list
+  - [x] Offered coatings follow both lenses: Sale, lens set, "Same lens" ticked — the coating list
         shows only that lens's coatings; untick, choose a different right lens — only the coatings
         both come in remain (`Form.PairCoatings` → `LensSetLenses.CoatingsFor(...).Offered` →
         Selector `RestrictToIds`). A trigger coating whose pair one lens lacks isn't listed. Nothing
         is listed (and a note appears) until both eyes have a lens; if no coating is common, the
         "No coating can be made on both of these lenses" note shows.
-  - [ ] Locked pairing and its note: tick the trigger (Blue block) — its paired coating
+  - [x] Locked pairing and its note: tick the trigger (Blue block) — its paired coating
         (Photochromic) ticks itself, its checkbox is disabled, and "Comes with Blue block on this
         lens" shows under it (`CoatingSelection.WithPairedCoatings` in Selector `ToggleAsync`;
         `CoatingSelection.LockedBy` in the render). Untick Blue block — Photochromic unlocks (stays
         ticked, can be unticked). A coating that an exclusion forbids with a ticked one is disabled
         with "Can't be combined with …" (`Selector` `FindConflict`).
-  - [ ] Removal note: tick a coating only the current lens has, then change a lens so it's no longer
+  - [x] Removal note: tick a coating only the current lens has, then change a lens so it's no longer
         offered — it is unticked and "Removed <names> — not available on the lens you've now
         chosen." appears; coatings still offered stay ticked (`Form.OnLensSelectionChanged` →
         `ReconcileCoatings` → `CoatingSelection.Reconcile`). The same note appears for a Test/Lead
         coating preference cleared by a lens change. Changing the left lens to another type
         (emptying the right) keeps the ticks until the right lens is chosen (deviation 1).
-  - [ ] Custom prescription offers any active coating: Sale, Custom — the full active coating list,
+  - [x] Custom prescription offers any active coating: Sale, Custom — the full active coating list,
         no locks, no pairing behaviour; exclusions still disable (`Form.ReconcileCoatings` non-lens-set
         branch; the Custom `CoatingMultiSelector` has no `RestrictToIds`/`RequiredPairings`).
-  - [ ] Coating preference on a lens set (Test/Lead): only the offered coatings are radios (with "No
+  - [x] Coating preference on a lens set (Test/Lead): only the offered coatings are radios (with "No
         preference" first) once both eyes have a lens; on Custom, every active coating
         (`Form.RenderCoatingPreference`).
-  - [ ] Converting a Lead / correcting a Failed record: a Lead whose preference is a trigger opens the
+  - [x] Converting a Lead / correcting a Failed record: a Lead whose preference is a trigger opens the
         Sale with its pair ticked and locked; a preference the chosen lenses don't offer opens
         unticked with the removal note; a Failed Test reopens with its coating preference
         (`Form.ApplyLensRange` → `ReconcileCoatings`; `LoadFailedRecordAsync`).
-  - [ ] A Sale saves without a server rejection: build a Sale on a lens set with the paired trigger
+  - [x] A Sale saves without a server rejection: build a Sale on a lens set with the paired trigger
         ticked and, separately, with a pair from the other lens's pairings; save (online) — no 400,
         nothing on Failed records (`ConsultationRules.Check` before queuing uses the same
         `CoatingsFor`; the server applies the same rule, B06).

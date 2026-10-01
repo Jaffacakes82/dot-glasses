@@ -1,0 +1,10 @@
+@model bool
+@*
+    The Lens Sets screen's two tabs: "Lens sets" (the list) and the read-only "Lens powers". Each
+    is its own page, so a tab is a link. The model is whether Lens powers is the current one. A
+    single lens set's page is reached from the list and has a breadcrumb back instead of tabs.
+*@
+<nav class="dg-tabs" aria-label="Lens Sets pages">
+    <a class="dg-tab @(Model ? "" : "active")" asp-action="Index" aria-current="@(Model ? null : "page")">Lens sets</a>
+    <a class="dg-tab @(Model ? "active" : "")" asp-action="LensPowers" aria-current="@(Model ? "page" : null)">Lens powers</a>
+</nav>

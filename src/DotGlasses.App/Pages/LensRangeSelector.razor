@@ -130,7 +130,7 @@ else if (Model.LensRangeType == LensRangeType.Custom)
        FieldError so a server rejection lands against the control it's about. *@
     <div style="display:flex; flex-wrap:wrap; gap:8px;">
         <LensPowerSelect Label="Sphere — left" Values="LensPowerValues.Sphere" Value="Model.SphereLeft"
-                         ValueChanged="v => Model.SphereLeft = v" Errors="Errors" Field="SphereLeft" />
+                         ValueChanged="v => OnSphereChanged(left: true, v)" Errors="Errors" Field="SphereLeft" />
         <LensPowerSelect Label="Cylinder — left" Values="LensPowerValues.Cylinder" Value="Model.CylinderLeft"
                          ValueChanged="v => OnCylinderChanged(left: true, v)" Errors="Errors" Field="CylinderLeft" />
         @if (LensPowerRules.HasCylinder(Model.CylinderLeft) || Model.AxisLeft is not null)
@@ -143,7 +143,7 @@ else if (Model.LensRangeType == LensRangeType.Custom)
     </div>
     <div style="display:flex; flex-wrap:wrap; gap:8px;">
         <LensPowerSelect Label="Sphere — right" Values="LensPowerValues.Sphere" Value="Model.SphereRight"
-                         ValueChanged="v => Model.SphereRight = v" Errors="Errors" Field="SphereRight" />
+                         ValueChanged="v => OnSphereChanged(left: false, v)" Errors="Errors" Field="SphereRight" />
         <LensPowerSelect Label="Cylinder — right" Values="LensPowerValues.Cylinder" Value="Model.CylinderRight"
                          ValueChanged="v => OnCylinderChanged(left: false, v)" Errors="Errors" Field="CylinderRight" />
         @if (LensPowerRules.HasCylinder(Model.CylinderRight) || Model.AxisRight is not null)
@@ -173,7 +173,7 @@ else if (Model.LensRangeType == LensRangeType.Custom)
 {
     <div class="dg-field">
         <label>Pupil distance (0–@MaxPresetPdBucket@(Model.ChildrensFrame ? ", children's frame" : ""))</label>
-        <select value="@Model.PresetPupilDistanceBucket" @onchange="e => Model.PresetPupilDistanceBucket = ParseInt(e.Value)">
+        <select value="@Model.PresetPupilDistanceBucket" @onchange="e => { Errors?.ClearFields(nameof(Model.PresetPupilDistanceBucket)); Model.PresetPupilDistanceBucket = ParseInt(e.Value); }">
             <option value="">Select...</option>
             @foreach (var bucket in LensPowerValues.PresetPupilDistanceBuckets(Model.ChildrensFrame))
             {
@@ -187,7 +187,7 @@ else if (Model.LensRangeType == LensRangeType.Custom)
 {
     <div class="dg-field">
         <label>Pupil distance (mm, @LensPowerValues.PupilDistanceMmRange.Min–@LensPowerValues.PupilDistanceMmRange.Max)</label>
-        <select value="@Model.PupilDistanceMm" @onchange="e => Model.PupilDistanceMm = ParseDecimal(e.Value)">
+        <select value="@Model.PupilDistanceMm" @onchange="e => { Errors?.ClearFields(nameof(Model.PupilDistanceMm)); Model.PupilDistanceMm = ParseDecimal(e.Value); }">
             <option value="">Select...</option>
             @foreach (var mm in LensPowerValues.PupilDistanceMm)
             {
@@ -293,6 +293,9 @@ else if (Model.LensRangeType == LensRangeType.Custom)
     {
         var value = e.Value?.ToString();
 
+        // Every lens-section message was about the range just left (or an answer it took with it).
+        Errors?.ClearFields(LensErrorKeys.All);
+
         // Switching range type invalidates whichever fields belonged to the previous one — the
         // validator rejects preset+custom fields being set together.
         Model.PresetCatalogueId = null;
@@ -332,6 +335,10 @@ else if (Model.LensRangeType == LensRangeType.Custom)
     {
         Model.ChildrensFrame = e.Value is true;
 
+        // The frame size moves the pupil distance's ceiling, so a message about the old ceiling no
+        // longer describes the answer.
+        Errors?.ClearFields(nameof(Model.PresetPupilDistanceBucket));
+
         // A previously-picked bucket value may no longer be in range once the max drops from 4
         // to 2 — clear it rather than leaving a stale, no-longer-selectable value in the model.
         if (Model.PresetPupilDistanceBucket > MaxPresetPdBucket)
@@ -359,7 +366,27 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         {
             Model.LensTypeRefId = null;
             Model.LensTypeOtherText = null;
+
+            // The lens type control is gone, so its message has nothing left to point at.
+            Errors?.ClearFields(LensErrorKeys.LensType);
         }
+    }
+
+    /// <summary>A Custom prescription with a sphere missing is reported against the lens range
+    /// ("Choose a sphere for each eye."), not against either sphere, so choosing a sphere clears
+    /// that message as well as the dropdown's own.</summary>
+    private void OnSphereChanged(bool left, decimal? value)
+    {
+        if (left)
+        {
+            Model.SphereLeft = value;
+        }
+        else
+        {
+            Model.SphereRight = value;
+        }
+
+        Errors?.ClearFields(nameof(Model.LensRangeType));
     }
 
     /// <summary>Same reasoning for the axis: it is only asked while that eye has a cylinder, so
@@ -370,6 +397,7 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         if (left)
         {
             Model.CylinderLeft = value;
+            Errors?.ClearFields("AxisLeft");
             if (!LensPowerRules.HasCylinder(value))
             {
                 Model.AxisLeft = null;
@@ -378,6 +406,7 @@ else if (Model.LensRangeType == LensRangeType.Custom)
         else
         {
             Model.CylinderRight = value;
+            Errors?.ClearFields("AxisRight");
             if (!LensPowerRules.HasCylinder(value))
             {
                 Model.AxisRight = null;
@@ -391,24 +420,28 @@ else if (Model.LensRangeType == LensRangeType.Custom)
     private async Task OnSameLensChanged(ChangeEventArgs e)
     {
         Model.SetSameLensForBothEyes(SetLenses, e.Value is true);
+        Errors?.ClearFields(LensErrorKeys.LensChoice);
         await SelectionChanged.InvokeAsync();
     }
 
     private async Task OnSameLensChosen(ChangeEventArgs e)
     {
         Model.ChooseSameLens(SetLenses, ParseGuid(e.Value));
+        Errors?.ClearFields(LensErrorKeys.LensChoice);
         await SelectionChanged.InvokeAsync();
     }
 
     private async Task OnLeftLensChosen(ChangeEventArgs e)
     {
         Model.ChooseLeftLens(SetLenses, ParseGuid(e.Value));
+        Errors?.ClearFields(LensErrorKeys.LensChoice);
         await SelectionChanged.InvokeAsync();
     }
 
     private async Task OnRightLensChosen(ChangeEventArgs e)
     {
         Model.ChooseRightLens(SetLenses, ParseGuid(e.Value));
+        Errors?.ClearFields(LensErrorKeys.LensChoice);
         await SelectionChanged.InvokeAsync();
     }
 }

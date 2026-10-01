@@ -27,23 +27,53 @@ public class CataloguesController(
     IUnscopedReportQueryService unscopedReportQueryService,
     IValidator<CreateCatalogueRequest> createValidator,
     IValidator<UpdateCatalogueRequest> updateValidator,
-    IValidator<AssignCataloguesRequest> assignValidator,
     IValidator<SaveLensRequest> saveLensValidator,
     IReferenceDataSnapshotProvider referenceDataSnapshotProvider) : Controller
 {
-    public async Task<IActionResult> Index(string? search, CancellationToken cancellationToken) =>
-        View(await BuildViewModelAsync(search, cancellationToken));
+    /// <summary>The "Lens sets" tab: every lens set as a row. <paramref name="status"/> is
+    /// "active" (the default, and what anything unrecognised means), "retired" or "all".</summary>
+    public async Task<IActionResult> Index(string? search, string? status, CancellationToken cancellationToken) =>
+        View(await BuildListAsync(search, ParseStatus(status), cancellationToken));
 
-    /// <summary>The read-only Lens powers page (ticket 08), behind the same policy as the rest of
-    /// this screen: every value list and the display format come from
+    /// <summary>One lens set's own page — its lenses and the orgs it is assigned to. Every write
+    /// made from it redirects back here, so the admin stays on the lens set they were working on.
+    /// A retired lens set opens read-only; an id that names no lens set goes back to the list.</summary>
+    public async Task<IActionResult> Details(Guid id, CancellationToken cancellationToken) =>
+        await DetailsViewAsync(id, cancellationToken);
+
+    /// <summary>The read-only "Lens powers" tab, behind the same policy as the rest of this
+    /// screen: every value list, its range summary and the display format come from
     /// <see cref="LensPowerValues"/> — the single definition the Field App, the Add lens dialog
     /// and the server all read (ADR-0007). The view holds none of these bounds itself.</summary>
-    public IActionResult LensPowers() => View(new LensPowersViewModel(
-        LensPowerValues.Sphere.Select(LensPowerValues.FormatPower).ToList(),
-        LensPowerValues.Cylinder.Select(LensPowerValues.FormatPower).ToList(),
-        LensPowerValues.Axis.Select(a => a.ToString("0", CultureInfo.InvariantCulture)).ToList(),
-        LensPowerValues.Add.Select(LensPowerValues.FormatPower).ToList(),
-        LensPowerValues.PupilDistanceMm.Select(mm => mm.ToString("0", CultureInfo.InvariantCulture)).ToList()));
+    public IActionResult LensPowers()
+    {
+        static string Whole(decimal value) => value.ToString("0", CultureInfo.InvariantCulture);
+
+        return View(new LensPowersViewModel(
+            [
+                LensPowerList.From("Sphere", "lens-power-sphere", LensPowerValues.Sphere, LensPowerValues.SphereRange, LensPowerValues.FormatPower, "required on every lens"),
+                LensPowerList.From("Cylinder", "lens-power-cylinder", LensPowerValues.Cylinder, LensPowerValues.CylinderRange, LensPowerValues.FormatPower, "blank means 0.00; the shop sells no positive cylinder"),
+                LensPowerList.From("Axis", "lens-power-axis", LensPowerValues.Axis, LensPowerValues.AxisRange, Whole, "whole degrees, asked only when the cylinder isn't 0.00"),
+                LensPowerList.From("Add", "lens-power-add", LensPowerValues.Add, LensPowerValues.AddRange, LensPowerValues.FormatPower, "blank or 0.00 means no add"),
+                LensPowerList.From("Pupil distance", "lens-power-pupil-distance", LensPowerValues.PupilDistanceMm, LensPowerValues.PupilDistanceMmRange, Whole, "whole millimetres, one value for the pair on a Custom prescription"),
+            ]));
+    }
+
+    /// <summary>Back to this lens set's page (POST-redirect-GET).</summary>
+    private RedirectToActionResult ToLensSet(Guid catalogueId) =>
+        RedirectToAction(nameof(Details), new { id = catalogueId });
+
+    /// <summary>Renders a lens set's page — for the GET, and straight from a refused POST with its
+    /// failures in ModelState.</summary>
+    private async Task<IActionResult> DetailsViewAsync(Guid catalogueId, CancellationToken cancellationToken, SaveLensRequest? reopenLensDialog = null) =>
+        await BuildDetailsAsync(catalogueId, cancellationToken, reopenLensDialog) is { } details
+            ? View(nameof(Details), details)
+            : RedirectToAction(nameof(Index));
+
+    private static LensSetStatusFilter ParseStatus(string? status) =>
+        Enum.TryParse<LensSetStatusFilter>(status, ignoreCase: true, out var parsed) && Enum.IsDefined(parsed)
+            ? parsed
+            : LensSetStatusFilter.Active;
 
     [HttpPost]
     [ValidateAntiForgeryToken]
@@ -53,12 +83,14 @@ public class CataloguesController(
         if (!validationResult.IsValid)
         {
             validationResult.AddToModelState(ModelState);
-            return View(nameof(Index), await BuildViewModelAsync(null, cancellationToken));
+            return View(nameof(Index), await BuildListAsync(null, LensSetStatusFilter.Active, cancellationToken));
         }
 
         var owningOrgNodeId = await ResolveOwningOrgNodeIdAsync(request.OwningOrgNodeId, cancellationToken);
-        await catalogueAdminService.CreateAsync(request.Name, request.Description, owningOrgNodeId, cancellationToken);
-        return RedirectToAction(nameof(Index));
+        var created = await catalogueAdminService.CreateAsync(request.Name, request.Description, owningOrgNodeId, cancellationToken);
+
+        // The new lens set is the one to work on next: it has no lenses yet.
+        return ToLensSet(created.Id);
     }
 
     /// <summary>The explicit choice if one was posted, otherwise the caller's single qualifying
@@ -88,20 +120,20 @@ public class CataloguesController(
         if (!validationResult.IsValid)
         {
             validationResult.AddToModelState(ModelState);
-            return View(nameof(Index), await BuildViewModelAsync(null, cancellationToken));
+            return await DetailsViewAsync(request.Id, cancellationToken);
         }
 
         await catalogueAdminService.UpdateAsync(request.Id, request.Name, request.Description, cancellationToken);
-        return RedirectToAction(nameof(Index));
+        return ToLensSet(request.Id);
     }
 
     /// <summary>
     /// The Add lens dialog's save, for a new lens and for an edit alike (ADR-0007).
     ///
     /// <para>
-    /// The round trip. A save that passes is written and redirected back to Index with a banner
-    /// (POST-redirect-GET). A refused one comes back the way every other refused form on this
-    /// screen does (CreateCatalogue, UpdateCatalogue, AssignCatalogues): the screen is rendered
+    /// The round trip. A save that passes is written and redirected back to the lens set's page
+    /// with a banner (POST-redirect-GET). A refused one comes back the way every other refused form
+    /// on these pages does (CreateCatalogue, UpdateCatalogue): the page is rendered
     /// straight from this POST with the validator's failures in ModelState — no redirect. What
     /// that adds here is the admin's own posted form, handed to the view as
     /// <see cref="LensDialogViewModel.Reopen"/>, so _LensDialog renders open on their input with
@@ -143,12 +175,12 @@ public class CataloguesController(
         if (!validationResult.IsValid || !ModelState.IsValid)
         {
             validationResult.AddToModelState(ModelState);
-            return View(nameof(Index), await BuildViewModelAsync(null, cancellationToken, reopenLensDialog: request));
+            return await DetailsViewAsync(request.CatalogueId, cancellationToken, reopenLensDialog: request);
         }
 
         await catalogueAdminService.SaveLensAsync(request.CatalogueId, request.LensOptionId, request.ToInput(), cancellationToken);
         TempData["Info"] = request.LensOptionId is null ? $"Lens \"{request.Label!.Trim()}\" added." : $"Lens \"{request.Label!.Trim()}\" saved.";
-        return RedirectToAction(nameof(Index));
+        return ToLensSet(request.CatalogueId);
     }
 
     [HttpPost]
@@ -162,32 +194,28 @@ public class CataloguesController(
         }
 
         await catalogueAdminService.RemoveLensOptionAsync(lensOptionId, cancellationToken);
-        return RedirectToAction(nameof(Index));
+        return ToLensSet(catalogueId);
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> AssignCatalogues(AssignCataloguesRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> AssignCatalogue(AssignCatalogueRequest request, CancellationToken cancellationToken)
     {
+        // No validator: an org that is blank or unknown is not one the caller may assign to.
         if (!await CanAssignToAsync(request.OrgNodeId, cancellationToken))
         {
             return Forbid();
         }
 
-        var validationResult = await assignValidator.ValidateAsync(request, cancellationToken);
-        if (!validationResult.IsValid)
+        if (!await LensSetExistsAsync(request.CatalogueId, cancellationToken))
         {
-            validationResult.AddToModelState(ModelState);
-            return View(nameof(Index), await BuildViewModelAsync(null, cancellationToken));
+            return RedirectToAction(nameof(Index));
         }
 
-        foreach (var catalogueId in request.CatalogueIds)
-        {
-            await catalogueAdminService.AssignCatalogueToOrgAsync(catalogueId, request.OrgNodeId, cancellationToken);
-        }
+        await catalogueAdminService.AssignCatalogueToOrgAsync(request.CatalogueId, request.OrgNodeId, cancellationToken);
 
-        TempData["Info"] = request.CatalogueIds.Count == 1 ? "Lens set assigned." : $"{request.CatalogueIds.Count} lens sets assigned.";
-        return RedirectToAction(nameof(Index));
+        TempData["Info"] = "Lens set assigned.";
+        return ToLensSet(request.CatalogueId);
     }
 
     [HttpPost]
@@ -200,6 +228,8 @@ public class CataloguesController(
         }
 
         await catalogueAdminService.RetireAsync(catalogueId, cancellationToken);
+
+        // Its page is read-only from here on, so back to the list.
         return RedirectToAction(nameof(Index));
     }
 
@@ -213,7 +243,7 @@ public class CataloguesController(
         }
 
         await catalogueAdminService.ReactivateAsync(catalogueId, cancellationToken);
-        return RedirectToAction(nameof(Index));
+        return ToLensSet(catalogueId);
     }
 
     [HttpPost]
@@ -225,8 +255,13 @@ public class CataloguesController(
             return Forbid();
         }
 
+        if (!await LensSetExistsAsync(catalogueId, cancellationToken))
+        {
+            return RedirectToAction(nameof(Index));
+        }
+
         await catalogueAdminService.UnassignCatalogueFromOrgAsync(catalogueId, orgNodeId, cancellationToken);
-        return RedirectToAction(nameof(Index));
+        return ToLensSet(catalogueId);
     }
 
     // --- Lens set permissions (ADR-0005) -------------------------------------------------------
@@ -241,6 +276,12 @@ public class CataloguesController(
         await catalogueAdminService.FindOwningOrgNodeIdAsync(catalogueId, cancellationToken) is { } owningOrgNodeId
         && await IsAuthorizedAtAsync(owningOrgNodeId, AuthorizationPolicies.PresetCatalogueEditInScope, await OrgPathsAsync(cancellationToken));
 
+    /// <summary>Retired ones included. Assign and unassign are authorized against the org, not the
+    /// lens set, so nothing else has looked the lens set up; an id that names none goes back to
+    /// the list, as it does on the lens set's page.</summary>
+    private async Task<bool> LensSetExistsAsync(Guid catalogueId, CancellationToken cancellationToken) =>
+        await catalogueAdminService.FindOwningOrgNodeIdAsync(catalogueId, cancellationToken) is not null;
+
     /// <summary>Assign/unassign: the org must be at or below the caller. Which lens set doesn't
     /// matter — any active one may be assigned within the caller's own part of the tree.</summary>
     private async Task<bool> CanAssignToAsync(Guid orgNodeId, CancellationToken cancellationToken) =>
@@ -254,68 +295,100 @@ public class CataloguesController(
         (await unscopedReportQueryService.GetOrganisationNodePathsUnscopedAsync(cancellationToken))
             .ToDictionary(x => x.Id, x => x.HierarchyPath);
 
-    private async Task<CataloguesIndexViewModel> BuildViewModelAsync(string? search, CancellationToken cancellationToken, SaveLensRequest? reopenLensDialog = null)
+    private async Task<LensSetsListViewModel> BuildListAsync(string? search, LensSetStatusFilter status, CancellationToken cancellationToken)
     {
-        var catalogues = await catalogueAdminService.ListAsync(cancellationToken);
-        if (!string.IsNullOrWhiteSpace(search))
+        var lensSets = new List<PresetCatalogueAdminDto>();
+        if (status is not LensSetStatusFilter.Retired)
         {
-            // In-memory filter, not a DB-level Where — lens sets number in the tens at most, and
-            // ListAsync already loads every one every request; pushing this to SQL would add
-            // complexity with no real benefit at this volume.
-            catalogues = catalogues.Where(c => c.Name.Contains(search, StringComparison.OrdinalIgnoreCase)).ToList();
+            lensSets.AddRange(await catalogueAdminService.ListAsync(cancellationToken));
         }
-        var orgs = await organisationAdminService.ListAsync(cancellationToken);
+        if (status is not LensSetStatusFilter.Active)
+        {
+            lensSets.AddRange(await catalogueAdminService.ListRetiredAsync(cancellationToken));
+        }
 
-        var assignableOrgs = orgs
-            .Where(o => o.Level is OrganisationLevel.Intermediate or OrganisationLevel.RetailPoint)
-            .OrderBy(o => o.Name)
-            .Select(o => (o.Id, o.Name))
-            .ToList();
+        // In-memory filter and sort, not a DB-level Where — lens sets number in the tens at most.
+        var shown = lensSets
+            .Where(c => string.IsNullOrWhiteSpace(search) || c.Name.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase))
+            .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase);
+
+        var orgs = await OrgNodesAsync(cancellationToken);
+        var assignedCounts = await catalogueAdminService.CountAssignedOrgsAsync(cancellationToken);
+
+        var rows = new List<LensSetRow>();
+        foreach (var c in shown)
+        {
+            rows.Add(new LensSetRow(
+                c.Id, c.Name, c.Description,
+                orgs.Names.GetValueOrDefault(c.OwningOrgNodeId, "Unknown organisation"),
+                c.LensOptions.Count,
+                assignedCounts.GetValueOrDefault(c.Id),
+                c.IsRetired,
+                CanReactivate: c.IsRetired && await IsAuthorizedAtAsync(c.OwningOrgNodeId, AuthorizationPolicies.PresetCatalogueEditInScope, orgs.Paths)));
+        }
 
         var owningOrgOptions = (await userAssignmentsQueryService.ListDgiOrCountryAssignmentsAsync(currentUserContext.UserId!.Value, cancellationToken))
             .Select(o => (Id: o.OrgNodeId, o.Name))
             .ToList();
 
-        // Actions the caller would be refused aren't offered — the server re-checks every one
-        // regardless (CLAUDE.md: hidden-button UX is never the only guard).
-        var orgPaths = await OrgPathsAsync(cancellationToken);
-        var catalogueCards = new List<CatalogueCard>();
-        foreach (var c in catalogues)
-        {
-            var assignedOrgCards = new List<AssignedOrgCard>();
-            foreach (var a in await catalogueAdminService.ListAssignedOrgsAsync(c.Id, cancellationToken))
-            {
-                assignedOrgCards.Add(new AssignedOrgCard(a.OrgNodeId, a.OrgName,
-                    CanUnassign: await IsAuthorizedAtAsync(a.OrgNodeId, AuthorizationPolicies.PresetCatalogueAssignInScope, orgPaths)));
-            }
+        return new LensSetsListViewModel(rows, status, search, owningOrgOptions);
+    }
 
-            catalogueCards.Add(new CatalogueCard(
-                c.Id, c.Name, c.Description,
-                c.LensOptions.Select(LensOptionCard.From).ToList(),
-                assignedOrgCards,
-                CanEdit: await IsAuthorizedAtAsync(c.OwningOrgNodeId, AuthorizationPolicies.PresetCatalogueEditInScope, orgPaths)));
+    /// <summary>Null when no lens set has this id. Actions the caller would be refused aren't
+    /// offered — the server re-checks every one regardless (CLAUDE.md: hidden-button UX is never
+    /// the only guard) — and a retired lens set offers none but Reactivate.</summary>
+    private async Task<LensSetDetailsViewModel?> BuildDetailsAsync(
+        Guid catalogueId, CancellationToken cancellationToken, SaveLensRequest? reopenLensDialog = null)
+    {
+        if (await catalogueAdminService.FindAsync(catalogueId, cancellationToken) is not { } c)
+        {
+            return null;
         }
 
-        var retired = new List<RetiredCatalogueCard>();
-        foreach (var c in await catalogueAdminService.ListRetiredAsync(cancellationToken))
+        var orgs = await OrgNodesAsync(cancellationToken);
+        var mayEdit = await IsAuthorizedAtAsync(c.OwningOrgNodeId, AuthorizationPolicies.PresetCatalogueEditInScope, orgs.Paths);
+
+        var assignedOrgCards = new List<AssignedOrgCard>();
+        foreach (var a in await catalogueAdminService.ListAssignedOrgsAsync(c.Id, cancellationToken))
         {
-            retired.Add(new RetiredCatalogueCard(c.Id, c.Name,
-                CanReactivate: await IsAuthorizedAtAsync(c.OwningOrgNodeId, AuthorizationPolicies.PresetCatalogueEditInScope, orgPaths)));
+            assignedOrgCards.Add(new AssignedOrgCard(a.OrgNodeId, a.OrgName,
+                CanUnassign: !c.IsRetired && await IsAuthorizedAtAsync(a.OrgNodeId, AuthorizationPolicies.PresetCatalogueAssignInScope, orgs.Paths)));
         }
 
-        return new CataloguesIndexViewModel(
-            catalogueCards,
-            retired,
-            assignableOrgs,
-            owningOrgOptions,
-            search,
-            await BuildLensDialogAsync(reopenLensDialog, catalogues, cancellationToken));
+        var lensSet = new CatalogueCard(
+            c.Id, c.Name, c.Description,
+            orgs.Names.GetValueOrDefault(c.OwningOrgNodeId, "Unknown organisation"),
+            c.LensOptions.Select(LensOptionCard.From).ToList(),
+            assignedOrgCards.OrderBy(a => a.OrgName, StringComparer.OrdinalIgnoreCase).ToList(),
+            CanEdit: mayEdit && !c.IsRetired,
+            IsRetired: c.IsRetired,
+            CanReactivate: mayEdit && c.IsRetired);
+
+        IReadOnlyList<(Guid Id, string Name)> assignableOrgs = c.IsRetired
+            ? []
+            : (await organisationAdminService.ListAsync(cancellationToken))
+                .Where(o => o.Level is OrganisationLevel.Intermediate or OrganisationLevel.RetailPoint)
+                .Where(o => assignedOrgCards.All(a => a.OrgNodeId != o.Id))
+                .OrderBy(o => o.Name)
+                .Select(o => (o.Id, o.Name))
+                .ToList();
+
+        return new LensSetDetailsViewModel(lensSet, assignableOrgs, await BuildLensDialogAsync(reopenLensDialog, c.Name, cancellationToken));
+    }
+
+    /// <summary>One unscoped read serves both the permission checks (paths) and the owner's name:
+    /// a lens set's owning org usually sits above the caller, which a scoped query can't see
+    /// (CLAUDE.md's standing gotcha).</summary>
+    private async Task<(IReadOnlyDictionary<Guid, string> Paths, IReadOnlyDictionary<Guid, string> Names)> OrgNodesAsync(CancellationToken cancellationToken)
+    {
+        var orgNodes = await unscopedReportQueryService.GetOrganisationNodesUnscopedAsync(cancellationToken);
+        return (orgNodes.ToDictionary(x => x.Id, x => x.HierarchyPath), orgNodes.ToDictionary(x => x.Id, x => x.Name));
     }
 
     /// <summary>The dialog's choices come off the memoised snapshot: this is a page render, never
     /// the write path (the validator reads its own rows).</summary>
     private async Task<LensDialogViewModel> BuildLensDialogAsync(
-        SaveLensRequest? reopen, IEnumerable<PresetCatalogueAdminDto> catalogues, CancellationToken cancellationToken)
+        SaveLensRequest? reopen, string lensSetName, CancellationToken cancellationToken)
     {
         var referenceData = await referenceDataSnapshotProvider.GetAsync(cancellationToken);
         IReadOnlyList<LensDialogChoice> Active(Contracts.Common.ReferenceDataCategory category) =>
@@ -329,12 +402,12 @@ public class CataloguesController(
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        string? title = null;
-        if (reopen is not null)
+        var title = reopen switch
         {
-            var lensSetName = catalogues.FirstOrDefault(c => c.Id == reopen.CatalogueId)?.Name;
-            title = reopen.LensOptionId is null ? $"Add lens to {lensSetName}" : $"Edit lens in {lensSetName}";
-        }
+            null => null,
+            { LensOptionId: null } => $"Add lens to {lensSetName}",
+            _ => $"Edit lens in {lensSetName}",
+        };
 
         return new LensDialogViewModel(
             Active(Contracts.Common.ReferenceDataCategory.Coating),

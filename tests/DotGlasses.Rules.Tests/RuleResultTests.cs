@@ -26,13 +26,13 @@ public class RuleResultTests
     {
         var result = RuleResult.From(
         [
-            new RuleFailure("ReferralReasonRefId", "ReferralReasonRefId is required when ReferredOrTreated is true."),
+            new RuleFailure("ReferralReasonRefId", "Choose a reason for the referral or treatment."),
             new RuleFailure("ReferralLocationFreeText", "ReferralLocationFreeText is required unless TreatedInFacility is true."),
         ]);
 
         Assert.False(result.IsValid);
         Assert.Equal(["ReferralReasonRefId", "ReferralLocationFreeText"], result.Failures.Select(f => f.Key));
-        Assert.Equal("ReferralReasonRefId is required when ReferredOrTreated is true.", result.Failures[0].Message);
+        Assert.Equal("Choose a reason for the referral or treatment.", result.Failures[0].Message);
     }
 
     [Fact]
@@ -42,8 +42,8 @@ public class RuleResultTests
         // list per key — deduplicating here would silently drop the second message.
         var result = RuleResult.From(
         [
-            new RuleFailure("AxisRight", "AxisRight must be a whole number."),
-            new RuleFailure("AxisRight", "AxisRight must be between 0 and 180."),
+            new RuleFailure("AxisRight", "Axis (right) must be a whole number."),
+            new RuleFailure("AxisRight", "Axis (right) must be between 0 and 180."),
         ]);
 
         Assert.Equal(2, result.Failures.Count);
@@ -65,7 +65,7 @@ public class RuleResultTests
         IEnumerable<RuleFailure> Failures()
         {
             enumerations++;
-            yield return new RuleFailure("OccupationRefId", "OccupationRefId must reference an existing, active Occupation reference-data item.");
+            yield return new RuleFailure("OccupationRefId", "Choose an occupation from the list.");
         }
     }
 }

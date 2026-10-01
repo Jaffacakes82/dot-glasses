@@ -51,8 +51,8 @@ build. Ticket 23 is still open and needs a person on staging.
 **Shipped, 2026-09-29:** tickets 01, 02 and 05–10 are built. Tickets 01 and 02 shipped as the
 [multi-org access spec](../multi-org-access-and-retail-points/spec.md) (PR #30), and tickets 05–10
 as the [lens power spec](../lens-power-and-lens-sets/spec.md) (PR #31). Each spec's `issues/` folder
-records what each build ticket delivered, and its `run-plan.md` or PR lists what still needs a
-person: Field App browser checklists, and telling the CEO before lens sets are reset on staging.
+records what each build ticket delivered. The Field App browser checklists were run by hand on
+staging on 2026-10-01 and pass.
 
 - [How several org assignments combine into one user's access](issues/01-multi-org-access-model.md) — the Admin Portal uses the union of all assignments, and the Field App records at one remembered current location. "Primary org" is gone, and access is rechecked on every request. See ADR-0006.
 - [Recording tests, leads and sales only at retail points](issues/02-record-only-at-retail-points.md) — a current location must be an active retail point the user is *directly* assigned to, and the server enforces it. No new records at a deactivated retail point. A user with no retail point sees a "can't record here" screen. Dummy retail points need no marker.

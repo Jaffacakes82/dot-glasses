@@ -262,13 +262,13 @@ public class AccessControlPolicyTests(AccessControlFixture fixture) : IClassFixt
 
         // Its own country's lens set is the Kenya admin's to edit.
         var kenyaOwned = SeedLensSet(OrganisationSeedConfiguration.KenyaId);
-        AssertRedirectedTo("/Catalogues", await AccessControlFixture.PostFormAsync(countryAdmin, "/Catalogues/UpdateCatalogue",
+        AssertRedirectedTo($"/Catalogues/Details/{kenyaOwned}", await AccessControlFixture.PostFormAsync(countryAdmin, "/Catalogues/UpdateCatalogue",
             ("Id", kenyaOwned.ToString()), ("Name", $"Renamed {kenyaOwned:N}")));
 
         // And the DGI admin, above the owner, can edit the DGI-owned one — so the refusal above
         // is the ownership rule, not an unwritable lens set.
         var dgiAdmin = await fixture.SignInAsync(AccessControlFixture.DgiAdmin);
-        AssertRedirectedTo("/Catalogues", await AccessControlFixture.PostFormAsync(dgiAdmin, "/Catalogues/UpdateCatalogue",
+        AssertRedirectedTo($"/Catalogues/Details/{dgiOwned}", await AccessControlFixture.PostFormAsync(dgiAdmin, "/Catalogues/UpdateCatalogue",
             ("Id", dgiOwned.ToString()), ("Name", $"Renamed {dgiOwned:N}")));
     }
 
@@ -280,17 +280,17 @@ public class AccessControlPolicyTests(AccessControlFixture fixture) : IClassFixt
         var countryAdmin = await fixture.SignInAsync(AccessControlFixture.CountryAdmin);
 
         // Not the owner, but assigning only touches the Kenya admin's own part of the tree.
-        AssertRedirectedTo("/Catalogues", await AccessControlFixture.PostFormAsync(countryAdmin, "/Catalogues/AssignCatalogues",
-            ("OrgNodeId", OrganisationSeedConfiguration.KenyaRetailPointId.ToString()), ("CatalogueIds", dgiOwned.ToString())));
+        AssertRedirectedTo($"/Catalogues/Details/{dgiOwned}", await AccessControlFixture.PostFormAsync(countryAdmin, "/Catalogues/AssignCatalogue",
+            ("OrgNodeId", OrganisationSeedConfiguration.KenyaRetailPointId.ToString()), ("CatalogueId", dgiOwned.ToString())));
 
         // A retail point in another country is beside the caller, not beneath them.
-        AssertAccessDenied(await AccessControlFixture.PostFormAsync(countryAdmin, "/Catalogues/AssignCatalogues",
-            ("OrgNodeId", ugandaRetailPoint.ToString()), ("CatalogueIds", dgiOwned.ToString())));
+        AssertAccessDenied(await AccessControlFixture.PostFormAsync(countryAdmin, "/Catalogues/AssignCatalogue",
+            ("OrgNodeId", ugandaRetailPoint.ToString()), ("CatalogueId", dgiOwned.ToString())));
 
         // Unassigning follows the same rule, applied to the assignment's org.
         var dgiAdmin = await fixture.SignInAsync(AccessControlFixture.DgiAdmin);
-        AssertRedirectedTo("/Catalogues", await AccessControlFixture.PostFormAsync(dgiAdmin, "/Catalogues/AssignCatalogues",
-            ("OrgNodeId", ugandaRetailPoint.ToString()), ("CatalogueIds", dgiOwned.ToString())));
+        AssertRedirectedTo($"/Catalogues/Details/{dgiOwned}", await AccessControlFixture.PostFormAsync(dgiAdmin, "/Catalogues/AssignCatalogue",
+            ("OrgNodeId", ugandaRetailPoint.ToString()), ("CatalogueId", dgiOwned.ToString())));
         AssertAccessDenied(await AccessControlFixture.PostFormAsync(countryAdmin, "/Catalogues/UnassignCatalogue",
             ("catalogueId", dgiOwned.ToString()), ("orgNodeId", ugandaRetailPoint.ToString())));
     }
@@ -304,10 +304,19 @@ public class AccessControlPolicyTests(AccessControlFixture fixture) : IClassFixt
         var kenyaOwned = SeedLensSet(OrganisationSeedConfiguration.KenyaId);
 
         var countryAdmin = await fixture.SignInAsync(AccessControlFixture.CountryAdmin);
-        var html = await countryAdmin.GetStringAsync("/Catalogues");
+        // Each lens set has its own page.
+        var dgiOwnedHtml = await countryAdmin.GetStringAsync($"/Catalogues/Details/{dgiOwned}");
+        Assert.Contains($"Lenses in Lens set {dgiOwned:N}", dgiOwnedHtml);
+        Assert.DoesNotContain($"editCatalogueModal-{dgiOwned}", dgiOwnedHtml);
+        Assert.DoesNotContain("data-lens-add", dgiOwnedHtml);
+        Assert.Contains("Owned above your organisation", dgiOwnedHtml);
+        // Assigning it within the Kenya admin's own part of the tree is still offered.
+        Assert.Contains("/Catalogues/AssignCatalogue", dgiOwnedHtml);
 
-        Assert.DoesNotContain($"editCatalogueModal-{dgiOwned}", html);
-        Assert.Contains($"editCatalogueModal-{kenyaOwned}", html);
+        var kenyaOwnedHtml = await countryAdmin.GetStringAsync($"/Catalogues/Details/{kenyaOwned}");
+        Assert.Contains($"editCatalogueModal-{kenyaOwned}", kenyaOwnedHtml);
+        Assert.Contains("data-lens-add", kenyaOwnedHtml);
+        Assert.DoesNotContain("Owned above your organisation", kenyaOwnedHtml);
     }
 
     private Guid SeedLensSet(Guid owningOrgNodeId)

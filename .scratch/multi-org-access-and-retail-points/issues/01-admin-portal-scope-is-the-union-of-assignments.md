@@ -21,27 +21,27 @@ helper that collapses nested scope paths may also be unit-tested in `DotGlasses.
 
 ## Acceptance criteria
 
-- [ ] The current-user abstraction gains, per request: the user's **scope paths** (assignment
+- [x] The current-user abstraction gains, per request: the user's **scope paths** (assignment
       paths, with any path nested inside another removed), their **highest assigned level**, their
       role, and whether they are suspended. These are loaded from the database once per request and
       memoised for that request, never cached across requests. Claims supply only the user's identity.
-- [ ] Transitional (expand step): until ticket 08 removes it, the user's old active org counts as one
+- [x] Transitional (expand step): until ticket 08 removes it, the user's old active org counts as one
       of their assignments when building the scope, so no one loses access before that migration's
       backfill. The existing single-org members stay in place for the consumers other tickets
       migrate (Organisations, User Directory, Lens Sets creation, the Field App API).
-- [ ] The hierarchy filter shows a row when its `HierarchyPath` starts with *any* scope path, as one
+- [x] The hierarchy filter shows a row when its `HierarchyPath` starts with *any* scope path, as one
       SQL predicate over an array parameter (e.g. `LIKE ANY`), on the raw string column (ADR-0004).
       No scope paths → no rows.
-- [ ] Field App (JWT) requests keep today's scope (the token's org) for now — ticket 06 turns that
+- [x] Field App (JWT) requests keep today's scope (the token's org) for now — ticket 06 turns that
       into the validated current location. Cookie requests use the scope paths.
-- [ ] The level requirement checks the highest assigned level; the descendant requirement passes
+- [x] The level requirement checks the highest assigned level; the descendant requirement passes
       when the target sits under any scope path. The sidebar's per-policy nav hiding follows.
-- [ ] A cookie validation event runs on each request: a suspended or deleted user is signed out and
+- [x] A cookie validation event runs on each request: a suspended or deleted user is signed out and
       redirected to sign-in. A JWT-validated event runs the same lookup and returns 401 when the
       user is suspended.
-- [ ] Test fixtures seed at least one user with nested assignments (DGI plus a retail point under
+- [x] Test fixtures seed at least one user with nested assignments (DGI plus a retail point under
       it) and one with assignments in separate trees (two countries).
-- [ ] Web.Tests cover: a DGI-plus-retail-point user sees DGI-wide data; an overlapping record is
+- [x] Web.Tests cover: a DGI-plus-retail-point user sees DGI-wide data; an overlapping record is
       counted once on the Dashboard; a Country-plus-retail-point user reaches Custom Orders and Lens
       Sets; removing an assignment directly in the database shrinks the scope on the next request;
       a role change is reflected on the next request; suspension redirects the next Admin Portal

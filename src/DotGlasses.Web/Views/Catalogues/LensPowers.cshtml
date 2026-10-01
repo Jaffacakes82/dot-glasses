@@ -6,79 +6,45 @@
 <div class="dg-page-header">
     <div>
         <span class="dg-crumb">Configuration</span>
-        <h1 class="dg-page-title">Lens Powers</h1>
-    </div>
-    <a class="dg-btn dg-btn-ghost" asp-action="Index">Back to Lens Sets</a>
-</div>
-
-<p class="dg-crumb" style="margin-bottom:var(--space-5);">
-    Read-only. The values every lens power can take, and the validity rules a lens set's own
-    lenses and a custom prescription both follow — the same definition the Field App, the Add
-    lens dialog and the server all read.
-</p>
-
-<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-6);">
-    <div class="dg-card">
-        <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin-top:0; font-size:15px;">Sphere</h3>
-        <p class="dg-stat-label">Required on every lens.</p>
-        <div id="lens-power-sphere" style="display:flex; flex-wrap:wrap; gap:6px;">
-            @foreach (var value in Model.Sphere)
-            {
-                <span class="dg-badge">@value</span>
-            }
-        </div>
-    </div>
-
-    <div class="dg-card">
-        <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin-top:0; font-size:15px;">Cylinder</h3>
-        <p class="dg-stat-label">A blank cylinder means 0.00 — the shop sells no positive cylinder.</p>
-        <div id="lens-power-cylinder" style="display:flex; flex-wrap:wrap; gap:6px;">
-            @foreach (var value in Model.Cylinder)
-            {
-                <span class="dg-badge">@value</span>
-            }
-        </div>
-    </div>
-
-    <div class="dg-card">
-        <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin-top:0; font-size:15px;">Axis</h3>
-        <p class="dg-stat-label">Whole degrees. Asked only when the cylinder isn't 0.00.</p>
-        <div id="lens-power-axis" style="display:flex; flex-wrap:wrap; gap:6px; max-height:180px; overflow-y:auto;">
-            @foreach (var value in Model.Axis)
-            {
-                <span class="dg-badge">@value</span>
-            }
-        </div>
-    </div>
-
-    <div class="dg-card">
-        <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin-top:0; font-size:15px;">Add</h3>
-        <p class="dg-stat-label">A blank or 0.00 add is no add.</p>
-        <div id="lens-power-add" style="display:flex; flex-wrap:wrap; gap:6px;">
-            @foreach (var value in Model.Add)
-            {
-                <span class="dg-badge">@value</span>
-            }
-        </div>
-    </div>
-
-    <div class="dg-card">
-        <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin-top:0; font-size:15px;">Pupil distance</h3>
-        <p class="dg-stat-label">Whole millimetres, on a Custom prescription. A lens set records a coarse bucket instead.</p>
-        <div id="lens-power-pupil-distance" style="display:flex; flex-wrap:wrap; gap:6px;">
-            @foreach (var value in Model.PupilDistanceMm)
-            {
-                <span class="dg-badge">@value</span>
-            }
-        </div>
+        <h1 class="dg-page-title">Lens Sets</h1>
     </div>
 </div>
 
+<partial name="_LensSetTabs" model="true" />
+
+@* Every list, value and range summary is LensPowerValues' (built in CataloguesController.LensPowers);
+   nothing here states a bound of its own. *@
 <div class="dg-card">
-    <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin-top:0; font-size:15px;">Validity rules</h3>
+    <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin-top:0;">Allowed lens powers</h3>
+    <p style="color:var(--text-muted-2); font-size:13px;">
+        The values every lens set's lenses and every custom prescription can use — the same
+        definition the Field App, the Add lens dialog and the server all read. This page is
+        <strong>read-only</strong>: changing these values needs a new release of both apps.
+    </p>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:var(--space-4);">
+        @foreach (var list in Model.Lists)
+        {
+            <div>
+                <h4 style="font-size:14px; font-weight:800; margin-bottom:4px;">@list.Title</h4>
+                <p style="color:var(--text-muted-2); font-size:13px; margin:0 0 6px;">@list.Summary</p>
+                <div id="@list.ElementId" class="dg-value-list" tabindex="0" role="group" aria-label="@list.Title values">
+                    <ul>
+                        @foreach (var value in list.Values)
+                        {
+                            <li>@value</li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        }
+    </div>
+
+    <h4 style="margin-top:var(--space-5); font-size:15px; font-weight:800;">Rules</h4>
     <ul style="margin:0; padding-left:20px; color:var(--text-muted-2); font-size:14px; line-height:1.7;">
         <li>Sphere is required on every lens.</li>
         <li>Axis is asked only when the cylinder isn't 0.00 — required then, and refused otherwise.</li>
         <li>Lens type (Bifocal, Progressive or Other) is asked only when the add is above 0.00 — a blank or 0.00 add means single vision, and no lens type is asked; "Other" needs its own free text.</li>
+        <li>Pupil distance is one value for the pair on a Custom prescription. It isn't part of a lens: a lens set records a coarse bucket instead.</li>
     </ul>
 </div>

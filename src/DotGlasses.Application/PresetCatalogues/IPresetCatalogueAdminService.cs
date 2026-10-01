@@ -14,8 +14,15 @@ public interface IPresetCatalogueAdminService
     /// <summary>Every catalogue, with its lens roster (label-resolved) and assignment count.</summary>
     Task<IReadOnlyList<PresetCatalogueAdminDto>> ListAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>Retired lens sets only — listed apart so they can be found and reactivated.</summary>
+    /// <summary>Retired lens sets only — so they can be found and reactivated.</summary>
     Task<IReadOnlyList<PresetCatalogueAdminDto>> ListRetiredAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>One lens set, retired or not, or null if there is none with this id.</summary>
+    Task<PresetCatalogueAdminDto?> FindAsync(Guid catalogueId, CancellationToken cancellationToken = default);
+
+    /// <summary>How many orgs each lens set is directly assigned to — not the outlets an
+    /// assignment reaches. A lens set with no assignment is absent.</summary>
+    Task<IReadOnlyDictionary<Guid, int>> CountAssignedOrgsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>A soft delete: the lens set stops being offered anywhere (Field App, assign form)
     /// but stays resolvable on the historical records that name it, and keeps its assignments so
@@ -45,6 +52,7 @@ public interface IPresetCatalogueAdminService
     /// of defence — see PresetCatalogue's own doc comment for why it must be Dgi/Country.</summary>
     Task<PresetCatalogueAdminDto> CreateAsync(string name, string? description, Guid owningOrgNodeId, CancellationToken cancellationToken = default);
 
+    /// <summary>A retired lens set is refused.</summary>
     Task UpdateAsync(Guid id, string name, string? description, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -66,7 +74,7 @@ public interface IPresetCatalogueAdminService
 
     /// <summary>Hard remove, taking the lens's coatings and pairings with it (cascade). A record
     /// keeps its own copy of what was sold (ADR-0007), so nothing needs preserving; a record that
-    /// still names the lens by id just shows it as missing.</summary>
+    /// still names the lens by id just shows it as missing. A retired lens set's lens is refused.</summary>
     Task RemoveLensOptionAsync(Guid lensOptionId, CancellationToken cancellationToken = default);
 
     /// <summary>No-op (not an error) if this exact catalogue/org pairing is already assigned —
@@ -79,7 +87,8 @@ public interface IPresetCatalogueAdminService
     /// genuinely not this caller's to manage, unlike resolving an ancestor's name.</summary>
     Task<IReadOnlyList<PresetCatalogueAssignmentAdminDto>> ListAssignedOrgsAsync(Guid catalogueId, CancellationToken cancellationToken = default);
 
-    /// <summary>No-op (not an error) if the pairing doesn't exist.</summary>
+    /// <summary>No-op (not an error) if the pairing doesn't exist. A retired lens set is refused:
+    /// its assignments are kept as they were, so reactivating restores them.</summary>
     Task UnassignCatalogueFromOrgAsync(Guid catalogueId, Guid orgNodeId, CancellationToken cancellationToken = default);
 }
 
@@ -88,7 +97,8 @@ public record PresetCatalogueAdminDto(
     string Name,
     string? Description,
     Guid OwningOrgNodeId,
-    IReadOnlyList<PresetCatalogueLensOptionAdminDto> LensOptions);
+    IReadOnlyList<PresetCatalogueLensOptionAdminDto> LensOptions,
+    bool IsRetired = false);
 
 /// <summary>One lens set lens as the Lens Sets screen lists it (ADR-0007): its label and lens
 /// power, its lens type (<see cref="LensTypeLabel"/> null means single vision), and its coatings
