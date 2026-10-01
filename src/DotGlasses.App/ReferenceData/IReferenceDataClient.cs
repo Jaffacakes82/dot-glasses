@@ -24,9 +24,13 @@ public interface IReferenceDataClient
     /// <summary>When the cached copy was last refreshed from the server, if it came from cache.</summary>
     DateTimeOffset? CachedAtUtc { get; }
 
-    Task EnsureLoadedAsync();
-
-    /// <summary>Forces a re-fetch even when data is already loaded — the Retry action.</summary>
+    /// <summary>
+    /// Loads for the signed-in technician's current location, fetching fresh whenever the server
+    /// answers. Call it when a form opens (and from Retry) — not while one is being filled in, so
+    /// its options don't change under the technician. A failed fetch keeps the copy this session
+    /// already holds, else uses the cached one. Sign-in, sign-out and a location switch discard
+    /// the held copy, so there is no "already loaded" shortcut to go stale.
+    /// </summary>
     Task RefreshAsync();
 
     IReadOnlyList<ReferenceDataItemDto> GetByCategory(ReferenceDataCategory category);
