@@ -13,7 +13,6 @@ public class CataloguesScreenWordingTests(AdminPortalFactory factory) : IClassFi
         var html = await factory.CreateAdminClient().GetStringAsync("/Catalogues");
 
         Assert.Contains("Create lens set", html);
-        Assert.Contains("Assign lens sets to a retailer", html);
         // The screen's own copy, not any word that happens to appear on the page — a lens set may
         // legitimately be *named* anything.
         Assert.DoesNotContain("Create package", html);

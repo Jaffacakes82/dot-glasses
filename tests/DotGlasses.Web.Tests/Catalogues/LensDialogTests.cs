@@ -95,7 +95,7 @@ public class LensDialogTests(AdminPortalFactory factory) : IClassFixture<AdminPo
     [Fact]
     public async Task TheDialogsDropdowns_AreTheRulesAllowedValues_InTheShopsOrder()
     {
-        var html = await factory.CreateAdminClient().GetStringAsync("/Catalogues");
+        var html = await factory.CreateAdminClient().GetStringAsync($"/Catalogues/Details/{DotGlasses.Infrastructure.Persistence.ExampleLensSets.SixLensSetId}");
         var dialog = Dialog(html);
 
         IReadOnlyList<string> Options(string name)
@@ -125,7 +125,7 @@ public class LensDialogTests(AdminPortalFactory factory) : IClassFixture<AdminPo
             }
         });
 
-        var dialog = VisibleText(Dialog(await factory.CreateAdminClient().GetStringAsync("/Catalogues")));
+        var dialog = VisibleText(Dialog(await factory.CreateAdminClient().GetStringAsync($"/Catalogues/Details/{DotGlasses.Infrastructure.Persistence.ExampleLensSets.SixLensSetId}")));
 
         Assert.Contains("Spherical power", dialog);
         Assert.Contains("Cylindrical power", dialog);
@@ -177,7 +177,7 @@ public class LensDialogTests(AdminPortalFactory factory) : IClassFixture<AdminPo
             ("CoatingIds", Clear.ToString()));
 
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
-        Assert.Contains("-2.00 astig SPH -2.00 · CYL -0.75 × 90 Single vision Clear —", TableFor(await client.GetStringAsync($"/Catalogues?catalogueId={lensSetId}"), lensSetName));
+        Assert.Contains("-2.00 astig SPH -2.00 · CYL -0.75 × 90 Single vision Clear —", TableFor(await client.GetStringAsync($"/Catalogues/Details/{lensSetId}"), lensSetName));
     }
 
     [Fact]
@@ -208,7 +208,7 @@ public class LensDialogTests(AdminPortalFactory factory) : IClassFixture<AdminPo
             Assert.Equal(HttpStatusCode.Found, (await SaveAsync(client, [.. fields])).StatusCode);
         }
 
-        var labels = Regex.Matches(TableFor(await client.GetStringAsync($"/Catalogues?catalogueId={lensSetId}"), lensSetName), @"(-0\.50|\+1\.50|Bifocal \+1\.00|Bifocal \+2\.00|Progressive \+1\.00) SPH")
+        var labels = Regex.Matches(TableFor(await client.GetStringAsync($"/Catalogues/Details/{lensSetId}"), lensSetName), @"(-0\.50|\+1\.50|Bifocal \+1\.00|Bifocal \+2\.00|Progressive \+1\.00) SPH")
             .Select(m => m.Groups[1].Value);
         Assert.Equal(["-0.50", "+1.50", "Bifocal +1.00", "Bifocal +2.00", "Progressive +1.00"], labels);
     }
@@ -227,7 +227,7 @@ public class LensDialogTests(AdminPortalFactory factory) : IClassFixture<AdminPo
 
         // The Edit button carries the lens as it is, as the dialog's own option values, for the
         // dialog to open with.
-        var before = await client.GetStringAsync($"/Catalogues?catalogueId={lensSetId}");
+        var before = await client.GetStringAsync($"/Catalogues/Details/{lensSetId}");
         var editData = Regex.Match(before, $"data-lens=\"([^\"]*{lensId}[^\"]*)\"");
         Assert.True(editData.Success, "No Edit button for the lens.");
         using (var lens = JsonDocument.Parse(WebUtility.HtmlDecode(editData.Groups[1].Value)))
@@ -266,7 +266,7 @@ public class LensDialogTests(AdminPortalFactory factory) : IClassFixture<AdminPo
             ("CoatingIds", Photochromic.ToString()));
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
 
-        var table = TableFor(await client.GetStringAsync($"/Catalogues?catalogueId={lensSetId}"), lensSetName);
+        var table = TableFor(await client.GetStringAsync($"/Catalogues/Details/{lensSetId}"), lensSetName);
         Assert.Contains("Readers +2.75 SPH +2.75 Single vision Photochromic —", table);
         Assert.Contains("+3.00 SPH +3.00", table);
         Assert.DoesNotContain("+2.50", table);
@@ -397,7 +397,7 @@ public class LensDialogTests(AdminPortalFactory factory) : IClassFixture<AdminPo
             ("CoatingIds", Clear.ToString()));
 
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
-        Assert.Contains("Progressive +2.00 SPH 0.00 · ADD +2.00 Progressive", TableFor(await client.GetStringAsync($"/Catalogues?catalogueId={lensSetId}"), lensSetName));
+        Assert.Contains("Progressive +2.00 SPH 0.00 · ADD +2.00 Progressive", TableFor(await client.GetStringAsync($"/Catalogues/Details/{lensSetId}"), lensSetName));
     }
 
     [Fact]
@@ -418,7 +418,7 @@ public class LensDialogTests(AdminPortalFactory factory) : IClassFixture<AdminPo
 
         var saved = await SaveAsync(client, Lens("Trifocal"));
         Assert.Equal(HttpStatusCode.Found, saved.StatusCode);
-        Assert.Contains("Trifocal +1.50 SPH 0.00 · ADD +1.50 Trifocal Clear", TableFor(await client.GetStringAsync($"/Catalogues?catalogueId={lensSetId}"), lensSetName));
+        Assert.Contains("Trifocal +1.50 SPH 0.00 · ADD +1.50 Trifocal Clear", TableFor(await client.GetStringAsync($"/Catalogues/Details/{lensSetId}"), lensSetName));
     }
 
     [Fact]

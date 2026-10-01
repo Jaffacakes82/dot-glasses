@@ -32,7 +32,7 @@ public class LensSetLensTableTests(AdminPortalFactory factory) : IClassFixture<A
     [Fact]
     public async Task EachLensShowsItsLabel_LensPower_LensType_Coatings_AndPairings()
     {
-        var html = await factory.CreateAdminClient().GetStringAsync($"/Catalogues?catalogueId={ExampleLensSets.SixLensSetId}");
+        var html = await factory.CreateAdminClient().GetStringAsync($"/Catalogues/Details/{ExampleLensSets.SixLensSetId}");
 
         Assert.Contains($"aria-label=\"Lenses in 6-Lens Set\"", html);
         var text = VisibleText(html);
@@ -49,7 +49,7 @@ public class LensSetLensTableTests(AdminPortalFactory factory) : IClassFixture<A
     [Fact]
     public async Task TheGlobalCoatingGrid_AndTheLensStrengthPicker_AreGone()
     {
-        var html = await factory.CreateAdminClient().GetStringAsync("/Catalogues");
+        var html = await factory.CreateAdminClient().GetStringAsync($"/Catalogues/Details/{ExampleLensSets.SixLensSetId}");
 
         Assert.DoesNotContain("coating availability", html, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("lens strength", html, StringComparison.OrdinalIgnoreCase);
@@ -88,7 +88,7 @@ public class LensSetLensTableTests(AdminPortalFactory factory) : IClassFixture<A
             LensSetTestData.AddSellableLens(db, lensSetId, label: "+0.75", sphere: 0.75m);
         });
         var client = factory.CreateAdminClient();
-        Assert.Contains("-1.75 SPH -1.75", CardFor(await client.GetStringAsync($"/Catalogues?catalogueId={lensSetId}"), lensSetName));
+        Assert.Contains("-1.75 SPH -1.75", CardFor(await client.GetStringAsync($"/Catalogues/Details/{lensSetId}"), lensSetName));
 
         var token = await AdminPortalFactory.GetAntiforgeryTokenAsync(client, "/Catalogues");
         var (_, html) = await AdminPortalFactory.PostAndFollowAsync(client, "/Catalogues/RemoveLensOption",
