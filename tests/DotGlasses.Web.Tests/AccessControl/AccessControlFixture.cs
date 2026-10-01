@@ -97,7 +97,7 @@ public class AccessControlFixture : IAsyncLifetime
     /// same one character that separates "/1/2/30/" from "/1/2/3/".</summary>
     public Guid SiblingResellerTargetUserId { get; private set; }
 
-    public async Task InitializeAsync()
+    public virtual async Task InitializeAsync()
     {
         // Starts the throwaway Postgres container and applies the real migration chain. Without
         // this the factory's connection string points at an unstarted container.
