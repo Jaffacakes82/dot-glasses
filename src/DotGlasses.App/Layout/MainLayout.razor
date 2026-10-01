@@ -11,12 +11,19 @@
    inline, but every other signed-in screen (Leads, Settings, Failed records…) had no such chrome
    at all. Hidden on the three screens where there either is no current location yet or the
    technician is actively choosing one (Login/NoLocation/OutletSelect) — showing a location line
-   there would either be blank or state something that isn't actually current yet. *@
-@if (_showLocationBar)
+   there would either be blank or state something that isn't actually current yet.
+
+   It is also the Field App's one sign-in / current-location gate (FieldAppAccessGate): every page
+   renders through @Body here, so the page is simply not rendered while the gate says redirect —
+   a form never flashes for a user who isn't allowed it. *@
+@if (_redirectTo is null)
 {
-    <div class="dg-location-bar">Recording at @TokenStore.CurrentLocationName</div>
+    @if (_showLocationBar)
+    {
+        <div class="dg-location-bar">Recording at @TokenStore.CurrentLocationName</div>
+    }
+    @Body
 }
-@Body
 
 @code {
     // Route-relative paths (no leading/trailing slash) this bar is hidden on — matches the @page
@@ -24,6 +31,7 @@
     private static readonly string[] HiddenOnPaths = ["login", "no-location", "outlet-select"];
 
     private bool _showLocationBar;
+    private string? _redirectTo;
 
     protected override void OnInitialized()
     {
@@ -33,6 +41,10 @@
         Navigation.LocationChanged += OnLocationChanged;
         Refresh();
     }
+
+    // The layout is re-parameterised (new Body) on every route change, before the new page is
+    // built — so the gate is decided before any gated page can render.
+    protected override void OnParametersSet() => Refresh();
 
     private void OnTokenStoreChanged()
     {
@@ -48,7 +60,22 @@
 
     private void Refresh()
     {
-        var relativePath = Navigation.ToBaseRelativePath(Navigation.Uri).Trim('/').ToLowerInvariant();
+        var uri = Navigation.ToBaseRelativePath(Navigation.Uri);
+
+        var redirect = FieldAppAccessGate.RedirectFor(uri, TokenStore.IsAuthenticated, TokenStore.CurrentLocationId is not null);
+        if (redirect is null)
+        {
+            _redirectTo = null;
+        }
+        else if (_redirectTo != redirect)
+        {
+            // Hold the page back and move on. Re-evaluated when the navigation lands (the gate
+            // never redirects to a target it would itself refuse, so this cannot loop).
+            _redirectTo = redirect;
+            Navigation.NavigateTo(redirect, replace: true);
+        }
+
+        var relativePath = uri.Trim('/').ToLowerInvariant();
         var hidden = Array.Exists(HiddenOnPaths, p => relativePath == p || relativePath.StartsWith(p + "/", StringComparison.Ordinal));
         _showLocationBar = !hidden && TokenStore.CurrentLocationName is not null;
     }
