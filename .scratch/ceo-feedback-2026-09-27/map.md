@@ -22,14 +22,33 @@ where they qualify. This map is for planning only; nothing is implemented from i
 - Day 2 items are deprioritised (see Out of scope).
 - **Before go-live (for the handover):** production will have no active lens sets after the lens
   redesign ships (ticket 09). DGI must build the real ones on the new screen first. The same
-  handover should ask DGI to review the coating list against the online shop's (ticket 07).
+  handover should ask DGI to review the coating list against the online shop's (ticket 07). Once
+  ticket 15 is built, DGI must also enter the children's frame colours and pictures; until then a
+  children's frame can only be sold with the colour "Other". Once ticket 16 is built, DGI should
+  also re-upload the six adult frame pictures, which otherwise load from the online shop and
+  don't show offline.
 - The shared checkout is used by other sessions, so map edits happen on a branch in a worktree.
 
 ## Decisions so far
 
 <!-- one line per resolved ticket: [title](issues/NN-slug.md) — gist -->
 
-**Shipped, 2026-09-29:** every decision below is built. Tickets 01 and 02 shipped as the
+**Specified, 2026-10-01, not yet built:** the decisions marked "Not yet built" below are grouped
+into four specs, each with build tickets in its `issues/` folder:
+- [Spec C — Managing users and organisations](../user-and-org-management/spec.md): tickets 03, 04,
+  17, 18 and 20.
+- [Spec D — Recording forms and wording](../recording-forms-and-wording/spec.md): tickets 13, 14
+  and 22.
+- [Spec E — Frame colours and their pictures](../frame-colours-and-pictures/spec.md): tickets 15
+  and 16.
+- [Spec F — Custom orders and reporting](../custom-orders-and-reporting/spec.md): tickets 11, 12
+  and 21. See ADR-0008.
+
+Suggested order: Spec D's tickets 01–04 first (they move the most of the recording form and its
+rules), then E and F, with C alongside since it touches different screens. Ticket 19 needs no
+build. Ticket 23 is still open and needs a person on staging.
+
+**Shipped, 2026-09-29:** tickets 01, 02 and 05–10 are built. Tickets 01 and 02 shipped as the
 [multi-org access spec](../multi-org-access-and-retail-points/spec.md) (PR #30), and tickets 05–10
 as the [lens power spec](../lens-power-and-lens-sets/spec.md) (PR #31). Each spec's `issues/` folder
 records what each build ticket delivered, and its `run-plan.md` or PR lists what still needs a
@@ -44,14 +63,26 @@ person: Field App browser checklists, and telling the CEO before lens sets are r
 - [How the Field App captures a lens after the redesign](issues/10-field-app-lens-capture.md) — a lens set uses one "Lens" dropdown with "Same lens for both eyes" ticked by default, and shows the chosen lens's power underneath. Custom copies the shop, with an axis dropdown only when there's a cylinder. Choices are ticks, never dropdowns. The section runs lens → children's frame → PD → coatings → order. A converted Lead's lens is matched by power.
 - [The lens option ranges the Dot Glasses e-commerce site offers](issues/05-custom-lens-option-ranges.md) — sphere (±10) and add (0 to 3) match the Field App. Cylinder doesn't: the site offers 0 to -6 only. The site also requires an axis of 0–180, asks lens type only when add is above 0, and has a different coating list.
 
+- [Editing a user's role and org assignments](issues/03-edit-user-role-and-scope.md) — a dedicated Edit user page for role, org assignments and full name, with one Save that applies only what the admin changed. A user partly outside the admin's scope has a read-only role and a count of hidden orgs. An admin can't change their own role, and can change their own assignments only if their scope doesn't shrink. Invite and Edit share an indented org tree picker. Not yet built.
+- [Assigning several users to an org at once](issues/04-assign-many-users-at-once.md) — the Organisations screen's Assign users dialog becomes a filterable checkbox list of Active users, assigned to one org in one transaction, with each user's role shown and a line saying what the assignment grants. Unassigning stays one at a time, with a confirmation at a retail point. Not yet built.
+- [Ordering a custom lens from a lead](issues/11-custom-lens-leads-can-order.md) — a custom order becomes its own record, placed when a Lead or a Sale is recorded and pointing back to it. An ordering Lead must hold a complete lens and a full coating set. A Sale converted from an ordered Lead shares the order with its lens locked. The queue marks unpaid orders, and the dashboard counts orders rather than Sales. Not yet built.
+- [Event History: lens power columns and the training-org marker](issues/12-event-history-columns.md) — the Sales and Leads tabs get Lens range, Lens power LE and Lens power RE columns in the existing one-line format. The CSV gets a column per value, plus lens type and coatings. A "Training" badge marks rows the dashboard leaves out, with a matching CSV column and no filter. Not yet built.
+- [Question order and optional fields on the consultation forms](issues/13-consultation-form-order.md) — every form opens Age, Gender, Occupation and ends with "Referred or treated" (on a Test, just before the contact-details question). A Test continued into a Lead offers its referral answers as starting values. Referral location becomes optional; nothing else does. The Admin Portal's conversion form follows the same order. Not yet built.
+- ["Customer aware of price": leads only, and never blocking](issues/14-customer-aware-of-price.md) — the step after Save is removed from both forms. The Lead form asks "Has the customer been told the price?" as a required Yes or No after "Reason not purchased", and stores the answer. Event History's Leads tab and CSV show it. A Sale no longer asks. Not yet built.
+- [Separate frame colours for adult and child frames](issues/15-adult-and-child-frame-colours.md) — two reference data lists, adult and child, each with its own pictures. The current colours become the adult list, and the child list starts with "Other" only. The forms offer the list matching the "children's frame" tick and the server enforces it. Dot colour isn't recorded. Not yet built.
+- [Reference data images: URL or upload](issues/16-reference-data-images.md) — upload only, into the existing blob container: PNG, JPEG or WebP up to 1 MB, for the frame colour lists. The container stays private and the Admin Portal serves the pictures. The Field App keeps copies for offline use. The six existing shop addresses work until replaced. Not yet built.
+- [Organisation "Kind" as a managed dropdown](issues/17-organisation-kind-dropdown.md) — Kind is removed altogether; nothing read it. The level labels become "Retail Point" and "Retailer/distributor" wherever a level is shown. Not yet built.
+- [Deactivating and reactivating an org with sub-orgs](issues/18-cascading-deactivation.md) — deactivating takes everything beneath it, after a confirmation with counts. Reactivating restores what went with it, and is refused while the org directly above is deactivated. Nothing is re-parented. Data stays in the reports under the real name marked "(deactivated)". Not yet built.
+- [A default or remembered lens set](issues/19-default-lens-set.md) — no change. A new Sale still has no starting lens range. An admin-set default, remembering the last one used and starting on the first in the list were each considered and turned down.
+- [Forgot password on the sign-in pages](issues/20-forgot-password.md) — both sign-in pages get it, the Field App through its own screen. The link goes by email only, to the existing set-password page, and returns the person to the app they came from. The same message is shown for any address; suspended accounts get no email. One day, single use, one email per account every five minutes. Not yet built.
+- [Dashboard gaps against the demo app](issues/21-dashboard-vs-demo-app.md) — Country and Retailer filters are added; Retail-point type is not. "Top performing" rows show Tests, Leads, Sales and Conversion, with conversion worked out as the tiles do so it can't exceed 100%, and a switch to rank by sales or conversion. A referral counts once per customer journey. Not yet built.
+- [Plain, friendly prompts and error messages](issues/22-user-facing-wording.md) — every error message a person can see in either app is reworded to one voice: say what to do, in the screen's own words. Unreachable rule failures share one plain message per group. "Username" becomes "email", and the location-switch message tells offline apart from failure. English only. Not yet built.
+
 ## Not yet specified
 
-- **Ticket 03's form work** follows the rules the multi-org access spec set. The server already
-  has a change-role endpoint with no form behind it.
-- **Custom Orders after the redesign.** If custom lenses come from the lens database and leads can
-  order, the Custom Orders queue and its fulfilment status may need to change shape.
 - **MI that doesn't tally.** The call expects small reporting discrepancies after these changes.
-  They can't be named until the dashboard ticket and the data changes land.
+  Ticket 21 settled the two found by reading the code (referrals counted more than once, and
+  conversion above 100%). Any others can't be named until the changes are on staging.
 
 ## Out of scope
 

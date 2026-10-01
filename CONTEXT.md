@@ -12,7 +12,8 @@ Block, Clear, Sunglasses). How many Coatings a record carries depends on the rec
 **Coating set** and **Coating preference**, which are different concepts and not interchangeable.
 
 **Coating set**:
-The Coatings applied to the lens on a **Sale** — a set, not a single value, because one lens can
+The Coatings applied to the lens on a **Sale**, or on a **Lead** that places a **Custom order** —
+a set, not a single value, because one lens can
 carry more than one at once (e.g. Blue Block + Photochromic together). There is one set for the
 pair of glasses, not one per eye. On a **Lens set**, only Coatings that both chosen lenses come in
 are offered, and both lenses' pairings apply. On a **Custom prescription**, any active Coating is
@@ -22,9 +23,10 @@ _Avoid_: treating a Sale's Coating as a single-select field — that was the pre
 **Coating preference**:
 The single Coating a customer expressed interest in on a **Test** or **Lead** — an intention
 recorded before any lens exists, and deliberately weaker than a Coating set. Converting to a Sale
-seeds the Coating set from it; a Test or Lead never carries a set of its own.
-_Avoid_: calling this a Coating set, or assuming ADR-0001's set model extends to Test/Lead — it
-describes the Sale only (2026-09-04).
+seeds the Coating set from it. A Test never carries a set of its own, and a Lead carries one only
+when it places a **Custom order**, because the lab makes what was ordered (2026-10-01).
+_Avoid_: calling this a Coating set, or assuming ADR-0001's set model extends to every Test and
+Lead — it describes the Sale, and a Lead that orders (2026-09-04, revised 2026-10-01).
 
 **Coating pairing**:
 A directional rule on one lens in a **Lens set**: selecting one Coating automatically adds a
@@ -49,6 +51,14 @@ retail point the user is directly assigned to; being assigned to an org above it
 is remembered per device. Only the Field App has one; the Admin Portal works across the user's
 whole **Scope** instead (2026-09-28).
 _Avoid_: "active org" or "primary org" for the Admin Portal, which has no single org.
+
+**Custom order**:
+A request for DOT Glasses to make a Custom-range lens for a **Retail point**. It is placed when a
+Lead or a Sale is recorded, never afterwards, and a Sale converted from a Lead that already ordered
+shares that order. It moves through Submitted, In Lab, Ready for Pickup and Fulfilled. An order
+placed from a Lead is unpaid until that Lead converts (2026-10-01).
+_Avoid_: treating a custom order as a kind of Sale — it is its own thing, and may exist with no
+Sale at all.
 
 **Lens power**:
 The prescription of one eye's lens: sphere, cylinder, axis and add. A lens power is a value, not
@@ -94,9 +104,11 @@ outcome/result. When true, a `ReferralReasonRefId` (FK to `ReferenceDataItem`, C
 ReferralReason) is required regardless of `TreatedInFacility`. `TreatedInFacility` distinguishes
 "treated in-house by the facility's own staff" from "referred out elsewhere": when true, the
 `ReferralLocationFreeText` field is suppressed (there's no external location to name); when
-false, it's required. Because Test/Lead/Sale are separate create-once events with no update
-endpoint, the same real-world referral may legitimately be (re)recorded at more than one stage of
-a converting Test → Lead → Sale journey — nothing carries forward automatically between them.
+false, it may be given but isn't required (optional since 2026-10-01). Because Test/Lead/Sale are
+separate create-once events with no update endpoint, the same real-world referral may legitimately
+be (re)recorded at more than one stage of a converting Test → Lead → Sale journey. Each record
+keeps its own answer; a Test continued into a Lead only offers its answers as the Lead form's
+starting values (2026-10-01).
 _Avoid_: "Referred" as a `TestOutcome` value — that member was retired; `TestOutcome` now only
 distinguishes `NoGlassesNeeded`/`NeedsGlasses`. Also avoid inferring "referred" from
 `ReferralReasonRefId != null` — `ReferredOrTreated` is the explicit source of truth.

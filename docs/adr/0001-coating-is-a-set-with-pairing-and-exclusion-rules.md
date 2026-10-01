@@ -5,6 +5,10 @@
 > prescriptions have none. Exclusions remain global, as below. `LensStrengthCoatingOption` is
 > replaced by the coatings each lens-set entry lists.
 
+> **Refined by [ADR-0008](0008-a-custom-order-is-its-own-record.md) (2026-10-01).** A Lead that
+> places a custom order carries a coating set too, because the lab makes what was ordered. A Lead
+> that doesn't order keeps its single coating preference.
+
 > **Scope correction (2026-09-04).** As written below, this ADR says "a Sale/Lead's lens" carries
 > a set. That is too broad: the set model applies to the **Sale only**. A `Test` or `Lead` records
 > a single **Coating preference** — an intention captured before any lens exists — which seeds the

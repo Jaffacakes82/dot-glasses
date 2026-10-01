@@ -385,7 +385,6 @@ page/tab links.
 **Not built**
 - No outlet, country or technician filters — date range and (Leads-only) name search are the only
   filters.
-- No export.
 - No row detail view — you cannot open the underlying Test, Lead or Sale from here (except Leads'
   convert-to-sale action, which is a write path, not a detail view).
 - Training-org data is included here (unlike the Dashboard).
@@ -1130,8 +1129,9 @@ product constraint (see `open-issues.md`), not an oversight.
 within an outlet, never listed, searched, edited or merged. Near-duplicates (a phone typed with
 and without a country code) silently become two customers.
 
-**No export or reporting output** of any kind, from any screen — deliberately deprioritised; see
-`open-issues.md` for the binding consent requirement that applies whenever it is eventually built.
+**CSV export** exists on Event History (one per tab, following the current search and date range),
+Organisations and Custom Orders. The Dashboard has none, and there are no scheduled or emailed
+reports.
 
 **No audit trail is surfaced.** Created/modified user and timestamp are captured on every entity
 but no screen displays them.

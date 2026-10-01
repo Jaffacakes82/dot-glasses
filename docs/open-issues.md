@@ -167,6 +167,11 @@ machine" rule.
   locked against each other, so two racing requests can each see one assignment left (of two) and
   both proceed. Accepted as unlikely (ticket 03); revisit if it's ever seen in practice.
 
+- **No history of who changed a user's role or org assignments.** These changes take effect on the
+  user's next request and nothing in the portal shows who made them. The Edit user page (CEO
+  feedback ticket 03, not yet built) is specified to write an application log entry per change and
+  no more; a change-history screen was left out as its own piece of work.
+
 ## Real, visible interim gaps (the system tells the user, doesn't hide it)
 
 - **`FrameColour`'s seeded "Other" row** is an assumption made while seeding reference data, not
