@@ -37,11 +37,65 @@ Field App API; (c) a Retail Point `User` with a valid location, on the Admin Por
 - Fixes for anything found, each keeping data scoping and RBAC separate.
 
 **Acceptance criteria:**
-- [ ] Every controller action is covered for user (a); a new action without coverage fails a test.
-- [ ] No endpoint returns a hierarchy-scoped row to user (a).
-- [ ] No create endpoint accepts a record from (a) or (b).
-- [ ] Findings are listed here, including "none found" where that is the result.
+- [x] Every controller action is covered for user (a); a new action without coverage fails a test.
+- [x] No endpoint returns a hierarchy-scoped row to user (a).
+- [x] No create endpoint accepts a record from (a) or (b).
+- [x] Findings are listed here, including "none found" where that is the result.
 
 **Out of scope:**
 - The Field App's client-side route gate — ticket 02.
 - Changing the role or level model.
+
+## Findings
+
+Audited by `AccessAuditTests` (`tests/DotGlasses.Web.Tests/AccessControl/`), which holds one row
+per controller action — 70 actions, API and Admin Portal — and fails if an action has no row.
+Every probe runs against real seeded rows (a Customer, Test, Lead and custom-order Sale at the
+caller's own outlet and at a sibling outlet), and every write targets a real row.
+
+**(a) No assignment at all** — checked as both `Admin` and `User`, on the Admin Portal (cookie)
+and on the Field App API (a token with no location, and a stale token still naming a retail
+point).
+
+- **One endpoint behaved wrongly: `GET /Organisations` returned a 500.** Not a leak — the scope
+  filter had already returned no organisations — but the screen then selected the first tree of
+  an empty list. The same failure hit any account whose only assignments are to deactivated
+  orgs. **Fix:** `OrganisationsController` renders an empty state (`NoOrganisations.cshtml`)
+  when the caller's scope holds no organisation. No scoping or policy code changed.
+- No leak found. Every scoped read comes back empty (Dashboard, Event History and its export on
+  every tab, Organisations export, User Directory; the API's tests/leads/sales lists, by-id
+  reads, lead match, "my orgs" and lens sets). Every policy-gated screen and every write is
+  refused, including assigning or promoting themselves. Reference data stays readable, as the
+  brief allows. All three create endpoints refuse with the `CurrentLocationCheck` reason and
+  write nothing.
+
+**(b) Assigned only above Retail Point, on the Field App API** — checked with the token sign-in
+actually issues (no location) and two tampered ones (naming the org they are assigned to, and a
+retail point beneath it).
+
+- None found. Sign-in issues a token with no location; every list is empty even for rows inside
+  their Admin Portal scope; all three create endpoints refuse with the `CurrentLocationCheck`
+  reason and write nothing. The Admin Portal still works at their level.
+
+**(c) Retail Point `User` on the Admin Portal**
+
+- No leak found. They reach only the `[Authorize]`-only screens, see only their own outlet's
+  rows (nothing from a sibling outlet whose path differs by one character, nor a deactivated
+  one), and are refused every policy-gated screen and every Organisations, User Directory, Lens
+  Sets, Custom Orders and Reference Data write.
+- **One thing does not match the brief's "refused on every write action", and was left as it
+  is:** lead conversion (`/Leads/Convert/{id}`) is `[Authorize]`-only by design, so a `User` can
+  convert a Lead *inside their own scope* into a Sale. A Lead outside their scope is a 404.
+  Closing it to `User` would be a change to the role model, which is out of scope here — it
+  needs a decision. The audit pins the read side and the out-of-scope 404; it does not submit
+  the own-lead conversion.
+
+**Also noticed, not changed**
+
+- An account with no assignment is invisible on the Admin Portal to everyone, a DGI Admin
+  included: the User Directory lists a user only through an in-scope assignment, and the
+  Organisations screen's "assign a user" picker draws from the same list. So the state this
+  ticket is about cannot be repaired from the portal — only in the database. Not a leak, but it
+  is why such an account stays stuck.
+- A Field App token is not honoured on any Admin Portal screen, and a portal session is not
+  honoured on any API endpoint (pinned by the audit).
