@@ -390,7 +390,8 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await ReferenceDataClient.EnsureLoadedAsync();
+        // Fresh at every form open, and only then — see IReferenceDataClient.RefreshAsync.
+        await ReferenceDataClient.RefreshAsync();
 
         if (FixOutboxId is { } fixId)
         {

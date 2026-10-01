@@ -315,7 +315,11 @@ on failure) — a technician who's been online at least once can keep working, a
 across a refresh, with no connectivity. First-ever use still needs one online session. The cache
 outlives releases, so a change to the *meaning* of a cached shape (not just adding a field) bumps
 `ReferenceDataClient.LensSetShape`: a cache written before it loses its lens sets on an offline load
-rather than presenting old lenses as zero-power ones.
+rather than presenting old lenses as zero-power ones. The cached lens sets belong to the location
+they were fetched at (the payload records it) and are not offered at any other; reference items
+and coating exclusions are global and are. In memory, `ReferenceDataClient` holds a copy only for
+the current session: sign-in, sign-out and a location switch discard it (`AuthTokenStore.Changed`),
+and a form refreshes it when it opens — never while it is being filled in.
 
 Known accepted risk, not yet fixed: offline records are attributed to whoever is signed in
 *when they sync*, not when they were created (`TechnicianUserId`/`HierarchyPath` come from the
