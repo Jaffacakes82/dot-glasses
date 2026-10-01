@@ -49,8 +49,22 @@ public interface IOrganisationAdminService
     /// Reactivating restores exactly that group — anything beneath it that was deactivated
     /// separately stays deactivated — and is refused (DomainRuleViolationException) while the
     /// organisation directly above is itself deactivated, so nothing comes back outside the tree.
-    /// Paths never change and assignments are untouched either way.</summary>
+    /// Paths never change and assignments are untouched either way.
+    ///
+    /// Deactivating an organisation the caller's own access comes through is refused: they would
+    /// lose the scope needed to reactivate it. That includes the root, which nobody sits above.</summary>
     Task SetActiveAsync(Guid id, bool isActive, CancellationToken cancellationToken = default);
+}
+
+/// <summary>The rule both the Organisations screen (to hide the button) and the service (to
+/// refuse) ask: an organisation can't be deactivated by someone whose own access comes through it.</summary>
+public static class OwnAccess
+{
+    public const string DeactivationRefusal =
+        "Your own access comes through this organisation, so deactivating it would lock you out. Ask an admin above it.";
+
+    public static bool ComesThrough(DotGlasses.Domain.Common.HierarchyPath organisation, IEnumerable<DotGlasses.Domain.Common.HierarchyPath> ownScopePaths) =>
+        ownScopePaths.Any(scope => scope.IsSelfOrDescendantOf(organisation));
 }
 
 public record OrganisationAdminNode(Guid Id, Guid? ParentId, string Name, OrganisationLevel Level, string HierarchyPath, bool IsTrainingOrg, bool IsActive, Guid? DeactivationGroupId = null);

@@ -297,7 +297,12 @@ under *any* of `ScopePaths`). `Users.ManageInScope` is stricter than the per-org
 purpose — seeing a user in the directory needs only one assignment in scope, but suspending them,
 resetting their password or changing their role acts on all of their access at once, so it needs
 *every* assignment in scope (`AllAssignmentsInScopeRequirement`); adding or removing a single
-assignment stays on the per-org check. Dashboard, Organisations, Event History and User Directory
+assignment stays on the per-org check. The Edit user page applies both in one Save: it works out
+what changed since the page loaded (`UserEditPlan`) and checks each change under its own rule.
+**Nobody edits their own access into a corner**, whoever they are: `UserAdminService` refuses a
+change to your own role, suspending yourself, and removing one of your own assignments unless
+another you keep covers it (`OwnAssignments`); `OrganisationAdminService` refuses deactivating an
+organisation your own access comes through (`OwnAccess`). Dashboard, Organisations, Event History and User Directory
 carry only `[Authorize]` — any authenticated user reaches them; what they see is narrowed by data
 scoping, not by policy.
 

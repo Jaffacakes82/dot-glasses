@@ -3,6 +3,7 @@ using System.Text;
 using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
 using DotGlasses.Application.Common;
+using DotGlasses.Application.Users;
 using DotGlasses.Domain.Enums;
 using DotGlasses.Infrastructure;
 using DotGlasses.Infrastructure.Identity;
@@ -92,6 +93,12 @@ builder.Services
     })
     .AddEntityFrameworkStores<DotGlassesDbContext>()
     .AddDefaultTokenProviders();
+
+// An invite or reset link works for one day. That is the framework's default too, but the
+// "Forgot password?" email promises it, so it is stated rather than inherited.
+builder.Services.Configure<DataProtectionTokenProviderOptions>(options => options.TokenLifespan = IPasswordResetService.LinkLifetime);
+builder.Services.Configure<FieldAppOptions>(builder.Configuration.GetSection(FieldAppOptions.SectionName));
+builder.Services.AddScoped<PasswordResetRequester>();
 
 // Access is re-read from the database on every request (ADR-0006) — see AccessRecheck. Wrapping
 // rather than replacing the validator AddIdentity installed keeps Identity's security-stamp check.

@@ -1,8 +1,10 @@
 using DotGlasses.Infrastructure.Identity;
+using DotGlasses.Web.Auth;
 using DotGlasses.Web.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace DotGlasses.Web.Controllers;
 
@@ -14,7 +16,10 @@ namespace DotGlasses.Web.Controllers;
 /// a deployed environment; LoggingEmailSender is the local-dev/unprovisioned fallback — see
 /// IEmailSender.
 /// </summary>
-public class AccountController(SignInManager<ApplicationUser> signInManager) : Controller
+public class AccountController(
+    SignInManager<ApplicationUser> signInManager,
+    PasswordResetRequester passwordResetRequester,
+    IOptions<FieldAppOptions> fieldAppOptions) : Controller
 {
     [HttpGet]
     [AllowAnonymous]
@@ -76,14 +81,35 @@ public class AccountController(SignInManager<ApplicationUser> signInManager) : C
 
     [HttpGet]
     [AllowAnonymous]
-    public IActionResult SetPassword(string userId, string token)
+    public IActionResult ForgotPassword() => View(new ForgotPasswordViewModel());
+
+    /// <summary>Always ends on the same message, whether or not the address has an account —
+    /// and whether or not an email went out (none for a suspended account, or one emailed in the
+    /// last few minutes). The link is only ever emailed.</summary>
+    [HttpPost]
+    [AllowAnonymous]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordViewModel model, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            return View(model);
+        }
+
+        await passwordResetRequester.RequestAsync(HttpContext, model.Email, RequestingApp.AdminPortal, cancellationToken);
+        return View(new ForgotPasswordViewModel { Sent = true });
+    }
+
+    [HttpGet]
+    [AllowAnonymous]
+    public IActionResult SetPassword(string userId, string token, string? app = null)
     {
         if (signInManager.IsSignedIn(User))
         {
             return RedirectToAction("Index", "Home");
         }
 
-        return View(new SetPasswordViewModel { UserId = userId, Token = token });
+        return View(new SetPasswordViewModel { UserId = userId, Token = token, App = app });
     }
 
     [HttpPost]
@@ -112,6 +138,13 @@ public class AccountController(SignInManager<ApplicationUser> signInManager) : C
 
         user.EmailConfirmed = true;
         await signInManager.UserManager.UpdateAsync(user);
+
+        // Back to the app that asked. The link only says *which* app; where the Field App lives
+        // is configuration, so a crafted link can't send anyone anywhere else.
+        if (model.App == RequestingApp.FieldApp)
+        {
+            return Redirect(fieldAppOptions.Value.SignInUrl(Request.Host.Host));
+        }
 
         TempData["Info"] = "Password set — you can now log in.";
         return RedirectToAction(nameof(Login));

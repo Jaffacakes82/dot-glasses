@@ -204,6 +204,29 @@ public class OrganisationsManagementTests(AccessControlFixture fixture) : IClass
         Assert.True((await ActiveFlagsAsync(earlier.Id)).Single());
     }
 
+    [Fact]
+    public async Task AnOrganisationYourOwnAccessComesThrough_CannotBeDeactivated()
+    {
+        var countryAdmin = await fixture.SignInAsync(AccessControlFixture.CountryAdmin);
+
+        // The button isn't offered on their own country...
+        var html = await countryAdmin.GetStringAsync($"/Organisations?selectedId={Kenya}");
+        Assert.Contains("Your own access comes through this organisation", html);
+        Assert.DoesNotContain("id=\"deactivateModal\"", html);
+
+        // ...and a posted request is refused: Kenya stays active.
+        var (_, refused) = await PostAndFollowAsync(countryAdmin, "/Organisations/SetActive", "/Organisations", ("id", Kenya.ToString()), ("value", "false"));
+        Assert.Contains("deactivating it would lock you out", refused);
+        Assert.True((await ActiveFlagsAsync(Kenya)).Single());
+
+        // Nobody sits above the root, so it can't be deactivated at all.
+        var dgiAdmin = await fixture.SignInAsync(AccessControlFixture.DgiAdmin);
+        var (_, rootRefused) = await PostAndFollowAsync(dgiAdmin, "/Organisations/SetActive", "/Organisations",
+            ("id", OrganisationSeedConfiguration.DgiId.ToString()), ("value", "false"));
+        Assert.Contains("deactivating it would lock you out", rootRefused);
+        Assert.True((await ActiveFlagsAsync(OrganisationSeedConfiguration.DgiId)).Single());
+    }
+
     // --- Reports keep a deactivated organisation's name -------------------------------------------
 
     [Fact]

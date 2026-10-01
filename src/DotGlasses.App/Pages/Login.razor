@@ -16,6 +16,11 @@
             <div class="alert alert-success">Signed in — token expires @TokenStore.ExpiresAtUtc?.ToLocalTime().ToString("t").</div>
         }
 
+        @if (PasswordSet == 1 && !TokenStore.IsAuthenticated)
+        {
+            <div class="alert alert-success" role="status">Password set. Sign in with your new password.</div>
+        }
+
         @if (!string.IsNullOrEmpty(_error))
         {
             <div class="alert alert-danger">@_error</div>
@@ -33,6 +38,8 @@
             <button type="submit" class="dg-btn dg-btn-primary" style="width:100%;" disabled="@_isSubmitting">Log in</button>
         </EditForm>
 
+        <p style="font-size:13px; margin-top:var(--space-3);"><a href="forgot-password">Forgot password?</a></p>
+
         <p style="font-size:12px; color:#888; margin-top:var(--space-4);">
             Log in once online — you can keep working fully offline after that. Sign out from
             Settings when you hand the device to someone else.
@@ -41,6 +48,10 @@
 </div>
 
 @code {
+    /// <summary>Set by the Admin Portal's set-password page when it sends someone back here
+    /// after a reset they asked for from this app.</summary>
+    [Parameter, SupplyParameterFromQuery] public int? PasswordSet { get; set; }
+
     private readonly LoginRequest _request = new();
     private string? _error;
     private bool _isSubmitting;

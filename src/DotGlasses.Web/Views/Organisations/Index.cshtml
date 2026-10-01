@@ -97,7 +97,14 @@
 
                 <button class="dg-btn dg-btn-ghost" type="button" data-bs-toggle="modal" data-bs-target="#assignUserModal">Assign users</button>
 
-                <button class="dg-btn dg-btn-ghost" style="color:#b00;" type="button" data-bs-toggle="modal" data-bs-target="#deactivateModal">Deactivate</button>
+                @if (Model.Deactivation.BlockedReason is { } blocked)
+                {
+                    <p style="font-size:12px; color:#999; margin:0;" id="deactivateBlocked">@blocked</p>
+                }
+                else
+                {
+                    <button class="dg-btn dg-btn-ghost" style="color:#b00;" type="button" data-bs-toggle="modal" data-bs-target="#deactivateModal">Deactivate</button>
+                }
             </div>
         }
     </div>
@@ -147,7 +154,7 @@
     </div>
 </div>
 
-@if (Model.CanManage)
+@if (Model.CanManage && Model.Deactivation.BlockedReason is null)
 {
     <div class="modal fade" id="deactivateModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">

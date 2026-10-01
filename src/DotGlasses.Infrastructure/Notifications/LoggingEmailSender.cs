@@ -14,4 +14,10 @@ public class LoggingEmailSender(ILogger<LoggingEmailSender> logger) : IEmailSend
         logger.LogInformation("Would send password-setup invite to {Email} ({RecipientName}): {SetPasswordUrl}", toEmail, recipientName, setPasswordUrl);
         return Task.CompletedTask;
     }
+
+    public Task SendPasswordResetAsync(string toEmail, string recipientName, string resetUrl, CancellationToken cancellationToken = default)
+    {
+        logger.LogInformation("Would send password-reset email to {Email} ({RecipientName}): {ResetUrl}", toEmail, recipientName, resetUrl);
+        return Task.CompletedTask;
+    }
 }

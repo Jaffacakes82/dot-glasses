@@ -121,6 +121,11 @@ public class OrganisationAdminService(DotGlassesDbContext dbContext, ICurrentUse
             return;
         }
 
+        if (OwnAccess.ComesThrough(HierarchyPath.Parse(entity.HierarchyPath), currentUserContext.ScopePaths))
+        {
+            throw new DomainRuleViolationException(OwnAccess.DeactivationRefusal);
+        }
+
         var pattern = entity.HierarchyPath + "%";
         var group = await dbContext.OrganisationNodes
             .IgnoreQueryFilters()

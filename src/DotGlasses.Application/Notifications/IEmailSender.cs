@@ -8,4 +8,9 @@ namespace DotGlasses.Application.Notifications;
 public interface IEmailSender
 {
     Task SendPasswordSetupInviteAsync(string toEmail, string recipientName, string setPasswordUrl, CancellationToken cancellationToken = default);
+
+    /// <summary>The "Forgot password?" email. Unlike an invite there is no on-screen copy of the
+    /// link to fall back on, and — like the invite — a delivery failure must not throw: the
+    /// person asking is told the same thing either way.</summary>
+    Task SendPasswordResetAsync(string toEmail, string recipientName, string resetUrl, CancellationToken cancellationToken = default);
 }

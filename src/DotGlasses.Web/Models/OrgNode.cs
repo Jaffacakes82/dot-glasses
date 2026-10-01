@@ -32,7 +32,7 @@ public record DeactivatedGroup(Guid Id, string Name, int BeneathCount);
 
 /// <summary>What the Deactivate confirmation states for the selected organisation: how many
 /// organisations beneath it go too, and how many people hold an assignment somewhere in it.</summary>
-public record DeactivationPreview(int OrganisationsBeneath, int PeopleAssigned);
+public record DeactivationPreview(int OrganisationsBeneath, int PeopleAssigned, string? BlockedReason = null);
 
 /// <summary>Trees (left panel) + the currently selected node (right detail panel) — one tree per
 /// separate part of the caller's scope (ADR-0006/CONTEXT.md "Scope"): each entry in Trees is a

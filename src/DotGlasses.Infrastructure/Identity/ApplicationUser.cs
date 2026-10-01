@@ -16,6 +16,11 @@ public class ApplicationUser : IdentityUser<Guid>
     /// none; User Directory falls back to UserName/Email for display when absent.</summary>
     public string? FullName { get; set; }
 
+    /// <summary>When the last "Forgot password?" email was sent to this account — what limits
+    /// them to one every few minutes (IPasswordResetService). Stored here rather than in memory
+    /// so the limit holds across replicas.</summary>
+    public DateTimeOffset? PasswordResetEmailSentAtUtc { get; set; }
+
     /// <summary>The one fallback rule for "what do we call this user" — every caller-facing
     /// display of a user's name needs it, parameterized only by what "unset" should render as in
     /// that context (an admin table cell wants "—"; a technician's own device greeting wants

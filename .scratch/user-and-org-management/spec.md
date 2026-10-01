@@ -1,6 +1,6 @@
 # Spec C — Managing users and organisations
 
-Status: ready-for-agent
+Status: resolved
 Source: wayfinder map `.scratch/ceo-feedback-2026-09-27/` — tickets 03 (editing a user's role and
 org assignments), 04 (assigning several users at once), 17 (organisation "Kind"), 18 (deactivating
 an org with sub-orgs) and 20 (forgot password). Rules: ADR-0006. Vocabulary: `CONTEXT.md` — **Org

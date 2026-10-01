@@ -169,19 +169,30 @@ password is incorrect."* Suspension is deliberately not distinguishable from a b
 **Sign out** — a real POST action, reachable from a button in the sidebar on every authenticated
 page. Ends the cookie session and returns to Login.
 
-**Set password** — `/Account/SetPassword?userId=…&token=…`, anonymous.
+**Forgot password** — `/Account/ForgotPassword`, anonymous, linked from the sign-in page.
 
-The target of an invite or reset link. Fields: hidden `UserId`, hidden `Token`, `Password`. The
-token is a genuine ASP.NET Identity password-reset token. Password rules as configured (tightened
-2026-08-12): minimum 8 characters, **at least one digit, one uppercase letter and one
+One field, Email. Whatever is entered, the page answers *"If that email has an account, we've
+sent a link."* — it never says whether the address has an account. An email is sent to an
+**Active or Invited** account; none to a suspended account or an unknown address, and none if
+that account was emailed in the last **five minutes** (the last-sent time is stored on the
+account, so the limit holds across replicas). The link is only ever emailed, never shown on
+screen. The Field App has the same thing through `POST /api/v1/auth/forgot-password` (§5.1).
+
+**Set password** — `/Account/SetPassword?userId=…&token=…[&app=…]`, anonymous.
+
+The target of an invite, an admin's reset, or a forgot-password link. Fields: hidden `UserId`,
+hidden `Token`, `Password`. The token is a genuine ASP.NET Identity password-reset token: it works
+for **one day** and stops working once the password has changed. Password rules as configured
+(tightened 2026-08-12): minimum 8 characters, **at least one digit, one uppercase letter and one
 non-alphanumeric character all required.** On success the account's `EmailConfirmed` is set to
-true and the user is redirected to Login with "Password set — you can now log in." An invalid or
-expired token surfaces Identity's own error text.
+true and the person is sent back to the app the link was asked for from: the Admin Portal's Login
+with "Password set — you can now log in.", or the Field App's sign-in page. The link says only
+*which* app; the Field App's address is configuration (`FieldApp` in `appsettings.json`, looked up
+by the Admin Portal host), so a crafted link can't redirect anywhere else. An invalid or expired
+token surfaces Identity's own error text. Setting a password never unsuspends an account.
 
 **Not built**
-- No self-service "forgot password" — a reset can only be initiated by an admin from the User
-  Directory.
-- No password change for a signed-in user, no MFA, no account lockout feedback.
+- No MFA, no account lockout feedback.
 
 ---
 
@@ -261,52 +272,73 @@ applied on this screen only.
 can view; write actions require `Organisations.ManageInScope`.
 
 **Left panel — the tree.** Rendered recursively with 24px indentation per level, a coloured dot
-per level (DGI black, Country blue, Intermediate orange, Retail Point green), the node name, a
-yellow "Training" badge where applicable, and the level name right-aligned. Children sort
+per level (DGI black, Country blue, Retailer/distributor orange, Retail Point green), the node
+name, a yellow "Training" badge where applicable, and the level right-aligned. Levels are always
+shown as words — "DGI", "Country", "Retailer/distributor", "Retail Point" — here, in the Add
+dialog, in the org picker and in the CSV export. Children sort
 alphabetically. Every node is a link that selects it.
 
 Because reads are scoped downward only, **your own node becomes the displayed root** — an Admin
 at Country level sees their own country as the top of the tree with DGI absent entirely, not
 greyed out. A Retail Point user sees a single-node "tree" consisting of themselves.
 
-A separate collapsed **"Deactivated orgs"** list, below the tree, shows the caller's own
-deactivated nodes with a Reactivate link per row.
+A separate **"Deactivated orgs"** strip, below the tree, lists each group deactivated together
+once, by its top organisation — "`<name>` and N beneath it" — with one Reactivate button. An
+organisation deactivated on its own is listed by name. Organisations beneath a deactivated one
+aren't offered on their own. The strip is absent when there is nothing to list.
 
 **Right panel — the selected node.** Shows the level badge, a training badge if flagged, the name,
-the free-text `Kind` label, a Retail-Point-only note that stock is tracked externally in Zoho, and
-a list of users assigned to this node (each with an × to un-assign). If the viewer fails the scope
+a Retail-Point-only note that stock is tracked externally in Zoho, and a list of users assigned to
+this node, each with their role and an × to un-assign. If the viewer fails the scope
 check the panel says "You don't have permission to manage this node." and no actions render.
 
 **Actions** (all re-checked server-side; hidden buttons are never trusted alone):
 
 1. **Flag / unflag as training organisation** — one-click toggle, available at any level. Excludes
    the node and everything beneath it from Dashboard aggregates.
-2. **Rename** — a modal, `Name` only (≤ 200 chars). `Kind` and level are still fixed after
-   creation.
-3. **Deactivate / Reactivate** — soft-delete via the node's existing `IsDeleted` flag. Deactivating
-   a node with active (non-deactivated) children is refused — deactivate the children first, so
-   nothing gets silently orphaned under a node that's disappeared from every admin's tree. A
-   deactivated node moves to the "Deactivated orgs" list; Reactivate moves it back into the tree.
-4. **Add child node** — a modal. Fields: `Name` (required, ≤ 200 chars), `Kind` (optional free-text
-   display label, ≤ 100 chars), `Level` (a select only when more than one level is legal; a hidden
+2. **Rename** — a modal, `Name` only (≤ 200 chars). The level is fixed after creation.
+3. **Deactivate / Reactivate** — soft-delete via the node's existing `IsDeleted` flag.
+   **Deactivating takes every active organisation beneath it too**, in one step, after a
+   confirmation that states how many organisations go with it, how many people hold an
+   assignment in it, and that unsent Field App records for its retail points will be refused.
+   Assignments are kept; they give no access while the organisation is deactivated and work again
+   afterwards. **Reactivating restores exactly the group that was deactivated together** — an
+   organisation beneath it that had been deactivated separately stays deactivated — and is refused
+   ("Reactivate the organisation above it first") while the organisation directly above is
+   deactivated, so nothing comes back outside the tree. Nothing is ever re-parented and no path
+   changes. An organisation your own access comes through can't be deactivated — including the
+   root — because you couldn't undo it.
+4. **Add child node** — a modal. Fields: `Name` (required, ≤ 200 chars), `Level` (a select only
+   when more than one level is legal; a hidden
    field with an explanatory line when exactly one is; the button is hidden entirely for Retail
    Points). Level legality is enforced three times over — in the UI, in the validator, and in the
    service. The new node's hierarchy path is *parent path + the next value of a database
    sequence*, so segments are globally unique rather than per-parent, and a segment is never
    handed out twice — not even one belonging to a deactivated org, which keeps its path in case it
    is reactivated. The database also refuses two orgs on one path outright.
-5. **Assign users** — a modal with a single-select dropdown of every user in the caller's own
-   scope. Creates a `UserOrgAssignment` row; re-submitting the same pair is a silent no-op. Every
-   assignment counts equally toward the user's Admin Portal scope and highest level — there is no
-   "primary" assignment to designate, and this has no bearing on the Field App's separate,
-   per-device *current location* (see §5.7).
-6. **Un-assign a user** — the × next to a name in the "Assigned users" list. Refused (with an
-   inline error, not a crash) only if it is that user's **last** remaining assignment — a user
-   always keeps at least one; suspending them from User Directory (§4.5) is how all of their access
-   is removed instead.
+5. **Assign users** — a modal listing, as tick boxes with a filter box, every **Active** user in
+   the caller's scope who isn't already assigned here, each with their role and email. One submit
+   assigns everyone ticked, all or nothing: if any one of them can't be assigned (not Active, or
+   not visible to the caller), nobody is. A line under the title says what the assignment grants —
+   at a Retail Point, recording there in the Field App; higher up, Admin Portal access to that
+   organisation and everything beneath it. Invited and Suspended users are assigned from their
+   Edit page (§4.5). Every assignment counts equally toward the user's Admin Portal scope and
+   highest level — there is no "primary" assignment to designate, and this has no bearing on the
+   Field App's separate, per-device *current location* (see §5.7).
+6. **Un-assign a user** — the × next to a name in the "Assigned users" list, one at a time; at a
+   Retail Point it asks first, since it applies at once and unsent Field App records for that
+   retail point will be refused. Refused (with an inline error, not a crash) if it is that user's
+   **last** remaining assignment — a user always keeps at least one; suspending them from User
+   Directory (§4.5) is how all of their access is removed instead — and if it is your own
+   assignment and removing it would shrink your scope.
+
+**Reports and deactivated organisations.** Records made at an organisation that was deactivated
+afterwards keep counting on the Dashboard, in Event History and in Custom Orders, under the
+organisation's real name followed by "(deactivated)". The User Directory marks an assignment to a
+deactivated organisation the same way.
 
 **Not built**
-- No edit of `Kind` or level after creation (only the name).
+- No change of level after creation (only the name).
 - No move/re-parent.
 
 ---
@@ -401,11 +433,11 @@ one (so a country admin can't act on a DGI admin who also happens to hold a reta
 assignment in that country). Listing applies the scope-paths filter manually, since
 `ApplicationUser` is outside the automatic query filter.
 
-**The table** — Name, Role, Scope, Last login, Sales, Status, actions. A search box (name or
+**The table** — Name, Role, Organisations, Last login, Sales, Status, actions. A search box (name or
 email), a Role filter, a Status filter and Previous/Next paging sit above it.
 
 - **Name** is `FullName`, falling back to username where absent.
-- **Scope** is a set of badges listing the org names from the user's `UserOrgAssignment` rows —
+- **Organisations** is a set of badges listing the org names from the user's `UserOrgAssignment` rows —
   every assignment counts, there is no primary among them. A viewer sees the name of an assignment
   that's within their own scope; one outside it renders as a badge reading "Outside your scope"
   rather than disclosing an org name the viewer can't otherwise see. A user is listed at all if
@@ -418,7 +450,8 @@ email), a Role filter, a Status filter and Previous/Next paging sit above it.
 - **Status** is derived, never stored: **Invited** if the account has no password hash at all;
   otherwise **Suspended** if the lockout end date is in the future; otherwise **Active**.
 
-**Actions per row**, shown only where the viewer passes the scope check:
+**Actions per row.** An Admin sees **Edit** on every row they can see (below). The other two are
+shown only where the viewer passes the all-assignments scope check:
 
 1. **Reset password** — generates a fresh Identity reset token and a `/Account/SetPassword` link,
    attempts email delivery (see below), and displays the link on screen regardless. Does *not*
@@ -428,12 +461,39 @@ email), a Role filter, a Status filter and Previous/Next paging sit above it.
    the generic invalid-credentials message, and — unlike a removed assignment or a role change,
    which bite on the user's next request — a signed-in session is also cut off on its very next
    request, both apps, rather than waiting for the cookie or JWT to expire. Suspension is the only
-   way to remove all of a user's access; there is no delete.
+   way to remove all of a user's access; there is no delete. You can't suspend yourself.
 
-There is also a **change-role capability with no button yet**: `UserDirectory/ChangeRole` is a
-real, `Users.ManageInScope`-checked POST endpoint (transactional, every `IdentityResult` checked),
-but nothing in this screen's markup calls it — a user's role can only be changed today by a
-request built by hand against that route.
+**Edit user** — `/UserDirectory/Edit/{id}`, Admins only. One page for a user's **full name**,
+**role** and **organisations**; the email is shown and can't be changed. Invited, Active and
+Suspended users can all be edited, and editing never unsuspends or emails anyone.
+
+- **One Save applies only what changed since the page loaded.** The form carries the name, role
+  and organisations it was rendered with, and the server works out the differences — so an
+  assignment another admin added in the meantime is left alone. Everything is written in one
+  transaction.
+- **Each kind of change keeps its own permission.** Changing the role or the name acts on the
+  user as a whole, so it needs *every* one of their assignments in the admin's scope; adding or
+  removing one organisation needs only that organisation in scope.
+- **A user partly outside the admin's scope** shows a read-only role and name with the reason,
+  and a line "plus N organisations outside your scope" — those are never named and never changed.
+  An admin may remove every assignment they can see as long as the user keeps one elsewhere; the
+  directory then says the user is no longer in their scope. With none left anywhere, the save is
+  refused with the "suspend them instead" message.
+- **Confirmation.** Saving asks first when a Retail Point assignment is being removed or an Admin
+  is becoming a User, naming the consequence.
+- **Editing yourself.** Your own name can be changed. Your own role is read-only ("Another admin
+  must change it"). You may add an assignment for yourself, and remove one only when your scope
+  is no smaller afterwards — that is, the organisation sits beneath another assignment you keep.
+  The same rules apply to assigning and un-assigning yourself on the Organisations screen.
+- **The organisation picker**, shared with Invite: the admin's organisations as an indented tree,
+  each with its level, a filter box, and a line explaining that only a direct Retail Point
+  assignment lets someone record in the Field App. A deactivated organisation is never offered;
+  an existing assignment to one is shown ticked, marked "deactivated", and can be unticked.
+- Every role, name or assignment change — from here or from the Organisations screen — writes a
+  line to the application log naming who made it, on whom, and what changed. There is no history
+  screen.
+
+`UserDirectory/ChangeRole` remains as a role-only POST endpoint under the same rules.
 
 **Invite platform user** — a modal, opened from a button that renders for *every* viewer
 regardless of permission (the refusal happens on submit). Fields:
@@ -442,7 +502,7 @@ regardless of permission (the refusal happens on submit). Fields:
 |---|---|
 | Full name | Required, ≤ 200 characters |
 | Email | Required, valid email format, ≤ 256 characters, must not already exist |
-| Hierarchy scope | A scrollable checkbox list of every org in the caller's own scope. At least one required — refused with "At least one location must be assigned" otherwise — and every selection re-validated as in-scope server-side. Ticking more than one box is meaningful: every checked org becomes a real, equal assignment, with no ordering and nothing "primary" among them. |
+| Organisations | The shared organisation picker (see Edit user): every active org in the caller's own scope, indented by depth with its level, and a filter box. At least one required — refused with "Choose at least one organisation." otherwise — and every selection re-validated as in-scope server-side. Ticking more than one box is meaningful: every checked org becomes a real, equal assignment, with no ordering and nothing "primary" among them. |
 | Role | Select: **Admin / User**, defaulting to User |
 
 On submit the system creates the account **with no password at all** (which is what "Invited"
@@ -459,9 +519,8 @@ Reloading the page loses the on-screen copy; the only recovery at that point is 
 which mints a new one.
 
 **Not built**
-- No edit of a user's name or email after invite. Assignments are edited one at a time from the
-  Organisations screen instead (§4.3) — assign or un-assign a single org — not from here; role has
-  the server-only endpoint noted above, with no form yet.
+- No edit of a user's email.
+- No history screen for changes to a user (they are in the application log only).
 - No delete or deactivate (only suspend).
 - No resend of an existing invite without invalidating it.
 - No bulk invite or import.
@@ -735,7 +794,14 @@ the token is **persisted to IndexedDB**, not just held in memory. Password rules
 letter and one non-alphanumeric character.
 
 Errors: "Email or password is incorrect." for a rejected credential, "Couldn't reach the server.
-Check your connection and try again." for a network failure. If already signed in, a green banner shows the token
+Check your connection and try again." for a network failure.
+
+**Forgot password?** links to `/forgot-password`: one Email field, which calls
+`POST /api/v1/auth/forgot-password` directly (it needs a connection, and there is nothing to
+queue). The answer is always "If that email has an account, we've sent a link."; with no
+connection the screen says "You're offline. Connect to get a reset link." and sends nothing. The
+emailed link opens the Admin Portal's set-password page (§4.1) and then returns here, where the
+sign-in page shows "Password set. Sign in with your new password." If already signed in, a green banner shows the token
 expiry time. Footer text: *"Log in once online — you can keep working fully offline after that.
 Sign out from Settings when you hand the device to someone else."*
 
@@ -1099,6 +1165,7 @@ Versioned at `v1`, with Swagger exposed in development only.
 
 | Endpoint | Auth | Who | Behaviour |
 |---|---|---|---|
+| `POST /api/v1/auth/forgot-password` | Anonymous | Anyone | Email → always 200 with the same message; a reset link is emailed to an Active or Invited account, at most once every five minutes. The link is never returned. |
 | `POST /api/v1/auth/login` | Anonymous | Anyone | Username + password → JWT (60 min default), plus an optional `PreferredLocationId` (the device's remembered location). Issues a token carrying that location if it's still eligible, the caller's single eligible location if there's exactly one, or none otherwise. Failures count toward lockout; suspended accounts are refused as invalid credentials. |
 | `GET /api/v1/auth/my-orgs` · `POST /api/v1/auth/switch-org` | JWT | Any authenticated user | Lists only the caller's *eligible* locations — active, Retail-Point-level orgs they're directly assigned to, never a broader assignment. Switching issues a fresh JWT carrying the chosen eligible location; nothing is written to the user row. Rejects a target that isn't eligible. |
 | `GET /api/v1/tests` · `GET /api/v1/tests/{id}` | JWT | Any authenticated user | Hierarchy-scoped list / fetch — for the Field App this is the caller's current location alone, not their whole assignment set. |

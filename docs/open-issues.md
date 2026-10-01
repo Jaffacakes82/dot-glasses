@@ -110,6 +110,16 @@ machine" rule.
   and confirm the referral block and the price answer come back filled in; and switch location
   with the device offline ("You're offline. Connect to switch location.") and with the server
   failing ("Couldn't switch location. Try again."), in Settings and on the outlet picker.
+- **The forgot-password email's link is unverified end to end by a person** (Spec C,
+  `.scratch/user-and-org-management/issues/09-field-app-forgot-password-screen.md`). In a local
+  browser on 2026-10-01 the Field App's link, screen, blank-field message and the one answer for a
+  real and a made-up address were checked. Still to do by hand, on an environment with real email:
+  open the emailed link, set a password, and confirm it ends at the Field App's sign-in page; and
+  try the screen with the device offline. Until the sender moves off Azure's shared domain the
+  email may land in spam — an admin's Reset password button is the fallback.
+- **The Organisations screen's reactivate was not retested by hand.** The reported glitch (the
+  page left in an odd state after Reactivate) is covered by an automated test that reads the page
+  after reactivating a group; nobody has clicked through it in a browser since.
 - **Before go-live: production has no active lens sets until DGI builds them.** The lens-set
   redesign retired every earlier set and created none, so the Field App offers only *Custom
   prescription* at every outlet until an admin builds real lens sets on Lens Sets and assigns them.
@@ -178,10 +188,10 @@ machine" rule.
   locked against each other, so two racing requests can each see one assignment left (of two) and
   both proceed. Accepted as unlikely (ticket 03); revisit if it's ever seen in practice.
 
-- **No history of who changed a user's role or org assignments.** These changes take effect on the
-  user's next request and nothing in the portal shows who made them. The Edit user page (CEO
-  feedback ticket 03, not yet built) is specified to write an application log entry per change and
-  no more; a change-history screen was left out as its own piece of work.
+- **No history screen for who changed a user's role, name or org assignments.** These changes take
+  effect on the user's next request. Each one writes an application log entry (who made it, on
+  whom, what changed) from the Edit user page and the Organisations screen alike; nothing in the
+  portal shows them. A change-history screen was left out as its own piece of work.
 
 ## Real, visible interim gaps (the system tells the user, doesn't hide it)
 

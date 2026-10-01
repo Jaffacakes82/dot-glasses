@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Asp.Versioning;
 using DotGlasses.Application.Common;
+using DotGlasses.Application.Users;
 using DotGlasses.Contracts.Auth;
 using DotGlasses.Domain.Common;
 using DotGlasses.Infrastructure.Identity;
@@ -35,8 +36,20 @@ public class AuthController(
     ICurrentUserContext currentUser,
     IValidator<LoginRequest> loginValidator,
     IValidator<SwitchOrgRequest> switchOrgValidator,
-    IValidator<ChangePasswordRequest> changePasswordValidator) : ControllerBase
+    IValidator<ChangePasswordRequest> changePasswordValidator,
+    PasswordResetRequester passwordResetRequester) : ControllerBase
 {
+    /// <summary>The Field App's "Forgot password?". Anonymous, and it answers the same way for
+    /// every address — known, unknown, suspended, or emailed a moment ago — so it can't be used
+    /// to find out who has an account. The link itself is only ever emailed.</summary>
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    public async Task<ActionResult<ForgotPasswordResponse>> ForgotPassword(ForgotPasswordRequest request, CancellationToken cancellationToken)
+    {
+        await passwordResetRequester.RequestAsync(HttpContext, request.Email, RequestingApp.FieldApp, cancellationToken);
+        return Ok(new ForgotPasswordResponse { Message = IPasswordResetService.Acknowledgement });
+    }
+
     [HttpPost("login")]
     [AllowAnonymous]
     public async Task<ActionResult<LoginResponse>> Login(LoginRequest request, CancellationToken cancellationToken)

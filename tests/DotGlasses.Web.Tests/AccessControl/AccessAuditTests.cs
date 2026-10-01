@@ -116,6 +116,9 @@ public class AccessAuditTests(AccessAuditFixture fixture) : IClassFixture<Access
         new("Portal.Account.Login POST", _ => "/Account/Login", Expect.Open, Expect.Open,
             (_, _) => [("UserName", "nobody@test.local"), ("Password", "not-the-password")]),
         new("Portal.Account.AccessDenied GET", _ => "/Account/AccessDenied", Expect.Open, Expect.Open),
+        new("Portal.Account.ForgotPassword GET", _ => "/Account/ForgotPassword", Expect.Open, Expect.Open),
+        new("Portal.Account.ForgotPassword POST", _ => "/Account/ForgotPassword", Expect.Open, Expect.Open,
+            (_, _) => [("Email", "nobody@test.local")]),
         new("Portal.Account.SetPassword GET", _ => "/Account/SetPassword?userId=x&token=y", Expect.Open, Expect.Open),
         new("Portal.Account.SetPassword POST", _ => "/Account/SetPassword", Expect.Open, Expect.Open,
             (_, _) => [("UserId", Guid.NewGuid().ToString()), ("Token", "not-a-token"), ("Password", "An0ther!Passw0rd"), ("ConfirmPassword", "An0ther!Passw0rd")]),
@@ -263,6 +266,8 @@ public class AccessAuditTests(AccessAuditFixture fixture) : IClassFixture<Access
     [
         new("Api.Auth.Login POST", _ => "api/v1/auth/login", Expect.Open, Expect.Open,
             (_, _) => new LoginRequest { UserName = "nobody@test.local", Password = "not-the-password" }),
+        new("Api.Auth.ForgotPassword POST", _ => "api/v1/auth/forgot-password", Expect.Open, Expect.Open,
+            (_, _) => new ForgotPasswordRequest { Email = "nobody@test.local" }),
         new("Api.Auth.MyOrgs GET", _ => "api/v1/auth/my-orgs", Expect.NoRows, Expect.NoRows),
         // A retail point the caller isn't directly assigned to, then the org (b) *is* assigned to.
         new("Api.Auth.SwitchOrg POST", _ => "api/v1/auth/switch-org", Expect.BadRequest, Expect.BadRequest,

@@ -1,5 +1,7 @@
+using DotGlasses.Application.Common;
 using DotGlasses.Application.Organisations;
 using DotGlasses.Application.Users;
+using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Enums;
 using DotGlasses.Web.Authorization;
 using DotGlasses.Web.Export;
@@ -17,7 +19,8 @@ public class OrganisationsController(
     IUserAdminService userAdminService,
     IAuthorizationService authorizationService,
     IValidator<CreateChildOrganisationRequest> createChildValidator,
-    IValidator<RenameOrganisationRequest> renameValidator) : Controller
+    IValidator<RenameOrganisationRequest> renameValidator,
+    ICurrentUserContext currentUser) : Controller
 {
     public Task<IActionResult> Index(Guid? selectedId, CancellationToken cancellationToken) =>
         IndexViewAsync(selectedId, cancellationToken);
@@ -211,7 +214,10 @@ public class OrganisationsController(
         var subtreeIds = Flatten(selected).Select(n => n.Id).ToHashSet();
         var deactivation = new DeactivationPreview(
             OrganisationsBeneath: subtreeIds.Count - 1,
-            PeopleAssigned: users.Count(u => u.OrgNodeIds.Any(subtreeIds.Contains)));
+            PeopleAssigned: users.Count(u => u.OrgNodeIds.Any(subtreeIds.Contains)),
+            BlockedReason: OwnAccess.ComesThrough(HierarchyPath.Parse(selectedAdmin.HierarchyPath), currentUser.ScopePaths)
+                ? OwnAccess.DeactivationRefusal
+                : null);
 
         return new OrganisationsIndexViewModel(
             trees, selected, canManage, validChildLevels, assignableUsers, selectedAssignedUsers,
