@@ -319,7 +319,7 @@ public class LensSetPagesTests(AdminPortalFactory factory) : IClassFixture<Admin
         Assert.Contains("Outreach Post", Text(Section(html, "lensSetAssignments")));
         // …and the only action is Reactivate.
         Assert.Contains("/Catalogues/ReactivateCatalogue", html);
-        foreach (var write in new[] { "data-lens-add", "data-lens-edit", "RemoveLensOption", "UpdateCatalogue", "RetireCatalogue", "AssignCatalogue", "UnassignCatalogue" })
+        foreach (var write in new[] { "data-lens-add", "data-lens-edit", "SaveLens", "RemoveLensOption", "UpdateCatalogue", "RetireCatalogue", "AssignCatalogue", "UnassignCatalogue" })
         {
             Assert.DoesNotContain(write, html);
         }

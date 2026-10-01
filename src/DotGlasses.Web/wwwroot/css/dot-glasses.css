@@ -483,6 +483,9 @@ body {
 
 .dg-content {
     flex: 1;
+    /* A flex item is never narrower than its content by default, so one wide table would
+       widen the whole page instead of scrolling inside its own card. */
+    min-width: 0;
     padding: 40px 48px;
 }
 

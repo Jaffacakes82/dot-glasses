@@ -229,8 +229,16 @@
     }
 </div>
 
-<partial name="_LensDialog" model="Model.LensDialog" />
+@* Only where a lens can be changed: a retired lens set, or one owned above the caller, has no
+   Add lens or Edit button to open it. *@
+@if (selected.CanEdit)
+{
+    <partial name="_LensDialog" model="Model.LensDialog" />
+}
 
 @section Scripts {
-    <script src="~/js/lens-dialog.js" asp-append-version="true"></script>
+    @if (selected.CanEdit)
+    {
+        <script src="~/js/lens-dialog.js" asp-append-version="true"></script>
+    }
 }
