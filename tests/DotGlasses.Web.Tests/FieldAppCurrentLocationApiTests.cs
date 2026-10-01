@@ -298,6 +298,7 @@ public class FieldAppCurrentLocationApiTests(CustomWebApplicationFactory factory
             CustomerId = customer.Id,
             ConsentGiven = true,
             ReasonNotPurchasedRefId = db.ReferenceDataItems.First(x => x.Category == ReferenceDataCategory.ReasonNotPurchased && x.IsActive).Id,
+            CustomerToldPrice = true,
             CreatedAtUtc = DateTimeOffset.UtcNow,
         };
         db.Customers.Add(customer);

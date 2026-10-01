@@ -76,6 +76,7 @@ public class ConsultationValidationApiTests(CustomWebApplicationFactory factory)
             ConsentGiven = true,
             ReferredOrTreated = false,
             ReasonNotPurchasedRefId = Guid.NewGuid(),
+            CustomerToldPrice = true,
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

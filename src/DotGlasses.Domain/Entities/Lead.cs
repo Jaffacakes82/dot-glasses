@@ -54,6 +54,10 @@ public class Lead : IAuditable, ISoftDeletable, IHierarchyScoped
     public Guid ReasonNotPurchasedRefId { get; set; }
     public string? ReasonNotPurchasedOtherText { get; set; }
 
+    /// <summary>"Has the customer been told the price?" Null only on a Lead recorded before the
+    /// question was asked.</summary>
+    public bool? CustomerToldPrice { get; set; }
+
     /// <summary>Nullable — a Lead can carry no product preference at all (test results only).</summary>
     public LensRangeType? LensRangeType { get; set; }
 

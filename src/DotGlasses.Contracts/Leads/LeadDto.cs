@@ -27,6 +27,9 @@ public class LeadDto
     public bool TreatedInFacility { get; set; }
     public Guid ReasonNotPurchasedRefId { get; set; }
     public string? ReasonNotPurchasedOtherText { get; set; }
+
+    /// <summary>Null on a Lead recorded before the question was asked.</summary>
+    public bool? CustomerToldPrice { get; set; }
     public LensRangeType? LensRangeType { get; set; }
     public Guid? PresetCatalogueId { get; set; }
     public decimal? SphereLeft { get; set; }

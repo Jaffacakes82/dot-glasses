@@ -162,6 +162,7 @@ public class AccessAuditFixture : AccessControlFixture
             CustomerId = customer.Id,
             ConsentGiven = true,
             ReasonNotPurchasedRefId = db.ReferenceDataItems.First(x => x.Category == ReferenceDataCategory.ReasonNotPurchased && x.IsActive).Id,
+            CustomerToldPrice = true,
             CreatedAtUtc = now,
         };
         var sale = new Sale

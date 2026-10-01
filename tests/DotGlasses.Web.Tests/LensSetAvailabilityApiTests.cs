@@ -125,6 +125,7 @@ public class LensSetAvailabilityApiTests(CustomWebApplicationFactory factory)
             FullName = "Amina Okoro",
             PhoneNumber = "0700111222",
             ReasonNotPurchasedRefId = reasonNotPurchasedId,
+            CustomerToldPrice = true,
             LensRangeType = ContractLensRangeType.LensSet,
             PresetCatalogueId = fixture.LensSetId,
             SphereLeft = LensSetTestData.SellableSphere,

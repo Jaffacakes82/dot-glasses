@@ -176,6 +176,7 @@ public class ConsultationRulesTests
         FullName = "Amina Okoro",
         PhoneNumber = "+254700000000",
         ReasonNotPurchasedRefId = ActiveReasonNotPurchased,
+        CustomerToldPrice = true,
     };
 
     /// <summary>A Sale cannot decline to name a lens range: LensRangeType is non-nullable and its
@@ -412,17 +413,15 @@ public class ConsultationRulesTests
     [Fact]
     public void Referral_ReferredWithoutAReason_IsRejected()
     {
-        // Referred out, so a location is still expected too — the reason and the location are
-        // independent requirements, not a chain.
+        // Referred out with no location either: only the reason is asked for — the location is
+        // optional.
         var request = ValidTest();
         request.ReferredOrTreated = true;
 
-        var result = ConsultationRules.Check(request, Snapshot());
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
-        Assert.Equal(2, result.Failures.Count);
-        Assert.Equal("ReferralReasonRefId", result.Failures[0].Key);
-        Assert.Equal("Choose a reason for the referral or treatment.", result.Failures[0].Message);
-        Assert.Equal("ReferralLocationFreeText", result.Failures[1].Key);
+        Assert.Equal("ReferralReasonRefId", failure.Key);
+        Assert.Equal("Choose a reason for the referral or treatment.", failure.Message);
     }
 
     [Fact]
@@ -529,27 +528,40 @@ public class ConsultationRulesTests
     }
 
     [Fact]
-    public void Referral_ReferredOutWithoutALocation_IsRejected()
+    public void Referral_ReferredOutWithoutALocation_IsAccepted()
     {
+        // The technician often doesn't know where the customer will go.
         var request = ValidTest();
         request.ReferredOrTreated = true;
         request.ReferralReasonRefId = ActiveReferralReason;
 
-        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
-
-        Assert.Equal("ReferralLocationFreeText", failure.Key);
-        Assert.Equal("Enter the referral location, or tick \"Treated in facility\".", failure.Message);
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
     }
 
     [Fact]
-    public void Referral_ReferredOutWithWhitespaceOnlyLocation_IsRejected()
+    public void Referral_ReferredOutWithWhitespaceOnlyLocation_IsAccepted()
     {
         var request = ValidTest();
         request.ReferredOrTreated = true;
         request.ReferralReasonRefId = ActiveReferralReason;
         request.ReferralLocationFreeText = "   ";
 
-        Assert.Equal("ReferralLocationFreeText", AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Key);
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void Referral_ReferredOutWithoutALocation_IsAcceptedOnALeadAndASale()
+    {
+        var lead = ValidLead();
+        lead.ReferredOrTreated = true;
+        lead.ReferralReasonRefId = ActiveReferralReason;
+
+        var sale = ValidSale();
+        sale.ReferredOrTreated = true;
+        sale.ReferralReasonRefId = ActiveReferralReason;
+
+        Assert.True(ConsultationRules.Check(lead, Snapshot()).IsValid);
+        Assert.True(ConsultationRules.Check(sale, Snapshot()).IsValid);
     }
 
     [Fact]
@@ -568,6 +580,8 @@ public class ConsultationRulesTests
     {
         var request = ValidLead();
         request.ReferredOrTreated = true;
+        request.TreatedInFacility = true;
+        request.ReferralLocationFreeText = "Kisumu District Hospital";
 
         var result = ConsultationRules.Check(request, Snapshot());
 
@@ -579,10 +593,36 @@ public class ConsultationRulesTests
     {
         var request = ValidSale();
         request.ReferredOrTreated = true;
+        request.TreatedInFacility = true;
+        request.ReferralLocationFreeText = "Kisumu District Hospital";
 
         var result = ConsultationRules.Check(request, Snapshot());
 
         Assert.Equal(["ReferralReasonRefId", "ReferralLocationFreeText"], result.Failures.Select(f => f.Key));
+    }
+
+    [Fact]
+    public void PriceAwareness_NotAnsweredOnALead_IsRejected()
+    {
+        var request = ValidLead();
+        request.CustomerToldPrice = null;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("CustomerToldPrice", failure.Key);
+        Assert.Equal("Choose Yes or No for \"Has the customer been told the price?\".", failure.Message);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void PriceAwareness_EitherAnswer_IsAccepted(bool told)
+    {
+        // A note for whoever follows the Lead up, not a gate.
+        var request = ValidLead();
+        request.CustomerToldPrice = told;
+
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
     }
 
     [Fact]
@@ -2435,6 +2475,8 @@ public class ConsultationRulesTests
         request.OccupationRefId = NeverExisted;
         request.ReferredOrTreated = true;
         request.ReferralReasonRefId = ActiveReferralReason;
+        request.TreatedInFacility = true;
+        request.ReferralLocationFreeText = "Kisumu District Hospital";
         request.FrameColourRefId = RetiredFrameColour;
         request.HardCaseOtherColourText = "Olive green";
 

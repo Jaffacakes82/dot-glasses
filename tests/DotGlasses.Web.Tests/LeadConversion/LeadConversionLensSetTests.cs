@@ -230,6 +230,37 @@ public class LeadConversionLensSetTests(AdminPortalFactory factory) : IClassFixt
         Assert.Contains("Choose a lens range.", await response.Content.ReadAsStringAsync());
     }
 
+    [Fact]
+    public async Task ReferredOrTreatedIsAskedLast_AndConvertsWithNoReferralLocation()
+    {
+        var leadId = SeedLeadWithNoLensPreference();
+        var client = factory.CreateAdminClient();
+
+        var html = await (await client.GetAsync($"/Leads/Convert/{leadId}")).Content.ReadAsStringAsync();
+        var referral = html.IndexOf("name=\"Form.ReferredOrTreated\"", StringComparison.Ordinal);
+        Assert.True(referral > html.IndexOf("name=\"Form.HardCaseOtherColourText\"", StringComparison.Ordinal));
+        Assert.True(referral > html.IndexOf("name=\"Form.FrameColourRefId\"", StringComparison.Ordinal));
+        Assert.Contains("Referral location (optional", html);
+
+        var lens = NineLensOptionWithACoating();
+        var reason = Query(db => db.ReferenceDataItems.First(x => x.Category == ReferenceDataCategory.ReferralReason && x.IsActive && !x.IsOtherOption).Id);
+        var token = await AdminPortalFactory.GetAntiforgeryTokenAsync(client, $"/Leads/Convert/{leadId}");
+        await AdminPortalFactory.PostAndFollowAsync(client, $"/Leads/Convert/{leadId}", AdminPortalFactory.Form(token,
+            ("Form.ConsentGiven", "true"),
+            ("Form.LensRange", ExampleLensSets.NineLensSetId.ToString()),
+            ("Form.LensLeftId", lens.Id.ToString()),
+            ("Form.LensRightId", lens.Id.ToString()),
+            ("Form.PresetPupilDistanceBucket", "2"),
+            ("Form.FrameColourRefId", AFrameColour().ToString()),
+            ("Form.CoatingRefIds", lens.CoatingId.ToString()),
+            ("Form.ReferredOrTreated", "true"),
+            ("Form.ReferralReasonRefId", reason.ToString())));
+
+        var sale = Query(db => db.Sales.IgnoreQueryFilters().Single(s => s.SourceLeadId == leadId));
+        Assert.True(sale.ReferredOrTreated);
+        Assert.Null(sale.ReferralLocationFreeText);
+    }
+
     /// <summary>The value of the option the select tag helper marked selected in the named select,
     /// or null when none is.</summary>
     private static string? SelectedValue(string html, string selectName)

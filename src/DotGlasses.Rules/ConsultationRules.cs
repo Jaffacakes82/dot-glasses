@@ -65,6 +65,7 @@ public static class ConsultationRules
                 .Concat(Occupation(request.OccupationRefId, request.OccupationOtherText, snapshot))
                 .Concat(Referral(request.ReferredOrTreated, request.ReferralReasonRefId, request.ReferralOtherText, request.ReferralLocationFreeText, request.TreatedInFacility, snapshot))
                 .Concat(ReasonNotPurchased(request.ReasonNotPurchasedRefId, request.ReasonNotPurchasedOtherText, snapshot))
+                .Concat(PriceAwareness(request.CustomerToldPrice))
                 .Concat(LensRange(
                     request.LensRangeType, request.PresetCatalogueId,
                     request.SphereLeft, request.CylinderLeft, request.AxisLeft, request.AddLeft,
@@ -222,9 +223,10 @@ public static class ConsultationRules
 
     /// <summary>"Referred or treated" per <c>CONTEXT.md</c>: an explicit flag, orthogonal to
     /// Outcome and not gated on any particular outcome/result. The reason is required whenever the
-    /// flag is set, whether the patient was referred out or treated in-house; only the location
-    /// requirement flips on TreatedInFacility, because treating in-house names no external place.
-    /// Every referral field must stay empty when the flag is clear.</summary>
+    /// flag is set, whether the patient was referred out or treated in-house. The location is
+    /// optional — the technician often doesn't know it — and must stay empty when the customer was
+    /// treated in the facility, because treating in-house names no external place. Every referral
+    /// field must stay empty when the flag is clear.</summary>
     private static IEnumerable<RuleFailure> Referral(
         bool referredOrTreated, Guid? referralReasonRefId, string? referralOtherText,
         string? referralLocationFreeText, bool treatedInFacility, ReferenceDataSnapshot snapshot)
@@ -255,18 +257,18 @@ public static class ConsultationRules
             }
         }
 
-        if (treatedInFacility)
+        if (treatedInFacility && !string.IsNullOrWhiteSpace(referralLocationFreeText))
         {
-            if (!string.IsNullOrWhiteSpace(referralLocationFreeText))
-            {
-                yield return new RuleFailure(ReferralLocationFreeTextKey, "Clear the referral location, or untick \"Treated in facility\".");
-            }
-        }
-        else if (string.IsNullOrWhiteSpace(referralLocationFreeText))
-        {
-            yield return new RuleFailure(ReferralLocationFreeTextKey, "Enter the referral location, or tick \"Treated in facility\".");
+            yield return new RuleFailure(ReferralLocationFreeTextKey, "Clear the referral location, or untick \"Treated in facility\".");
         }
     }
+
+    /// <summary>Lead only. "Has the customer been told the price?" must be answered, and either
+    /// answer passes: it is a note for whoever follows the Lead up, not a gate on saving it.</summary>
+    private static IEnumerable<RuleFailure> PriceAwareness(bool? customerToldPrice) =>
+        customerToldPrice is null
+            ? [new RuleFailure(nameof(CreateLeadRequest.CustomerToldPrice), "Choose Yes or No for \"Has the customer been told the price?\".")]
+            : [];
 
     /// <summary>Lead only, and required rather than optional — an unconverted Lead exists because
     /// something stopped the purchase, so the record always names it.</summary>

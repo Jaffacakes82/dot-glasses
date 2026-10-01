@@ -51,20 +51,8 @@
                 instead of creating a separate record?
             </p>
             <div style="display:flex; gap:8px; margin-top:var(--space-4);">
-                <button class="dg-btn dg-btn-ghost" style="flex:1;" @onclick="DeclineMatchedLead">No, new customer</button>
-                <button class="dg-btn dg-btn-primary" style="flex:1;" @onclick="ConvertMatchedLead">Yes, convert it</button>
-            </div>
-        </div>
-    }
-    else if (_showPriceConfirm)
-    {
-        <div class="dg-card" style="text-align:center;">
-            <p style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; font-size:16px;">Confirm price awareness</p>
-            <p style="color:#555;">Has the customer been told the price for this order?</p>
-            <p style="font-size:12px; color:#666; margin-top:var(--space-2);">Recording at @(TokenStore.CurrentLocationName ?? "—")</p>
-            <div style="display:flex; gap:8px; margin-top:var(--space-4);">
-                <button class="dg-btn dg-btn-ghost" style="flex:1;" @onclick="() => _showPriceConfirm = false">Not yet</button>
-                <button class="dg-btn dg-btn-primary" style="flex:1;" disabled="@_saving" @onclick="ConfirmAndSaveAsync">Yes, save</button>
+                <button class="dg-btn dg-btn-ghost" style="flex:1;" disabled="@_saving" @onclick="DeclineMatchedLead">No, new customer</button>
+                <button class="dg-btn dg-btn-primary" style="flex:1;" disabled="@_saving" @onclick="ConvertMatchedLead">Yes, convert it</button>
             </div>
         </div>
     }
@@ -110,27 +98,12 @@
                 </select>
             </div>
 
-            <div class="dg-field">
-                <label><input type="checkbox" @bind="_referredOrTreated" @bind:after="() => ClearErrors(ReferralFields)" style="width:auto; margin-right:8px;" />Referred or treated</label>
-            </div>
-            @if (_referredOrTreated)
-            {
-                <ReferenceDataDropdown Label="Reason for referral/treatment" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.ReferralReason)"
-                                        SelectedId="_referralReasonRefId" SelectedIdChanged="v => _referralReasonRefId = v"
-                                        OtherText="@_referralOtherText" OtherTextChanged="v => _referralOtherText = v"
-                                        Errors="_errors" Field="ReferralReasonRefId" OtherField="ReferralOtherText" />
-                <div class="dg-field">
-                    <label><input type="checkbox" @bind="_treatedInFacility" @bind:after="() => ClearErrors(TreatedFields)" style="width:auto; margin-right:8px;" />Treated in facility</label>
-                </div>
-                @if (!_treatedInFacility)
-                {
-                    <div class="dg-field">
-                        <label>Referral location (hospital, clinic, etc.)</label>
-                        <input @bind="_referralLocationFreeText" @oninput="() => ClearErrors(nameof(CreateTestRequest.ReferralLocationFreeText))" />
-                        <FieldError Errors="_errors" For="ReferralLocationFreeText" />
-                    </div>
-                }
-            }
+            @* One order on every form (Spec D): Age, Gender, Occupation open it and "Referred or
+               treated" closes it — on a Test, just ahead of the contact-details question. *@
+            <ReferenceDataDropdown Label="Occupation (optional)" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Occupation)"
+                                    SelectedId="_occupationRefId" SelectedIdChanged="v => _occupationRefId = v"
+                                    OtherText="@_occupationOtherText" OtherTextChanged="v => _occupationOtherText = v"
+                                    Errors="_errors" Field="OccupationRefId" OtherField="OccupationOtherText" />
 
             @if (IsTest)
             {
@@ -145,17 +118,17 @@
 
                 @if (_testOutcome == TestOutcome.NeedsGlasses)
                 {
-                    <ReferenceDataDropdown Label="Occupation (optional)" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Occupation)"
-                                            SelectedId="_occupationRefId" SelectedIdChanged="v => _occupationRefId = v"
-                                            OtherText="@_occupationOtherText" OtherTextChanged="v => _occupationOtherText = v"
-                                            Errors="_errors" Field="OccupationRefId" OtherField="OccupationOtherText" />
-
                     <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues" ReferenceData="Snapshot"
                                        LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
                                        AllowNoPreference="true" Errors="_errors" SelectionChanged="OnLensSelectionChanged" />
 
                     @RenderCoatingPreference()
+                }
 
+                @RenderReferral()
+
+                @if (_testOutcome == TestOutcome.NeedsGlasses)
+                {
                     <div class="dg-field">
                         <label>Did the customer share contact details?</label>
                         <div style="display:flex; gap:8px;">
@@ -175,13 +148,6 @@
                         }
                     </div>
                 }
-                else
-                {
-                    <ReferenceDataDropdown Label="Occupation (optional)" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Occupation)"
-                                            SelectedId="_occupationRefId" SelectedIdChanged="v => _occupationRefId = v"
-                                            OtherText="@_occupationOtherText" OtherTextChanged="v => _occupationOtherText = v"
-                                            Errors="_errors" Field="OccupationRefId" OtherField="OccupationOtherText" />
-                }
             }
             else
             {
@@ -195,10 +161,6 @@
                     <input @bind="_phone" @oninput="() => ClearErrors(nameof(CreateLeadRequest.PhoneNumber))" />
                     <FieldError Errors="_errors" For="PhoneNumber" />
                 </div>
-                <ReferenceDataDropdown Label="Occupation (optional)" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Occupation)"
-                                        SelectedId="_occupationRefId" SelectedIdChanged="v => _occupationRefId = v"
-                                        OtherText="@_occupationOtherText" OtherTextChanged="v => _occupationOtherText = v"
-                                        Errors="_errors" Field="OccupationRefId" OtherField="OccupationOtherText" />
                 <div class="dg-field">
                     <label><input type="checkbox" @bind="_consentGiven" style="width:auto; margin-right:8px;" />Customer consents to be contacted by Dot Glasses for follow-ups/marketing</label>
                 </div>
@@ -260,12 +222,23 @@
                                             OtherText="@_reasonNotPurchasedOtherText" OtherTextChanged="v => _reasonNotPurchasedOtherText = v"
                                             Errors="_errors" Field="ReasonNotPurchasedRefId" OtherField="ReasonNotPurchasedOtherText" />
 
+                    <div class="dg-field">
+                        <label>Has the customer been told the price?</label>
+                        <div style="display:flex; gap:8px;">
+                            <button type="button" class="dg-btn @(_customerToldPrice == true ? "dg-btn-primary" : "dg-btn-ghost")" style="flex:1;" @onclick="() => SetCustomerToldPrice(true)">Yes</button>
+                            <button type="button" class="dg-btn @(_customerToldPrice == false ? "dg-btn-primary" : "dg-btn-ghost")" style="flex:1;" @onclick="() => SetCustomerToldPrice(false)">No</button>
+                        </div>
+                        <FieldError Errors="_errors" For="CustomerToldPrice" />
+                    </div>
+
                     <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues" ReferenceData="Snapshot"
                                        LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
                                        AllowNoPreference="true" Errors="_errors" SelectionChanged="OnLensSelectionChanged" />
 
                     @RenderCoatingPreference()
                 }
+
+                @RenderReferral()
             }
 
             @if (!(IsTest && _testOutcome == TestOutcome.NeedsGlasses && _contactShared == true))
@@ -296,6 +269,14 @@
     [Parameter, SupplyParameterFromQuery] public int? PrefillAge { get; set; }
     [Parameter, SupplyParameterFromQuery] public string? PrefillGender { get; set; }
 
+    // The Test's "Referred or treated" answers, offered to the Lead it continues into as starting
+    // values: loaded into the controls once, changeable, and each record stores its own answer.
+    [Parameter, SupplyParameterFromQuery] public bool? PrefillReferred { get; set; }
+    [Parameter, SupplyParameterFromQuery] public Guid? PrefillReferralReason { get; set; }
+    [Parameter, SupplyParameterFromQuery] public string? PrefillReferralOther { get; set; }
+    [Parameter, SupplyParameterFromQuery] public bool? PrefillTreatedInFacility { get; set; }
+    [Parameter, SupplyParameterFromQuery] public string? PrefillReferralLocation { get; set; }
+
     /// <summary>Set when this form was opened to correct a permanently-failed outbox record —
     /// see FailedRecords.razor. The corrected payload is re-queued under the same Id so the
     /// server's idempotent upsert still applies.</summary>
@@ -309,7 +290,6 @@
     private Guid? _occupationRefId;
     private string? _occupationOtherText;
     private bool _saving;
-    private bool _showPriceConfirm;
 
     // Automatic conversion-match prompt (Sale only, and only when not already converting a
     // specific Lead via SourceLeadId) — see HandleSubmit.
@@ -346,6 +326,7 @@
     // Lead-only
     private Guid? _reasonNotPurchasedRefId;
     private string? _reasonNotPurchasedOtherText;
+    private bool? _customerToldPrice;
 
     // Custom-range coating preference — shared between Test (NeedsGlasses) and Lead, both of
     // which treat coating as optional (unlike Sale, which requires it).
@@ -380,7 +361,7 @@
     private static readonly string[] FrameColourFields = ["FrameColourRefId", "FrameColourOtherText"];
 
     private static readonly string[] LeadFields =
-        [.. TestFields, .. LensFields, "FullName", "PhoneNumber", "ReasonNotPurchasedRefId", "ReasonNotPurchasedOtherText", "CoatingPreferenceRefId"];
+        [.. TestFields, .. LensFields, "FullName", "PhoneNumber", "ReasonNotPurchasedRefId", "ReasonNotPurchasedOtherText", "CustomerToldPrice", "CoatingPreferenceRefId"];
 
     // HardCaseSold and OrderFromDotGlasses each own a checkbox on this form, so a failure keyed to
     // either belongs against that checkbox rather than in the summary band. Both rules are
@@ -442,6 +423,12 @@
         ClearErrors("Outcome");
     }
 
+    private void SetCustomerToldPrice(bool told)
+    {
+        _customerToldPrice = told;
+        ClearErrors(nameof(CreateLeadRequest.CustomerToldPrice));
+    }
+
     private bool _optionsReady;
 
     protected override async Task OnInitializedAsync()
@@ -471,6 +458,12 @@
         if (PrefillGender is not null && Enum.TryParse<Gender>(PrefillGender, out var gender))
         {
             _gender = gender;
+        }
+
+        if (PrefillReferred == true)
+        {
+            ApplyReferral(true, PrefillReferralReason, PrefillReferralOther, PrefillTreatedInFacility == true,
+                PrefillTreatedInFacility == true ? null : PrefillReferralLocation);
         }
     }
 
@@ -510,6 +503,15 @@
             seeded.PupilDistanceMm, seeded.PresetPupilDistanceBucket, seeded.ChildrensFrame);
     }
 
+    private void ApplyReferral(bool referredOrTreated, Guid? reasonRefId, string? otherText, bool treatedInFacility, string? location)
+    {
+        _referredOrTreated = referredOrTreated;
+        _referralReasonRefId = reasonRefId;
+        _referralOtherText = otherText;
+        _treatedInFacility = treatedInFacility;
+        _referralLocationFreeText = location;
+    }
+
     /// <summary>
     /// Rehydrates the form from a permanently-failed outbox item so the technician corrects what
     /// they originally typed instead of re-entering the whole consultation. The stored payload is
@@ -535,10 +537,8 @@
                     _gender = test.Gender;
                     _occupationRefId = test.OccupationRefId;
                     _occupationOtherText = test.OccupationOtherText;
+                    ApplyReferral(test.ReferredOrTreated, test.ReferralReasonRefId, test.ReferralOtherText, test.TreatedInFacility, test.ReferralLocationFreeText);
                     _testOutcome = test.Outcome;
-                    _referralReasonRefId = test.ReferralReasonRefId;
-                    _referralOtherText = test.ReferralOtherText;
-                    _referralLocationFreeText = test.ReferralLocationFreeText;
                     _coatingPreferenceRefId = test.CoatingPreferenceRefId;
                     ApplyLensRange("record", test.LensRangeType, test.PresetCatalogueId,
                         test.SphereLeft, test.CylinderLeft, test.AxisLeft, test.AddLeft,
@@ -556,11 +556,13 @@
                     _gender = lead.Gender;
                     _occupationRefId = lead.OccupationRefId;
                     _occupationOtherText = lead.OccupationOtherText;
+                    ApplyReferral(lead.ReferredOrTreated, lead.ReferralReasonRefId, lead.ReferralOtherText, lead.TreatedInFacility, lead.ReferralLocationFreeText);
                     _name = lead.FullName;
                     _phone = lead.PhoneNumber;
                     _consentGiven = lead.ConsentGiven;
                     _reasonNotPurchasedRefId = lead.ReasonNotPurchasedRefId == Guid.Empty ? null : lead.ReasonNotPurchasedRefId;
                     _reasonNotPurchasedOtherText = lead.ReasonNotPurchasedOtherText;
+                    _customerToldPrice = lead.CustomerToldPrice;
                     _coatingPreferenceRefId = lead.CoatingPreferenceRefId;
                     SourceTestId = lead.SourceTestId;
                     ApplyLensRange("record", lead.LensRangeType, lead.PresetCatalogueId,
@@ -579,6 +581,8 @@
                     _gender = sale.Gender;
                     _occupationRefId = sale.OccupationRefId;
                     _occupationOtherText = sale.OccupationOtherText;
+                    ApplyReferral(sale.ReferredOrTreated, sale.ReferralReasonRefId, sale.ReferralOtherText, sale.TreatedInFacility, sale.ReferralLocationFreeText);
+                    SourceLeadId = sale.SourceLeadId;
                     _name = sale.FullName;
                     _phone = sale.PhoneNumber ?? string.Empty;
                     _consentGiven = sale.ConsentGiven;
@@ -684,6 +688,33 @@
             return left is not null && right is not null ? LensSetLenses.CoatingsFor(left, right) : null;
         }
     }
+
+    /// <summary>"Referred or treated" — the same block on all three forms, asked last, once the
+    /// consultation is done (a Test asks it just before the contact-details question).</summary>
+    private RenderFragment RenderReferral() => @<text>
+        <div class="dg-field">
+            <label><input type="checkbox" @bind="_referredOrTreated" @bind:after="() => ClearErrors(ReferralFields)" style="width:auto; margin-right:8px;" />Referred or treated</label>
+            <FieldError Errors="_errors" For="ReferredOrTreated" />
+        </div>
+        @if (_referredOrTreated)
+        {
+            <ReferenceDataDropdown Label="Reason for referral/treatment" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.ReferralReason)"
+                                    SelectedId="_referralReasonRefId" SelectedIdChanged="v => _referralReasonRefId = v"
+                                    OtherText="@_referralOtherText" OtherTextChanged="v => _referralOtherText = v"
+                                    Errors="_errors" Field="ReferralReasonRefId" OtherField="ReferralOtherText" />
+            <div class="dg-field">
+                <label><input type="checkbox" @bind="_treatedInFacility" @bind:after="() => ClearErrors(TreatedFields)" style="width:auto; margin-right:8px;" />Treated in facility</label>
+            </div>
+            @if (!_treatedInFacility)
+            {
+                <div class="dg-field">
+                    <label>Referral location (optional)</label>
+                    <input @bind="_referralLocationFreeText" placeholder="Hospital, clinic, etc." @oninput="() => ClearErrors(nameof(CreateTestRequest.ReferralLocationFreeText))" />
+                    <FieldError Errors="_errors" For="ReferralLocationFreeText" />
+                </div>
+            }
+        }
+    </text>;
 
     /// <summary>The optional coating preference of a Test or Lead, as radio buttons with "No
     /// preference" first (never a dropdown — ADR-0007). On a lens set it is limited to the coatings
@@ -800,7 +831,7 @@
         _age is not null || !string.IsNullOrWhiteSpace(_name) || !string.IsNullOrWhiteSpace(_phone)
         || _occupationRefId is not null || _consentGiven
         || (IsTest && _testOutcome != TestOutcome.NoGlassesNeeded) || _referredOrTreated
-        || _reasonNotPurchasedRefId is not null || _coatingPreferenceRefId is not null
+        || _reasonNotPurchasedRefId is not null || _customerToldPrice is not null || _coatingPreferenceRefId is not null
         || _frameColourRefId is not null || _coatingRefIds.Count > 0 || _hardCaseSold
         || _lensRange.LensLeftId is not null || _lensRange.LensRightId is not null
         || _lensRange.SphereLeft is not null || _lensRange.SphereRight is not null
@@ -843,8 +874,6 @@
             return;
         }
 
-        // Test saves immediately (per the design brief); Lead and Sale require the
-        // price-awareness confirmation step first.
         if (IsTest)
         {
             await SaveTestAsync();
@@ -866,23 +895,25 @@
             }
         }
 
-        _showPriceConfirm = true;
+        await SaveLeadOrSaleAsync();
     }
 
-    private void ConvertMatchedLead()
+    // The match prompt is the only step between Save and saving: either answer saves the Sale
+    // that was already checked.
+    private async Task ConvertMatchedLead()
     {
         SourceLeadId = _leadMatch?.Id;
         _showLeadMatchConfirm = false;
-        _showPriceConfirm = true;
+        await SaveLeadOrSaleAsync();
     }
 
-    private void DeclineMatchedLead()
+    private async Task DeclineMatchedLead()
     {
         _showLeadMatchConfirm = false;
-        _showPriceConfirm = true;
+        await SaveLeadOrSaleAsync();
     }
 
-    private async Task ConfirmAndSaveAsync()
+    private async Task SaveLeadOrSaleAsync()
     {
         if (IsSale)
         {
@@ -907,11 +938,19 @@
             return;
         }
 
-        var url = $"consultation/lead?sourceTestId={testId}&prefillGender={_gender}";
-        if (_age is { } age)
-        {
-            url += $"&prefillAge={age}";
-        }
+        var url = Navigation.GetUriWithQueryParameters(
+            Navigation.ToAbsoluteUri("consultation/lead").ToString(),
+            new Dictionary<string, object?>
+            {
+                ["sourceTestId"] = testId,
+                ["prefillGender"] = _gender.ToString(),
+                ["prefillAge"] = _age,
+                ["prefillReferred"] = _referredOrTreated ? true : null,
+                ["prefillReferralReason"] = _referredOrTreated ? _referralReasonRefId : null,
+                ["prefillReferralOther"] = _referredOrTreated ? _referralOtherText : null,
+                ["prefillTreatedInFacility"] = _referredOrTreated && _treatedInFacility ? true : null,
+                ["prefillReferralLocation"] = _referredOrTreated && !_treatedInFacility ? _referralLocationFreeText : null,
+            });
 
         Navigation.NavigateTo(url);
     }
@@ -1033,6 +1072,7 @@
         TreatedInFacility = _referredOrTreated && _treatedInFacility,
         ReasonNotPurchasedRefId = _reasonNotPurchasedRefId ?? Guid.Empty,
         ReasonNotPurchasedOtherText = _reasonNotPurchasedOtherText,
+        CustomerToldPrice = _customerToldPrice,
         LensRangeType = _lensRange.LensRangeType,
         PresetCatalogueId = _lensRange.PresetCatalogueId,
         SphereLeft = _lensRange.SphereLeft,
@@ -1173,7 +1213,6 @@
                 return true;
             }
 
-            _showPriceConfirm = false;
             _summaryMessage = result.Message ?? "The server rejected this record.";
             if (result.FieldErrors is not null)
             {

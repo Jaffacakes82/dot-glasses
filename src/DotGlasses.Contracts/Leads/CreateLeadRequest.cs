@@ -37,6 +37,11 @@ public class CreateLeadRequest
     public Guid ReasonNotPurchasedRefId { get; set; }
     public string? ReasonNotPurchasedOtherText { get; set; }
 
+    /// <summary>"Has the customer been told the price?" — a note for whoever follows the Lead up,
+    /// not a gate: either answer saves, but one must be given (see ConsultationRules). Nullable so
+    /// "not answered" is distinguishable from No.</summary>
+    public bool? CustomerToldPrice { get; set; }
+
     /// <summary>Null if this Lead carries no product preference at all (test results only).</summary>
     public LensRangeType? LensRangeType { get; set; }
 

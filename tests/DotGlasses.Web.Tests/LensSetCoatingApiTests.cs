@@ -146,6 +146,7 @@ public class LensSetCoatingApiTests(CustomWebApplicationFactory factory)
             FullName = "Amina Okoro",
             PhoneNumber = "0700111222",
             ReasonNotPurchasedRefId = ActiveItem(DomainReferenceDataCategory.ReasonNotPurchased),
+            CustomerToldPrice = true,
             LensRangeType = LensRangeType.LensSet,
             PresetCatalogueId = lensSetId,
             SphereLeft = 3.00m,
