@@ -46,6 +46,43 @@ public class FormErrors
     public void Clear() => _errors.Clear();
 
     /// <summary>
+    /// Raised after <see cref="ClearFields"/> removed at least one message. The controls that
+    /// clear their own message are often child components, and the message they clear is shown by
+    /// FieldErrors elsewhere in the tree and by the form's summary band; this is how the owner of
+    /// the shared bag learns to re-render and re-evaluate the summary without every control
+    /// knowing about its parent.
+    /// </summary>
+    public event Action? Changed;
+
+    /// <summary>True while any message is showing, against a control or in the summary band.</summary>
+    public bool HasMessages => _errors.Count > 0 || Unattributed.Count > 0;
+
+    /// <summary>
+    /// Drops the messages attributed to these fields — what a control calls when the technician
+    /// changes it, so a corrected answer doesn't keep the complaint about its old value. Other
+    /// fields' messages stay, and so does everything in <see cref="Unattributed"/>: a whole-record
+    /// message isn't about any one control, so changing one can't have answered it. Nothing is
+    /// re-checked; the next save runs the whole shared check again and raises what is still wrong.
+    /// Unknown or empty keys are ignored.
+    /// </summary>
+    public void ClearFields(params IEnumerable<string> fields)
+    {
+        var removed = false;
+        foreach (var field in fields)
+        {
+            if (!string.IsNullOrEmpty(field))
+            {
+                removed |= _errors.Remove(field);
+            }
+        }
+
+        if (removed)
+        {
+            Changed?.Invoke();
+        }
+    }
+
+    /// <summary>
     /// Folds the shared module's verdict into the bag before a record is ever queued. Taken as
     /// <see cref="RuleResult"/> rather than a dictionary because a single key legitimately carries
     /// more than one failure (a Coating preference can be both inactive and unavailable for the

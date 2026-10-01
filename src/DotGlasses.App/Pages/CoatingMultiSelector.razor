@@ -120,6 +120,8 @@
             selection.Remove(coatingId);
         }
 
+        // Only a tick that took effect changes the answer; a blocked one returned above.
+        Errors?.ClearFields(Field);
         await SelectedIdsChanged.InvokeAsync(selection);
     }
 

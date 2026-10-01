@@ -37,7 +37,11 @@
     private static string Key(decimal? value) =>
         value is { } v ? v.ToString("0.##", CultureInfo.InvariantCulture) : string.Empty;
 
-    private Task OnChangedAsync(ChangeEventArgs e) =>
-        ValueChanged.InvokeAsync(
+    private Task OnChangedAsync(ChangeEventArgs e)
+    {
+        // A changed answer no longer carries the message raised against the old one.
+        Errors?.ClearFields(Field);
+        return ValueChanged.InvokeAsync(
             decimal.TryParse(e.Value?.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var d) ? d : null);
+    }
 }
