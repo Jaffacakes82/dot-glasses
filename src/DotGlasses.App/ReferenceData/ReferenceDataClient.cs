@@ -32,6 +32,12 @@ public class ReferenceDataClient : IReferenceDataClient
     /// own 100 seconds to fetch options the technician already has.</summary>
     private static readonly TimeSpan HeldCopyRefreshTimeout = TimeSpan.FromSeconds(5);
 
+    /// <summary>The same bound when nothing is held in memory yet (first form after a launch, a
+    /// sign-in or a location switch). Longer, because the only fallback is the IndexedDB copy,
+    /// which may be older or belong to another location — but still far short of HttpClient's 100
+    /// seconds on a connection that is up and going nowhere.</summary>
+    private static readonly TimeSpan FirstLoadTimeout = TimeSpan.FromSeconds(15);
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly HttpClient _httpClient;
@@ -112,7 +118,7 @@ public class ReferenceDataClient : IReferenceDataClient
             return true;
         }
 
-        var fetched = await TryFetchAsync(IsLoaded ? HeldCopyRefreshTimeout : null);
+        var fetched = await TryFetchAsync(IsLoaded ? HeldCopyRefreshTimeout : FirstLoadTimeout);
         if (session != _session)
         {
             return false;
@@ -129,7 +135,9 @@ public class ReferenceDataClient : IReferenceDataClient
             IsLoaded = true;
 
             await WriteCacheAsync(locationId);
-            return true;
+
+            // A sign-out or location switch during the write cleared what was just assigned.
+            return session == _session;
         }
 
         if (IsLoaded)
@@ -181,9 +189,9 @@ public class ReferenceDataClient : IReferenceDataClient
             ? payload.Catalogues ?? []
             : [];
 
-    private async Task<Fetched?> TryFetchAsync(TimeSpan? timeout)
+    private async Task<Fetched?> TryFetchAsync(TimeSpan timeout)
     {
-        using var cancellation = timeout is { } limit ? new CancellationTokenSource(limit) : new CancellationTokenSource();
+        using var cancellation = new CancellationTokenSource(timeout);
         try
         {
             var items = await _httpClient.GetFromJsonAsync<List<ReferenceDataItemDto>>("api/v1/reference-data", cancellation.Token);

@@ -1,6 +1,6 @@
 # 01 — Lens Sets screen follows the prototype's layout
 
-**Status:** ready-for-agent
+**Status:** resolved
 **Category:** enhancement
 **Blocked by:** None — can start immediately
 

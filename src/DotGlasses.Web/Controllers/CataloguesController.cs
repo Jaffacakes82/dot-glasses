@@ -49,11 +49,11 @@ public class CataloguesController(
 
         return View(new LensPowersViewModel(
             [
-                LensPowerList.From("Sphere", "lens-power-sphere", LensPowerValues.Sphere, LensPowerValues.FormatPower, "required on every lens"),
-                LensPowerList.From("Cylinder", "lens-power-cylinder", LensPowerValues.Cylinder, LensPowerValues.FormatPower, "blank means 0.00; the shop sells no positive cylinder"),
-                LensPowerList.From("Axis", "lens-power-axis", LensPowerValues.Axis, Whole, "whole degrees, asked only when the cylinder isn't 0.00"),
-                LensPowerList.From("Add", "lens-power-add", LensPowerValues.Add, LensPowerValues.FormatPower, "blank or 0.00 means no add"),
-                LensPowerList.From("Pupil distance", "lens-power-pupil-distance", LensPowerValues.PupilDistanceMm, Whole, "whole millimetres, one value for the pair on a Custom prescription"),
+                LensPowerList.From("Sphere", "lens-power-sphere", LensPowerValues.Sphere, LensPowerValues.SphereRange, LensPowerValues.FormatPower, "required on every lens"),
+                LensPowerList.From("Cylinder", "lens-power-cylinder", LensPowerValues.Cylinder, LensPowerValues.CylinderRange, LensPowerValues.FormatPower, "blank means 0.00; the shop sells no positive cylinder"),
+                LensPowerList.From("Axis", "lens-power-axis", LensPowerValues.Axis, LensPowerValues.AxisRange, Whole, "whole degrees, asked only when the cylinder isn't 0.00"),
+                LensPowerList.From("Add", "lens-power-add", LensPowerValues.Add, LensPowerValues.AddRange, LensPowerValues.FormatPower, "blank or 0.00 means no add"),
+                LensPowerList.From("Pupil distance", "lens-power-pupil-distance", LensPowerValues.PupilDistanceMm, LensPowerValues.PupilDistanceMmRange, Whole, "whole millimetres, one value for the pair on a Custom prescription"),
             ],
             catalogueId));
     }

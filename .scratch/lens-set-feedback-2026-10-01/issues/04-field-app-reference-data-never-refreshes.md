@@ -1,6 +1,6 @@
 # 04 — Field App keeps the lens sets it loaded at startup until the app is reloaded
 
-**Status:** ready-for-agent
+**Status:** resolved
 **Category:** bug
 **Blocked by:** None — can start immediately
 

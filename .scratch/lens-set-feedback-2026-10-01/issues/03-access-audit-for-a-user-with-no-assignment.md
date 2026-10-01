@@ -1,6 +1,6 @@
 # 03 — Access audit: what can a user with no assignment, or no retail point, reach?
 
-**Status:** ready-for-agent
+**Status:** resolved
 **Category:** bug
 **Blocked by:** None — can start immediately (independent of 02)
 

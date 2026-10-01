@@ -1,6 +1,6 @@
 # 05 — A field's error stays on screen after the answer is corrected
 
-**Status:** ready-for-agent
+**Status:** resolved
 **Category:** bug
 **Blocked by:** None — can start immediately
 

@@ -38,7 +38,7 @@
             <button class="dg-btn dg-btn-ghost" type="button" @onclick="RetryReferenceDataAsync">Retry</button>
         </div>
     }
-    else if (!ReferenceDataClient.IsLoaded)
+    else if (!_optionsReady || !ReferenceDataClient.IsLoaded)
     {
         <p>Loading options…</p>
     }
@@ -442,10 +442,15 @@
         ClearErrors("Outcome");
     }
 
+    private bool _optionsReady;
+
     protected override async Task OnInitializedAsync()
     {
-        // Fresh at every form open, and only then — see IReferenceDataClient.RefreshAsync.
+        // Fresh at every form open, and only then — see IReferenceDataClient.RefreshAsync. The
+        // form stays on "Loading options…" until this returns, even when a copy is already held:
+        // rendering it first would let the refresh swap the options under answers already given.
         await ReferenceDataClient.RefreshAsync();
+        _optionsReady = true;
 
         if (FixOutboxId is { } fixId)
         {

@@ -1,6 +1,6 @@
 # 02 — Field App pages open from a typed URL without sign-in or a current location
 
-**Status:** ready-for-agent
+**Status:** resolved
 **Category:** bug
 **Blocked by:** None — can start immediately
 

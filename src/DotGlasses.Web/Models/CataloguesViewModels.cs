@@ -183,15 +183,12 @@ public record LensPowersViewModel(IReadOnlyList<LensPowerList> Lists, Guid? Cata
 /// can never disagree with the list beneath it, followed by a note on what the value means.</summary>
 public record LensPowerList(string Title, string ElementId, string Summary, IReadOnlyList<string> Values)
 {
-    public static LensPowerList From(string title, string elementId, IReadOnlyList<decimal> values, Func<decimal, string> format, string note)
-    {
-        var sorted = values.Order().ToList();
-        var step = sorted.Zip(sorted.Skip(1), (lower, higher) => higher - lower).Min();
-
-        return new LensPowerList(
+    /// <summary><paramref name="range"/> is the Rules' own bounds for the list (ADR-0007), so the
+    /// summary line states them rather than working them back out of the values.</summary>
+    public static LensPowerList From(string title, string elementId, IReadOnlyList<decimal> values, AllowedRange range, Func<decimal, string> format, string note) =>
+        new(
             title,
             elementId,
-            $"{format(sorted[0])} to {format(sorted[^1])} in steps of {step.ToString("0.##", CultureInfo.InvariantCulture)} · {note}",
+            $"{format(range.Min)} to {format(range.Max)} in steps of {range.Step.ToString("0.##", CultureInfo.InvariantCulture)} · {note}",
             values.Select(format).ToList());
-    }
 }

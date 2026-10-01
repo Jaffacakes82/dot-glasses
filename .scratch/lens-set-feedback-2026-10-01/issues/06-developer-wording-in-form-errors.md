@@ -1,6 +1,6 @@
 # 06 — Form errors a technician sees are written for developers
 
-**Status:** ready-for-agent
+**Status:** resolved
 **Category:** bug
 **Blocked by:** None — can start immediately (touches the same form as 05; land 05 first if both are in flight)
 
