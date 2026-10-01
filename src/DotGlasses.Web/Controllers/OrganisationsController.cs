@@ -19,8 +19,8 @@ public class OrganisationsController(
     IValidator<CreateChildOrganisationRequest> createChildValidator,
     IValidator<RenameOrganisationRequest> renameValidator) : Controller
 {
-    public async Task<IActionResult> Index(Guid? selectedId, CancellationToken cancellationToken) =>
-        View(await BuildViewModelAsync(selectedId, cancellationToken));
+    public Task<IActionResult> Index(Guid? selectedId, CancellationToken cancellationToken) =>
+        IndexViewAsync(selectedId, cancellationToken);
 
     /// <summary>Drives off the same ListAsync used to build the tree — already hierarchy-scoped
     /// to the caller's own subtree, no separate query path.</summary>
@@ -47,7 +47,7 @@ public class OrganisationsController(
         if (!validationResult.IsValid)
         {
             validationResult.AddToModelState(ModelState);
-            return View(nameof(Index), await BuildViewModelAsync(request.ParentId, cancellationToken));
+            return await IndexViewAsync(request.ParentId, cancellationToken);
         }
 
         var created = await organisationAdminService.CreateChildAsync(request.ParentId, request.Name, request.Level, request.Kind, cancellationToken);
@@ -108,7 +108,7 @@ public class OrganisationsController(
         if (!validationResult.IsValid)
         {
             validationResult.AddToModelState(ModelState);
-            return View(nameof(Index), await BuildViewModelAsync(request.Id, cancellationToken));
+            return await IndexViewAsync(request.Id, cancellationToken);
         }
 
         await organisationAdminService.RenameAsync(request.Id, request.Name, cancellationToken);
@@ -153,9 +153,24 @@ public class OrganisationsController(
         return result.Succeeded;
     }
 
-    private async Task<OrganisationsIndexViewModel> BuildViewModelAsync(Guid? selectedId, CancellationToken cancellationToken)
+    /// <summary>The screen, or its empty state when the caller's scope holds no organisation at
+    /// all — an account with no assignment (it shouldn't exist, but a database clear-down leaves
+    /// one behind), or one whose only assignments are to deactivated orgs. The scope filter has
+    /// already answered "nothing" by then; this is only the screen saying so instead of failing
+    /// on a tree with no root to select.</summary>
+    private async Task<IActionResult> IndexViewAsync(Guid? selectedId, CancellationToken cancellationToken) =>
+        await BuildViewModelAsync(selectedId, cancellationToken) is { } model
+            ? View(nameof(Index), model)
+            : View("NoOrganisations");
+
+    private async Task<OrganisationsIndexViewModel?> BuildViewModelAsync(Guid? selectedId, CancellationToken cancellationToken)
     {
         var nodes = await organisationAdminService.ListAsync(cancellationToken);
+        if (nodes.Count == 0)
+        {
+            return null;
+        }
+
         var byId = nodes.ToDictionary(n => n.Id);
         var byParent = nodes.ToLookup(n => n.ParentId);
 

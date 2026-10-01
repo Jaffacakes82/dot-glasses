@@ -16,7 +16,7 @@
 {
     <div class="dg-field">
         <label>@(OtherLabel ?? $"{Label} — please specify")</label>
-        <input value="@OtherText" @oninput="e => OtherTextChanged.InvokeAsync(e.Value?.ToString())" />
+        <input value="@OtherText" @oninput="OnOtherInputAsync" />
         <FieldError Errors="Errors" For="@OtherField" />
     </div>
 }
@@ -41,8 +41,17 @@
 
     private bool SelectedIsOther => SelectedId is { } id && Items.FirstOrDefault(i => i.Id == id)?.IsOtherOption == true;
 
+    private Task OnOtherInputAsync(ChangeEventArgs e)
+    {
+        Errors?.ClearFields(OtherField);
+        return OtherTextChanged.InvokeAsync(e.Value?.ToString());
+    }
+
     private async Task OnChangedAsync(ChangeEventArgs e)
     {
+        // Both keys: choosing an option also settles the "Other" text it may have required (or
+        // that is about to be emptied below).
+        Errors?.ClearFields(Field, OtherField);
         var id = Guid.TryParse(e.Value?.ToString(), out var parsed) ? parsed : (Guid?)null;
         await SelectedIdChanged.InvokeAsync(id);
 

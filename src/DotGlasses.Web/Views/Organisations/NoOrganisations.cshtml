@@ -1,0 +1,15 @@
+@{
+    ViewData["Title"] = "Organisations";
+}
+
+@await Html.PartialAsync("_PageHeader", new DotGlasses.Web.Models.PageHeaderViewModel
+{
+    Crumb = "Org Structure",
+    Title = "Organisations",
+})
+
+@* The caller's scope holds no organisation: no assignment at all, or only deactivated ones. *@
+<div class="alert alert-info" style="border-radius:var(--radius-md); max-width:640px;">
+    You aren't assigned to an organisation, so there is nothing to show here. Ask your admin to
+    assign you to one.
+</div>

@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using DotGlasses.App.Auth;
 using DotGlasses.Contracts.Common;
 using DotGlasses.Contracts.PresetCatalogues;
 using DotGlasses.Contracts.ReferenceData;
@@ -15,18 +16,49 @@ namespace DotGlasses.App.ReferenceData;
 /// button and nothing else. That was the single largest hole in the offline story after token
 /// persistence.
 /// </summary>
-public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : IReferenceDataClient
+public class ReferenceDataClient : IReferenceDataClient
 {
     private const string StorageKey = "reference-data-cache";
 
-    /// <summary>The shape of the lens sets in the cache: 1 is ADR-0007's (each lens a lens power
-    /// with its own coatings and pairings). A payload with no such field was written before it.</summary>
-    private const int LensSetShape = 1;
+    /// <summary>The shape of the lens sets in the cache. 1 was ADR-0007's (each lens a lens power
+    /// with its own coatings and pairings); 2 adds whose they are — the lens sets in a payload are
+    /// the ones offered at <see cref="CachedPayload.LocationId"/> and nowhere else. A payload with
+    /// no such field was written before either.</summary>
+    private const int LensSetShape = 2;
+
+    /// <summary>How long a refresh may keep a form waiting when a copy is already held in memory.
+    /// A dead connection fails at once and never gets here; this bounds the connection that is up
+    /// but going nowhere, where the alternative is the form sitting on "Loading" for HttpClient's
+    /// own 100 seconds to fetch options the technician already has.</summary>
+    private static readonly TimeSpan HeldCopyRefreshTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>The same bound when nothing is held in memory yet (first form after a launch, a
+    /// sign-in or a location switch). Longer, because the only fallback is the IndexedDB copy,
+    /// which may be older or belong to another location — but still far short of HttpClient's 100
+    /// seconds on a connection that is up and going nowhere.</summary>
+    private static readonly TimeSpan FirstLoadTimeout = TimeSpan.FromSeconds(15);
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    private readonly HttpClient _httpClient;
+    private readonly IJSRuntime _jsRuntime;
+    private readonly AuthTokenStore _tokenStore;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private List<ReferenceDataItemDto> _items = [];
+
+    /// <summary>Counts sign-ins, sign-outs and location switches. A load that finds it changed
+    /// while it was waiting was answered for a session that is gone, and starts again.</summary>
+    private int _session;
+
+    public ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime, AuthTokenStore tokenStore)
+    {
+        _httpClient = httpClient;
+        _jsRuntime = jsRuntime;
+        _tokenStore = tokenStore;
+
+        // Both live for the whole app (singletons), so there is nothing to unsubscribe.
+        _tokenStore.Changed += Invalidate;
+    }
 
     public bool IsLoaded { get; private set; }
 
@@ -40,53 +72,15 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
 
     public IReadOnlyList<CoatingExclusionDto> CoatingExclusions { get; private set; } = [];
 
-    public async Task EnsureLoadedAsync()
-    {
-        if (IsLoaded)
-        {
-            return;
-        }
-
-        await LoadAsync();
-    }
-
-    public async Task RefreshAsync() => await LoadAsync();
-
-    private async Task LoadAsync()
+    public async Task RefreshAsync()
     {
         await _gate.WaitAsync();
         try
         {
-            try
+            while (!await TryLoadForCurrentSessionAsync())
             {
-                var items = await httpClient.GetFromJsonAsync<List<ReferenceDataItemDto>>("api/v1/reference-data");
-                var catalogues = await httpClient.GetFromJsonAsync<List<PresetCatalogueDto>>("api/v1/preset-catalogues");
-                var coatingRules = await httpClient.GetFromJsonAsync<CoatingRulesDto>("api/v1/reference-data/coating-rules");
-
-                _items = items ?? [];
-                Catalogues = catalogues ?? [];
-                CoatingExclusions = coatingRules?.Exclusions ?? [];
-                LoadError = null;
-                IsFromCache = false;
-                CachedAtUtc = null;
-                IsLoaded = true;
-
-                await WriteCacheAsync();
-                return;
+                // Signed in, out or switched location mid-load — go again for the new session.
             }
-            catch (Exception)
-            {
-                // Unreachable, offline, or the token has expired — fall through to the cache.
-            }
-
-            if (await TryLoadFromCacheAsync())
-            {
-                return;
-            }
-
-            LoadError = "Couldn't reach the server to load lens/coating/frame options, and this "
-                + "device has no saved copy yet. Connect once to download them — after that they "
-                + "stay available offline.";
         }
         finally
         {
@@ -94,12 +88,132 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
         }
     }
 
-    private async Task WriteCacheAsync()
+    /// <summary>
+    /// Sign-in, sign-out and location switch all discard the in-memory copy: lens sets are scoped
+    /// server-side to the token's current location, and a signed-out device must not keep the
+    /// previous user's copy readable. The next form to open loads for whoever is signed in then.
+    /// </summary>
+    private void Invalidate()
     {
-        var payload = new CachedPayload(DateTimeOffset.UtcNow, _items, Catalogues.ToList(), CoatingExclusions.ToList(), LensSetShape);
+        _session++;
+        _items = [];
+        Catalogues = [];
+        CoatingExclusions = [];
+        IsLoaded = false;
+        IsFromCache = false;
+        CachedAtUtc = null;
+        LoadError = null;
+    }
+
+    /// <summary>One attempt: a fresh fetch, else the copy already in memory, else the IndexedDB
+    /// cache. False means the session changed while it waited and nothing it read may be used.</summary>
+    private async Task<bool> TryLoadForCurrentSessionAsync()
+    {
+        var session = _session;
+        var locationId = _tokenStore.CurrentLocationId;
+
+        if (_tokenStore.AccessToken is null)
+        {
+            // Signed out: nothing to load for, and the cache must not refill what sign-out cleared.
+            return true;
+        }
+
+        var fetched = await TryFetchAsync(IsLoaded ? HeldCopyRefreshTimeout : FirstLoadTimeout);
+        if (session != _session)
+        {
+            return false;
+        }
+
+        if (fetched is not null)
+        {
+            _items = fetched.Items;
+            Catalogues = fetched.Catalogues;
+            CoatingExclusions = fetched.CoatingExclusions;
+            LoadError = null;
+            IsFromCache = false;
+            CachedAtUtc = null;
+            IsLoaded = true;
+
+            await WriteCacheAsync(locationId);
+
+            // A sign-out or location switch during the write cleared what was just assigned.
+            return session == _session;
+        }
+
+        if (IsLoaded)
+        {
+            // Unreachable, offline, or the token has expired — but this session already holds a
+            // copy at least as new as the cache, so it stands.
+            return true;
+        }
+
+        var cached = await TryReadCacheAsync();
+        if (session != _session)
+        {
+            return false;
+        }
+
+        if (cached is not null)
+        {
+            _items = cached.Items;
+            Catalogues = LensSetsUsableAt(cached, locationId);
+            CoatingExclusions = cached.CoatingExclusions;
+            IsFromCache = true;
+            CachedAtUtc = cached.CachedAtUtc;
+            LoadError = null;
+            IsLoaded = true;
+            return true;
+        }
+
+        LoadError = "Couldn't reach the server to load lens/coating/frame options, and this "
+            + "device has no saved copy yet. Connect once to download them — after that they "
+            + "stay available offline.";
+        return true;
+    }
+
+    /// <summary>
+    /// Which of a cached payload's lens sets may be offered at <paramref name="locationId"/>: all
+    /// of them when the payload was written at that location in the current shape, otherwise none.
+    /// Reference items and exclusions are one global library and are used whatever this says.
+    ///
+    /// Two kinds of payload lose their lens sets, and in both the technician sees "no lens sets"
+    /// until they are next online, which replaces the whole payload. One was written at another
+    /// retail point: lens sets are assigned per location, and offering the last location's would
+    /// let a technician record against a set the server then refuses. The other is older than the
+    /// current shape: before shape 1 a lens was a label and nothing else, so each would read as
+    /// sphere 0.00 with no coatings and choosing one would record a prescription nobody made, and
+    /// shape 1 doesn't say which location its lens sets were for.
+    /// </summary>
+    private static IReadOnlyList<PresetCatalogueDto> LensSetsUsableAt(CachedPayload payload, Guid? locationId) =>
+        payload.LensSetShape >= LensSetShape && locationId is not null && payload.LocationId == locationId
+            ? payload.Catalogues ?? []
+            : [];
+
+    private async Task<Fetched?> TryFetchAsync(TimeSpan timeout)
+    {
+        using var cancellation = new CancellationTokenSource(timeout);
         try
         {
-            await jsRuntime.InvokeVoidAsync("dotGlassesIdb.kvSet", StorageKey, JsonSerializer.Serialize(payload, JsonOptions));
+            var items = await _httpClient.GetFromJsonAsync<List<ReferenceDataItemDto>>("api/v1/reference-data", cancellation.Token);
+            var catalogues = await _httpClient.GetFromJsonAsync<List<PresetCatalogueDto>>("api/v1/preset-catalogues", cancellation.Token);
+            var coatingRules = await _httpClient.GetFromJsonAsync<CoatingRulesDto>("api/v1/reference-data/coating-rules", cancellation.Token);
+
+            return new Fetched(items ?? [], catalogues ?? [], coatingRules?.Exclusions ?? []);
+        }
+        catch (Exception)
+        {
+            // Unreachable, offline, too slow, or the token has expired — the caller falls back.
+            return null;
+        }
+    }
+
+    private async Task WriteCacheAsync(Guid? locationId)
+    {
+        var payload = new CachedPayload(
+            DateTimeOffset.UtcNow, _items, Catalogues.ToList(), CoatingExclusions.ToList(), LensSetShape, locationId);
+        try
+        {
+            await _jsRuntime.InvokeVoidAsync("dotGlassesIdb.kvSet", StorageKey, JsonSerializer.Serialize(payload, JsonOptions));
         }
         catch (Exception)
         {
@@ -108,39 +222,16 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
         }
     }
 
-    private async Task<bool> TryLoadFromCacheAsync()
+    private async Task<CachedPayload?> TryReadCacheAsync()
     {
         try
         {
-            var json = await jsRuntime.InvokeAsync<string?>("dotGlassesIdb.kvGet", StorageKey);
-            if (string.IsNullOrEmpty(json))
-            {
-                return false;
-            }
-
-            var payload = JsonSerializer.Deserialize<CachedPayload>(json, JsonOptions);
-            if (payload is null)
-            {
-                return false;
-            }
-
-            _items = payload.Items;
-            // A cache written before lens-set lenses were lens powers holds lenses that are a label and
-            // nothing else — every one would read as a lens with sphere 0.00 and no coatings, and
-            // choosing one would record a prescription nobody made. Those lens sets are dropped
-            // (the technician sees "no lens sets" until they next go online, which replaces the
-            // whole payload); the rest of the cache — reference items, exclusions — is still good.
-            Catalogues = payload.LensSetShape >= LensSetShape ? payload.Catalogues ?? [] : [];
-            CoatingExclusions = payload.CoatingExclusions;
-            IsFromCache = true;
-            CachedAtUtc = payload.CachedAtUtc;
-            LoadError = null;
-            IsLoaded = true;
-            return true;
+            var json = await _jsRuntime.InvokeAsync<string?>("dotGlassesIdb.kvGet", StorageKey);
+            return string.IsNullOrEmpty(json) ? null : JsonSerializer.Deserialize<CachedPayload>(json, JsonOptions);
         }
         catch (Exception)
         {
-            return false;
+            return null;
         }
     }
 
@@ -154,9 +245,9 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
     /// existed still deserializes safely (missing JSON properties fall back to the constructor's
     /// default parameter value).
     ///
-    /// Older payloads are read, never rejected, but their lens sets are not used: a payload cached
-    /// before ADR-0007 carries no <see cref="LensSetShape"/> (so 0), and TryLoadFromCacheAsync drops
-    /// its lens sets rather than presenting each lens as a zero-power one with no coatings. Its
+    /// Older payloads are read, never rejected, but their lens sets are not used: LensSetShape
+    /// and LocationId are both absent from a payload written before they existed (so 0 and null),
+    /// and <see cref="LensSetsUsableAt"/> drops the lens sets of any payload it can't place. Its
     /// reference items and exclusions are still used, and the next online load replaces the whole
     /// payload.
     /// </summary>
@@ -165,8 +256,12 @@ public class ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime) : 
         List<ReferenceDataItemDto> Items,
         List<PresetCatalogueDto> Catalogues,
         List<CoatingExclusionDto> CoatingExclusions = null!,
-        int LensSetShape = 0)
+        int LensSetShape = 0,
+        Guid? LocationId = null)
     {
         public List<CoatingExclusionDto> CoatingExclusions { get; init; } = CoatingExclusions ?? [];
     }
+
+    private sealed record Fetched(
+        List<ReferenceDataItemDto> Items, List<PresetCatalogueDto> Catalogues, List<CoatingExclusionDto> CoatingExclusions);
 }

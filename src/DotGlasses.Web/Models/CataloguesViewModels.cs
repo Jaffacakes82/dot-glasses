@@ -5,8 +5,15 @@ using DotGlasses.Rules.ReferenceData;
 
 namespace DotGlasses.Web.Models;
 
+/// <summary>
+/// The "Lens sets" tab (prototype variant A): one lens set on screen at a time.
+/// <see cref="Catalogues"/> is every lens set the picker offers (narrowed by
+/// <see cref="Search"/>); <see cref="Selected"/> is the one being worked on — the one asked for
+/// in the query string, or the first — and null only when there is none to show.
+/// </summary>
 public record CataloguesIndexViewModel(
-    IReadOnlyList<CatalogueCard> Catalogues,
+    IReadOnlyList<LensSetPickerOption> Catalogues,
+    CatalogueCard? Selected,
     IReadOnlyList<RetiredCatalogueCard> RetiredCatalogues,
     IReadOnlyList<(Guid Id, string Name)> AssignableOrgs,
     IReadOnlyList<(Guid Id, string Name)> OwningOrgOptions,
@@ -59,12 +66,15 @@ public record LensEditValues(
 
 public record RetiredCatalogueCard(Guid Id, string Name, bool CanReactivate);
 
-public record CatalogueCard(Guid Id, string Name, string? Description, IReadOnlyList<LensOptionCard> LensOptions, IReadOnlyList<AssignedOrgCard> AssignedOrgs, bool CanEdit);
+/// <summary>One entry of the "Lens set" picker (and of the assign form's list).</summary>
+public record LensSetPickerOption(Guid Id, string Name);
+
+public record CatalogueCard(Guid Id, string Name, string? Description, string OwningOrgName, IReadOnlyList<LensOptionCard> LensOptions, IReadOnlyList<AssignedOrgCard> AssignedOrgs, bool CanEdit);
 
 public record AssignedOrgCard(Guid OrgNodeId, string OrgName, bool CanUnassign);
 
 /// <summary>One row of a lens set's lens table (ADR-0007): label, lens power, lens type, coatings
-/// and pairings, each already rendered as text. The power is formatted by the Rules definition
+/// and pairings, each already rendered as text — a coating or a pairing ("A → B") is one chip. The power is formatted by the Rules definition
 /// (<see cref="LensPowerValues.FormatLensPower"/>), the one place the display format lives.</summary>
 public record LensOptionCard(Guid Id, string Label, string LensPower, string LensType, IReadOnlyList<string> Coatings, IReadOnlyList<string> Pairings, LensEditValues Edit)
 {
@@ -162,13 +172,23 @@ public class AssignCataloguesRequest
     public List<Guid> CatalogueIds { get; set; } = [];
 }
 
-/// <summary>The Lens powers page (ticket 08): each value already formatted by
-/// <see cref="LensPowerValues.FormatPower"/> (sphere, cylinder, add) or as a plain whole-number
-/// string (axis in degrees, a Custom prescription's pupil distance in millimetres), in the shop's
-/// order — the view renders these lists as given and states no bound of its own.</summary>
-public record LensPowersViewModel(
-    IReadOnlyList<string> Sphere,
-    IReadOnlyList<string> Cylinder,
-    IReadOnlyList<string> Axis,
-    IReadOnlyList<string> Add,
-    IReadOnlyList<string> PupilDistanceMm);
+/// <summary>The "Lens powers" tab: one list per value, in the shop's order, each already formatted
+/// and summarised from <see cref="LensPowerValues"/> — the view renders these as given and states
+/// no bound of its own. <see cref="CatalogueId"/> is the lens set the admin came from, carried so
+/// the "Lens sets" tab opens back on it.</summary>
+public record LensPowersViewModel(IReadOnlyList<LensPowerList> Lists, Guid? CatalogueId);
+
+/// <summary>One value list of the "Lens powers" tab. <see cref="Summary"/> is its one-line range,
+/// worked out from the values themselves (lowest, highest, and the gap between neighbours) so it
+/// can never disagree with the list beneath it, followed by a note on what the value means.</summary>
+public record LensPowerList(string Title, string ElementId, string Summary, IReadOnlyList<string> Values)
+{
+    /// <summary><paramref name="range"/> is the Rules' own bounds for the list (ADR-0007), so the
+    /// summary line states them rather than working them back out of the values.</summary>
+    public static LensPowerList From(string title, string elementId, IReadOnlyList<decimal> values, AllowedRange range, Func<decimal, string> format, string note) =>
+        new(
+            title,
+            elementId,
+            $"{format(range.Min)} to {format(range.Max)} in steps of {range.Step.ToString("0.##", CultureInfo.InvariantCulture)} · {note}",
+            values.Select(format).ToList());
+}

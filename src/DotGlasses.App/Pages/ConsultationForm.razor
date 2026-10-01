@@ -14,6 +14,7 @@
 @using DotGlasses.Rules.ReferenceData
 @using DotGlasses.Rules.Sales
 @using DotGlasses.App.Auth
+@implements IDisposable
 @inject NavigationManager Navigation
 @inject AuthTokenStore TokenStore
 @inject IReferenceDataClient ReferenceDataClient
@@ -37,7 +38,7 @@
             <button class="dg-btn dg-btn-ghost" type="button" @onclick="RetryReferenceDataAsync">Retry</button>
         </div>
     }
-    else if (!ReferenceDataClient.IsLoaded)
+    else if (!_optionsReady || !ReferenceDataClient.IsLoaded)
     {
         <p>Loading options…</p>
     }
@@ -98,19 +99,19 @@
 
             <div class="dg-field">
                 <label>Age</label>
-                <input type="number" min="0" max="120" @bind="_age" />
+                <input type="number" min="0" max="120" @bind="_age" @oninput="() => ClearErrors(nameof(CreateTestRequest.AgeYears))" />
                 <FieldError Errors="_errors" For="AgeYears" />
             </div>
             <div class="dg-field">
                 <label>Gender</label>
-                <select @bind="_gender">
+                <select @bind="_gender" @bind:after="() => ClearErrors(nameof(CreateTestRequest.Gender))">
                     <option value="Female">Female</option>
                     <option value="Male">Male</option>
                 </select>
             </div>
 
             <div class="dg-field">
-                <label><input type="checkbox" @bind="_referredOrTreated" style="width:auto; margin-right:8px;" />Referred or treated</label>
+                <label><input type="checkbox" @bind="_referredOrTreated" @bind:after="() => ClearErrors(ReferralFields)" style="width:auto; margin-right:8px;" />Referred or treated</label>
             </div>
             @if (_referredOrTreated)
             {
@@ -119,13 +120,13 @@
                                         OtherText="@_referralOtherText" OtherTextChanged="v => _referralOtherText = v"
                                         Errors="_errors" Field="ReferralReasonRefId" OtherField="ReferralOtherText" />
                 <div class="dg-field">
-                    <label><input type="checkbox" @bind="_treatedInFacility" style="width:auto; margin-right:8px;" />Treated in facility</label>
+                    <label><input type="checkbox" @bind="_treatedInFacility" @bind:after="() => ClearErrors(TreatedFields)" style="width:auto; margin-right:8px;" />Treated in facility</label>
                 </div>
                 @if (!_treatedInFacility)
                 {
                     <div class="dg-field">
                         <label>Referral location (hospital, clinic, etc.)</label>
-                        <input @bind="_referralLocationFreeText" />
+                        <input @bind="_referralLocationFreeText" @oninput="() => ClearErrors(nameof(CreateTestRequest.ReferralLocationFreeText))" />
                         <FieldError Errors="_errors" For="ReferralLocationFreeText" />
                     </div>
                 }
@@ -135,7 +136,7 @@
             {
                 <div class="dg-field">
                     <label>Outcome</label>
-                    <select @bind="_testOutcome">
+                    <select @bind="_testOutcome" @bind:after="OnOutcomeChanged">
                         <option value="NoGlassesNeeded">No glasses needed</option>
                         <option value="NeedsGlasses">Needs glasses</option>
                     </select>
@@ -158,8 +159,8 @@
                     <div class="dg-field">
                         <label>Did the customer share contact details?</label>
                         <div style="display:flex; gap:8px;">
-                            <button type="button" class="dg-btn @(_contactShared == false ? "dg-btn-primary" : "dg-btn-ghost")" style="flex:1;" @onclick="() => _contactShared = false">No</button>
-                            <button type="button" class="dg-btn @(_contactShared == true ? "dg-btn-primary" : "dg-btn-ghost")" style="flex:1;" @onclick="() => _contactShared = true">Yes</button>
+                            <button type="button" class="dg-btn @(_contactShared == false ? "dg-btn-primary" : "dg-btn-ghost")" style="flex:1;" @onclick="() => SetContactShared(false)">No</button>
+                            <button type="button" class="dg-btn @(_contactShared == true ? "dg-btn-primary" : "dg-btn-ghost")" style="flex:1;" @onclick="() => SetContactShared(true)">Yes</button>
                         </div>
                         @if (_contactShared == true)
                         {
@@ -186,12 +187,12 @@
             {
                 <div class="dg-field">
                     <label>Full name</label>
-                    <input @bind="_name" />
+                    <input @bind="_name" @oninput="() => ClearErrors(nameof(CreateLeadRequest.FullName))" />
                     <FieldError Errors="_errors" For="FullName" />
                 </div>
                 <div class="dg-field">
                     <label>Phone number@(IsSale ? " (optional)" : "")</label>
-                    <input @bind="_phone" />
+                    <input @bind="_phone" @oninput="() => ClearErrors(nameof(CreateLeadRequest.PhoneNumber))" />
                     <FieldError Errors="_errors" For="PhoneNumber" />
                 </div>
                 <ReferenceDataDropdown Label="Occupation (optional)" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Occupation)"
@@ -235,14 +236,14 @@
                         @* Last in the lens section: the order is placed once everything about the
                            lens, its coatings included, has been chosen. *@
                         <div class="dg-field">
-                            <label class="dg-choice"><input type="checkbox" @bind="_orderFromDotGlasses" />Order this lens from Dot Glasses (outlet doesn't have stock)</label>
+                            <label class="dg-choice"><input type="checkbox" @bind="_orderFromDotGlasses" @bind:after="() => ClearErrors(nameof(CreateSaleRequest.OrderFromDotGlasses))" />Order this lens from Dot Glasses (outlet doesn't have stock)</label>
                         </div>
                     }
 
                     @RenderFrameSwatches()
 
                     <div class="dg-field">
-                        <label><input type="checkbox" @bind="_hardCaseSold" style="width:auto; margin-right:8px;" />Did this person buy a hard case?</label>
+                        <label><input type="checkbox" @bind="_hardCaseSold" @bind:after="() => ClearErrors(HardCaseFields)" style="width:auto; margin-right:8px;" />Did this person buy a hard case?</label>
                     </div>
                     @if (_hardCaseSold)
                     {
@@ -319,6 +320,12 @@
     private readonly FormErrors _errors = new();
     private string? _summaryMessage;
 
+    /// <summary>True while <see cref="_summaryMessage"/> is the line over highlighted field errors
+    /// (the client's "Please fix…", or a server rejection that landed against fields), so it can go
+    /// when the last of them is corrected. Other summaries — a Failed record's stored reason, a
+    /// whole-record rejection, "that lead couldn't be loaded" — aren't about a field and stay.</summary>
+    private bool _summaryFollowsFieldErrors;
+
     // Test-only
     private TestOutcome _testOutcome = TestOutcome.NoGlassesNeeded;
     private bool? _contactShared;
@@ -362,10 +369,15 @@
         ["AgeYears", "Gender", "OccupationRefId", "OccupationOtherText", "Outcome",
          "ReferredOrTreated", "ReferralReasonRefId", "ReferralOtherText", "ReferralLocationFreeText", "TreatedInFacility"];
 
-    private static readonly string[] LensFields =
-        ["LensRangeType", "PresetCatalogueId", "SphereLeft", "SphereRight",
-         "CylinderLeft", "CylinderRight", "AxisLeft", "AxisRight", "AddLeft", "AddRight",
-         "LensTypeRefId", "LensTypeOtherText", "PupilDistanceMm", "PresetPupilDistanceBucket"];
+    // The referral block's keys: "Referred or treated" shows or hides all of them together.
+    private static readonly string[] ReferralFields =
+        ["ReferredOrTreated", "ReferralReasonRefId", "ReferralOtherText", "ReferralLocationFreeText", "TreatedInFacility"];
+
+    private static readonly string[] LensFields = LensErrorKeys.All;
+
+    private static readonly string[] TreatedFields = ["TreatedInFacility", "ReferralLocationFreeText"];
+    private static readonly string[] HardCaseFields = ["HardCaseSold", "HardCaseColourRefId", "HardCaseOtherColourText"];
+    private static readonly string[] FrameColourFields = ["FrameColourRefId", "FrameColourOtherText"];
 
     private static readonly string[] LeadFields =
         [.. TestFields, .. LensFields, "FullName", "PhoneNumber", "ReasonNotPurchasedRefId", "ReasonNotPurchasedOtherText", "CoatingPreferenceRefId"];
@@ -388,9 +400,57 @@
     /// this device already holds — no I/O, and Validate() runs only on a save.</summary>
     private ReferenceDataSnapshot Snapshot => ReferenceDataClient.ToSnapshot();
 
+    protected override void OnInitialized() => _errors.Changed += OnErrorsChanged;
+
+    public void Dispose() => _errors.Changed -= OnErrorsChanged;
+
+    /// <summary>Drops the messages against the control(s) the technician just changed — see
+    /// <see cref="FormErrors.ClearFields"/>. Nothing is re-validated; Save runs the whole check.</summary>
+    private void ClearErrors(params IEnumerable<string> fields) => _errors.ClearFields(fields);
+
+    /// <summary>Controls clear their own keys, often from a child component, so the form hears about
+    /// it through the bag: the summary line goes with the last field message, and the form re-renders
+    /// so every FieldError (and the band) reflects it.</summary>
+    private void OnErrorsChanged()
+    {
+        if (_summaryFollowsFieldErrors && !_errors.HasMessages)
+        {
+            _summaryMessage = null;
+            _summaryFollowsFieldErrors = false;
+        }
+
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void OnOutcomeChanged()
+    {
+        ClearErrors("Outcome");
+
+        // "No glasses needed" hides the lens section and the coating preference.
+        if (_testOutcome != TestOutcome.NeedsGlasses)
+        {
+            ClearErrors(LensFields);
+            ClearErrors("CoatingPreferenceRefId");
+        }
+    }
+
+    private void SetContactShared(bool shared)
+    {
+        _contactShared = shared;
+
+        // The only message tied to this answer is the "continue as a Lead instead" one on Outcome.
+        ClearErrors("Outcome");
+    }
+
+    private bool _optionsReady;
+
     protected override async Task OnInitializedAsync()
     {
-        await ReferenceDataClient.EnsureLoadedAsync();
+        // Fresh at every form open, and only then — see IReferenceDataClient.RefreshAsync. The
+        // form stays on "Loading options…" until this returns, even when a copy is already held:
+        // rendering it first would let the refresh swap the options under answers already given.
+        await ReferenceDataClient.RefreshAsync();
+        _optionsReady = true;
 
         if (FixOutboxId is { } fixId)
         {
@@ -670,6 +730,13 @@
     private void OnLensSelectionChanged()
     {
         ReconcileCoatings();
+
+        // A coating the new lens doesn't offer was just unticked, so a message about it is moot.
+        if (_coatingRemovedNote is not null)
+        {
+            ClearErrors("CoatingRefIds", "CoatingPreferenceRefId");
+        }
+
         StateHasChanged();
     }
 
@@ -767,6 +834,7 @@
             _errors.Unattributed.Clear();
             _errors.Add("Outcome", "This customer shared contact details — continue as a Lead instead of saving a plain test.");
             _summaryMessage = "Please fix the highlighted fields before saving.";
+            _summaryFollowsFieldErrors = true;
             return;
         }
 
@@ -865,6 +933,7 @@
         _errors.Clear();
         _errors.Unattributed.Clear();
         _summaryMessage = null;
+        _summaryFollowsFieldErrors = false;
 
         // A Sale has no default lens range (ADR-0005) — the same rule the Admin Portal's conversion
         // asks through. FormErrors keeps the first message per field, so this one wins over the
@@ -885,6 +954,7 @@
         if (_errors.Any || _errors.Unattributed.Count > 0)
         {
             _summaryMessage = "Please fix the highlighted fields before saving.";
+            _summaryFollowsFieldErrors = true;
         }
 
         return !_errors.Any && _errors.Unattributed.Count == 0;
@@ -1117,6 +1187,10 @@
                 _errors.Unattributed.RemoveAll(message => message == _summaryMessage);
             }
 
+            // The server's line stands over the field messages it came with; with none left (a
+            // whole-record rejection, which this line is the only copy of) it is not about a field.
+            _summaryFollowsFieldErrors = _errors.HasMessages;
+
             return false;
         }
         finally
@@ -1134,7 +1208,7 @@
             @foreach (var colour in frameColours.OrderBy(c => c.SortOrder))
             {
                 var selected = _frameColourRefId == colour.Id;
-                <button type="button" title="@colour.Label" @onclick="() => _frameColourRefId = colour.Id"
+                <button type="button" title="@colour.Label" @onclick="() => { ClearErrors(FrameColourFields); _frameColourRefId = colour.Id; }"
                         style="display:flex; flex-direction:column; align-items:center; gap:4px; width:64px; padding:4px; background:none; cursor:pointer;
                                border-radius:var(--radius-md); border: @(selected ? "2px solid var(--dot-orange)" : "1px solid var(--border-default)");">
                     @if (colour.ImageUrl is { } imageUrl)
@@ -1158,7 +1232,7 @@
         {
             <div class="dg-field" style="margin-top:var(--space-2);">
                 <label>Frame colour — please specify</label>
-                <input @bind="_frameColourOtherText" />
+                <input @bind="_frameColourOtherText" @oninput="() => ClearErrors(nameof(CreateSaleRequest.FrameColourOtherText))" />
                 <FieldError Errors="_errors" For="FrameColourOtherText" />
             </div>
         }
