@@ -32,7 +32,7 @@
 {
     <div class="dg-field">
         <label>@(OtherLabel ?? $"{Label} — please specify")</label>
-        <input value="@OtherText" @oninput="e => OtherTextChanged.InvokeAsync(e.Value?.ToString())" />
+        <input value="@OtherText" @oninput="OnOtherInputAsync" />
         <FieldError Errors="Errors" For="@OtherField" />
     </div>
 }
@@ -62,8 +62,15 @@
 
     private bool SelectedIsOther => SelectedId is { } id && Items.FirstOrDefault(i => i.Id == id)?.IsOtherOption == true;
 
+    private Task OnOtherInputAsync(ChangeEventArgs e)
+    {
+        Errors?.ClearFields(OtherField);
+        return OtherTextChanged.InvokeAsync(e.Value?.ToString());
+    }
+
     private async Task SelectAsync(Guid? id)
     {
+        Errors?.ClearFields(Field, OtherField);
         await SelectedIdChanged.InvokeAsync(id);
 
         // Asked of the id just chosen, not of SelectedId: the parameter still holds the old choice
