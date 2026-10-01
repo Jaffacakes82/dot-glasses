@@ -45,6 +45,10 @@ machine" rule.
   2026-09-06 — see CLAUDE.md's Deployment section for what that identity is and why it's separate
   from `web_identity-*`). The equivalent grant against `rg-dotglasses-prod`'s server hasn't been
   done yet, so production's migration step will fail with the same `28P01` until it is.
+  It can't be done ahead of time: production's server doesn't exist until the first production
+  deploy creates it (checked 2026-10-01). Expect that deploy's migration step to fail, then
+  register the identity with `--display-name runner` — the value `AZURE_POSTGRES_AAD_USERNAME`
+  holds on both GitHub Environments, and the name nonprod's grant uses — and re-run the job.
 - **Field App API URL placeholders — resolved 2026-09-09**: `appsettings.Staging.json`/
   `appsettings.Production.json` now point `ApiBaseUrl` at the Admin Portal's real custom domains
   (`nonprod.admin.dotglasses.com` / `admin.dotglasses.com`) instead of the
