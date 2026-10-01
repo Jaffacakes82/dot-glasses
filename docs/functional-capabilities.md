@@ -471,13 +471,20 @@ which mints a new one.
 
 ### 4.6 Lens Sets
 
-**Route** `/Catalogues?search=…` · **Access** `PresetCatalogue.Manage` — Admin at DGI or Country
+**Route** `/Catalogues?catalogueId=…&search=…` · **Access** `PresetCatalogue.Manage` — Admin at DGI or Country
 level. Everyone else is redirected to Access Denied.
 
 Catalogues themselves are **not** hierarchy-scoped: every user who reaches this page sees every
-catalogue in the system, regardless of who owns it. A name search box narrows the list (no
-paging — the table is structurally small, see below). A **Lens powers** button in the page header
-opens the read-only page described at the end of this section.
+catalogue in the system, regardless of who owns it. The screen has two tabs: **Lens sets** and the
+read-only **Lens powers** described at the end of this section.
+
+**One lens set at a time.** A **Lens set** picker at the top chooses which lens set is on screen
+(`?catalogueId=`; the first one when none is asked for), and a name search box beside it narrows
+what the picker offers. Every write on the screen — adding, editing or removing a lens, renaming,
+assigning, unassigning, reactivating — comes back to the same lens set, and so does a refused lens
+that reopens the Add lens dialog; a newly created lens set becomes the selected one, and retiring
+the selected one falls back to the first. With no lens sets, or none matching the search, the
+screen says so.
 
 **What a lens is.** A lens set is a list of lenses, and a lens is a **lens power** — a sphere and
 optionally a cylinder, axis and add, the same values a Custom prescription uses (ADR-0007) — with a
@@ -486,13 +493,16 @@ Other; a lens with no add is single vision and is never asked), the **coatings**
 (at least one) and its own **pairings**. A set may repeat a power only with a different lens type.
 Nothing links a lens to a reference-data list any more.
 
-**Lens set cards** — one per lens set (a `PresetCatalogue` in the code), showing name,
-description, and the list of orgs it's assigned to (with an un-assign action per org, not just a
-count). Below that, a table of the set's lenses — Label, Lens power (`SPH +2.50 · CYL -0.75 × 90 ·
-ADD +2.00`, only the parts the lens has), Lens type ("Single vision" when there is none), Coatings
-and Pairings (`Blue block → Photochromic`, or "—") — in the fixed display order: single vision by
+**The selected lens set** (a `PresetCatalogue` in the code) — beside the picker, a line naming the
+org that owns it, the orgs it's assigned to (a chip each, with an un-assign action per org) and
+how many lenses it has, then its description and an **Edit lens set** button (name, description,
+Retire). Below that, one full-width card, "Lenses in <set>", with a table of the set's lenses —
+Label, Lens power (`SPH +2.50 · CYL -0.75 × 90 · ADD +2.00`, only the parts the lens has), Lens
+type ("Single vision" when there is none), Coatings (a chip each) and Pairings (a chip each,
+`Blue block → Photochromic`, or "—") — in the fixed display order: single vision by
 sphere, then Bifocal, Progressive and Other by add, then sphere. Each row has **Edit** and
-**Remove**, and each card an **Add lens** button, where the caller may change the set. There is no
+**Remove**, and the card an **Add lens** button, where the caller may change the set; a set with
+no lenses says so. The table scrolls inside its card on a narrow screen. There is no
 per-catalogue role: every non-empty lens set assigned at or above a retail point is offered there
 (see §5.6, ADR-0005).
 
@@ -559,9 +569,10 @@ Exclusions are the one global coating rule (Reference Data, §4.8) and apply eve
 a Custom prescription; saving a pairing an exclusion forbids is refused, and so is adding an
 exclusion a lens's pairing contradicts.
 
-**Lens powers** (`/Catalogues/LensPowers`, reached from the header button; same policy as the
+**Lens powers** (`/Catalogues/LensPowers`, the screen's second tab; same policy as the
 rest of the screen) — a read-only page listing every value a lens power can take (sphere,
-cylinder, axis, add) and the validity rules (axis only with a cylinder; lens type only with an
+cylinder, axis, add, pupil distance), each as one scrollable column under a one-line summary of
+its range and step, and the validity rules (axis only with a cylinder; lens type only with an
 add). It renders straight off the definition the Field App, the Admin Portal and the server all
 share (`LensPowerValues`), so it can never disagree with them. The values are copied from the DOT
 Glasses online shop and change only with a release: sphere -10.00 to +10.00, cylinder 0.00 to

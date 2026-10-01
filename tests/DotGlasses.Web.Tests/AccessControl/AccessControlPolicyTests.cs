@@ -304,10 +304,17 @@ public class AccessControlPolicyTests(AccessControlFixture fixture) : IClassFixt
         var kenyaOwned = SeedLensSet(OrganisationSeedConfiguration.KenyaId);
 
         var countryAdmin = await fixture.SignInAsync(AccessControlFixture.CountryAdmin);
-        var html = await countryAdmin.GetStringAsync("/Catalogues");
+        // The screen shows one lens set at a time, so each is looked at on its own.
+        var dgiOwnedHtml = await countryAdmin.GetStringAsync($"/Catalogues?catalogueId={dgiOwned}");
+        Assert.Contains($"Lenses in Lens set {dgiOwned:N}", dgiOwnedHtml);
+        Assert.DoesNotContain($"editCatalogueModal-{dgiOwned}", dgiOwnedHtml);
+        Assert.DoesNotContain("data-lens-add", dgiOwnedHtml);
+        Assert.Contains("Owned above your organisation", dgiOwnedHtml);
 
-        Assert.DoesNotContain($"editCatalogueModal-{dgiOwned}", html);
-        Assert.Contains($"editCatalogueModal-{kenyaOwned}", html);
+        var kenyaOwnedHtml = await countryAdmin.GetStringAsync($"/Catalogues?catalogueId={kenyaOwned}");
+        Assert.Contains($"editCatalogueModal-{kenyaOwned}", kenyaOwnedHtml);
+        Assert.Contains("data-lens-add", kenyaOwnedHtml);
+        Assert.DoesNotContain("Owned above your organisation", kenyaOwnedHtml);
     }
 
     private Guid SeedLensSet(Guid owningOrgNodeId)

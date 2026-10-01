@@ -1,0 +1,16 @@
+@model (bool LensPowers, Guid? CatalogueId)
+@*
+    The Lens Sets screen's two tabs (prototype variant A): "Lens sets" (Index) and the read-only
+    "Lens powers". Each is its own page, so a tab is a link; both carry the lens set being worked
+    on, so going to Lens powers and back returns to it.
+*@
+@{
+    // asp-route-* drops a null, so a tab with no lens set chosen links to the bare page.
+    var catalogueId = Model.CatalogueId?.ToString();
+}
+<nav class="dg-tabs" aria-label="Lens Sets pages">
+    <a class="dg-tab @(Model.LensPowers ? "" : "active")" asp-action="Index" asp-route-catalogueId="@catalogueId"
+       aria-current="@(Model.LensPowers ? null : "page")">Lens sets</a>
+    <a class="dg-tab @(Model.LensPowers ? "active" : "")" asp-action="LensPowers" asp-route-catalogueId="@catalogueId"
+       aria-current="@(Model.LensPowers ? "page" : null)">Lens powers</a>
+</nav>

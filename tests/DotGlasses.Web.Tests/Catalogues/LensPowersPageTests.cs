@@ -44,6 +44,26 @@ public class LensPowersPageTests(AdminPortalFactory factory) : IClassFixture<Adm
     }
 
     [Fact]
+    public async Task EachValueList_IsOneScrollableColumn_WithAOneLineRangeSummary()
+    {
+        var html = WebUtility.HtmlDecode(await factory.CreateAdminClient().GetStringAsync("/Catalogues/LensPowers"));
+
+        // One value per row, in a list that scrolls inside its own box (dg-value-list).
+        foreach (var id in new[] { "lens-power-sphere", "lens-power-cylinder", "lens-power-axis", "lens-power-add", "lens-power-pupil-distance" })
+        {
+            Assert.Matches($"<div id=\"{id}\" class=\"dg-value-list\"", html);
+            Assert.Matches(@"^\s*<ul>(\s*<li>[^<]+</li>)+\s*</ul>\s*$", Section(html, id));
+        }
+
+        // The summaries are worked out from LensPowerValues' own lists: lowest, highest and step.
+        Assert.Contains("-10.00 to +10.00 in steps of 0.25", html);
+        Assert.Contains("-6.00 to 0.00 in steps of 0.25", html);
+        Assert.Contains("0 to 180 in steps of 1", html);
+        Assert.Contains("0.00 to +3.00 in steps of 0.25", html);
+        Assert.Contains("54 to 74 in steps of 1", html);
+    }
+
+    [Fact]
     public async Task ThePage_StatesTheValidityRules()
     {
         var html = await factory.CreateAdminClient().GetStringAsync("/Catalogues/LensPowers");

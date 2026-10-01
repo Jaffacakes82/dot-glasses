@@ -7,7 +7,7 @@ namespace DotGlasses.Web.Tests.Catalogues;
 
 /// <summary>
 /// Since ADR-0007 a lens set lens is a lens power with its own coatings and pairings, so the Lens
-/// Sets screen lists each set's lenses in a table — label, lens power, lens type, coatings and
+/// Sets screen lists the selected set's lenses in a table — label, lens power, lens type, coatings and
 /// pairings — and the global "Lens strength coating availability" grid, its save action and the
 /// old add-a-lens-strength picker are gone (the Add lens dialog is lens-power ticket 07).
 /// </summary>
@@ -18,8 +18,8 @@ public class LensSetLensTableTests(AdminPortalFactory factory) : IClassFixture<A
     private static string VisibleText(string html) =>
         Regex.Replace(WebUtility.HtmlDecode(Regex.Replace(html, "<[^>]+>", " ")), @"\s+", " ");
 
-    /// <summary>The one card for this lens set: from its heading (the first time the page names
-    /// it) to its Edit dialog, which the view renders straight after the card.</summary>
+    /// <summary>The selected lens set's part of the screen: from the first time the page names it
+    /// (the picker) to its Edit dialog, which the view renders straight after its lenses card.</summary>
     private static string CardFor(string html, string lensSetName)
     {
         var text = VisibleText(html);
@@ -32,15 +32,15 @@ public class LensSetLensTableTests(AdminPortalFactory factory) : IClassFixture<A
     [Fact]
     public async Task EachLensShowsItsLabel_LensPower_LensType_Coatings_AndPairings()
     {
-        var html = await factory.CreateAdminClient().GetStringAsync("/Catalogues");
+        var html = await factory.CreateAdminClient().GetStringAsync($"/Catalogues?catalogueId={ExampleLensSets.SixLensSetId}");
 
         Assert.Contains($"aria-label=\"Lenses in 6-Lens Set\"", html);
         var text = VisibleText(html);
         Assert.Contains("Label Lens power Lens type Coatings Pairings", text);
 
-        // The example 6-Lens +2.50: single vision, three coatings in the Coating list's own order,
-        // and the example pairing.
-        Assert.Contains("+2.50 SPH +2.50 Single vision Photochromic, Clear, Blue block Blue block → Photochromic", text);
+        // The example 6-Lens +2.50: single vision, three coatings in the Coating list's own order
+        // (one chip each), and the example pairing as one "trigger → paired" chip.
+        Assert.Contains("+2.50 SPH +2.50 Single vision Photochromic Clear Blue block Blue block → Photochromic", text);
 
         // A bifocal: its add, its lens type, Photochromic only, no pairing.
         Assert.Contains("Bifocal +2.50 SPH 0.00 · ADD +2.50 Bifocal Photochromic —", text);
@@ -88,7 +88,7 @@ public class LensSetLensTableTests(AdminPortalFactory factory) : IClassFixture<A
             LensSetTestData.AddSellableLens(db, lensSetId, label: "+0.75", sphere: 0.75m);
         });
         var client = factory.CreateAdminClient();
-        Assert.Contains("-1.75 SPH -1.75", CardFor(await client.GetStringAsync("/Catalogues"), lensSetName));
+        Assert.Contains("-1.75 SPH -1.75", CardFor(await client.GetStringAsync($"/Catalogues?catalogueId={lensSetId}"), lensSetName));
 
         var token = await AdminPortalFactory.GetAntiforgeryTokenAsync(client, "/Catalogues");
         var (_, html) = await AdminPortalFactory.PostAndFollowAsync(client, "/Catalogues/RemoveLensOption",
