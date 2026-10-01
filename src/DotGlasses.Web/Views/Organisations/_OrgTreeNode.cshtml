@@ -14,13 +14,13 @@
         {
             <span style="width:11px;"></span>
         }
-        <span style="width:8px; height:8px; border-radius:50%; background:@DotGlasses.Web.Models.OrgNode.TypeColor[Model.Type]; flex:0 0 8px;"></span>
+        <span style="width:8px; height:8px; border-radius:50%; background:@Model.LevelColor; flex:0 0 8px;"></span>
         <span style="font-weight:600;">@Model.Name</span>
         @if (Model.IsTrainingOrg)
         {
             <span class="dg-badge" style="background:var(--dot-yellow); font-size:10px; padding:2px 6px;">Training</span>
         }
-        <span class="dg-stat-label" style="margin-left:auto;">@Model.Type</span>
+        <span class="dg-stat-label" style="margin-left:auto;">@Model.LevelLabel</span>
     </div>
 </a>
 @foreach (var child in Model.Children)

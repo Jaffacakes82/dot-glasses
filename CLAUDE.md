@@ -222,14 +222,21 @@ Real domain entities, in `DotGlasses.Domain/Entities` and `/Enums`:
 
 - **`OrganisationNode`** — arbitrary-depth org hierarchy. `OrganisationLevel`:
   `Dgi` (0) → `Country` (1) → `Intermediate` (2) → `RetailPoint` (3), ordered, only these four
-  carry business rules (`Intermediate` covers every reseller/distributor tier via a free-text
-  `Kind` label). Tree shape is enforced: DGI's only child level is Country; Country/Intermediate
+  carry business rules (`Intermediate` covers every reseller/distributor tier). A level is shown
+  to people only through `OrganisationLevelLabels` ("Retailer/distributor", "Retail Point"); views
+  decide behaviour by the level, never by its label. Tree shape is enforced: DGI's only child level is Country; Country/Intermediate
   may have Intermediate or RetailPoint children; RetailPoint is always a leaf. `HierarchyPath`
   segments are drawn from a Postgres sequence (`OrganisationPathSegments`) — globally unique,
   not per-parent, and **never reused**: a deactivated node keeps its path and can be reactivated,
   so its segments stay spent. Don't go back to "current max + 1" — it re-minted a deactivated
   node's segment and put two orgs on `/1/2/`, merging their data scopes. `HierarchyPath` is
-  unique across every row (deactivated included) as the backstop. `IsTrainingOrg` nodes
+  unique across every row (deactivated included) as the backstop. Deactivating takes every active
+  organisation beneath it too, stamped with one `DeactivationGroupId`; reactivating restores
+  exactly that group and is refused while the parent is deactivated. The cascade sets the
+  soft-delete fields by hand — `Remove()` on a parent nulls the `ParentId` of its tracked children
+  before the interceptor's soft-delete flip. Reports feed `OrgTreeLookup` from
+  `GetOrganisationNodesForReportsAsync`, which includes deactivated organisations so their records
+  keep their name, marked "(deactivated)". `IsTrainingOrg` nodes
   are excluded from Dashboard aggregates only (not Event History/Custom Orders/User Directory).
 - **`Test`/`Lead`/`Sale`** — separate atomic create-once events, no update endpoint by design
   (server-side linking happens inside the service layer instead): a Test converts to a Lead

@@ -1,10 +1,11 @@
 @model DotGlasses.Web.Models.UserDirectoryViewModel
 @using DotGlasses.Application.Common
-@using DotGlasses.Application.Organisations
+@using DotGlasses.Application.Users
+@using DotGlasses.Web.Controllers
 @{
     ViewData["Title"] = "User Directory";
     var statusColor = (Dictionary<string, string>)ViewData["StatusColor"]!;
-    var availableOrgs = (IReadOnlyList<OrganisationAdminNode>)ViewData["AvailableOrgs"]!;
+    var invitePicker = (DotGlasses.Web.Models.OrgPickerViewModel)ViewData["InvitePicker"]!;
 }
 
 <div class="dg-page-header">
@@ -23,6 +24,11 @@
         yourself:<br />
         <code>@link</code>
     </div>
+}
+
+@if (TempData[UserDirectoryController.NoticeKey] is string notice)
+{
+    <div class="alert alert-success" style="border-radius:var(--radius-md); margin-bottom:var(--space-4);">@notice</div>
 }
 
 @if (!ViewData.ModelState.IsValid)
@@ -49,7 +55,7 @@
         <label class="dg-stat-label" style="display:block; margin-bottom:4px;">Status</label>
         <select class="form-select" name="status">
             <option value="">All statuses</option>
-            @foreach (var statusName in new[] { "Active", "Invited", "Suspended" })
+            @foreach (var statusName in new[] { UserStatuses.Active, UserStatuses.Invited, UserStatuses.Suspended })
             {
                 <option value="@statusName" selected="@(Model.Status == statusName ? "selected" : null)">@statusName</option>
             }
@@ -70,7 +76,7 @@
     else
     {
     <table class="dg-table">
-        <thead><tr><th>Name</th><th>Role</th><th>Scope</th><th>Last login</th><th>Sales</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Role</th><th>Organisations</th><th>Last login</th><th>Sales</th><th>Status</th><th></th></tr></thead>
         <tbody>
         @foreach (var user in Model.Users)
         {
@@ -80,7 +86,7 @@
                 <td>
                     @if (user.Scope.Count == 0)
                     {
-                        <span class="dg-muted">No organisation — assign one on Organisations</span>
+                        <span class="dg-muted">No organisation</span>
                     }
                     @foreach (var scope in user.Scope)
                     {
@@ -89,22 +95,26 @@
                 </td>
                 <td class="dg-muted">@user.LastLogin</td>
                 <td class="dg-muted">@user.Sales</td>
-                <td><span class="dg-badge" style="background:@statusColor[user.Status]; color:@(user.Status == "Active" ? "var(--dot-white)" : "var(--dot-black)");">@user.Status</span></td>
+                <td><span class="dg-badge" style="background:@statusColor[user.Status]; color:@(user.Status == UserStatuses.Active ? "var(--dot-white)" : "var(--dot-black)");">@user.Status</span></td>
                 <td style="white-space:nowrap;">
+                    @if (user.CanEdit)
+                    {
+                        <a class="dg-btn dg-btn-ghost" style="padding:6px 14px; font-size:12px;" asp-action="Edit" asp-route-id="@user.Id">Edit</a>
+                    }
                     @if (user.CanManage)
                     {
                         <form asp-action="ResetPassword" method="post" style="display:inline;">
                             <input type="hidden" name="id" value="@user.Id" />
                             <button class="dg-btn dg-btn-ghost" style="padding:6px 14px; font-size:12px;" type="submit">Reset password</button>
                         </form>
-                        @if (user.Status == "Suspended")
+                        @if (user.Status == UserStatuses.Suspended)
                         {
                             <form asp-action="Unsuspend" method="post" style="display:inline;">
                                 <input type="hidden" name="id" value="@user.Id" />
                                 <button class="dg-btn dg-btn-ghost" style="padding:6px 14px; font-size:12px;" type="submit">Unsuspend</button>
                             </form>
                         }
-                        else
+                        else if (!user.IsSelf)
                         {
                             <form asp-action="Suspend" method="post" style="display:inline;">
                                 <input type="hidden" name="id" value="@user.Id" />
@@ -159,17 +169,7 @@
                         <label>Email</label>
                         <input class="form-control" type="email" name="Email" />
                     </div>
-                    <div class="dg-auth-field">
-                        <label>Hierarchy scope</label>
-                        <div style="max-height:160px; overflow-y:auto; border:1px solid var(--border-default); border-radius:8px; padding:8px;">
-                            @foreach (var org in availableOrgs)
-                            {
-                                <label style="display:block; font-weight:400; padding:2px 0;">
-                                    <input type="checkbox" name="OrgNodeIds" value="@org.Id" /> @org.Name
-                                </label>
-                            }
-                        </div>
-                    </div>
+                    @await Html.PartialAsync("_OrgPicker", invitePicker)
                     <div class="dg-auth-field">
                         <label>Role</label>
                         <select class="form-select" name="Role">
@@ -177,10 +177,6 @@
                             <option value="User" selected>User</option>
                         </select>
                     </div>
-                    <p style="font-size:12px; color:var(--text-muted);">
-                        No email sending is wired up yet — after inviting, you'll get a
-                        set-password link to copy and send the new user yourself.
-                    </p>
                 </div>
                 <div class="modal-footer">
                     <button class="dg-btn dg-btn-ghost" type="button" data-bs-dismiss="modal">Cancel</button>

@@ -138,11 +138,11 @@ public class AccessAuditTests(AccessAuditFixture fixture) : IClassFixture<Access
             (_, _) => [("id", KenyaRetailPointId.ToString()), ("value", "true")],
             Written: (_, _, db) => db.OrganisationNodes.IgnoreQueryFilters().AnyAsync(o => o.Id == KenyaRetailPointId && o.IsTrainingOrg)),
         // The escalation that matters most: a caller assigning *themselves* somewhere.
-        new("Portal.Organisations.AssignUser POST", _ => "/Organisations/AssignUser", Expect.Denied, Expect.Denied,
-            (f, c) => [("orgNodeId", f.SiblingOutletId.ToString()), ("userId", c.Account.UserId.ToString())],
+        new("Portal.Organisations.AssignUsers POST", _ => "/Organisations/AssignUsers", Expect.Denied, Expect.Denied,
+            (f, c) => [("orgNodeId", f.SiblingOutletId.ToString()), ("userIds", c.Account.UserId.ToString())],
             Written: (f, c, db) => db.UserOrgAssignments.AnyAsync(a => a.UserId == c.Account.UserId && a.OrgNodeId == f.SiblingOutletId)),
-        new("Portal.Organisations.AssignUser POST", _ => "/Organisations/AssignUser", Expect.Denied, Expect.Denied,
-            (f, _) => [("orgNodeId", KenyaRetailPointId.ToString()), ("userId", f.OutOfScopeTargetUserId.ToString())],
+        new("Portal.Organisations.AssignUsers POST", _ => "/Organisations/AssignUsers", Expect.Denied, Expect.Denied,
+            (f, _) => [("orgNodeId", KenyaRetailPointId.ToString()), ("userIds", f.OutOfScopeTargetUserId.ToString())],
             Written: (f, _, db) => db.UserOrgAssignments.AnyAsync(a => a.UserId == f.OutOfScopeTargetUserId && a.OrgNodeId == KenyaRetailPointId)),
         new("Portal.Organisations.UnassignUser POST", _ => "/Organisations/UnassignUser", Expect.Denied, Expect.Denied,
             (f, _) => [("orgNodeId", KenyaRetailPointId.ToString()), ("userId", f.InScopeTargetUserId.ToString())],
@@ -198,6 +198,11 @@ public class AccessAuditTests(AccessAuditFixture fixture) : IClassFixture<Access
         new("Portal.UserDirectory.ChangeRole POST", _ => "/UserDirectory/ChangeRole", Expect.Denied, Expect.Denied,
             (f, _) => [("id", f.InScopeTargetUserId.ToString()), ("role", RoleNames.Admin)],
             Written: (f, _, db) => db.UserRoles.AnyAsync(ur => ur.UserId == f.InScopeTargetUserId && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == RoleNames.Admin))),
+        // The Edit user page is an Admin's: neither caller reaches it, to look or to save.
+        new("Portal.UserDirectory.Edit GET", f => $"/UserDirectory/Edit/{f.InScopeTargetUserId}", Expect.Denied, Expect.Denied),
+        new("Portal.UserDirectory.Edit POST", f => $"/UserDirectory/Edit/{f.InScopeTargetUserId}", Expect.Denied, Expect.Denied,
+            (f, _) => [("FullName", "Renamed By The Audit"), ("LoadedFullName", ""), ("Role", RoleNames.Admin), ("LoadedRole", RoleNames.User), ("OrgNodeIds", f.SiblingOutletId.ToString())],
+            Written: (f, _, db) => db.Users.AnyAsync(u => u.Id == f.InScopeTargetUserId && u.FullName == "Renamed By The Audit")),
         // ...and a caller promoting themselves.
         new("Portal.UserDirectory.ChangeRole POST", _ => "/UserDirectory/ChangeRole", Expect.Denied, Expect.Denied,
             (_, c) => [("id", c.Account.UserId.ToString()), ("role", RoleNames.Admin)]),

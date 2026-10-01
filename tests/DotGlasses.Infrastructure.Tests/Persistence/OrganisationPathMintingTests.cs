@@ -42,10 +42,10 @@ public class OrganisationPathMintingTests(PostgresContainerFixture postgres)
         await using var context = CreateContext(connectionString);
         var service = CreateService(context);
 
-        var first = await service.CreateChildAsync(OrganisationSeedConfiguration.KenyaId, "Mombasa Outlet", OrganisationLevel.RetailPoint, "Standalone");
+        var first = await service.CreateChildAsync(OrganisationSeedConfiguration.KenyaId, "Mombasa Outlet", OrganisationLevel.RetailPoint);
         await service.SetActiveAsync(first.Id, isActive: false);
 
-        var second = await service.CreateChildAsync(OrganisationSeedConfiguration.KenyaId, "Kisumu Outlet", OrganisationLevel.RetailPoint, "Standalone");
+        var second = await service.CreateChildAsync(OrganisationSeedConfiguration.KenyaId, "Kisumu Outlet", OrganisationLevel.RetailPoint);
 
         Assert.NotEqual(first.HierarchyPath, second.HierarchyPath);
 
@@ -70,7 +70,7 @@ public class OrganisationPathMintingTests(PostgresContainerFixture postgres)
         await service.SetActiveAsync(OrganisationSeedConfiguration.KenyaRetailerId, isActive: false);
         await service.SetActiveAsync(OrganisationSeedConfiguration.KenyaId, isActive: false);
 
-        var uganda = await service.CreateChildAsync(OrganisationSeedConfiguration.DgiId, "Uganda", OrganisationLevel.Country, kind: null);
+        var uganda = await service.CreateChildAsync(OrganisationSeedConfiguration.DgiId, "Uganda", OrganisationLevel.Country);
 
         // The seeded tree's highest segment is the 4 in /1/2/3/4/.
         Assert.True(LastSegment(uganda.HierarchyPath) > 4, $"Expected a segment above 4, got {uganda.HierarchyPath}");

@@ -7,11 +7,22 @@ using DotGlasses.Domain.Enums;
 using DotGlasses.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace DotGlasses.Infrastructure.Identity;
 
-public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlassesDbContext dbContext, ICurrentUserContext currentUser) : IUserAdminService
+public class UserAdminService(
+    UserManager<ApplicationUser> userManager,
+    DotGlassesDbContext dbContext,
+    ILogger<UserAdminService> logger,
+    ICurrentUserContext currentUser) : IUserAdminService
 {
+    private const string LastAssignmentMessage =
+        "This is the user's last org assignment, so it can't be removed. To take away all of their access, suspend them instead.";
+
+    private const string OwnRoleMessage = "You can't change your own role. Ask another admin to change it.";
+    private const string OwnSuspensionMessage = "You can't suspend yourself. Ask another admin.";
+
     /// <summary>Shown in place of the name of an org the caller can't see: the assignment exists
     /// (and is why the caller may not suspend the user), but where it is isn't theirs to know.</summary>
     private const string OutsideScopeOrgName = "Outside your scope";
@@ -64,7 +75,11 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
         var orgs = await dbContext.OrganisationNodes
             .IgnoreQueryFilters()
             .Where(o => orgIds.Contains(o.Id))
-            .ToDictionaryAsync(o => o.Id, o => (o.Name, Path: HierarchyPath.Parse(o.HierarchyPath)), cancellationToken);
+            .ToDictionaryAsync(
+                o => o.Id,
+                // An assignment to a deactivated organisation is still the user's, and says so.
+                o => (Name: o.IsDeleted ? o.Name + " (deactivated)" : o.Name, Path: HierarchyPath.Parse(o.HierarchyPath)),
+                cancellationToken);
 
         var rows = new List<UserAdminRow>();
         foreach (var user in users)
@@ -207,13 +222,7 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
 
             foreach (var orgNodeId in orgNodeIds)
             {
-                dbContext.UserOrgAssignments.Add(new UserOrgAssignment
-                {
-                    Id = Guid.NewGuid(),
-                    UserId = invitee.Id,
-                    OrgNodeId = orgNodeId,
-                    CreatedAtUtc = DateTimeOffset.UtcNow,
-                });
+                dbContext.UserOrgAssignments.Add(NewAssignment(invitee.Id, orgNodeId));
             }
 
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -244,6 +253,11 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
     /// account, which UserSuspension.IsSuspended reads by the end date alone.</summary>
     public async Task SuspendAsync(Guid userId, CancellationToken cancellationToken = default)
     {
+        if (currentUser.UserId == userId)
+        {
+            throw new DomainRuleViolationException(OwnSuspensionMessage);
+        }
+
         var strategy = dbContext.Database.CreateExecutionStrategy();
 
         await strategy.ExecuteAsync(async () =>
@@ -308,86 +322,284 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
             throw new DomainRuleViolationException("Choose a role.");
         }
 
+        await UpdateAsync(userId, new UserEditPlan(NewFullName: null, NewRole: role, OrgsToAdd: [], OrgsToRemove: []), cancellationToken);
+    }
+
+    public async Task AssignUsersToOrgAsync(IReadOnlyList<Guid> userIds, Guid orgNodeId, CancellationToken cancellationToken = default)
+    {
+        var ids = userIds.Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            throw new DomainRuleViolationException("Tick at least one person to assign.");
+        }
+
+        // Checked against the caller's own directory before anything is written: someone the
+        // caller can't see is assigned by someone higher up, and an Invited or Suspended user's
+        // organisations are changed from their Edit page.
+        var visible = (await ListAsync(cancellationToken)).ToDictionary(u => u.Id);
+        foreach (var id in ids)
+        {
+            if (!visible.TryGetValue(id, out var row))
+            {
+                throw new DomainRuleViolationException(
+                    "One of the people chosen isn't in the organisations you manage, so nobody was assigned. Ask someone higher up to assign them.");
+            }
+
+            if (row.Status != UserStatuses.Active)
+            {
+                throw new DomainRuleViolationException(
+                    $"{row.DisplayName} is {row.Status.ToLowerInvariant()}, so nobody was assigned. Change their organisations from their Edit page.");
+            }
+        }
+
         var strategy = dbContext.Database.CreateExecutionStrategy();
 
-        await strategy.ExecuteAsync(async () =>
+        var assigned = await strategy.ExecuteAsync(async () =>
         {
-            // A replayed attempt starts from nothing — EF doesn't revert entity states on
-            // rollback. Safe here: everything earlier in the request (the scope check) only read.
             dbContext.ChangeTracker.Clear();
-
-            var user = await userManager.FindByIdAsync(userId.ToString()) ?? throw new InvalidOperationException("User not found.");
-            var currentRoles = await userManager.GetRolesAsync(user);
-            if (currentRoles.SequenceEqual([role]))
-            {
-                return;
-            }
 
             await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-            var removeResult = await userManager.RemoveFromRolesAsync(user, currentRoles);
-            if (!removeResult.Succeeded)
+            var org = await dbContext.OrganisationNodes.FirstAsync(o => o.Id == orgNodeId, cancellationToken);
+            var already = await dbContext.UserOrgAssignments
+                .Where(a => a.OrgNodeId == orgNodeId && ids.Contains(a.UserId))
+                .Select(a => a.UserId)
+                .ToListAsync(cancellationToken);
+
+            var toAssign = ids.Except(already).ToList();
+            foreach (var userId in toAssign)
             {
-                throw new DomainRuleViolationException(Describe("Couldn't remove the account's current role", removeResult));
+                dbContext.UserOrgAssignments.Add(NewAssignment(userId, orgNodeId));
             }
 
-            var addResult = await userManager.AddToRoleAsync(user, role);
-            if (!addResult.Succeeded)
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+
+            return (Users: toAssign, Org: org.Name);
+        });
+
+        foreach (var userId in assigned.Users)
+        {
+            LogChange(userId, $"assigned to {assigned.Org} ({orgNodeId})");
+        }
+    }
+
+    public Task UnassignUserFromOrgAsync(Guid userId, Guid orgNodeId, CancellationToken cancellationToken = default) =>
+        UpdateAsync(userId, new UserEditPlan(NewFullName: null, NewRole: null, OrgsToAdd: [], OrgsToRemove: [orgNodeId]), cancellationToken);
+
+    public async Task<UserEditDetail?> GetForEditAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var user = await userManager.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
+        if (user is null)
+        {
+            return null;
+        }
+
+        // Unscoped on purpose, as in ListAsync: out-of-scope and deactivated organisations both
+        // still count as this user's assignments.
+        var orgs = await (
+            from assignment in dbContext.UserOrgAssignments
+            join org in dbContext.OrganisationNodes.IgnoreQueryFilters() on assignment.OrgNodeId equals org.Id
+            where assignment.UserId == userId
+            orderby org.HierarchyPath
+            select org).ToListAsync(cancellationToken);
+
+        var assignments = orgs
+            .Select(o => new UserEditAssignment(o.Id, o.Name, o.Level, HierarchyPath.Parse(o.HierarchyPath), o.IsDeleted))
+            .ToList();
+        var inScope = assignments.Where(a => currentUser.ScopePaths.Any(a.Path.IsSelfOrDescendantOf)).ToList();
+
+        // Seeing a user needs one assignment in scope; one with none at all is shown to DGI-level
+        // callers only, so they can be repaired (see ListAsync).
+        var visible = inScope.Count > 0 || (assignments.Count == 0 && currentUser.HighestLevel == OrganisationLevel.Dgi);
+        if (!visible)
+        {
+            return null;
+        }
+
+        var roles = await userManager.GetRolesAsync(user);
+
+        return new UserEditDetail(
+            user.Id,
+            user.Email ?? user.UserName ?? "—",
+            user.FullName ?? string.Empty,
+            RoleNames.Primary(roles) ?? RoleNames.User,
+            ResolveStatus(user),
+            inScope,
+            assignments.Count - inScope.Count,
+            assignments.Select(a => a.Path).Distinct().ToList(),
+            IsSelf: currentUser.UserId == userId);
+    }
+
+    /// <summary>Name, role and assignment changes are one unit of work, opened through the
+    /// execution strategy for the same reasons as InviteAsync's, with every IdentityResult
+    /// checked. Nothing is emailed to the user, and editing never unsuspends them.</summary>
+    public async Task UpdateAsync(Guid userId, UserEditPlan plan, CancellationToken cancellationToken = default)
+    {
+        if (plan.NewRole is { } requestedRole && !RoleNames.All.Contains(requestedRole))
+        {
+            throw new DomainRuleViolationException("Choose a role.");
+        }
+
+        if (plan.NewFullName is { } requestedName && (requestedName.Length == 0 || requestedName.Length > 200))
+        {
+            throw new DomainRuleViolationException(requestedName.Length == 0
+                ? "Enter the person's full name."
+                : "Keep the full name to 200 characters or fewer.");
+        }
+
+        var isSelf = currentUser.UserId == userId;
+        var strategy = dbContext.Database.CreateExecutionStrategy();
+
+        var changes = await strategy.ExecuteAsync(async () =>
+        {
+            // A replayed attempt starts from nothing — EF doesn't revert entity states on
+            // rollback. Safe here: everything earlier in the request (the scope checks) only read.
+            dbContext.ChangeTracker.Clear();
+            var made = new List<string>();
+
+            var user = await userManager.FindByIdAsync(userId.ToString()) ?? throw new InvalidOperationException("User not found.");
+
+            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+            if (plan.NewFullName is { } name && name != user.FullName)
             {
-                throw new DomainRuleViolationException(Describe($"Couldn't give the account the {role} role", addResult));
+                user.FullName = name;
+                var nameResult = await userManager.UpdateAsync(user);
+                if (!nameResult.Succeeded)
+                {
+                    throw new DomainRuleViolationException(Describe("Couldn't change the name", nameResult));
+                }
+
+                made.Add("name changed");
+            }
+
+            if (plan.NewRole is { } role)
+            {
+                var currentRoles = await userManager.GetRolesAsync(user);
+                if (!currentRoles.SequenceEqual([role]))
+                {
+                    if (isSelf)
+                    {
+                        throw new DomainRuleViolationException(OwnRoleMessage);
+                    }
+
+                    var removeResult = await userManager.RemoveFromRolesAsync(user, currentRoles);
+                    if (!removeResult.Succeeded)
+                    {
+                        throw new DomainRuleViolationException(Describe("Couldn't remove the account's current role", removeResult));
+                    }
+
+                    var addResult = await userManager.AddToRoleAsync(user, role);
+                    if (!addResult.Succeeded)
+                    {
+                        throw new DomainRuleViolationException(Describe($"Couldn't give the account the {role} role", addResult));
+                    }
+
+                    made.Add($"role changed from {RoleNames.Primary(currentRoles) ?? "none"} to {role}");
+                }
+            }
+
+            if (plan.OrgsToAdd.Count > 0 || plan.OrgsToRemove.Count > 0)
+            {
+                made.AddRange(await ApplyAssignmentChangesAsync(userId, plan, isSelf, cancellationToken));
             }
 
             await transaction.CommitAsync(cancellationToken);
-        });
-    }
-
-    public async Task AssignUserToOrgAsync(Guid userId, Guid orgNodeId, CancellationToken cancellationToken = default)
-    {
-        var alreadyAssigned = await dbContext.UserOrgAssignments
-            .AnyAsync(a => a.UserId == userId && a.OrgNodeId == orgNodeId, cancellationToken);
-        if (alreadyAssigned)
-        {
-            return;
-        }
-
-        dbContext.UserOrgAssignments.Add(new UserOrgAssignment
-        {
-            Id = Guid.NewGuid(),
-            UserId = userId,
-            OrgNodeId = orgNodeId,
-            CreatedAtUtc = DateTimeOffset.UtcNow,
+            return made;
         });
 
-        await dbContext.SaveChangesAsync(cancellationToken);
+        foreach (var change in changes)
+        {
+            LogChange(userId, change);
+        }
     }
 
-    public async Task UnassignUserFromOrgAsync(Guid userId, Guid orgNodeId, CancellationToken cancellationToken = default)
+    private async Task<List<string>> ApplyAssignmentChangesAsync(Guid userId, UserEditPlan plan, bool isSelf, CancellationToken cancellationToken)
     {
-        // A missing user is a tampered form or a bug, not a no-op — left a 500 (ADR-0003).
-        if (!await dbContext.Users.AnyAsync(u => u.Id == userId, cancellationToken))
-        {
-            throw new InvalidOperationException("User not found.");
-        }
+        var made = new List<string>();
 
         var assignments = await dbContext.UserOrgAssignments
             .Where(a => a.UserId == userId)
             .ToListAsync(cancellationToken);
 
-        var removed = assignments.FirstOrDefault(a => a.OrgNodeId == orgNodeId);
-        if (removed is null)
+        // Past the filter: a deactivated organisation still holds assignments (they come back
+        // into force when it is reactivated) and can still have one removed.
+        var orgIds = assignments.Select(a => a.OrgNodeId).Concat(plan.OrgsToAdd).Distinct().ToList();
+        var orgs = await dbContext.OrganisationNodes
+            .IgnoreQueryFilters()
+            .Where(o => orgIds.Contains(o.Id))
+            .ToDictionaryAsync(o => o.Id, cancellationToken);
+
+        var removed = new List<UserOrgAssignment>();
+        foreach (var orgNodeId in plan.OrgsToRemove)
         {
-            return;
+            if (assignments.FirstOrDefault(a => a.OrgNodeId == orgNodeId) is { } assignment)
+            {
+                assignments.Remove(assignment);
+                removed.Add(assignment);
+                dbContext.UserOrgAssignments.Remove(assignment);
+                made.Add($"unassigned from {orgs[orgNodeId].Name} ({orgNodeId})");
+            }
         }
 
-        if (assignments.Count == 1)
+        foreach (var orgNodeId in plan.OrgsToAdd)
         {
-            throw new DomainRuleViolationException(
-                "This is the user's last org assignment, so it can't be removed. To take away all of their access, suspend them instead.");
+            if (assignments.Any(a => a.OrgNodeId == orgNodeId))
+            {
+                continue;
+            }
+
+            // An id that names no organisation is a tampered form or a bug — a 500 (ADR-0003).
+            var org = orgs[orgNodeId];
+            if (org.IsDeleted)
+            {
+                throw new DomainRuleViolationException($"{org.Name} is deactivated, so nobody can be assigned to it.");
+            }
+
+            var added = NewAssignment(userId, orgNodeId);
+            assignments.Add(added);
+            dbContext.UserOrgAssignments.Add(added);
+            made.Add($"assigned to {org.Name} ({orgNodeId})");
         }
 
-        dbContext.UserOrgAssignments.Remove(removed);
+        if (assignments.Count == 0)
+        {
+            throw new DomainRuleViolationException(LastAssignmentMessage);
+        }
+
+        if (isSelf)
+        {
+            var kept = assignments.Select(a => HierarchyPath.Parse(orgs[a.OrgNodeId].HierarchyPath)).ToList();
+            foreach (var assignment in removed)
+            {
+                var org = orgs[assignment.OrgNodeId];
+                if (OwnAssignments.RemovalShrinksScope(HierarchyPath.Parse(org.HierarchyPath), kept))
+                {
+                    throw new DomainRuleViolationException(
+                        $"Removing {org.Name} would take away access you couldn't give back to yourself. Ask another admin to remove it.");
+                }
+            }
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken);
+        return made;
     }
+
+    private static UserOrgAssignment NewAssignment(Guid userId, Guid orgNodeId) => new()
+    {
+        Id = Guid.NewGuid(),
+        UserId = userId,
+        OrgNodeId = orgNodeId,
+        CreatedAtUtc = DateTimeOffset.UtcNow,
+    };
+
+    /// <summary>One structured entry per change to a user's access. There is no history screen
+    /// (docs/open-issues.md); this is the trace.</summary>
+    private void LogChange(Guid targetUserId, string change) =>
+        logger.LogInformation(
+            "User access change by {ActingUserId} on {TargetUserId}: {Change}",
+            currentUser.UserId, targetUserId, change);
 
     /// <summary>Identity's own error descriptions are already English sentences ("Username 'x' is
     /// already taken."), but on their own they don't say which step of the invite refused —
@@ -400,15 +612,15 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
     {
         if (string.IsNullOrEmpty(user.PasswordHash))
         {
-            return "Invited";
+            return UserStatuses.Invited;
         }
 
         // Only a real suspension — not the temporary lockout anyone can trigger with wrong passwords.
         if (UserSuspension.IsSuspended(user.LockoutEnd))
         {
-            return "Suspended";
+            return UserStatuses.Suspended;
         }
 
-        return "Active";
+        return UserStatuses.Active;
     }
 }

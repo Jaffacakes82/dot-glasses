@@ -222,7 +222,7 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
     /// OrgTreeLookup, shared with the Dashboard and Custom Orders (docs/adr/0004).</summary>
     private async Task<OrgTreeLookup> BuildOrgLookupAsync(CancellationToken cancellationToken)
     {
-        var nodes = await unscopedReportQueryService.GetOrganisationNodesUnscopedAsync(cancellationToken);
+        var nodes = await unscopedReportQueryService.GetOrganisationNodesForReportsAsync(cancellationToken);
         return new OrgTreeLookup(nodes);
     }
 

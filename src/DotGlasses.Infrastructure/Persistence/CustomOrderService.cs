@@ -124,7 +124,7 @@ public class CustomOrderService(DotGlassesDbContext dbContext, IUnscopedReportQu
             .Where(c => customerIds.Contains(c.Id))
             .ToDictionaryAsync(c => c.Id, cancellationToken);
 
-        var orgLookup = new OrgTreeLookup(await unscopedReportQueryService.GetOrganisationNodesUnscopedAsync(cancellationToken));
+        var orgLookup = new OrgTreeLookup(await unscopedReportQueryService.GetOrganisationNodesForReportsAsync(cancellationToken));
 
         return orders.Select(s =>
         {
@@ -134,7 +134,7 @@ public class CustomOrderService(DotGlassesDbContext dbContext, IUnscopedReportQu
             return new EnrichedOrder(
                 s,
                 new RetailerKey(retailer.Kind, retailer.Node?.Id ?? Guid.Empty), retailer.Name,
-                retailPoint?.Id ?? Guid.Empty, retailPoint?.Name ?? OrgTreeLookup.UnknownOutlet,
+                retailPoint?.Id ?? Guid.Empty, retailPoint?.ReportName ?? OrgTreeLookup.UnknownOutlet,
                 s.CustomerId, customer?.FullName ?? "—");
         }).ToList();
     }

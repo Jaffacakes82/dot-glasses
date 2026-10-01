@@ -30,7 +30,7 @@ public interface IOrganisationAdminService
     /// <summary>Mints a new globally-unique HierarchyPath segment under parentId. Known
     /// simplification: read-current-max-then-increment has a small race window under concurrent
     /// creates — acceptable for an infrequent, admin-only action (see CLAUDE.md).</summary>
-    Task<OrganisationAdminNode> CreateChildAsync(Guid parentId, string name, OrganisationLevel level, string? kind, CancellationToken cancellationToken = default);
+    Task<OrganisationAdminNode> CreateChildAsync(Guid parentId, string name, OrganisationLevel level, CancellationToken cancellationToken = default);
 
     /// <summary>IsTrainingOrg has no Level restriction — any node can be flagged.</summary>
     Task SetTrainingOrgFlagAsync(Guid id, bool isTrainingOrg, CancellationToken cancellationToken = default);
@@ -42,10 +42,15 @@ public interface IOrganisationAdminService
     /// ISoftDeletable entity uses, no new column needed. Deactivating sets IsDeleted = true,
     /// which drops the node out of ListAsync and every other scoped query immediately; historical
     /// Test/Lead/Sale rows still resolve its name via IUnscopedReportQueryService (IgnoreQueryFilters),
-    /// same as a retired ReferenceDataItem. Deactivating a node with active (non-deleted) children
-    /// throws — deactivate the children first, rather than silently orphaning them under a node
-    /// that no longer appears in any admin's tree.</summary>
+    /// same as a retired ReferenceDataItem.
+    ///
+    /// Deactivating takes every active organisation beneath it too, in one unit of work, and
+    /// stamps them all with one <see cref="OrganisationAdminNode.DeactivationGroupId"/>.
+    /// Reactivating restores exactly that group — anything beneath it that was deactivated
+    /// separately stays deactivated — and is refused (DomainRuleViolationException) while the
+    /// organisation directly above is itself deactivated, so nothing comes back outside the tree.
+    /// Paths never change and assignments are untouched either way.</summary>
     Task SetActiveAsync(Guid id, bool isActive, CancellationToken cancellationToken = default);
 }
 
-public record OrganisationAdminNode(Guid Id, Guid? ParentId, string Name, OrganisationLevel Level, string? Kind, string HierarchyPath, bool IsTrainingOrg, bool IsActive);
+public record OrganisationAdminNode(Guid Id, Guid? ParentId, string Name, OrganisationLevel Level, string HierarchyPath, bool IsTrainingOrg, bool IsActive, Guid? DeactivationGroupId = null);

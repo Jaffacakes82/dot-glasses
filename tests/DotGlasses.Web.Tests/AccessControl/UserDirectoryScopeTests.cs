@@ -65,7 +65,7 @@ public class UserDirectoryScopeTests(AccessControlFixture fixture) : IClassFixtu
 
         // Repaired from the portal: assigning them an org is the per-org check, as for anyone.
         var retailPoint = OrganisationSeedConfiguration.KenyaRetailPointId.ToString();
-        AssertRedirectedTo("/Organisations", await PostAsync(dgiAdmin, "/Organisations/AssignUser", ("orgNodeId", retailPoint), ("userId", userId.ToString())));
+        AssertRedirectedTo("/Organisations", await PostAsync(dgiAdmin, "/Organisations/AssignUsers", ("orgNodeId", retailPoint), ("userIds", userId.ToString())));
         Assert.True(IsListed(await DirectoryAsync(countryAdmin, userName), userName));
     }
 
@@ -140,8 +140,8 @@ public class UserDirectoryScopeTests(AccessControlFixture fixture) : IClassFixtu
         var countryAdmin = await fixture.SignInAsync(AccessControlFixture.CountryAdmin);
 
         // In Kenya: allowed, even though the user also has an assignment outside it.
-        AssertRedirectedTo("/Organisations", await PostAsync(countryAdmin, "/Organisations/AssignUser",
-            ("orgNodeId", AccessControlFixture.ResellerId.ToString()), ("userId", userId.ToString())));
+        AssertRedirectedTo("/Organisations", await PostAsync(countryAdmin, "/Organisations/AssignUsers",
+            ("orgNodeId", AccessControlFixture.ResellerId.ToString()), ("userIds", userId.ToString())));
         AssertRedirectedTo("/Organisations", await PostAsync(countryAdmin, "/Organisations/UnassignUser",
             ("orgNodeId", OrganisationSeedConfiguration.KenyaRetailPointId.ToString()), ("userId", userId.ToString())));
 

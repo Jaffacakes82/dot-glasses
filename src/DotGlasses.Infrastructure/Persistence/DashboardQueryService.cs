@@ -24,7 +24,7 @@ public class DashboardQueryService(DotGlassesDbContext dbContext, IUnscopedRepor
 
     public async Task<DashboardSnapshot> GetAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, CancellationToken cancellationToken = default)
     {
-        var orgLookup = new OrgTreeLookup(await unscopedReportQueryService.GetOrganisationNodesUnscopedAsync(cancellationToken));
+        var orgLookup = new OrgTreeLookup(await unscopedReportQueryService.GetOrganisationNodesForReportsAsync(cancellationToken));
 
         var allTests = (await dbContext.Tests.ToListAsync(cancellationToken))
             .Where(t => !orgLookup.IsRowUnderTrainingOrg(t.HierarchyPath))

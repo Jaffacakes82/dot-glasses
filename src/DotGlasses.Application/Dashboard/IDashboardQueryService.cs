@@ -8,8 +8,7 @@ namespace DotGlasses.Application.Dashboard;
 /// query condition, not a global filter").
 ///
 /// Deliberately does NOT include a "distribution by retail-point type" tile — no such concept
-/// exists anywhere in the domain (OrganisationNode.Kind is a free-text display label with no
-/// fixed taxonomy behind it), and the design mockup's Physical/Mobile Agent/Outreach categories
+/// exists anywhere in the domain, and the design mockup's Physical/Mobile Agent/Outreach categories
 /// were never confirmed with the user. Deliberately has no filters or a sales-vs-conversion sort
 /// toggle either — top-N lists are a fixed sort by sales volume (both were explicit 2026-08-05
 /// scope decisions, see CLAUDE.md).</summary>

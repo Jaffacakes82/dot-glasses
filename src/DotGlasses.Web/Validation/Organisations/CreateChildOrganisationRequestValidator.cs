@@ -15,7 +15,6 @@ public class CreateChildOrganisationRequestValidator : AbstractValidator<CreateC
             .NotEmpty().WithMessage("Enter a name for the organisation.")
             .MaximumLength(200).WithMessage("Keep the name to 200 characters or fewer.");
         RuleFor(x => x.Level).IsInEnum().WithMessage("Choose a level from the list.");
-        RuleFor(x => x.Kind).MaximumLength(100).WithMessage("Keep the kind to 100 characters or fewer.");
 
         RuleFor(x => x).CustomAsync(async (request, context, cancellationToken) =>
         {

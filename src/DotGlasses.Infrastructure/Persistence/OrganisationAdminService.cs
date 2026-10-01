@@ -44,7 +44,7 @@ public class OrganisationAdminService(DotGlassesDbContext dbContext, ICurrentUse
         _ => false,
     };
 
-    public async Task<OrganisationAdminNode> CreateChildAsync(Guid parentId, string name, OrganisationLevel level, string? kind, CancellationToken cancellationToken = default)
+    public async Task<OrganisationAdminNode> CreateChildAsync(Guid parentId, string name, OrganisationLevel level, CancellationToken cancellationToken = default)
     {
         var parent = await dbContext.OrganisationNodes.FirstAsync(x => x.Id == parentId, cancellationToken);
 
@@ -66,7 +66,6 @@ public class OrganisationAdminService(DotGlassesDbContext dbContext, ICurrentUse
             ParentId = parent.Id,
             Name = name,
             Level = level,
-            Kind = kind,
             HierarchyPath = $"{parent.HierarchyPath}{segment}/",
             IsTrainingOrg = false,
         };
@@ -99,30 +98,92 @@ public class OrganisationAdminService(DotGlassesDbContext dbContext, ICurrentUse
 
         if (isActive)
         {
-            // AuditSaveChangesInterceptor has no "undelete" — it only turns a Remove() into a
-            // soft-delete, one direction. Reactivating means clearing the soft-delete fields by
-            // hand.
-            entity.IsDeleted = false;
-            entity.DeletedAtUtc = null;
-            entity.DeletedBy = null;
+            await ReactivateAsync(entity, cancellationToken);
         }
         else
         {
-            var hasActiveChildren = await dbContext.OrganisationNodes.AnyAsync(x => x.ParentId == id, cancellationToken);
-            if (hasActiveChildren)
-            {
-                throw new DomainRuleViolationException("Deactivate this node's child orgs first — an org with active children can't be deactivated.");
-            }
-
-            // Remove() on an ISoftDeletable entity is turned into a soft-delete by
-            // AuditSaveChangesInterceptor (State flips Deleted -> Modified, IsDeleted/
-            // DeletedAtUtc/DeletedBy get stamped), not a hard delete.
-            dbContext.OrganisationNodes.Remove(entity);
+            await DeactivateAsync(entity, cancellationToken);
         }
 
+        // One SaveChanges, so the whole group goes or comes back together.
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>The organisation and every active one beneath it, stamped with one group id.
+    /// Read past the global filter so the group doesn't depend on which rows the caller's own
+    /// scope happens to return — the controller has already checked the target is theirs to
+    /// manage, and everything beneath it is then theirs too. Already-deactivated descendants are
+    /// left out: they belong to their own, earlier group.</summary>
+    private async Task DeactivateAsync(OrganisationNode entity, CancellationToken cancellationToken)
+    {
+        if (entity.IsDeleted)
+        {
+            return;
+        }
+
+        var pattern = entity.HierarchyPath + "%";
+        var group = await dbContext.OrganisationNodes
+            .IgnoreQueryFilters()
+            .Where(x => !x.IsDeleted && EF.Functions.Like(x.HierarchyPath, pattern))
+            .ToListAsync(cancellationToken);
+
+        var groupId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        foreach (var node in group)
+        {
+            node.DeactivationGroupId = groupId;
+
+            // Stamped by hand rather than through Remove() and AuditSaveChangesInterceptor's
+            // soft-delete flip: marking a parent Deleted makes EF null the ParentId of every
+            // tracked child (the FK is optional), and the flip back to Modified doesn't undo
+            // that — the children would be saved detached from the tree.
+            node.IsDeleted = true;
+            node.DeletedAtUtc = now;
+            node.DeletedBy = currentUserContext.UserName ?? currentUserContext.UserId?.ToString() ?? "system";
+        }
+    }
+
+    private async Task ReactivateAsync(OrganisationNode entity, CancellationToken cancellationToken)
+    {
+        if (!entity.IsDeleted)
+        {
+            return;
+        }
+
+        // The parent lookup ignores the filter for the same reason the target's does: the row
+        // that decides this is one the filter hides.
+        if (entity.ParentId is { } parentId)
+        {
+            var parent = await dbContext.OrganisationNodes.IgnoreQueryFilters().FirstAsync(x => x.Id == parentId, cancellationToken);
+            if (parent.IsDeleted)
+            {
+                throw new DomainRuleViolationException(
+                    $"{entity.Name} sits under {parent.Name}, which is deactivated. Reactivate the organisation above it first.");
+            }
+        }
+
+        var group = new List<OrganisationNode> { entity };
+        if (entity.DeactivationGroupId is { } groupId)
+        {
+            var pattern = entity.HierarchyPath + "%";
+            group.AddRange(await dbContext.OrganisationNodes
+                .IgnoreQueryFilters()
+                .Where(x => x.IsDeleted && x.Id != entity.Id && x.DeactivationGroupId == groupId && EF.Functions.Like(x.HierarchyPath, pattern))
+                .ToListAsync(cancellationToken));
+        }
+
+        foreach (var node in group)
+        {
+            // AuditSaveChangesInterceptor has no "undelete" — it only turns a Remove() into a
+            // soft-delete, one direction. Reactivating means clearing the soft-delete fields by
+            // hand.
+            node.IsDeleted = false;
+            node.DeletedAtUtc = null;
+            node.DeletedBy = null;
+            node.DeactivationGroupId = null;
+        }
+    }
+
     private static OrganisationAdminNode ToAdminNode(OrganisationNode entity) =>
-        new(entity.Id, entity.ParentId, entity.Name, entity.Level, entity.Kind, entity.HierarchyPath, entity.IsTrainingOrg, !entity.IsDeleted);
+        new(entity.Id, entity.ParentId, entity.Name, entity.Level, entity.HierarchyPath, entity.IsTrainingOrg, !entity.IsDeleted, entity.DeactivationGroupId);
 }

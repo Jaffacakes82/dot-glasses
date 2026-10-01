@@ -229,7 +229,7 @@ public class InviteAtomicityTests(PostgresContainerFixture postgres)
             _scope = provider.CreateScope();
             Context = _scope.ServiceProvider.GetRequiredService<DotGlassesDbContext>();
             UserManager = _scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-            Service = new UserAdminService(UserManager, Context, new FakeCurrentUserContext
+            Service = new UserAdminService(UserManager, Context, Microsoft.Extensions.Logging.Abstractions.NullLogger<UserAdminService>.Instance, new FakeCurrentUserContext
             {
                 ScopePaths = [HierarchyPath.Parse(OrganisationSeedConfiguration.DgiPath)],
             });
