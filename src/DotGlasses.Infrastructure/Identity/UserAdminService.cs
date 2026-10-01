@@ -3,6 +3,7 @@ using DotGlasses.Application.Reporting;
 using DotGlasses.Application.Users;
 using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Entities;
+using DotGlasses.Domain.Enums;
 using DotGlasses.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -33,8 +34,17 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
             .Where(o => patterns.Any(p => EF.Functions.Like(o.HierarchyPath, p)))
             .Select(o => o.Id);
 
+        // A user with no assignment at all sits under nobody's org, so no scope path can claim
+        // them — but someone has to be able to see them, or the state can't be repaired from the
+        // portal (they have no access until assigned somewhere). They are listed for DGI-level
+        // callers, whose scope is the whole tree, and for nobody else. The application never
+        // leaves a user in that state (removing the last assignment is refused); it arises from
+        // outside it, e.g. a database clear-down.
+        var listsUnassigned = currentUser.HighestLevel == OrganisationLevel.Dgi;
+
         var users = await userManager.Users
-            .Where(u => dbContext.UserOrgAssignments.Any(a => a.UserId == u.Id && inScopeOrgIds.Contains(a.OrgNodeId)))
+            .Where(u => dbContext.UserOrgAssignments.Any(a => a.UserId == u.Id && inScopeOrgIds.Contains(a.OrgNodeId))
+                || (listsUnassigned && !dbContext.UserOrgAssignments.Any(a => a.UserId == u.Id)))
             .OrderBy(u => u.UserName)
             .ToListAsync(cancellationToken);
 

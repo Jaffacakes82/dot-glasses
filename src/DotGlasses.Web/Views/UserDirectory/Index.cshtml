@@ -78,6 +78,10 @@
                 <td>@user.Name</td>
                 <td class="dg-muted">@user.Role</td>
                 <td>
+                    @if (user.Scope.Count == 0)
+                    {
+                        <span class="dg-muted">No organisation — assign one on Organisations</span>
+                    }
                     @foreach (var scope in user.Scope)
                     {
                         <span class="dg-badge" style="background:var(--dot-beige); margin-right:4px;">@scope</span>

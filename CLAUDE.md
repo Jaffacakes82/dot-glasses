@@ -171,7 +171,9 @@ are the record of *how* things got built; don't restate that here.
   `ApplicationUser` is an Identity type, outside the automatic filter entirely — any screen
   listing users (User Directory) applies the same scope-paths rule manually in code, matched
   against each user's *assignment* paths rather than the user row itself: a user is listed if
-  *any* one of their assignments is in scope.
+  *any* one of their assignments is in scope. A user with no assignment at all (a state only
+  reachable from outside the application) is listed for DGI-level callers only, so it can be
+  repaired by assigning them an org.
 - **RBAC** (what a user can do with rows they can see) is separate, policy-based
   `IAuthorizationHandler`/`[Authorize(Policy = ...)]` — role-dependent, never touches the
   query filter.
