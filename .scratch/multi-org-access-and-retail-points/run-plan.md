@@ -41,6 +41,11 @@ How to hand the tickets in `issues/` here and in `../lens-power-and-lens-sets/is
   before B12. `/code-review` of Spec B run and its fixes merged; full suite 714 passing. Decision
   (user): pre-reset lens-set records lose which lens was sold — recorded in ADR-0007. Spec B's PR
   opened, stacked on Spec A's. Field App manual checklists (A09, B09, B10) still need a human.
+- 2026-10-01: both specs are on `main` and deployed to staging. The Field App manual checklists
+  (A09, B09, B10) and the staging smoke tests were run by hand and pass. Triage ticket 05 is
+  resolved: the migration username variable is set on both GitHub Environments and the step now
+  refuses a blank one. Production's Postgres grant can only be made after the first production
+  deploy creates the server (`docs/open-issues.md`).
 - Follow-ups noted during review, not yet ticketed:
   - The Admin Portal's cookie recheck also runs on static-asset requests (one small query each).
   - Two admins removing a user's last two assignments at once could leave the user with none.
@@ -90,5 +95,5 @@ they both rewrite `DotGlassesDbContextModelSnapshot`.
 - Deploying Spec B retires every lens set in staging, including sets the CEO built. Tell the CEO first.
   Production will have no active lens sets until DGI builds them.
 - Production deploys have waited for approval since 2026-09-10. Ticket 05 of
-  `.scratch/triage-2026-09-26/` (the CI migration step's Postgres username) is still `ready-for-human`
+  `.scratch/triage-2026-09-26/` (the CI migration step's Postgres username) was resolved on 2026-10-01 (it was `ready-for-human`)
   and must be fixed before a prod deploy is approved.

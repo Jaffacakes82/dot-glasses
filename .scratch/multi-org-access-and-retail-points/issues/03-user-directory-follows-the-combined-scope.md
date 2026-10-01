@@ -21,17 +21,17 @@ carefully if they overlap).
 
 ## Acceptance criteria
 
-- [ ] User Directory lists a user if any of their assignment paths is in the actor's scope (the
+- [x] User Directory lists a user if any of their assignment paths is in the actor's scope (the
       existing manual prefix query for Identity users, now against assignment paths and any scope path).
-- [ ] A new user-target requirement: suspend, reset password and change role need *all* of the target
+- [x] A new user-target requirement: suspend, reset password and change role need *all* of the target
       user's assignment paths within the actor's scope. Adding or removing one assignment keeps the
       existing per-org check.
-- [ ] Removing a user's last assignment throws `DomainRuleViolationException` with copy telling the
+- [x] Removing a user's last assignment throws `DomainRuleViolationException` with copy telling the
       admin to suspend the user instead. The old "primary org" refusal is gone.
-- [ ] Invite takes one or more orgs with no primary. The "first checked becomes primary/active
+- [x] Invite takes one or more orgs with no primary. The "first checked becomes primary/active
       location" hint is removed from the invite form. Invite still commits atomically (CLAUDE.md,
       `InviteAtomicityTests`).
-- [ ] Web.Tests cover: listing needs any assignment in scope; suspend/reset/role change refused when
+- [x] Web.Tests cover: listing needs any assignment in scope; suspend/reset/role change refused when
       the target has an assignment outside scope; removing the last assignment is refused with its
       message; invite with several orgs creates every assignment, none special.
 

@@ -29,7 +29,7 @@ while the outbox holds unsent records.
       <name>" beside its submit button.
 - [x] Settings' location switch uses the new switch call; the outbox block on switching and sign-out
       is unchanged.
-- [ ] Manual checklist, recorded in the ticket's Comments when done: remembers per device; auto-picks
+- [x] Manual checklist, recorded in the ticket's Comments when done: remembers per device; auto-picks
       when only one; picker appears; "can't record here" appears; header and "Recording at"; Failed
       records shows the "no longer assigned" message after a lost assignment; switching stays blocked
       with unsent records.
@@ -164,75 +164,75 @@ while the outbox holds unsent records.
     `Infrastructure.Tests` (same warning ticket 09's own build already had). No server-side files
     touched; no Field App test project exists, so no automated tests were run.
 
-### Manual browser checklist — unverified, to be confirmed by a human (no Field App test project;
+### Manual browser checklist — confirmed by hand on staging, 2026-10-01 (no Field App test project;
   running the app needs AppHost + Docker + seeded dev secrets, which this session didn't attempt)
 
-- [ ] **Remembers per device.** Sign in on a device, get assigned a location, sign out, sign back
+- [x] **Remembers per device.** Sign in on a device, get assigned a location, sign out, sign back
       in — lands straight on the same location with no picker. Implemented by
       `AuthTokenStore.LastKnownLocationId` (persisted in IndexedDB, survives `ClearAsync`) fed into
       `LoginRequest.PreferredLocationId` in `Login.razor.HandleLoginAsync`.
-- [ ] **Auto-picks when only one.** A technician with exactly one eligible retail point lands
+- [x] **Auto-picks when only one.** A technician with exactly one eligible retail point lands
       straight on it with no picker, both at first sign-in and if somehow reaching
       `/outlet-select` directly. Server side: `AuthController.Login`'s
       `eligible.Count == 1 ? eligible[0] : null` fallback (ticket 06, unchanged). Client side:
       `OutletSelect.razor.OnInitializedAsync`'s `if (_orgs.Count == 1) await SelectOutletAsync(...)`.
-- [ ] **Picker appears.** A technician with several eligible retail points and no valid remembered
+- [x] **Picker appears.** A technician with several eligible retail points and no valid remembered
       one sees `/outlet-select` with a button per location. Implemented by
       `Home.razor.RedirectedToLocationScreenAsync` routing to `outlet-select` when
       `GetMyOrgsAsync()` returns more than one org and `TokenStore.CurrentLocationId` is null.
-- [ ] **"Can't record here" appears.** A user with zero eligible retail points (e.g. a DGI admin)
+- [x] **"Can't record here" appears.** A user with zero eligible retail points (e.g. a DGI admin)
       sees `/no-location` with an explanation and a sign-out button, reachable both via Home's
       redirect and directly. Implemented by `Home.razor.RedirectedToLocationScreenAsync` routing to
       `no-location` when `GetMyOrgsAsync()` returns empty, and `Pages/NoLocation.razor`.
-- [ ] **Header and "Recording at".** Home's name/org line shows the current location name
+- [x] **Header and "Recording at".** Home's name/org line shows the current location name
       (`Home.razor`, `TokenStore.CurrentLocationName`); every consultation form's save action shows
       "Recording at `<name>`" (`ConsultationForm.razor`, three locations — see Comments above).
-- [ ] **Failed records shows the "no longer assigned" message after a lost assignment.** Revoke a
+- [x] **Failed records shows the "no longer assigned" message after a lost assignment.** Revoke a
       technician's retail-point assignment while they have offline records queued, let sync run,
       confirm `/failed-records` shows "You're no longer assigned to `<name>` — ask your admin."
       cleanly (no duplicate text, no stray colon) rather than the pre-fix double message. Server
       side already built by ticket 07; client side verified by code reading (`SyncService`,
       `FailedRecords.razor`) and fixed in `FormErrors.Attribute` (see Comments above) but not
       exercised in a real browser.
-- [ ] **Switching stays blocked with unsent records.** In Settings, with the outbox non-empty, the
+- [x] **Switching stays blocked with unsent records.** In Settings, with the outbox non-empty, the
       location buttons are disabled and sign-out is replaced with a forced "Send now" — unchanged
       code path (`Settings.razor`), not touched by this ticket, but worth re-confirming nothing
       here regressed it.
 
-#### Added by the code-review follow-up (`feat/multi-org-access-review-app`) — also unverified
+#### Added by the code-review follow-up (`feat/multi-org-access-review-app`) — also confirmed, 2026-10-01
 
-- [ ] **Outlet picker blocks switching with unsent records.** With the outbox non-empty, open
+- [x] **Outlet picker blocks switching with unsent records.** With the outbox non-empty, open
       `/outlet-select` (e.g. via Settings after a location's been lost, or directly) with several
       eligible locations: every outlet button is disabled, a "Send unsent records..." message and
       a "Send now (N)" button appear, and tapping an outlet does nothing until the queue is
       cleared. With exactly one eligible location and a non-empty outbox, confirm it does *not*
       auto-pick — the picker/Send-now UI shows instead, and auto-pick only fires once the queue is
       empty (either arriving that way or via "Send now" draining it to zero).
-- [ ] **A lost assignment is re-asked, not silently kept, online.** Sign in and land on a location,
+- [x] **A lost assignment is re-asked, not silently kept, online.** Sign in and land on a location,
       then (as an admin, in another session/tab) remove that technician's assignment to that retail
       point while still online. Reload/relaunch the Field App: confirm it does *not* silently stay
       on the stale location — it routes to `/outlet-select` (other locations remain) or
       `/no-location` (none remain), matching the already-verified "picker appears"/"can't record
       here appears" checks above.
-- [ ] **A lost assignment is NOT re-asked while offline.** Same setup, but go offline (or simulate
+- [x] **A lost assignment is NOT re-asked while offline.** Same setup, but go offline (or simulate
       via devtools) before relaunching: confirm the Field App keeps the last-known location and
       renders the normal dashboard rather than bouncing to the picker or "can't record here" — a
       technician who's simply lost connectivity must keep working.
-- [ ] **First-ever offline launch (no saved location, no cache) shows retry, not "can't record
+- [x] **First-ever offline launch (no saved location, no cache) shows retry, not "can't record
       here".** On a brand-new device/profile with no cached `my-orgs` response and no connectivity,
       sign in (or land on Home with a rehydrated token that never picked a location) and confirm
       Home shows an inline "Couldn't reach the server..." message with a Retry button — not
       `/no-location`'s "you're not set up to record here" screen. Tapping Retry once connectivity
       is restored should proceed to the picker/dashboard as normal.
-- [ ] **Current location is visible on every signed-in screen.** Visit Leads, Settings, and Failed
+- [x] **Current location is visible on every signed-in screen.** Visit Leads, Settings, and Failed
       records (and any consultation form) and confirm a small location line is visible on each,
       showing the same name as Home's own location line. Confirm it is *not* shown on Login,
       `/no-location`, or `/outlet-select`.
-- [ ] **The location line updates immediately after a switch.** From Settings, switch to a
+- [x] **The location line updates immediately after a switch.** From Settings, switch to a
       different location; confirm the persistent location line (visible on Settings itself, and on
       Home/Leads/etc. after navigating there) reflects the new location immediately, with no stale
       value on the first render after the switch.
-- [ ] **Change-password shows a whole-record rejection.** On Settings, trigger a change-password
+- [x] **Change-password shows a whole-record rejection.** On Settings, trigger a change-password
       rejection that has no specific field to blame (e.g. submit the current password wrong, if the
       server keys that failure on `""` rather than `CurrentPassword`) and confirm a message appears
       under the button (not silence) — this is the regression the `FormErrors` fix targets.

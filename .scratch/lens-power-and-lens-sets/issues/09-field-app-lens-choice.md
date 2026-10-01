@@ -33,7 +33,7 @@ longer in <set>. Choose a lens."; "Same lens for both eyes" starts ticked only i
       unmatched-lens note.
 - [x] The cached reference data takes the new lens-set shape (the IndexedDB cache refreshes on the next
       online load).
-- [ ] Manual checklist, recorded in Comments when done: same-lens and right-eye filter; power line;
+- [x] Manual checklist, recorded in Comments when done: same-lens and right-eye filter; power line;
       custom form with axis gating; lens type only with an add; radios; section order; conversion
       seeding incl. an unmatched lens; an old-shape outbox record lands on Failed records.
 
@@ -88,39 +88,39 @@ longer in <set>. Choose a lens."; "Same lens for both eyes" starts ticked only i
   4. `LensPowerText.Format` duplicates `LensOptionCard.FormatLensPower` in Web because I may not edit
      Rules; worth moving into Rules later.
   5. The unmatched note reads "on this record" (not "Lead") when correcting a Failed record.
-- **Manual checklist — all UNVERIFIED, to be confirmed by a human in the browser.** (`Selector` =
+- **Manual checklist — confirmed by hand on staging, 2026-10-01; every item works as expected.** (`Selector` =
   `LensRangeSelector.razor`, `Form` = `ConsultationForm.razor`.)
-  - [ ] Same lens / right-eye filter: on a lens set, "Same lens for both eyes" is ticked and shows one
+  - [x] Same lens / right-eye filter: on a lens set, "Same lens for both eyes" is ticked and shows one
         "Lens" dropdown; choosing sets both eyes (Selector `OnSameLensChosen` → `ChooseSameLens`).
         Unticking shows left/right; with a Bifocal left chosen the right lists only Bifocals, and
         changing the left to another type empties a now-mixed right (`RightLensChoices`,
         `LensRangeSelection.ChooseLeftLens`). Re-ticking copies the left lens to the right.
-  - [ ] Power line: the chosen lens's "SPH +2.50 · CYL -0.75 × 90 · ADD +1.00" (only the parts it has)
+  - [x] Power line: the chosen lens's "SPH +2.50 · CYL -0.75 × 90 · ADD +1.00" (only the parts it has)
         appears under each lens dropdown (Selector `RenderPowerLine`, `LensPowerText.Format`); lenses
         are in single vision → Bifocal → Progressive → Other order (`OrderedLenses`).
-  - [ ] Custom form: sphere/cylinder/add/axis are dropdowns with the shop's values, 0.00 first for
+  - [x] Custom form: sphere/cylinder/add/axis are dropdowns with the shop's values, 0.00 first for
         sphere and cylinder, no positive cylinder (`LensPowerSelect` over `LensPowerValues`); the axis
         dropdown (0–180) appears only once that eye's cylinder isn't 0.00 and disappears, cleared,
         when it goes back to 0.00 (Selector `OnCylinderChanged`).
-  - [ ] Lens type only with an add: radios Bifocal/Progressive/Other appear only when an add is above
+  - [x] Lens type only with an add: radios Bifocal/Progressive/Other appear only when an add is above
         0.00 (an add of 0.00 doesn't); "Other" reveals a text box; removing the add clears the choice
         (Selector `OnAddPowerChanged`, `ReferenceDataRadios`).
-  - [ ] Radios, never dropdowns: lens type, and coating preference on a Test and a Lead, with "No
+  - [x] Radios, never dropdowns: lens type, and coating preference on a Test and a Lead, with "No
         preference" first; choosing a lens after picking a preference clears it and the radio unticks
         visibly (Form `RenderCoatingPreference`, `ReferenceDataRadios` re-keying).
-  - [ ] Section order: lens range, lens, children's frame, pupil distance, coatings (Sale) or coating
+  - [x] Section order: lens range, lens, children's frame, pupil distance, coatings (Sale) or coating
         preference (Test/Lead), then — Custom Sale only — "Order this lens from Dot Glasses" last, above
         frame colour (Selector markup order; Form Sale block).
-  - [ ] Conversion seeding: converting a Lead on a lens set pre-selects its lens (both eyes matching →
+  - [x] Conversion seeding: converting a Lead on a lens set pre-selects its lens (both eyes matching →
         "Same lens" ticked; eyes differing → unticked with each side selected). Remove that lens from
         the set in the Admin Portal, reload the device data, convert again: the Lens dropdown is empty
         with "The SPH … on this Lead is no longer in <set>. Choose a lens."; saving without choosing is
         refused against the lens (Form `ApplyLensRange`, `LensSetLenses.Match`, `EyesMatch`).
         Correcting a Failed record does the same with "on this record".
-  - [ ] Old-shape outbox record: a queued record carrying `lensOptionLeftId`/`lensOptionRightId` is
+  - [x] Old-shape outbox record: a queued record carrying `lensOptionLeftId`/`lensOptionRightId` is
         rejected at sync (400 on `SphereLeft`/`SphereRight`) and lands on Failed records; opening it
         shows the error against the lens dropdown (Selector `FieldError`s; keys unchanged).
-  - [ ] Old cache: with an IndexedDB `reference-data-cache` written before this change, going offline
+  - [x] Old cache: with an IndexedDB `reference-data-cache` written before this change, going offline
         shows no lens sets (rather than zero-power lenses); back online refreshes it
         (`ReferenceDataClient.TryLoadFromCacheAsync`).
 - **Stale docs for B12** (not edited here): `docs/functional-capabilities.md`'s Field App lens
