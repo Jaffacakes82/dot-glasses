@@ -171,7 +171,7 @@ public partial class ReferenceDataAdminService(DotGlassesDbContext dbContext, IR
             .AnyAsync(x => x.Id == coatingRefId && x.Category == ReferenceDataCategory.Coating && x.IsActive, cancellationToken);
         if (!isActive)
         {
-            throw new DomainRuleViolationException("Both coatings must reference an existing, active Coating reference-data item.");
+            throw new DomainRuleViolationException("One of these coatings isn't offered any more. Reload the page and choose again.");
         }
     }
 

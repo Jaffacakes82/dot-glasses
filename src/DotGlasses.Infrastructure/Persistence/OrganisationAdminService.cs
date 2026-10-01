@@ -50,7 +50,7 @@ public class OrganisationAdminService(DotGlassesDbContext dbContext, ICurrentUse
 
         if (!IsValidChildLevel(parent.Level, level))
         {
-            throw new DomainRuleViolationException($"{level} is not a valid child level under a {parent.Level} node.");
+            throw new DomainRuleViolationException("That level can't sit directly under this organisation. Choose another level.");
         }
 
         // New path segments are globally unique integers across the *whole* tree (not

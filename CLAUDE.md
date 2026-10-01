@@ -48,9 +48,11 @@ are the record of *how* things got built; don't restate that here.
 - **There is no consultation request validator.** `ConsultationRules.Check` holds *every* rule for
   a `Test`/`Lead`/`Sale` create — including the scalar ones (`NotEmpty`, length caps, `IsInEnum`,
   the age range). A message a form control can cause is a plain instruction naming the control by
-  its on-screen label ("Choose a reason not purchased."), never a property or enum name; only the
-  ones no form can produce (an empty `Id`, an out-of-enum value, fields the forms always blank)
-  stay technical. The three create endpoints call the module directly: load the
+  its on-screen label ("Choose a reason not purchased."), never a property or enum name. The ones no
+  form can produce (an empty `Id`, an out-of-enum value, fields the forms always blank) can still
+  reach a technician on Failed records, so each group shares one plain sentence saying what to do;
+  `ConsultationRulesTests` has a guard test that fails if any message names a request property or
+  enum member. The three create endpoints call the module directly: load the
   snapshot once, `Check`, `ToModelStateDictionary()`, `ValidationProblem`. Don't reintroduce a
   validator for these three DTOs, and don't reword a message without treating it as the
   client-visible change it is.

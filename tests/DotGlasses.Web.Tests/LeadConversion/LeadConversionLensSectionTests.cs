@@ -155,7 +155,7 @@ public class LeadConversionLensSectionTests(AdminPortalFactory factory) : IClass
         var html = await response.Content.ReadAsStringAsync();
         Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
         Assert.Empty(Query(db => db.Sales.IgnoreQueryFilters().Where(s => s.SourceLeadId == leadId).ToList()));
-        Assert.Contains("choose a right-eye lens of the left eye's type", ErrorFor(html, "Form.SphereRight"));
+        Assert.Contains("Choose a right-eye lens of the same lens type as the left eye's", ErrorFor(html, "Form.SphereRight"));
     }
 
     [Fact]
@@ -341,7 +341,7 @@ public class LeadConversionLensSectionTests(AdminPortalFactory factory) : IClass
 
         var html = await response.Content.ReadAsStringAsync();
         Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains("configured as available for the chosen lens", ErrorFor(html, "Form.CoatingRefIds"));
+        Assert.Contains("isn't made on these lenses", ErrorFor(html, "Form.CoatingRefIds"));
     }
 
     [Fact]

@@ -31,7 +31,7 @@
 @if (SelectedIsOther)
 {
     <div class="dg-field">
-        <label>@(OtherLabel ?? $"{Label} — please specify")</label>
+        <label>@(OtherLabel ?? $"{Label} — say which")</label>
         <input value="@OtherText" @oninput="OnOtherInputAsync" />
         <FieldError Errors="Errors" For="@OtherField" />
     </div>

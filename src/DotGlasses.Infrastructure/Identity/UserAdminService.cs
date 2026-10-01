@@ -155,7 +155,7 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
         // always has at least one assignment — true for any other caller too.
         if (orgNodeIds.Count == 0)
         {
-            throw new DomainRuleViolationException("At least one location must be assigned.");
+            throw new DomainRuleViolationException("Choose at least one organisation.");
         }
 
         // Routed through the execution strategy rather than calling BeginTransactionAsync
@@ -305,7 +305,7 @@ public class UserAdminService(UserManager<ApplicationUser> userManager, DotGlass
     {
         if (!RoleNames.All.Contains(role))
         {
-            throw new DomainRuleViolationException("Role must be one of: " + string.Join(", ", RoleNames.All) + ".");
+            throw new DomainRuleViolationException("Choose a role.");
         }
 
         var strategy = dbContext.Database.CreateExecutionStrategy();

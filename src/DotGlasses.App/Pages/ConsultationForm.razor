@@ -301,7 +301,7 @@
     private string? _summaryMessage;
 
     /// <summary>True while <see cref="_summaryMessage"/> is the line over highlighted field errors
-    /// (the client's "Please fix…", or a server rejection that landed against fields), so it can go
+    /// (the client's "Fix the highlighted fields…", or a server rejection that landed against fields), so it can go
     /// when the last of them is corrected. Other summaries — a Failed record's stored reason, a
     /// whole-record rejection, "that lead couldn't be loaded" — aren't about a field and stay.</summary>
     private bool _summaryFollowsFieldErrors;
@@ -864,7 +864,7 @@
             _errors.Clear();
             _errors.Unattributed.Clear();
             _errors.Add("Outcome", "This customer shared contact details — continue as a Lead instead of saving a plain test.");
-            _summaryMessage = "Please fix the highlighted fields before saving.";
+            _summaryMessage = "Fix the highlighted fields, then save.";
             _summaryFollowsFieldErrors = true;
             return;
         }
@@ -992,7 +992,7 @@
 
         if (_errors.Any || _errors.Unattributed.Count > 0)
         {
-            _summaryMessage = "Please fix the highlighted fields before saving.";
+            _summaryMessage = "Fix the highlighted fields, then save.";
             _summaryFollowsFieldErrors = true;
         }
 
@@ -1270,7 +1270,7 @@
         @if (selectedIsOther)
         {
             <div class="dg-field" style="margin-top:var(--space-2);">
-                <label>Frame colour — please specify</label>
+                <label>Frame colour — say which</label>
                 <input @bind="_frameColourOtherText" @oninput="() => ClearErrors(nameof(CreateSaleRequest.FrameColourOtherText))" />
                 <FieldError Errors="_errors" For="FrameColourOtherText" />
             </div>

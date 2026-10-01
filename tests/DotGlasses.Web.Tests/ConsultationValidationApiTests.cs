@@ -51,8 +51,8 @@ public class ConsultationValidationApiTests(CustomWebApplicationFactory factory)
         var errors = await ErrorsAsync(response);
 
         AssertKeys(["Id", "Gender", "AgeYears", "OccupationOtherText", "OccupationRefId"], errors);
-        Assert.Equal("'Id' must not be empty.", errors["Id"].Single());
-        Assert.Equal("'Gender' has a range of values which does not include '99'.", errors["Gender"].Single());
+        Assert.Equal("This record can't be saved as it was sent. Open it, check each answer and save it again.", errors["Id"].Single());
+        Assert.Equal("This record can't be saved as it was sent. Open it, check each answer and save it again.", errors["Gender"].Single());
         Assert.Equal("Enter an age between 0 and 120.", errors["AgeYears"].Single());
         Assert.Equal(
             "Keep the other occupation to 200 characters or fewer.",
@@ -123,7 +123,7 @@ public class ConsultationValidationApiTests(CustomWebApplicationFactory factory)
 
         AssertKeys(["FrameCoverage", "FrameColourRefId", "LensRangeType", "PupilDistanceMm", "CoatingRefIds"], errors);
         Assert.DoesNotContain("OrderFromDotGlasses", errors.Keys);
-        Assert.Equal("'Frame Coverage' has a range of values which does not include '99'.", errors["FrameCoverage"].Single());
+        Assert.Equal("This record can't be saved as it was sent. Open it, check each answer and save it again.", errors["FrameCoverage"].Single());
         Assert.Equal(
             "Choose a sphere for each eye.",
             errors["LensRangeType"].Single());
@@ -157,8 +157,8 @@ public class ConsultationValidationApiTests(CustomWebApplicationFactory factory)
         var errors = await ErrorsAsync(response);
 
         AssertKeys(["SphereLeft", "CylinderLeft", "AxisRight", "AddLeft", "LensTypeRefId"], errors);
-        Assert.Equal("Sphere (left) must be between -10 and 10 in 0.25 increments.", errors["SphereLeft"].Single());
-        Assert.Equal("Axis (right) must be a whole number of degrees between 0 and 180.", errors["AxisRight"].Single());
+        Assert.Equal("Sphere (left): choose a value between -10 and 10, in steps of 0.25.", errors["SphereLeft"].Single());
+        Assert.Equal("Axis (right): choose a whole number of degrees from 0 to 180.", errors["AxisRight"].Single());
     }
 
     /// <summary>Allowed values (lens-power ticket 02): the shop sells no positive cylinder. A
@@ -180,7 +180,7 @@ public class ConsultationValidationApiTests(CustomWebApplicationFactory factory)
         var errors = await ErrorsAsync(response);
 
         AssertKeys(["CylinderLeft"], errors);
-        Assert.Equal("Cylinder (left) must be between -6 and 0 in 0.25 increments.", errors["CylinderLeft"].Single());
+        Assert.Equal("Cylinder (left): choose a value between -6 and 0, in steps of 0.25.", errors["CylinderLeft"].Single());
     }
 
     /// <summary>Axis (lens-power ticket 02): required with a cylinder, refused without one.</summary>
@@ -200,8 +200,8 @@ public class ConsultationValidationApiTests(CustomWebApplicationFactory factory)
         var errors = await ErrorsAsync(response);
 
         AssertKeys(["AxisLeft", "AxisRight"], errors);
-        Assert.Equal("Axis (left) is required when Cylinder (left) isn't 0.00 — choose an axis from 0 to 180.", errors["AxisLeft"].Single());
-        Assert.Equal("Axis (right) must be empty when Cylinder (right) is 0.00 — an axis only applies to a cylinder.", errors["AxisRight"].Single());
+        Assert.Equal("Axis (left): choose an axis from 0 to 180 — Cylinder (left) isn't 0.00.", errors["AxisLeft"].Single());
+        Assert.Equal("Axis (right): clear the axis — it only applies when Cylinder (right) isn't 0.00.", errors["AxisRight"].Single());
     }
 
     /// <summary>Lens type (lens-power ticket 02): an add of 0.00 is no add, so it takes no lens

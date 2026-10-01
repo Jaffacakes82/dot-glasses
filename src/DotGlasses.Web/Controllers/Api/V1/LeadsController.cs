@@ -123,11 +123,11 @@ public class LeadsController(
         var test = await testService.GetByIdAsync(sourceTestId, cancellationToken);
         if (test is null)
         {
-            modelState.AddModelError(nameof(request.SourceTestId), "SourceTestId must reference an existing Test.");
+            modelState.AddModelError(nameof(request.SourceTestId), "The test this lead continues from can't be found at this location. Discard this record and record the lead again.");
         }
         else if (test.ConvertedToLeadId is not null)
         {
-            modelState.AddModelError(nameof(request.SourceTestId), "This Test has already been converted into a Lead.");
+            modelState.AddModelError(nameof(request.SourceTestId), "This test has already been continued into a lead. Discard this record.");
         }
     }
 

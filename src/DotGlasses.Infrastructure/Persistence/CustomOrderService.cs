@@ -89,7 +89,7 @@ public class CustomOrderService(DotGlassesDbContext dbContext, IUnscopedReportQu
 
         if (sale.FulfilmentStatus is not { } current)
         {
-            throw new DomainRuleViolationException("This Sale is not a custom order routed to fulfilment.");
+            throw new DomainRuleViolationException("This sale has no custom order to update.");
         }
 
         sale.FulfilmentStatus = current switch

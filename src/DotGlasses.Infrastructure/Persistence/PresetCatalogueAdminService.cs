@@ -131,7 +131,7 @@ public class PresetCatalogueAdminService(DotGlassesDbContext dbContext, IReferen
         var owningOrg = await dbContext.OrganisationNodes.FirstAsync(x => x.Id == owningOrgNodeId, cancellationToken);
         if (owningOrg.Level is not (OrganisationLevel.Dgi or OrganisationLevel.Country))
         {
-            throw new DomainRuleViolationException("A PresetCatalogue's owning org must be Dgi or Country level.");
+            throw new DomainRuleViolationException("A lens set can only belong to DGI or a country. Choose one of those.");
         }
 
         var entity = new PresetCatalogue

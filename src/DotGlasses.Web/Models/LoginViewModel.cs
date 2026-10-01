@@ -4,11 +4,11 @@ namespace DotGlasses.Web.Models;
 
 public class LoginViewModel
 {
-    [Required]
+    [Required(ErrorMessage = "Enter your email address.")]
     [Display(Name = "Email")]
     public string UserName { get; set; } = string.Empty;
 
-    [Required]
+    [Required(ErrorMessage = "Enter your password.")]
     [DataType(DataType.Password)]
     public string Password { get; set; } = string.Empty;
 

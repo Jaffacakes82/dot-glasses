@@ -39,7 +39,7 @@ public class LensSetNameTests(AdminPortalFactory factory) : IClassFixture<AdminP
         var response = await CreateAsync(client, "");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains("&#x27;Name&#x27; must not be empty.", await response.Content.ReadAsStringAsync());
+        Assert.Contains("Enter a name for the lens set.", await response.Content.ReadAsStringAsync());
     }
 
     [Fact]

@@ -151,10 +151,9 @@
         _locationError = null;
         try
         {
-            var succeeded = await LocationClient.SwitchOrgAsync(orgNodeId);
-            if (!succeeded)
+            _locationError = await LocationClient.SwitchOrgAsync(orgNodeId);
+            if (_locationError is not null)
             {
-                _locationError = "Couldn't switch location — check your connection and try again.";
                 return;
             }
 

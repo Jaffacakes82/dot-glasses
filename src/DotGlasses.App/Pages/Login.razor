@@ -60,7 +60,7 @@
             var response = await Http.PostAsJsonAsync("api/v1/auth/login", _request);
             if (!response.IsSuccessStatusCode)
             {
-                _error = "Invalid username or password.";
+                _error = "Email or password is incorrect.";
                 return;
             }
 
@@ -76,7 +76,7 @@
         }
         catch (Exception)
         {
-            _error = "Could not reach the server — check your connection.";
+            _error = "Couldn't reach the server. Check your connection and try again.";
         }
         finally
         {

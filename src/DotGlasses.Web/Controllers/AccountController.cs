@@ -43,7 +43,7 @@ public class AccountController(SignInManager<ApplicationUser> signInManager) : C
         var result = await signInManager.PasswordSignInAsync(model.UserName, model.Password, isPersistent: true, lockoutOnFailure: true);
         if (!result.Succeeded)
         {
-            model.Error = "Invalid username or password.";
+            model.Error = "Email or password is incorrect.";
             return View(model);
         }
 

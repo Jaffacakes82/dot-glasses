@@ -118,9 +118,10 @@ public static class ConsultationRules
     ///
     /// <b>The messages a form control can cause are plain instructions</b> naming the control as
     /// the forms label it ("Enter the customer's full name."), like the rest of this file. Two
-    /// kinds are still FluentValidation's generated copy, because no form can cause them and the
-    /// value quoted back is the only clue to what a client sent: an empty Id, and an enum value
-    /// outside its enum. All are pinned character-for-character by ConsultationRulesTests.
+    /// kinds no form can cause — an empty Id, and an enum value outside its enum — can still reach
+    /// a technician on Failed records, so they share one plain sentence
+    /// (<see cref="RecordCannotBeSaved"/>) rather than quoting a property name. All are pinned
+    /// character-for-character by ConsultationRulesTests.
     ///
     /// Which check applies to which request is <em>not</em> uniform, and the gaps are pre-existing
     /// drift preserved on purpose rather than tidied: only a Lead requires PhoneNumber, and only a
@@ -131,9 +132,9 @@ public static class ConsultationRules
     /// over-long text is a keyed failure rather than a database error.)
     /// </summary>
     private static IEnumerable<RuleFailure> Scalars(CreateTestRequest request) =>
-        NotEmpty(request.Id, IdKey, "Id")
-            .Concat(InEnum(request.Gender, GenderKey, "Gender"))
-            .Concat(InEnum(request.Outcome, nameof(CreateTestRequest.Outcome), "Outcome"))
+        NotEmpty(request.Id, IdKey)
+            .Concat(InEnum(request.Gender, GenderKey))
+            .Concat(InEnum(request.Outcome, nameof(CreateTestRequest.Outcome)))
             .Concat(AgeYears(request.AgeYears))
             .Concat(MaximumLength(request.OccupationOtherText, OccupationOtherTextKey, "the other occupation", 200))
             .Concat(MaximumLength(request.ReferralOtherText, ReferralOtherTextKey, "the other referral reason", 200))
@@ -142,12 +143,12 @@ public static class ConsultationRules
 
     /// <summary>See <see cref="Scalars(CreateTestRequest)"/>.</summary>
     private static IEnumerable<RuleFailure> Scalars(CreateLeadRequest request) =>
-        NotEmpty(request.Id, IdKey, "Id")
+        NotEmpty(request.Id, IdKey)
             .Concat(NotEmpty(request.FullName, FullNameKey, "Enter the customer's full name."))
             .Concat(MaximumLength(request.FullName, FullNameKey, "the full name", 200))
             .Concat(NotEmpty(request.PhoneNumber, PhoneNumberKey, "Enter a phone number."))
             .Concat(MaximumLength(request.PhoneNumber, PhoneNumberKey, "the phone number", 32))
-            .Concat(InEnum(request.Gender, GenderKey, "Gender"))
+            .Concat(InEnum(request.Gender, GenderKey))
             .Concat(AgeYears(request.AgeYears))
             .Concat(MaximumLength(request.OccupationOtherText, OccupationOtherTextKey, "the other occupation", 200))
             .Concat(MaximumLength(request.ReasonNotPurchasedOtherText, nameof(CreateLeadRequest.ReasonNotPurchasedOtherText), "the other reason", 200))
@@ -159,14 +160,14 @@ public static class ConsultationRules
     /// from the Admin Portal's conversion screen, which renders the checkbox whatever the lens
     /// range; the Field App hides it outside a Custom prescription.</summary>
     private static IEnumerable<RuleFailure> Scalars(CreateSaleRequest request) =>
-        NotEmpty(request.Id, IdKey, "Id")
+        NotEmpty(request.Id, IdKey)
             .Concat(NotEmpty(request.FullName, FullNameKey, "Enter the customer's full name."))
             .Concat(MaximumLength(request.FullName, FullNameKey, "the full name", 200))
             .Concat(MaximumLength(request.PhoneNumber, PhoneNumberKey, "the phone number", 32))
-            .Concat(InEnum(request.Gender, GenderKey, "Gender"))
+            .Concat(InEnum(request.Gender, GenderKey))
             .Concat(AgeYears(request.AgeYears))
-            .Concat(InEnum(request.LensRangeType, LensRangeTypeKey, "Lens Range Type"))
-            .Concat(InEnum(request.FrameCoverage, nameof(CreateSaleRequest.FrameCoverage), "Frame Coverage"))
+            .Concat(InEnum(request.LensRangeType, LensRangeTypeKey))
+            .Concat(InEnum(request.FrameCoverage, nameof(CreateSaleRequest.FrameCoverage)))
             .Concat(MaximumLength(request.OccupationOtherText, OccupationOtherTextKey, "the other occupation", 200))
             .Concat(MaximumLength(request.FrameColourOtherText, nameof(CreateSaleRequest.FrameColourOtherText), "the other frame colour", 200))
             .Concat(MaximumLength(request.HardCaseOtherColourText, nameof(CreateSaleRequest.HardCaseOtherColourText), "the other hard case colour", 200))
@@ -179,8 +180,8 @@ public static class ConsultationRules
 
     /// <summary>An id the caller actually filled in. Guid.Empty is what a missing id deserialises
     /// to, so it is indistinguishable from "not sent" and rejected as such.</summary>
-    private static IEnumerable<RuleFailure> NotEmpty(Guid value, string key, string displayName) =>
-        value == Guid.Empty ? [new RuleFailure(key, $"'{displayName}' must not be empty.")] : [];
+    private static IEnumerable<RuleFailure> NotEmpty(Guid value, string key) =>
+        value == Guid.Empty ? [new RuleFailure(key, RecordCannotBeSaved)] : [];
 
     /// <summary>Whitespace counts as empty, matching the FluentValidation rule this replaces — a
     /// customer named " " is not a named customer.</summary>
@@ -197,13 +198,11 @@ public static class ConsultationRules
 
     /// <summary>An enum value that is one of the enum's own members. A number outside the set
     /// arrives whenever a client sends an integer the server's copy of the enum has never heard
-    /// of, and the message quotes it back because that number is the only clue to what was
-    /// sent.</summary>
-    private static IEnumerable<RuleFailure> InEnum<TEnum>(TEnum value, string key, string displayName)
+    /// of — a record queued by another version of the app. The key still says which answer it
+    /// was.</summary>
+    private static IEnumerable<RuleFailure> InEnum<TEnum>(TEnum value, string key)
         where TEnum : struct, Enum =>
-        Enum.IsDefined(value)
-            ? []
-            : [new RuleFailure(key, $"'{displayName}' has a range of values which does not include '{value}'.")];
+        Enum.IsDefined(value) ? [] : [new RuleFailure(key, RecordCannotBeSaved)];
 
     /// <summary>Optional on all three requests, range-checked whenever it is given. 120 is a
     /// plausibility ceiling, not a medical one.</summary>
@@ -346,7 +345,7 @@ public static class ConsultationRules
             case null:
                 if (lensSetChosen || lensFieldsSet || pupilDistanceMm is not null || presetPupilDistanceBucket is not null)
                 {
-                    yield return new RuleFailure(LensRangeTypeKey, "Lens set and custom lens fields must be empty when LensRangeType is not set.");
+                    yield return new RuleFailure(LensRangeTypeKey, LensDetailsDoNotMatch);
                 }
 
                 break;
@@ -405,7 +404,7 @@ public static class ConsultationRules
     {
         if (presetCatalogueId is not { } catalogueId)
         {
-            yield return new RuleFailure(PresetCatalogueIdKey, "PresetCatalogueId is required for a LensSet LensRangeType.");
+            yield return new RuleFailure(PresetCatalogueIdKey, LensDetailsDoNotMatch);
             yield break;
         }
 
@@ -459,7 +458,7 @@ public static class ConsultationRules
 
         if (pupilDistanceMm is not null)
         {
-            yield return new RuleFailure(PupilDistanceMmKey, "PupilDistanceMm must be empty for a LensSet LensRangeType — use PresetPupilDistanceBucket instead.");
+            yield return new RuleFailure(PupilDistanceMmKey, LensDetailsDoNotMatch);
         }
 
         var maxBucket = LensPowerValues.MaxPresetPupilDistanceBucket(childrensFrame);
@@ -538,16 +537,16 @@ public static class ConsultationRules
         var shared = leftLensTypes.Intersect(rightLensTypes).ToList();
         if (shared.Count == 0)
         {
-            yield return new RuleFailure(SphereRightKey, "Both eyes' lenses must be the same lens type — choose a right-eye lens of the left eye's type.");
+            yield return new RuleFailure(SphereRightKey, "Choose a right-eye lens of the same lens type as the left eye's.");
         }
         else if (!shared.Contains(lensTypeRefId))
         {
-            yield return new RuleFailure(LensTypeRefIdKey, "LensTypeRefId must be the chosen lenses' own lens type.");
+            yield return new RuleFailure(LensTypeRefIdKey, LensDetailsDoNotMatch);
         }
         else if (LensSetLenses.Match(lenses, sphereLeft, cylinderLeft, axisLeft, addLeft, lensTypeRefId) is { } leftLens
             && !string.Equals(TextOrNull(leftLens.LensTypeOtherText), TextOrNull(lensTypeOtherText), StringComparison.Ordinal))
         {
-            yield return new RuleFailure(LensTypeOtherTextKey, "LensTypeOtherText must be the chosen lenses' own lens type text (empty unless their lens type is \"Other\").");
+            yield return new RuleFailure(LensTypeOtherTextKey, LensDetailsDoNotMatch);
         }
 
         static string? TextOrNull(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
@@ -610,7 +609,7 @@ public static class ConsultationRules
     {
         if (lensSetChosen)
         {
-            yield return new RuleFailure(LensRangeTypeKey, "Lens set fields must be empty for a Custom LensRangeType.");
+            yield return new RuleFailure(LensRangeTypeKey, LensDetailsDoNotMatch);
         }
 
         if (sphereLeft is null || sphereRight is null)
@@ -631,7 +630,7 @@ public static class ConsultationRules
 
         if (presetPupilDistanceBucket is not null)
         {
-            yield return new RuleFailure(PresetPupilDistanceBucketKey, "PresetPupilDistanceBucket must be empty for a Custom LensRangeType — use PupilDistanceMm instead.");
+            yield return new RuleFailure(PresetPupilDistanceBucketKey, LensDetailsDoNotMatch);
         }
 
         foreach (var failure in CustomPupilDistance(pupilDistanceMm, pupilDistanceRequired))
@@ -663,7 +662,7 @@ public static class ConsultationRules
         }
         else if (!range.Allows(pd))
         {
-            yield return new RuleFailure(PupilDistanceMmKey, "PupilDistanceMm must be a whole millimetre value.");
+            yield return new RuleFailure(PupilDistanceMmKey, "Choose a pupil distance in whole millimetres.");
         }
     }
 
@@ -767,7 +766,7 @@ public static class ConsultationRules
 
         if (coatingRefIds.Distinct().Count() != coatingRefIds.Count)
         {
-            return [new RuleFailure(CoatingRefIdsKey, "CoatingRefIds must not contain duplicates.")];
+            return [new RuleFailure(CoatingRefIdsKey, "A coating is ticked twice on this record. Choose the coatings again.")];
         }
 
         foreach (var coatingRefId in coatingRefIds)
@@ -779,7 +778,7 @@ public static class ConsultationRules
 
             if (lensSetPair is { } offeredOnThePair && !offeredOnThePair.Offered.Contains(coatingRefId))
             {
-                return [new RuleFailure(CoatingRefIdsKey, "Every coating must be configured as available for the chosen lenses (see Lens Sets).")];
+                return [new RuleFailure(CoatingRefIdsKey, "One of the chosen coatings isn't made on these lenses — choose the coatings again.")];
             }
         }
 
@@ -882,6 +881,12 @@ public static class ConsultationRules
             ? [new RuleFailure(otherTextKey, otherTextRequiredMessage)]
             : [];
     }
+
+    // Failures no form control can cause. They still reach a technician — on Failed records, for a
+    // record queued under older rules or by another version of the app — so each group has one
+    // plain sentence saying what to do, and the key still places it against the nearest control.
+    private const string RecordCannotBeSaved = "This record can't be saved as it was sent. Open it, check each answer and save it again.";
+    private const string LensDetailsDoNotMatch = "This record's lens details don't match its lens range. Open it and choose the lens again.";
 
     // Id, Gender and AgeYears are spelled identically on all three requests; FullName and
     // PhoneNumber on the two that carry a customer (a Test records no name — see

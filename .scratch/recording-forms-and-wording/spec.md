@@ -1,6 +1,6 @@
 # Spec D — Recording forms and wording
 
-Status: ready-for-agent
+Status: resolved
 Source: wayfinder map `.scratch/ceo-feedback-2026-09-27/` — tickets 13 (question order and optional
 fields), 14 ("customer aware of price") and 22 (plain, friendly prompts and error messages).
 Vocabulary: `CONTEXT.md` — **Referred or treated**.

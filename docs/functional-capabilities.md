@@ -160,11 +160,11 @@ that. The email itself is truncated with an ellipsis rather than overflowing the
 
 **Login** — `/Account/Login`, anonymous.
 
-Two fields, both required client-side: `UserName`, `Password`. Optional `returnUrl`, honoured only
+Two fields, both required: Email and Password. Optional `returnUrl`, honoured only
 if local. Sign-in is persistent (a lasting cookie) and counts failures toward lockout. On success
 `LastLoginUtc` is stamped and the user lands on the Dashboard or their return URL. On any failure
-— wrong password, unknown user, or a suspended account — the same message appears: *"Invalid
-username or password."* Suspension is deliberately not distinguishable from a bad password.
+— wrong password, unknown user, or a suspended account — the same message appears: *"Email or
+password is incorrect."* Suspension is deliberately not distinguishable from a bad password.
 
 **Sign out** — a real POST action, reachable from a button in the sidebar on every authenticated
 page. Ends the cookie session and returns to Login.
@@ -341,8 +341,9 @@ tabs.
 The **admin conversion form** (`/Leads/Convert/{id}`) asks for the Sale fields a Lead has no
 equivalent for — coating, frame colour, hard case, "order from DOT Glasses", and the lens range
 where the Lead captured no preference — plus **referred or treated**, with a referral reason, its
-"Other" free text, a treated-in-facility flag and a referral location, following exactly the same
-conditional rules as every other capture path (2026-09-04). Frame coverage is **not** asked here,
+"Other" free text, a treated-in-facility flag and an optional referral location, following exactly
+the same rules as every other capture path. That block is the form's last section, after hard case,
+as on the Field App. Frame coverage is **not** asked here,
 matching the Field App's Sale form; the sale records the Full frame default. Outside the lens
 section every field is rendered unconditionally with its condition stated in the label — the
 rules are enforced server-side and reported as a validation summary on submit, not by live
@@ -733,8 +734,8 @@ the token is **persisted to IndexedDB**, not just held in memory. Password rules
 2026-08-12, same as the Admin Portal): minimum 8 characters, at least one digit, one uppercase
 letter and one non-alphanumeric character.
 
-Errors: "Invalid username or password." for a rejected credential, "Could not reach the server —
-check your connection." for a network failure. If already signed in, a green banner shows the token
+Errors: "Email or password is incorrect." for a rejected credential, "Couldn't reach the server.
+Check your connection and try again." for a network failure. If already signed in, a green banner shows the token
 expiry time. Footer text: *"Log in once online — you can keep working fully offline after that.
 Sign out from Settings when you hand the device to someone else."*
 
@@ -774,62 +775,66 @@ The counts refresh only on page load and after a manual sync, so they go stale w
 timer syncs underneath.
 
 **Every consultation form's real save action shows "Recording at `<name>`" beside it** — the
-bottom Save/Save-test button, the price-confirmation card's "Yes, save", and the Test→Lead
+bottom Save/Save-test button and the Test→Lead
 "Continue as Lead" button (which also saves, before navigating on) — so the technician sees the
 current location at the moment they commit a record, not just once on Home.
 
 ### 5.3 Record Test — `/consultation/test`
 
-**Client-side validation runs before submit** — required fields are checked and shown inline
-before anything reaches the price-confirmation step or the network, matching the server's own
-rules exactly (see 6).
+**Client-side validation runs before submit** — the form builds the request it would send and
+runs the same shared rules the server runs, so required fields are shown inline before anything
+reaches the network (see 6).
 
-Fields, in order:
+**Every recording form uses one order:** Age, Gender and Occupation open it, and "Referred or
+treated" closes it. Fields on a Test, in order:
 
 | Field | Control | Rules |
 |---|---|---|
-| Age | Number input, min 0, no upper bound in the UI | Optional; server accepts 0–120 |
+| Age | Number input | Optional; 0–120 |
 | Gender | Select: Female / Male, defaulting to Female | — |
-| Outcome | Select: No glasses needed / Needs glasses / Referred, defaulting to *No glasses needed* | — |
+| Occupation (optional) | Reference dropdown; "Other" reveals a free-text field | Free text required when Other is chosen (≤ 200 chars) |
+| Outcome | Select: No glasses needed / Needs glasses, defaulting to *No glasses needed* | — |
 
-The form then branches on outcome:
+**Needs glasses** then shows the shared **lens range selector** (5.6) with "No preference yet"
+permitted, and **Coating preference (optional)**.
 
-**Referred** →
-- *Reason for referral* — reference dropdown; choosing the "Other" row reveals a "please specify"
-  text field. Required, must be an active Referral reason, free text required when Other is chosen
-  (≤ 200 chars).
-- *Referral location (hospital, clinic, etc.)* — free text, required (≤ 500 chars), now enforced
-  and marked in the UI as well as the server.
+**Referred or treated** comes next, whatever the outcome — a tick box that reveals:
+- *Reason for referral/treatment* — reference dropdown with Other free-text. Required when the box
+  is ticked.
+- *Treated in facility* — a tick box. When ticked, there is no location to give.
+- *Referral location (optional)* — free text (≤ 500 chars), shown when the customer wasn't treated
+  in the facility. It may be left blank.
 
-**Needs glasses** →
-- *Occupation (optional)* — reference dropdown with Other free-text.
-- *"Did the customer share contact details?"* — a No / Yes pair of buttons.
-  - **Yes** reveals **"Continue as Lead →"**, which saves the Test and navigates to the Lead form
-    carrying `sourceTestId` plus the age and gender as pre-filled values. This is the only path
-    that links a Test to a Lead, and therefore the only path that produces a conversion figure on
-    the Dashboard.
-  - **No** shows "Recorded as a test only — not entered into the leads pipeline."
+**Needs glasses** then ends with *"Did the customer share contact details?"* — a No / Yes pair of
+buttons.
+- **Yes** reveals **"Continue as Lead →"**, which saves the Test and opens the Lead form carrying
+  `sourceTestId`, the age and gender, and the Test's referral answers as the Lead form's starting
+  values (the technician can change them; each record stores its own answer). This is the only
+  path that links a Test to a Lead, and therefore the only path that produces a conversion figure
+  on the Dashboard.
+- **No** shows "Recorded as a test only — not entered into the leads pipeline."
 
-**No glasses needed** → *Occupation (optional)* only.
-
-Saving a Test is immediate — no price-confirmation step. A Test carries no customer name or phone
-at all. A Test opened via `?fixOutboxId=` (from the failed-records review screen) pre-fills every
-field from the originally-queued payload.
+Saving a Test is immediate. A Test carries no customer name or phone at all. A Test opened via
+`?fixOutboxId=` (from the failed-records review screen) pre-fills every field from the
+originally-queued payload, the referral block included.
 
 ### 5.4 Record Lead — `/consultation/lead`
 
-Client-side validation as above. Fields: Age, Gender, **Full name**, **Phone number**, Occupation
-(optional), a consent checkbox ("Customer consents to be contacted by DOT Glasses for
-follow-ups/marketing"), **Reason not purchased** (reference dropdown + Other free-text), the
-shared **lens range selector** with "No preference yet" permitted, and **Coating preference
-(optional)**, a radio group with "No preference" first. On a lens set it lists only the coatings
+Client-side validation as above. Fields, in order: Age, Gender, Occupation (optional), **Full
+name**, **Phone number**, a consent checkbox ("Customer consents to be contacted by DOT Glasses for
+follow-ups/marketing"), **Reason not purchased** (reference dropdown + Other free-text), **"Has
+the customer been told the price?"** (Yes / No buttons — one must be chosen, either saves, and the
+answer is stored on the Lead), the shared **lens range selector** with "No preference yet"
+permitted, **Coating preference (optional)**, a radio group with "No preference" first, and last
+the **Referred or treated** block described in 5.3. On a lens set it lists only the coatings
 both chosen lenses come in (nothing until both eyes have a lens); on a Custom prescription, or
 with no range, every active coating. A preference the chosen lenses don't offer is refused by the
 server against `CoatingPreferenceRefId`, and choosing different lenses clears one that's no longer
 offered.
 
 Server rules: full name required (≤ 200), phone required (≤ 32), reason not purchased must be an
-active option with its free text present if Other, age 0–120, and if a `sourceTestId` is carried
+active option with its free text present if Other, the price question answered, age 0–120, and if
+a `sourceTestId` is carried
 it must reference an existing Test that has **not already been converted** (a second attempt is
 rejected). "Existing" means existing *and visible to the caller* — a Test at another outlet is
 hidden by hierarchy scoping and so is refused exactly like one that was never recorded. Either
@@ -840,14 +845,14 @@ The customer is matched or created server-side by exact **name + phone within th
 a repeat visitor with identical details reuses their existing customer record rather than creating
 a duplicate.
 
-Submitting shows the **price-awareness confirmation**: *"Has the customer been told the price for
-this order?"* with "Not yet" (returns to the form) and "Yes, save".
+Save saves straight away; there is no step after it. The price answer does not carry into a Sale.
 
 ### 5.5 Record Sale — `/consultation/sale`
 
-Client-side validation as above. Fields: Age, Gender, **Full name**, Phone number *(optional
-here)*, Occupation, consent checkbox, then the shared **lens range selector** with no "no
-preference" option — a Sale must always have a range.
+Client-side validation as above. Fields, in order: Age, Gender, Occupation (optional), **Full
+name**, Phone number *(optional here)*, consent checkbox, the shared **lens range selector** with
+no "no preference" option — a Sale must always have a range — then coatings, frame colour, hard
+case, and last the **Referred or treated** block described in 5.3.
 
 **Two ways a Sale gets linked to a Lead** (`SourceLeadId`):
 - **Opened from the Leads worklist** (`/leads`, see 5.7a) via `?sourceLeadId=…` — every field the
@@ -858,10 +863,10 @@ preference" option — a Sale must always have a range.
   filling in fresh — a Lead has no equivalent fields for any of those.
 - **Automatic match prompt** — for a fresh Sale (not already opened from a specific Lead), the app
   checks once per form visit whether the entered name + phone matches an existing open Lead. If it
-  does, a card appears before the price-confirmation step: *"Existing lead found — `<name>` already
+  does, a card appears before the Sale is saved: *"Existing lead found — `<name>` already
   has an open lead from an earlier visit. Convert it into this sale instead of creating a separate
-  record?"* — accepting sets `SourceLeadId` and proceeds; declining continues as an ordinary
-  unlinked Sale and doesn't ask again on that visit.
+  record?"* — accepting sets `SourceLeadId` and saves; declining saves an ordinary unlinked Sale.
+  This prompt is the only step between Save and saving.
 
 The **Coating** list follows the lens range (5.6): a lens set offers the coatings both chosen lenses
 come in, a Custom prescription offers **every** active coating. **When the range is Custom**, one
@@ -891,8 +896,8 @@ other — "`<Paired>` comes with `<Trigger>` on these lenses — add `<Paired>`,
 applies, and exclusions still do. A pair on which no coating can be made is refused against the
 right eye's lens.
 
-Submitting shows the same price-awareness confirmation as a Lead. A Sale opened via
-`?fixOutboxId=` pre-fills from the originally-queued payload, same as Test/Lead.
+A Sale is not asked about price: the customer has paid. A Sale opened via `?fixOutboxId=`
+pre-fills from the originally-queued payload, same as Test/Lead.
 
 ### 5.6 The lens range selector (shared by Lead and Sale)
 

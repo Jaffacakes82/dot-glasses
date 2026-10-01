@@ -26,7 +26,7 @@ public class VisionTestService(IVisionTestRepository repository, IUnitOfWork uni
     {
         if (string.IsNullOrEmpty(hierarchyPath))
         {
-            throw new DomainRuleViolationException("Your account has no org assignment and cannot record a test.");
+            throw new DomainRuleViolationException("Your account isn't assigned to an organisation, so it can't record a test. Ask an admin to assign you.");
         }
 
         var existing = await repository.GetByIdAsync(request.Id, cancellationToken);

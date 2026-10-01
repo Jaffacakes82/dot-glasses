@@ -86,11 +86,11 @@ public class SalesController(
         var lead = await leadService.GetByIdAsync(sourceLeadId, cancellationToken);
         if (lead is null)
         {
-            modelState.AddModelError(nameof(request.SourceLeadId), "SourceLeadId must reference an existing Lead.");
+            modelState.AddModelError(nameof(request.SourceLeadId), "The lead this sale converts can't be found at this location. Discard this record and record the sale again.");
         }
         else if (lead.SaleId is not null)
         {
-            modelState.AddModelError(nameof(request.SourceLeadId), "This Lead has already been converted into a Sale.");
+            modelState.AddModelError(nameof(request.SourceLeadId), "This lead has already been converted into a sale. Discard this record.");
         }
     }
 

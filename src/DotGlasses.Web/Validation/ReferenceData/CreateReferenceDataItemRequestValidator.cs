@@ -15,15 +15,17 @@ public class CreateReferenceDataItemRequestValidator : AbstractValidator<CreateR
 {
     public CreateReferenceDataItemRequestValidator(IReferenceDataAdminService referenceDataAdminService)
     {
-        RuleFor(x => x.Category).IsInEnum();
-        RuleFor(x => x.Label).NotEmpty().MaximumLength(200);
-        RuleFor(x => x.ImageUrl).MaximumLength(2000);
+        RuleFor(x => x.Category).IsInEnum().WithMessage("Choose a list to add this option to.");
+        RuleFor(x => x.Label)
+            .NotEmpty().WithMessage("Enter a label for the option.")
+            .MaximumLength(200).WithMessage("Keep the label to 200 characters or fewer.");
+        RuleFor(x => x.ImageUrl).MaximumLength(2000).WithMessage("Keep the image address to 2000 characters or fewer.");
 
         RuleFor(x => x).CustomAsync(async (request, context, cancellationToken) =>
         {
             if (request.IsOtherOption && await referenceDataAdminService.HasActiveOtherOptionAsync(request.Category, cancellationToken))
             {
-                context.AddFailure(nameof(request.IsOtherOption), "This category already has an active \"Other\" option — retire it first.");
+                context.AddFailure(nameof(request.IsOtherOption), "This list already has an \"Other\" option. Retire that one first.");
             }
         });
     }

@@ -126,7 +126,7 @@ public class UserDirectoryScopeTests(AccessControlFixture fixture) : IClassFixtu
             AdminPortalFactory.Form(token, ("id", userId.ToString()), ("role", "Supervisor")),
             referer: "/UserDirectory");
 
-        Assert.Contains("Role must be one of", html);
+        Assert.Contains("Choose a role.", html);
         Assert.True(IsListed(await DirectoryAsync(dgiAdmin, userName, role: RoleNames.User), userName));
     }
 
@@ -240,7 +240,7 @@ public class UserDirectoryScopeTests(AccessControlFixture fixture) : IClassFixtu
             ("OrgNodeIds", fixture.SecondCountryRetailPointId.ToString()));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains("outside your own scope", await response.Content.ReadAsStringAsync());
+        Assert.Contains("outside the ones you manage", await response.Content.ReadAsStringAsync());
         Assert.Null(await FindUserIdAsync(email));
     }
 

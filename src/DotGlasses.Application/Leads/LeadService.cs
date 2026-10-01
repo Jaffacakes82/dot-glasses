@@ -49,7 +49,7 @@ public class LeadService(
     {
         if (string.IsNullOrEmpty(hierarchyPath))
         {
-            throw new DomainRuleViolationException("Your account has no org assignment and cannot look up a lead.");
+            throw new DomainRuleViolationException("Your account isn't assigned to an organisation, so it can't look up a lead. Ask an admin to assign you.");
         }
 
         var customer = await customerRepository.FindByNameAndPhoneAsync(hierarchyPath, fullName, phoneNumber, cancellationToken);
@@ -66,7 +66,7 @@ public class LeadService(
     {
         if (string.IsNullOrEmpty(hierarchyPath))
         {
-            throw new DomainRuleViolationException("Your account has no org assignment and cannot record a lead.");
+            throw new DomainRuleViolationException("Your account isn't assigned to an organisation, so it can't record a lead. Ask an admin to assign you.");
         }
 
         var existing = await repository.GetByIdAsync(request.Id, cancellationToken);

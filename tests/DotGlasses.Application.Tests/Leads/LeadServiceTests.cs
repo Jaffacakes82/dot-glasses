@@ -61,7 +61,7 @@ public class LeadServiceTests
         var rejection = await Assert.ThrowsAsync<DomainRuleViolationException>(
             () => sut.CreateAsync(ARecordedLead(), Guid.NewGuid(), hierarchyPath: ""));
 
-        Assert.Contains("no org assignment", rejection.Message);
+        Assert.Contains("isn't assigned to an organisation", rejection.Message);
         Assert.Empty(await sut.ListAsync());
         Assert.Equal(0, customers.Count);
         Assert.Equal(0, unitOfWork.SaveCount);
@@ -75,7 +75,7 @@ public class LeadServiceTests
         var rejection = await Assert.ThrowsAsync<DomainRuleViolationException>(
             () => sut.FindOpenMatchAsync(hierarchyPath: "", "Amina Okoro", "0700111222"));
 
-        Assert.Contains("no org assignment", rejection.Message);
+        Assert.Contains("isn't assigned to an organisation", rejection.Message);
     }
 
     [Fact]

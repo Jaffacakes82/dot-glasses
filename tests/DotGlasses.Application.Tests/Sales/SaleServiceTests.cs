@@ -74,7 +74,7 @@ public class SaleServiceTests
         var rejection = await Assert.ThrowsAsync<DomainRuleViolationException>(
             () => sut.CreateAsync(ARecordedSale(), Guid.NewGuid(), hierarchyPath: ""));
 
-        Assert.Contains("no org assignment", rejection.Message);
+        Assert.Contains("isn't assigned to an organisation", rejection.Message);
         Assert.Equal(0, sales.Count);
         Assert.Equal(0, customers.Count);
         Assert.Equal(0, unitOfWork.SaveCount);

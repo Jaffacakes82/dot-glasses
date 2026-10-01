@@ -103,6 +103,13 @@ machine" rule.
   that the tests cover, but the Blazor UI has no test project and no coding session has run it.
   Each ticket's `## Comments` holds a manual checklist
   (`.scratch/lens-power-and-lens-sets/issues/09-field-app-lens-choice.md`, `…/10-field-app-coating-choices.md`).
+- **Two recording-form behaviours are unverified in a browser** (Spec D,
+  `.scratch/recording-forms-and-wording/`). The question order on all three forms, the Test-to-Lead
+  referral prefill, the Lead's price question and a Sale saving with no extra step were checked in
+  a local browser on 2026-10-01. Still to do by hand: reopen a Lead and a Sale from Failed records
+  and confirm the referral block and the price answer come back filled in; and switch location
+  with the device offline ("You're offline. Connect to switch location.") and with the server
+  failing ("Couldn't switch location. Try again."), in Settings and on the outlet picker.
 - **Before go-live: production has no active lens sets until DGI builds them.** The lens-set
   redesign retired every earlier set and created none, so the Field App offers only *Custom
   prescription* at every outlet until an admin builds real lens sets on Lens Sets and assigns them.
@@ -144,9 +151,9 @@ machine" rule.
   the body" is not a safe shortcut.
 - **Location switching only works online.** `POST switch-org` re-issues a JWT, which is inherently
   a server round trip — there's no such thing as an offline-issued, server-verifiable JWT. Settings
-  and the outlet picker show the same generic "check your connection" message for *any* failure,
-  not one specific to being offline. Not fixable client-side; a clearer message is the honest fix,
-  not yet done.
+  and the outlet picker say so when the device is offline ("You're offline. Connect to switch
+  location.") and say "Couldn't switch location. Try again." for any other failure. Not fixable
+  client-side.
 - **Offline sync conflict resolution is last-write-wins** (idempotent upsert keyed on the
   client-generated GUID) — no version/ETag column exists. Don't build anything that assumes
   ordering or conflict detection until this is addressed.

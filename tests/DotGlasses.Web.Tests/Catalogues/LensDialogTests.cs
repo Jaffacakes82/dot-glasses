@@ -312,11 +312,11 @@ public class LensDialogTests(AdminPortalFactory factory) : IClassFixture<AdminPo
         var html = await response.Content.ReadAsStringAsync();
 
         Assert.Contains("already has a lens labelled \"READERS\"", ErrorFor(html, "Label"));
-        Assert.Contains("Spherical power must be between -10 and 10", ErrorFor(html, "Sphere"));
-        Assert.Contains("Axis is required when Cylindrical power isn't 0.00", ErrorFor(html, "Axis"));
+        Assert.Contains("Spherical power: choose a value between -10 and 10", ErrorFor(html, "Sphere"));
+        Assert.Contains("Axis: choose an axis from 0 to 180 — Cylindrical power isn't 0.00", ErrorFor(html, "Axis"));
         Assert.Contains("Choose a lens type", ErrorFor(html, "LensTypeRefId"));
         Assert.Contains("Tick at least one coating", ErrorFor(html, "CoatingIds"));
-        Assert.Contains("must be ticked", ErrorFor(html, "Pairings[0]"));
+        Assert.Contains("Tick both coatings", ErrorFor(html, "Pairings[0]"));
 
         // Reopened on what was typed, not on a blank form — and saved nothing.
         var dialog = Dialog(html);

@@ -56,7 +56,7 @@ public class VisionTestServiceTests
         var rejection = await Assert.ThrowsAsync<DomainRuleViolationException>(
             () => sut.CreateAsync(ARecordedTest(), Guid.NewGuid(), hierarchyPath: ""));
 
-        Assert.Contains("no org assignment", rejection.Message);
+        Assert.Contains("isn't assigned to an organisation", rejection.Message);
         Assert.Empty(await sut.ListAsync());
         Assert.Equal(0, unitOfWork.SaveCount);
     }

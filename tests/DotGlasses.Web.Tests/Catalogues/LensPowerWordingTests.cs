@@ -71,7 +71,7 @@ public class LensPowerWordingTests(AdminPortalFactory factory) : IClassFixture<A
             ("Add", "2.00")));
 
         var html = await response.Content.ReadAsStringAsync();
-        Assert.Contains("must be between", html);
+        Assert.Contains("choose a value between", html);
         AssertNoLensStrength(html, "the refused Add lens dialog");
     }
 

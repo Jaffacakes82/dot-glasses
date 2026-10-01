@@ -93,6 +93,6 @@ public class CustomOrderAdvanceStatusTests(PostgresContainerFixture postgres)
         await using var context = CreateContext(connectionString, hierarchyPathPrefix: "/1/");
 
         var ex = await Assert.ThrowsAsync<DomainRuleViolationException>(() => new CustomOrderService(context, new UnscopedReportQueryService(context)).AdvanceStatusAsync(saleId));
-        Assert.Equal("This Sale is not a custom order routed to fulfilment.", ex.Message);
+        Assert.Equal("This sale has no custom order to update.", ex.Message);
     }
 }

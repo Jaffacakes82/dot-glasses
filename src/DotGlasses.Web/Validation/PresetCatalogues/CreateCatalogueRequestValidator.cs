@@ -14,10 +14,12 @@ public class CreateCatalogueRequestValidator : AbstractValidator<CreateCatalogue
         ICurrentUserContext currentUserContext)
     {
         // Cascade stop: the uniqueness check has nothing to look up on a blank or overlong name.
-        RuleFor(x => x.Name).Cascade(CascadeMode.Stop).NotEmpty().MaximumLength(200)
+        RuleFor(x => x.Name).Cascade(CascadeMode.Stop)
+            .NotEmpty().WithMessage(LensSetNameMessages.Missing)
+            .MaximumLength(200).WithMessage(LensSetNameMessages.TooLong)
             .MustAsync(async (name, cancellationToken) => !await catalogueAdminService.IsNameTakenAsync(name, excludeId: null, cancellationToken))
             .WithMessage(LensSetNameMessages.Taken);
-        RuleFor(x => x.Description).MaximumLength(500);
+        RuleFor(x => x.Description).MaximumLength(500).WithMessage(LensSetNameMessages.DescriptionTooLong);
 
         // The owning org is chosen from the caller's own Dgi/Country assignments (spec user
         // stories 20-21), never re-derived from a client-submitted path. A chosen org outside
@@ -39,12 +41,15 @@ public class CreateCatalogueRequestValidator : AbstractValidator<CreateCatalogue
                     ? options.Any(o => o.OrgNodeId == chosen)
                     : options.Count == 1;
             })
-            .WithMessage("Choose which org this lens set belongs to.");
+            .WithMessage("Choose which organisation this lens set belongs to.");
     }
 }
 
 /// <summary>Shared by the create and update validators — one sentence for one rule.</summary>
 public static class LensSetNameMessages
 {
-    public const string Taken = "A lens set with this name already exists.";
+    public const string Taken = "A lens set with this name already exists. Choose another name.";
+    public const string Missing = "Enter a name for the lens set.";
+    public const string TooLong = "Keep the name to 200 characters or fewer.";
+    public const string DescriptionTooLong = "Keep the description to 500 characters or fewer.";
 }
