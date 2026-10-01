@@ -48,13 +48,100 @@ FluentValidation's generated copy ("'Full Name' must not be empty.").
   change, so call it out in the PR description.
 
 **Acceptance criteria:**
-- [ ] Saving a Lead with no reason shows a plain instruction against "Reason not purchased".
-- [ ] Each required field left blank on the Test, Lead and Sale forms shows a plain instruction.
-- [ ] No message reachable from a form control contains a property name, enum name or "reference-data".
-- [ ] No failure key changes; server and device still produce identical text for the same failure.
-- [ ] The PR lists every message changed (old → new) and every technical message deliberately kept.
+- [x] Saving a Lead with no reason shows a plain instruction against "Reason not purchased".
+- [x] Each required field left blank on the Test, Lead and Sale forms shows a plain instruction.
+- [x] No message reachable from a form control contains a property name, enum name or "reference-data".
+- [x] No failure key changes; server and device still produce identical text for the same failure.
+- [x] The PR lists every message changed (old → new) and every technical message deliberately kept.
+  (Listed below, for the PR description to copy.)
 
 **Out of scope:**
 - Labels, headings and other non-error wording (map ticket 22).
 - Admin Portal validators outside the consultation rules.
 - When errors appear or clear — ticket 05.
+
+## Messages changed
+
+Keys, rule logic, ordering and which failures fire are unchanged. `{…}` is an interpolated value.
+
+| Key | Old | New |
+|---|---|---|
+| `FullName` | 'Full Name' must not be empty. | Enter the customer's full name. |
+| `PhoneNumber` (Lead) | 'Phone Number' must not be empty. | Enter a phone number. |
+| `FullName`, `PhoneNumber`, every "Other" text, `ReferralLocationFreeText` (9 fields) | The length of '{Spaced Property Name}' must be {max} characters or fewer. You entered {n} characters. | Keep {the full name / the phone number / the other occupation / the other reason / the other referral reason / the referral location / the other lens type / the other frame colour / the other hard case colour} to {max} characters or fewer. |
+| `AgeYears` | 'Age Years' must be between 0 and 120. You entered {n}. | Enter an age between 0 and 120. |
+| `OccupationRefId` | OccupationRefId must reference an existing, active Occupation reference-data item. | Choose an occupation from the list. |
+| `OccupationOtherText` | OccupationOtherText is required when Occupation is "Other". | Say what the other occupation is. |
+| `ReferredOrTreated` | Referral/treatment fields must be empty unless ReferredOrTreated is true. | Tick "Referred or treated", or clear the referral details. |
+| `ReferralReasonRefId` | ReferralReasonRefId is required when ReferredOrTreated is true. | Choose a reason for the referral or treatment. |
+| `ReferralReasonRefId` | ReferralReasonRefId must reference an existing, active ReferralReason reference-data item. | Choose a reason for the referral or treatment. |
+| `ReferralOtherText` | ReferralOtherText is required when ReferralReason is "Other". | Say what the other referral reason is. |
+| `ReferralLocationFreeText` | ReferralLocationFreeText must be empty when TreatedInFacility is true. | Clear the referral location, or untick "Treated in facility". |
+| `ReferralLocationFreeText` | ReferralLocationFreeText is required when ReferredOrTreated is true and TreatedInFacility is false. | Enter the referral location, or tick "Treated in facility". |
+| `ReasonNotPurchasedRefId` | ReasonNotPurchasedRefId must reference an existing, active ReasonNotPurchased reference-data item. | Choose a reason not purchased. |
+| `ReasonNotPurchasedOtherText` | ReasonNotPurchasedOtherText is required when ReasonNotPurchased is "Other". | Say what the other reason is. |
+| `FrameColourRefId` | FrameColourRefId must reference an existing, active FrameColour reference-data item. | Choose a frame colour. |
+| `FrameColourOtherText` | FrameColourOtherText is required when FrameColour is "Other". | Say what the other frame colour is. |
+| `HardCaseSold` | HardCaseColourRefId/HardCaseOtherColourText must be empty when HardCaseSold is false. | Clear the hard case colour, or tick that a hard case was sold. |
+| `HardCaseColourRefId` | HardCaseColourRefId is required when HardCaseSold is true. | Choose a hard case colour. |
+| `HardCaseColourRefId` | HardCaseColourRefId must reference an existing, active HardCaseColour reference-data item. | Choose a hard case colour. |
+| `HardCaseOtherColourText` | HardCaseOtherColourText is required when HardCaseColour is "Other". | Say what the other hard case colour is. |
+| `OrderFromDotGlasses` | OrderFromDotGlasses is only meaningful when LensRangeType is Custom. | Only a Custom prescription can be ordered from Dot Glasses — untick "Order this lens from Dot Glasses". |
+| `LensRangeType` | SphereLeft and SphereRight are required for a Custom LensRangeType. | Choose a sphere for each eye. |
+| `PresetPupilDistanceBucket` | PresetPupilDistanceBucket [is required and] must be between 0 and {max}[ for a LensSet LensRangeType][ (0-2 for a children's frame)]. (three variants by record type) | Choose a pupil distance between 0 and {max}. — with a children's frame: Choose a pupil distance between 0 and {max} — the limit for a children's frame. (one sentence for Test, Lead and Sale) |
+| `PupilDistanceMm` | PupilDistanceMm [is required and] must be within the standard 54-74mm range for a Custom LensRangeType (manual override outside this range is a Day 2 feature). | Choose a pupil distance between 54 and 74 mm. |
+| `CoatingRefIds` | CoatingRefIds must only reference existing, active Coating reference-data items. | One of the chosen coatings isn't available any more — choose the coatings again. |
+| `CoatingPreferenceRefId` | CoatingPreferenceRefId is not configured as available for the chosen lenses (see Lens Sets). | This coating preference isn't available for the chosen lenses — choose another, or no preference. |
+| `CoatingPreferenceRefId` | CoatingPreferenceRefId must reference an existing, active Coating reference-data item. | This coating preference isn't available any more — choose another, or no preference. |
+| `LensTypeRefId` | LensTypeRefId is required when an add power is set (two distinct powers on that eye). | Choose a lens type — a lens with an add power needs one. |
+| `LensTypeRefId` | LensTypeRefId/LensTypeOtherText must be empty unless an add power is set. | A lens type only applies to a lens with an add power — remove the lens type. |
+| `LensTypeRefId` | LensTypeRefId must reference an existing, active LensType reference-data item. | Choose a lens type from the list. |
+| `LensTypeOtherText` | LensTypeOtherText is required when LensType is "Other". | Say what the other lens type is. |
+| `SphereLeft`/`SphereRight`, `CylinderLeft`/`CylinderRight`, `AddLeft`/`AddRight` | {PropertyName} must be between {min} and {max} in {step} increments. | {Sphere (left) / Cylinder (right) / Add power (left) …} must be between {min} and {max} in {step} increments. |
+| `AxisLeft`/`AxisRight` | AxisLeft is required when CylinderLeft isn't 0.00 — choose an axis from 0 to 180. | Axis (left) is required when Cylinder (left) isn't 0.00 — choose an axis from 0 to 180. |
+| `AxisLeft`/`AxisRight` | AxisRight must be empty when CylinderRight is 0.00 — an axis only applies to a cylinder. | Axis (right) must be empty when Cylinder (right) is 0.00 — an axis only applies to a cylinder. |
+| `AxisLeft`/`AxisRight` | AxisLeft must be a whole number of degrees between 0 and 180. | Axis (left) must be a whole number of degrees between 0 and 180. |
+
+Notes:
+
+- The lens power sentences keep their shape because the Admin Portal's Add lens dialog shares them
+  (it passes its own on-screen names — "Spherical power must be between …" is unchanged there).
+  Only the name inside the sentence changed, from the property name to the label
+  (`LensPowerNames` gained label properties that default to the key).
+- The four lens type messages are shared with the Add lens dialog too, so its copy changed with
+  them ("Lens type is required when an add power is set …" → "Choose a lens type — a lens with an
+  add power needs one.", "Other lens type is required when LensType is "Other"." → "Say what the
+  other lens type is."). `LensDialogTests` updated.
+- The pupil distance messages no longer differ by record type, so the
+  `presetBucketMessageNamesTheBranch` flag (documented as copy drift, not a rule) is gone. When
+  the bucket failure fires is unchanged.
+
+## Left technical
+
+No form can produce these; each needs a malformed or hand-built request.
+
+- `Id` — "'Id' must not be empty." The device and the conversion screen always mint the Id.
+- `Gender`, `Outcome`, `LensRangeType` (Sale), `FrameCoverage` — "'{Name}' has a range of values
+  which does not include '{n}'." Each is a fixed dropdown (or has no control); the number quoted
+  back is the only clue to what a client sent.
+- `LensRangeType` — "Lens set and custom lens fields must be empty when LensRangeType is not set."
+  Both forms blank the lens fields when no lens range is chosen.
+- `LensRangeType` — "Lens set fields must be empty for a Custom LensRangeType." The one lens range
+  dropdown yields a lens set id or Custom, never both (`LensRangeChoice.Parse`).
+- `PresetCatalogueId` — "PresetCatalogueId is required for a LensSet LensRangeType." Same reason:
+  choosing a lens set is what makes the range a lens set.
+- `PupilDistanceMm` — "PupilDistanceMm must be empty for a LensSet LensRangeType — use
+  PresetPupilDistanceBucket instead." and `PresetPupilDistanceBucket` — "PresetPupilDistanceBucket
+  must be empty for a Custom LensRangeType — use PupilDistanceMm instead." Both forms blank the
+  other branch's pupil distance (`LeadConversionFormModel.ApplyLensRange` on the Admin Portal).
+- `PupilDistanceMm` — "PupilDistanceMm must be a whole millimetre value." The control is a
+  dropdown of whole millimetres.
+- `LensTypeRefId` — "LensTypeRefId must be the chosen lenses' own lens type." and
+  `LensTypeOtherText` — "LensTypeOtherText must be the chosen lenses' own lens type text …". On a
+  lens set the lens type is read off the chosen lenses, never entered.
+- `CoatingRefIds` — "CoatingRefIds must not contain duplicates." Checkboxes can't tick one coating
+  twice.
+
+Outside this ticket's files, noted for follow-up: `LeadsController`/`SalesController` still say
+"SourceTestId must reference an existing Test." / "SourceLeadId must reference an existing Lead."
+(the two I/O rules that live on the controllers, not in `Rules`).

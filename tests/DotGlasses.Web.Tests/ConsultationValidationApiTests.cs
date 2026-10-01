@@ -18,8 +18,8 @@ namespace DotGlasses.Web.Tests;
 /// response was supposed to change, and this is where that is checked: the keys are the request
 /// DTO's own property names (which is what lets the Field App's FormErrors bag map a server
 /// rejection onto the right control with no translation table), and the messages are the exact
-/// strings clients already received — FluentValidation's generated copy included, spaced display
-/// names and interpolated lengths and all.
+/// strings the rule module produces — plain instructions for anything a form control can cause,
+/// FluentValidation's generated copy only for what no form can (an empty Id, an out-of-enum value).
 ///
 /// Keys are asserted exhaustively rather than by Contains: a rule that quietly stops firing is as
 /// much a regression as one that starts, and only an exact set catches the first. They are
@@ -53,12 +53,12 @@ public class ConsultationValidationApiTests(CustomWebApplicationFactory factory)
         AssertKeys(["Id", "Gender", "AgeYears", "OccupationOtherText", "OccupationRefId"], errors);
         Assert.Equal("'Id' must not be empty.", errors["Id"].Single());
         Assert.Equal("'Gender' has a range of values which does not include '99'.", errors["Gender"].Single());
-        Assert.Equal("'Age Years' must be between 0 and 120. You entered 999.", errors["AgeYears"].Single());
+        Assert.Equal("Enter an age between 0 and 120.", errors["AgeYears"].Single());
         Assert.Equal(
-            "The length of 'Occupation Other Text' must be 200 characters or fewer. You entered 201 characters.",
+            "Keep the other occupation to 200 characters or fewer.",
             errors["OccupationOtherText"].Single());
         Assert.Equal(
-            "OccupationRefId must reference an existing, active Occupation reference-data item.",
+            "Choose an occupation from the list.",
             errors["OccupationRefId"].Single());
     }
 
@@ -83,12 +83,12 @@ public class ConsultationValidationApiTests(CustomWebApplicationFactory factory)
         var errors = await ErrorsAsync(response);
 
         AssertKeys(["FullName", "PhoneNumber", "ReasonNotPurchasedRefId"], errors);
-        Assert.Equal("'Full Name' must not be empty.", errors["FullName"].Single());
+        Assert.Equal("Enter the customer's full name.", errors["FullName"].Single());
         Assert.Equal(
-            "The length of 'Phone Number' must be 32 characters or fewer. You entered 33 characters.",
+            "Keep the phone number to 32 characters or fewer.",
             errors["PhoneNumber"].Single());
         Assert.Equal(
-            "ReasonNotPurchasedRefId must reference an existing, active ReasonNotPurchased reference-data item.",
+            "Choose a reason not purchased.",
             errors["ReasonNotPurchasedRefId"].Single());
     }
 
@@ -124,7 +124,7 @@ public class ConsultationValidationApiTests(CustomWebApplicationFactory factory)
         Assert.DoesNotContain("OrderFromDotGlasses", errors.Keys);
         Assert.Equal("'Frame Coverage' has a range of values which does not include '99'.", errors["FrameCoverage"].Single());
         Assert.Equal(
-            "SphereLeft and SphereRight are required for a Custom LensRangeType.",
+            "Choose a sphere for each eye.",
             errors["LensRangeType"].Single());
         Assert.Equal("Choose at least one coating.", errors["CoatingRefIds"].Single());
     }
@@ -156,8 +156,8 @@ public class ConsultationValidationApiTests(CustomWebApplicationFactory factory)
         var errors = await ErrorsAsync(response);
 
         AssertKeys(["SphereLeft", "CylinderLeft", "AxisRight", "AddLeft", "LensTypeRefId"], errors);
-        Assert.Equal("SphereLeft must be between -10 and 10 in 0.25 increments.", errors["SphereLeft"].Single());
-        Assert.Equal("AxisRight must be a whole number of degrees between 0 and 180.", errors["AxisRight"].Single());
+        Assert.Equal("Sphere (left) must be between -10 and 10 in 0.25 increments.", errors["SphereLeft"].Single());
+        Assert.Equal("Axis (right) must be a whole number of degrees between 0 and 180.", errors["AxisRight"].Single());
     }
 
     /// <summary>Allowed values (lens-power ticket 02): the shop sells no positive cylinder. A
@@ -179,7 +179,7 @@ public class ConsultationValidationApiTests(CustomWebApplicationFactory factory)
         var errors = await ErrorsAsync(response);
 
         AssertKeys(["CylinderLeft"], errors);
-        Assert.Equal("CylinderLeft must be between -6 and 0 in 0.25 increments.", errors["CylinderLeft"].Single());
+        Assert.Equal("Cylinder (left) must be between -6 and 0 in 0.25 increments.", errors["CylinderLeft"].Single());
     }
 
     /// <summary>Axis (lens-power ticket 02): required with a cylinder, refused without one.</summary>
@@ -199,8 +199,8 @@ public class ConsultationValidationApiTests(CustomWebApplicationFactory factory)
         var errors = await ErrorsAsync(response);
 
         AssertKeys(["AxisLeft", "AxisRight"], errors);
-        Assert.Equal("AxisLeft is required when CylinderLeft isn't 0.00 — choose an axis from 0 to 180.", errors["AxisLeft"].Single());
-        Assert.Equal("AxisRight must be empty when CylinderRight is 0.00 — an axis only applies to a cylinder.", errors["AxisRight"].Single());
+        Assert.Equal("Axis (left) is required when Cylinder (left) isn't 0.00 — choose an axis from 0 to 180.", errors["AxisLeft"].Single());
+        Assert.Equal("Axis (right) must be empty when Cylinder (right) is 0.00 — an axis only applies to a cylinder.", errors["AxisRight"].Single());
     }
 
     /// <summary>Lens type (lens-power ticket 02): an add of 0.00 is no add, so it takes no lens
@@ -222,7 +222,7 @@ public class ConsultationValidationApiTests(CustomWebApplicationFactory factory)
         var errors = await ErrorsAsync(response);
 
         AssertKeys(["LensTypeRefId"], errors);
-        Assert.Equal("LensTypeRefId/LensTypeOtherText must be empty unless an add power is set.", errors["LensTypeRefId"].Single());
+        Assert.Equal("A lens type only applies to a lens with an add power — remove the lens type.", errors["LensTypeRefId"].Single());
     }
 
     [Fact]

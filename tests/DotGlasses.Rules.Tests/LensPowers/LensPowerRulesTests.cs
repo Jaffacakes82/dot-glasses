@@ -160,7 +160,7 @@ public class LensPowerRulesTests
         var failure = Assert.Single(LensType(hasAdd: true, lensTypeRefId: null));
 
         Assert.Equal("LensTypeRefId", failure.Key);
-        Assert.Equal("LensTypeRefId is required when an add power is set (two distinct powers on that eye).", failure.Message);
+        Assert.Equal("Choose a lens type — a lens with an add power needs one.", failure.Message);
     }
 
     [Fact]
@@ -169,7 +169,7 @@ public class LensPowerRulesTests
         var failure = Assert.Single(LensType(hasAdd: false, lensTypeRefId: Bifocal));
 
         Assert.Equal("LensTypeRefId", failure.Key);
-        Assert.Equal("LensTypeRefId/LensTypeOtherText must be empty unless an add power is set.", failure.Message);
+        Assert.Equal("A lens type only applies to a lens with an add power — remove the lens type.", failure.Message);
     }
 
     [Fact]
@@ -184,7 +184,7 @@ public class LensPowerRulesTests
         var failure = Assert.Single(LensType(hasAdd: true, lensTypeRefId: Other));
 
         Assert.Equal("LensTypeOtherText", failure.Key);
-        Assert.Equal("LensTypeOtherText is required when LensType is \"Other\".", failure.Message);
+        Assert.Equal("Say what the other lens type is.", failure.Message);
 
         Assert.Empty(LensType(hasAdd: true, lensTypeRefId: Other, otherText: "Trifocal"));
     }
@@ -195,7 +195,7 @@ public class LensPowerRulesTests
         var failure = Assert.Single(LensType(hasAdd: true, lensTypeRefId: Guid.NewGuid()));
 
         Assert.Equal("LensTypeRefId", failure.Key);
-        Assert.Equal("LensTypeRefId must reference an existing, active LensType reference-data item.", failure.Message);
+        Assert.Equal("Choose a lens type from the list.", failure.Message);
     }
 
     [Fact]

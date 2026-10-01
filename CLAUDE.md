@@ -47,10 +47,12 @@ are the record of *how* things got built; don't restate that here.
   `LensPowerRules.Normalise` spells it.
 - **There is no consultation request validator.** `ConsultationRules.Check` holds *every* rule for
   a `Test`/`Lead`/`Sale` create — including the scalar ones (`NotEmpty`, length caps, `IsInEnum`,
-  the age range), whose messages are FluentValidation's generated copy reproduced verbatim because
-  clients already receive them. The three create endpoints call the module directly: load the
+  the age range). A message a form control can cause is a plain instruction naming the control by
+  its on-screen label ("Choose a reason not purchased."), never a property or enum name; only the
+  ones no form can produce (an empty `Id`, an out-of-enum value, fields the forms always blank)
+  stay technical. The three create endpoints call the module directly: load the
   snapshot once, `Check`, `ToModelStateDictionary()`, `ValidationProblem`. Don't reintroduce a
-  validator for these three DTOs, and don't reword a scalar message without treating it as the
+  validator for these three DTOs, and don't reword a message without treating it as the
   client-visible change it is.
   **Two exceptions can never live in `Rules`** and sit on the controllers instead: a Lead's
   `SourceTestId` and a Sale's `SourceLeadId` resolve a specific hierarchy-scoped row, which is I/O.
