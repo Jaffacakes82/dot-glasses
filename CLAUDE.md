@@ -139,7 +139,7 @@ are the record of *how* things got built; don't restate that here.
   `InviteAtomicityTests`. Anything a user-visible operation *emits* (an email, a set-password
   link) is produced **after** the commit — a live invite link for an account the rollback removed
   is worse than the failure it came from.
-- FluentValidation still backs the **nine remaining Admin Portal validators** (Organisations, Lens
+- FluentValidation still backs the **eight remaining Admin Portal validators** (Organisations, Lens
   Sets, Reference Data, User Directory) and is deliberately **not** wired up via
   `AddFluentValidationAutoValidation()` — that runs FluentValidation synchronously inside ASP.NET's
   model-binding pipeline, which can't invoke the async rules several of them need for DB-backed

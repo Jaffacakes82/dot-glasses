@@ -27,7 +27,6 @@ public class CataloguesController(
     IUnscopedReportQueryService unscopedReportQueryService,
     IValidator<CreateCatalogueRequest> createValidator,
     IValidator<UpdateCatalogueRequest> updateValidator,
-    IValidator<AssignCatalogueRequest> assignValidator,
     IValidator<SaveLensRequest> saveLensValidator,
     IReferenceDataSnapshotProvider referenceDataSnapshotProvider) : Controller
 {
@@ -134,7 +133,7 @@ public class CataloguesController(
     /// <para>
     /// The round trip. A save that passes is written and redirected back to the lens set's page
     /// with a banner (POST-redirect-GET). A refused one comes back the way every other refused form
-    /// on these pages does (CreateCatalogue, UpdateCatalogue, AssignCatalogue): the page is rendered
+    /// on these pages does (CreateCatalogue, UpdateCatalogue): the page is rendered
     /// straight from this POST with the validator's failures in ModelState — no redirect. What
     /// that adds here is the admin's own posted form, handed to the view as
     /// <see cref="LensDialogViewModel.Reopen"/>, so _LensDialog renders open on their input with
@@ -202,16 +201,15 @@ public class CataloguesController(
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> AssignCatalogue(AssignCatalogueRequest request, CancellationToken cancellationToken)
     {
+        // No validator: an org that is blank or unknown is not one the caller may assign to.
         if (!await CanAssignToAsync(request.OrgNodeId, cancellationToken))
         {
             return Forbid();
         }
 
-        var validationResult = await assignValidator.ValidateAsync(request, cancellationToken);
-        if (!validationResult.IsValid)
+        if (!await LensSetExistsAsync(request.CatalogueId, cancellationToken))
         {
-            validationResult.AddToModelState(ModelState);
-            return await DetailsViewAsync(request.CatalogueId, cancellationToken);
+            return RedirectToAction(nameof(Index));
         }
 
         await catalogueAdminService.AssignCatalogueToOrgAsync(request.CatalogueId, request.OrgNodeId, cancellationToken);
@@ -257,6 +255,11 @@ public class CataloguesController(
             return Forbid();
         }
 
+        if (!await LensSetExistsAsync(catalogueId, cancellationToken))
+        {
+            return RedirectToAction(nameof(Index));
+        }
+
         await catalogueAdminService.UnassignCatalogueFromOrgAsync(catalogueId, orgNodeId, cancellationToken);
         return ToLensSet(catalogueId);
     }
@@ -272,6 +275,12 @@ public class CataloguesController(
     private async Task<bool> CanEditLensSetAsync(Guid catalogueId, CancellationToken cancellationToken) =>
         await catalogueAdminService.FindOwningOrgNodeIdAsync(catalogueId, cancellationToken) is { } owningOrgNodeId
         && await IsAuthorizedAtAsync(owningOrgNodeId, AuthorizationPolicies.PresetCatalogueEditInScope, await OrgPathsAsync(cancellationToken));
+
+    /// <summary>Retired ones included. Assign and unassign are authorized against the org, not the
+    /// lens set, so nothing else has looked the lens set up; an id that names none goes back to
+    /// the list, as it does on the lens set's page.</summary>
+    private async Task<bool> LensSetExistsAsync(Guid catalogueId, CancellationToken cancellationToken) =>
+        await catalogueAdminService.FindOwningOrgNodeIdAsync(catalogueId, cancellationToken) is not null;
 
     /// <summary>Assign/unassign: the org must be at or below the caller. Which lens set doesn't
     /// matter — any active one may be assigned within the caller's own part of the tree.</summary>

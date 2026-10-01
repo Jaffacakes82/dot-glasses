@@ -34,7 +34,7 @@ public class PresetCatalogueAdminService(DotGlassesDbContext dbContext, IReferen
             .ToDictionaryAsync(x => x.CatalogueId, x => x.Count, cancellationToken);
 
     /// <summary>The soft-delete filter hides a retired lens set, so "not found here" is "retired"
-    /// for every caller below: each has already resolved the lens set through
+    /// for every caller below: the controller has already resolved the lens set through
     /// <see cref="FindOwningOrgNodeIdAsync"/>, which sees retired ones. The screen offers none of
     /// these actions on a retired lens set; this answers a stale page or a hand-built POST.</summary>
     private async Task RefuseIfRetiredAsync(Guid catalogueId, string action, CancellationToken cancellationToken)

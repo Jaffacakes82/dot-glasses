@@ -301,6 +301,22 @@ public class LensSetPagesTests(AdminPortalFactory factory) : IClassFixture<Admin
         Assert.Contains("Not assigned to any organisation yet.", afterUnassign);
     }
 
+    [Fact]
+    public async Task AssigningOrUnassigningALensSetThatDoesNotExist_GoesBackToTheList()
+    {
+        var client = factory.CreateAdminClient();
+        var token = await AdminPortalFactory.GetAntiforgeryTokenAsync(client, "/Catalogues");
+
+        foreach (var (path, idField, orgField) in new[] { ("/Catalogues/AssignCatalogue", "CatalogueId", "OrgNodeId"), ("/Catalogues/UnassignCatalogue", "catalogueId", "orgNodeId") })
+        {
+            var response = await client.PostAsync(path, AdminPortalFactory.Form(token,
+                (idField, Guid.NewGuid().ToString()), (orgField, KenyaRetailPoint.ToString())));
+
+            Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+            Assert.Equal("/Catalogues", RedirectPath(response));
+        }
+    }
+
     // --- A retired lens set ------------------------------------------------------------------------
 
     [Fact]
@@ -357,6 +373,11 @@ public class LensSetPagesTests(AdminPortalFactory factory) : IClassFixture<Admin
             var (_, html) = await AdminPortalFactory.PostAndFollowAsync(client, path, AdminPortalFactory.Form(token, fields), referer: page);
             Assert.True(html.Contains("This lens set is retired"), $"{path} was not refused on a retired lens set.");
         }
+
+        // A lens the validator refuses first still comes back with something to read.
+        var invalidLens = await client.PostAsync("/Catalogues/SaveLens", AdminPortalFactory.Form(token,
+            ("CatalogueId", lensSetId.ToString()), ("Label", ""), ("Sphere", P(2.00m)), ("Cylinder", P(0m)), ("Add", P(0m))));
+        Assert.Contains("alert-danger", await invalidLens.Content.ReadAsStringAsync());
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DotGlassesDbContext>();
