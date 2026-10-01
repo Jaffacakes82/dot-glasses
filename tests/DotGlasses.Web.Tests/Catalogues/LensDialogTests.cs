@@ -35,7 +35,8 @@ public class LensDialogTests(AdminPortalFactory factory) : IClassFixture<AdminPo
     private static string VisibleText(string html) =>
         Regex.Replace(WebUtility.HtmlDecode(Regex.Replace(html, "<[^>]+>", " ")), @"\s+", " ").Trim();
 
-    /// <summary>The lens table for this lens set, as an admin reads it.</summary>
+    /// <summary>The lens table for this lens set, as an admin reads it. The screen shows one lens
+    /// set at a time, so the table is only there when this is the one selected.</summary>
     private static string TableFor(string html, string lensSetName)
     {
         var match = Regex.Match(html, $"<table[^>]*aria-label=\"Lenses in {Regex.Escape(lensSetName)}\"[^>]*>(.*?)</table>", RegexOptions.Singleline);
@@ -43,7 +44,7 @@ public class LensDialogTests(AdminPortalFactory factory) : IClassFixture<AdminPo
         return VisibleText(match.Groups[1].Value);
     }
 
-    /// <summary>The dialog, which the screen renders once, after every lens set's card.</summary>
+    /// <summary>The dialog, which the screen renders once, after the selected lens set's card.</summary>
     private static string Dialog(string html)
     {
         var match = Regex.Match(html, "<div class=\"modal fade\" id=\"lensDialog\".*?<!-- /lensDialog -->", RegexOptions.Singleline);
@@ -157,7 +158,7 @@ public class LensDialogTests(AdminPortalFactory factory) : IClassFixture<AdminPo
 
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
         var html = await client.GetStringAsync(response.Headers.Location);
-        Assert.Contains("Bifocal +2.00 SPH 0.00 · ADD +2.00 Bifocal Photochromic, Blue block Blue block → Photochromic Edit Remove", TableFor(html, lensSetName));
+        Assert.Contains("Bifocal +2.00 SPH 0.00 · ADD +2.00 Bifocal Photochromic Blue block Blue block → Photochromic Edit Remove", TableFor(html, lensSetName));
     }
 
     [Fact]
@@ -176,7 +177,7 @@ public class LensDialogTests(AdminPortalFactory factory) : IClassFixture<AdminPo
             ("CoatingIds", Clear.ToString()));
 
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
-        Assert.Contains("-2.00 astig SPH -2.00 · CYL -0.75 × 90 Single vision Clear —", TableFor(await client.GetStringAsync("/Catalogues"), lensSetName));
+        Assert.Contains("-2.00 astig SPH -2.00 · CYL -0.75 × 90 Single vision Clear —", TableFor(await client.GetStringAsync($"/Catalogues?catalogueId={lensSetId}"), lensSetName));
     }
 
     [Fact]
@@ -207,7 +208,7 @@ public class LensDialogTests(AdminPortalFactory factory) : IClassFixture<AdminPo
             Assert.Equal(HttpStatusCode.Found, (await SaveAsync(client, [.. fields])).StatusCode);
         }
 
-        var labels = Regex.Matches(TableFor(await client.GetStringAsync("/Catalogues"), lensSetName), @"(-0\.50|\+1\.50|Bifocal \+1\.00|Bifocal \+2\.00|Progressive \+1\.00) SPH")
+        var labels = Regex.Matches(TableFor(await client.GetStringAsync($"/Catalogues?catalogueId={lensSetId}"), lensSetName), @"(-0\.50|\+1\.50|Bifocal \+1\.00|Bifocal \+2\.00|Progressive \+1\.00) SPH")
             .Select(m => m.Groups[1].Value);
         Assert.Equal(["-0.50", "+1.50", "Bifocal +1.00", "Bifocal +2.00", "Progressive +1.00"], labels);
     }
@@ -226,7 +227,7 @@ public class LensDialogTests(AdminPortalFactory factory) : IClassFixture<AdminPo
 
         // The Edit button carries the lens as it is, as the dialog's own option values, for the
         // dialog to open with.
-        var before = await client.GetStringAsync("/Catalogues");
+        var before = await client.GetStringAsync($"/Catalogues?catalogueId={lensSetId}");
         var editData = Regex.Match(before, $"data-lens=\"([^\"]*{lensId}[^\"]*)\"");
         Assert.True(editData.Success, "No Edit button for the lens.");
         using (var lens = JsonDocument.Parse(WebUtility.HtmlDecode(editData.Groups[1].Value)))
@@ -265,7 +266,7 @@ public class LensDialogTests(AdminPortalFactory factory) : IClassFixture<AdminPo
             ("CoatingIds", Photochromic.ToString()));
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
 
-        var table = TableFor(await client.GetStringAsync("/Catalogues"), lensSetName);
+        var table = TableFor(await client.GetStringAsync($"/Catalogues?catalogueId={lensSetId}"), lensSetName);
         Assert.Contains("Readers +2.75 SPH +2.75 Single vision Photochromic —", table);
         Assert.Contains("+3.00 SPH +3.00", table);
         Assert.DoesNotContain("+2.50", table);
@@ -396,7 +397,7 @@ public class LensDialogTests(AdminPortalFactory factory) : IClassFixture<AdminPo
             ("CoatingIds", Clear.ToString()));
 
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
-        Assert.Contains("Progressive +2.00 SPH 0.00 · ADD +2.00 Progressive", TableFor(await client.GetStringAsync("/Catalogues"), lensSetName));
+        Assert.Contains("Progressive +2.00 SPH 0.00 · ADD +2.00 Progressive", TableFor(await client.GetStringAsync($"/Catalogues?catalogueId={lensSetId}"), lensSetName));
     }
 
     [Fact]
@@ -417,7 +418,7 @@ public class LensDialogTests(AdminPortalFactory factory) : IClassFixture<AdminPo
 
         var saved = await SaveAsync(client, Lens("Trifocal"));
         Assert.Equal(HttpStatusCode.Found, saved.StatusCode);
-        Assert.Contains("Trifocal +1.50 SPH 0.00 · ADD +1.50 Trifocal Clear", TableFor(await client.GetStringAsync("/Catalogues"), lensSetName));
+        Assert.Contains("Trifocal +1.50 SPH 0.00 · ADD +1.50 Trifocal Clear", TableFor(await client.GetStringAsync($"/Catalogues?catalogueId={lensSetId}"), lensSetName));
     }
 
     [Fact]
