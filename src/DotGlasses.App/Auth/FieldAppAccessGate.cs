@@ -13,7 +13,7 @@ namespace DotGlasses.App.Auth;
 /// decision (no-location vs outlet-select, plus its offline state), so a page that needs a
 /// location but has none is sent to Home to be routed onward, rather than duplicating that
 /// server-backed choice here. Home allows itself with a token, so there is no loop.</item>
-/// <item>No-location, outlet-select, settings, failed-records, messages, not-found — need a token
+/// <item>No-location, outlet-select, settings, failed-records, not-found — need a token
 /// only. A technician with no location must still be able to pick one, send or discard queued
 /// records, and sign out.</item>
 /// <item>Everything else (the consultation forms, Leads, anything new) — token and location.</item>
@@ -28,7 +28,7 @@ public static class FieldAppAccessGate
     public const string HomePath = "";
 
     private static readonly string[] TokenOnlyPaths =
-        ["no-location", "outlet-select", "settings", "failed-records", "messages", "not-found"];
+        ["no-location", "outlet-select", "settings", "failed-records", "not-found"];
 
     /// <summary>Returns the base-relative path to redirect to, or null when the page may render.</summary>
     /// <param name="relativePath">Base-relative path (<c>NavigationManager.ToBaseRelativePath</c>);

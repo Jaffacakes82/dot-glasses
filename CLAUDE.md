@@ -393,8 +393,8 @@ the body" is not a safe shortcut.
   system layers custom `dg-*` classes/tokens on top rather than replacing it.
 - All seven Admin Portal screens (Dashboard, Organisations, Event History, User Directory, Lens
   Sets, Custom Orders, Reference Data) and the Field App's consultation forms are wired to
-  real data — no controller returns hardcoded placeholder data. The Field App's `Messages` and
-  `Outlet select` screens are still static placeholders (Settings' location picker is real; see
+  real data — no controller returns hardcoded placeholder data. The Field App's `Outlet select`
+  screen is still a static placeholder (Settings' location picker is real; see
   `docs/functional-capabilities.md`).
 
 ## Deployment (Azure)
