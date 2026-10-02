@@ -239,9 +239,6 @@ machine" rule.
 
 ## Real, visible interim gaps (the system tells the user, doesn't hide it)
 
-- **A frame colour picture over 8 MB is refused with a bare error page**, not the "keep it under
-  1 MB" message every other oversize file gets: the request size limit rejects it before the
-  controller runs.
 - **Replacing a frame colour's picture can leave the old file behind.** The item is saved first
   and the old blob deleted after; if that delete fails the admin sees an error for a change that
   did save, and the old file stays in storage until someone removes it.
