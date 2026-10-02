@@ -46,6 +46,15 @@ public class LeadDto
     public int? PresetPupilDistanceBucket { get; set; }
     public bool ChildrensFrame { get; set; }
     public Guid? CoatingPreferenceRefId { get; set; }
+
+    /// <summary>Whether this Lead placed a custom order for its lens (ADR-0008).</summary>
+    public bool OrderFromDotGlasses { get; set; }
+
+    /// <summary>The Coating set ordered with the lens; empty for a Lead that didn't order.</summary>
+    public List<Guid> CoatingRefIds { get; set; } = [];
+
+    /// <summary>How far the order has got; null when there is none.</summary>
+    public CustomOrderStatus? CustomOrderStatus { get; set; }
     public bool ConvertedFlag { get; set; }
     public Guid? SaleId { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; }

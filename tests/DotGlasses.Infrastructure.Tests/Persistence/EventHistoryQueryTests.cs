@@ -284,7 +284,6 @@ public class EventHistoryQueryTests(PostgresContainerFixture postgres)
         HierarchyPath = hierarchyPath,
         TechnicianUserId = Guid.NewGuid(),
         CustomerId = Guid.NewGuid(),
-        FulfilmentStatus = FulfilmentStatus.Submitted,
         ReferredOrTreated = referredOrTreated,
         ReferralReasonRefId = referredOrTreated ? ReferralReasonId : null,
         CreatedAtUtc = createdAtUtc,

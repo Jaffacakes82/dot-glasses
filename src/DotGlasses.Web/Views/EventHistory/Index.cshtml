@@ -50,6 +50,8 @@
         }
         else
         {
+            @* The lens columns make these tables wider than a narrow window: they scroll, the page does not. *@
+            <div style="overflow-x:auto;">
             <table class="dg-table">
                 <thead>
                     <tr>
@@ -61,6 +63,12 @@
                         }
                         <th>Outlet</th>
                         <th>Country</th>
+                        @if (Model.ActiveTab == "sales")
+                        {
+                            <th>Lens range</th>
+                            <th>Lens power LE</th>
+                            <th>Lens power RE</th>
+                        }
                         <th>Time</th>
                     </tr>
                 </thead>
@@ -68,19 +76,26 @@
                 @foreach (var row in rows)
                 {
                     <tr>
-                        <td><span class="dg-badge" style="background:@(row.Type == "Sale" ? "var(--dot-green)" : "var(--dot-blue)"); color:@(row.Type == "Sale" ? "var(--dot-white)" : "var(--dot-black)");">@row.Type@(row.Custom ? " · Custom" : "")</span></td>
+                        <td><span class="dg-badge" style="background:@(row.Type == "Sale" ? "var(--dot-green)" : "var(--dot-blue)"); color:@(row.Type == "Sale" ? "var(--dot-white)" : "var(--dot-black)");">@row.Type</span></td>
                         @if (Model.ActiveTab == "sales")
                         {
                             <td>@row.Name</td>
                             <td class="dg-muted">@(row.ConsentGiven == true ? "Yes" : "No")</td>
                         }
-                        <td class="dg-muted">@row.Outlet</td>
+                        <td class="dg-muted">@row.Outlet @await Html.PartialAsync("_TrainingBadge", row.IsTraining)</td>
                         <td class="dg-muted">@row.Country</td>
+                        @if (Model.ActiveTab == "sales")
+                        {
+                            <td class="dg-muted">@row.Lens.Range</td>
+                            <td class="dg-muted">@row.Lens.Left</td>
+                            <td class="dg-muted">@row.Lens.Right</td>
+                        }
                         <td class="dg-muted">@row.Time</td>
                     </tr>
                 }
                 </tbody>
             </table>
+            </div>
         }
     }
     else if (Model.ActiveTab == "leads")
@@ -98,16 +113,22 @@
         }
         else
         {
+            @* The lens columns make these tables wider than a narrow window: they scroll, the page does not. *@
+            <div style="overflow-x:auto;">
             <table class="dg-table">
-                <thead><tr><th>Name</th><th>Phone</th><th>Outlet</th><th>Reason not purchased</th><th>Consent</th><th>Logged</th><th></th></tr></thead>
+                <thead><tr><th>Name</th><th>Phone</th><th>Outlet</th><th>Reason not purchased</th><th>Aware of price</th><th>Lens range</th><th>Lens power LE</th><th>Lens power RE</th><th>Consent</th><th>Logged</th><th></th></tr></thead>
                 <tbody>
                 @foreach (var lead in Model.Leads)
                 {
                     <tr>
                         <td>@lead.Name</td>
                         <td class="dg-muted">@lead.PhoneMasked</td>
-                        <td class="dg-muted">@lead.Outlet</td>
+                        <td class="dg-muted">@lead.Outlet @await Html.PartialAsync("_TrainingBadge", lead.IsTraining)</td>
                         <td class="dg-muted">@lead.Reason</td>
+                        <td class="dg-muted">@lead.AwareOfPrice</td>
+                        <td class="dg-muted">@lead.Lens.Range</td>
+                        <td class="dg-muted">@lead.Lens.Left</td>
+                        <td class="dg-muted">@lead.Lens.Right</td>
                         <td class="dg-muted">@(lead.ConsentGiven ? "Yes" : "No")</td>
                         <td class="dg-muted">@lead.Logged</td>
                         <td>
@@ -124,17 +145,22 @@
                 }
                 </tbody>
             </table>
+            </div>
         }
     }
     else
     {
-        <p style="color:var(--text-muted-2); margin-bottom:var(--space-4);">Tracked for government reporting requirements in several operating countries.</p>
+        <p style="color:var(--text-muted-2); margin-bottom:var(--space-4);">
+            Tracked for government reporting requirements in several operating countries. Each record is listed here, so a customer referred at their test and again as a lead appears twice; the dashboard's "Referrals logged" counts that customer once.
+        </p>
         @if (Model.Referrals.Count == 0)
         {
             <div class="dg-empty-state"><div class="dg-ring"></div><p>No referrals logged yet.</p></div>
         }
         else
         {
+            @* The lens columns make these tables wider than a narrow window: they scroll, the page does not. *@
+            <div style="overflow-x:auto;">
             <table class="dg-table">
                 <thead><tr><th>Source</th><th>Outlet</th><th>Country</th><th>Reason</th><th>Treated in facility</th><th>Time</th></tr></thead>
                 <tbody>
@@ -142,7 +168,7 @@
                 {
                     <tr>
                         <td><span class="dg-badge" style="background:var(--dot-beige);">@referral.Source</span></td>
-                        <td>@referral.Outlet</td>
+                        <td>@referral.Outlet @await Html.PartialAsync("_TrainingBadge", referral.IsTraining)</td>
                         <td class="dg-muted">@referral.Country</td>
                         <td class="dg-muted">@referral.Reason</td>
                         <td class="dg-muted">@(referral.TreatedInFacility ? "Yes" : "No")</td>
@@ -151,6 +177,7 @@
                 }
                 </tbody>
             </table>
+            </div>
         }
     }
 

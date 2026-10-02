@@ -4,11 +4,10 @@ using DotGlasses.Domain.Enums;
 namespace DotGlasses.Domain.Entities;
 
 /// <summary>
-/// Full transaction — a completed sale, whether fulfilled from local stock (a lens set) or
-/// routed to fulfilment (Custom + OrderFromDotGlasses). A custom order counts as a completed Sale
-/// immediately — FulfilmentStatus tracks it through the lab/pickup workflow on this same row
-/// (2026-08-05 decision) rather than a separate entity, matching the flat single-status queue the
-/// Custom Orders admin screen shows; Id is client-generated (offline-sync outbox idempotency key).
+/// Full transaction — a completed sale, whether fulfilled from local stock (a lens set) or with
+/// a custom lens ordered from DOT Glasses. The order is its own record (CustomOrder, ADR-0008),
+/// linked to this Sale by the Sale's id — one this Sale placed, or one the Lead it was converted
+/// from had already placed. Id is client-generated (offline-sync outbox idempotency key).
 /// The lens's Coating set lives in SaleCoating (2026-09-03, see ADR-0001), not a field here — a
 /// lens can carry more than one Coating at once.
 /// </summary>
@@ -73,14 +72,6 @@ public class Sale : IAuditable, ISoftDeletable, IHierarchyScoped
     /// two distinct powers (an add power alongside its base sphere) on either eye.</summary>
     public Guid? LensTypeRefId { get; set; }
     public string? LensTypeOtherText { get; set; }
-
-    /// <summary>Only meaningful when LensRangeType == Custom — routes the record to fulfilment
-    /// (needs manufacturing + delivery) rather than logging it as stock already on hand.</summary>
-    public bool OrderFromDotGlasses { get; set; }
-
-    /// <summary>Null unless OrderFromDotGlasses is true — set to Submitted at creation, then
-    /// advanced forward-only by the Custom Orders admin screen. See FulfilmentStatus.</summary>
-    public FulfilmentStatus? FulfilmentStatus { get; set; }
 
     /// <summary>The real inter-pupillary distance in mm — meaningful only for Custom range (see
     /// PresetPupilDistanceBucket for the preset-range equivalent).</summary>

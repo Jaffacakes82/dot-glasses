@@ -110,6 +110,7 @@ public class DomainRuleViolationScreenTests(AdminPortalFactory factory) : IClass
     public async Task CustomOrders_AdvancingAFulfilledOrder_ShowsTheMessageOnTheCustomOrdersScreen()
     {
         var saleId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
         var customerId = Guid.NewGuid();
         factory.Seed(dbContext =>
         {
@@ -127,8 +128,15 @@ public class DomainRuleViolationScreenTests(AdminPortalFactory factory) : IClass
                 TechnicianUserId = Guid.NewGuid(),
                 CustomerId = customerId,
                 LensRangeType = LensRangeType.Custom,
-                OrderFromDotGlasses = true,
-                FulfilmentStatus = FulfilmentStatus.Fulfilled,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            });
+            dbContext.CustomOrders.Add(new CustomOrder
+            {
+                Id = orderId,
+                HierarchyPath = OrganisationSeedConfiguration.KenyaRetailPointPath,
+                Status = FulfilmentStatus.Fulfilled,
+                PlacedAtUtc = DateTimeOffset.UtcNow,
+                SaleId = saleId,
                 CreatedAtUtc = DateTimeOffset.UtcNow,
             });
         });
@@ -139,19 +147,19 @@ public class DomainRuleViolationScreenTests(AdminPortalFactory factory) : IClass
         var (redirect, html) = await AdminPortalFactory.PostAndFollowAsync(
             client,
             "/CustomOrders/AdvanceStatus",
-            AdminPortalFactory.Form(token, ("saleId", saleId.ToString())));
+            AdminPortalFactory.Form(token, ("orderId", orderId.ToString())));
 
         Assert.Equal("/CustomOrders", redirect.Headers.Location?.ToString());
         Assert.Contains("This custom order is already Fulfilled.", html);
     }
 
-    /// <summary>A sale the caller can't see and a sale that doesn't exist are the same fact here —
+    /// <summary>An order the caller can't see and one that doesn't exist are the same fact here —
     /// the hierarchy filter hides the former, so the service cannot tell them apart and must not
-    /// try, or the screen would leak which sales exist elsewhere in the tree. Both get the one
+    /// try, or the screen would leak which orders exist elsewhere in the tree. Both get the one
     /// sentence CustomOrderService has for it, rather than the generic error page an unhandled
     /// missing row would produce.</summary>
     [Fact]
-    public async Task CustomOrders_AdvancingASaleTheCallerCannotSee_ShowsTheSameMessageAsOneThatDoesNotExist()
+    public async Task CustomOrders_AdvancingAnOrderTheCallerCannotSee_ShowsTheSameMessageAsOneThatDoesNotExist()
     {
         var client = factory.CreateAdminClient();
         var token = await AdminPortalFactory.GetAntiforgeryTokenAsync(client, "/CustomOrders");
@@ -159,7 +167,7 @@ public class DomainRuleViolationScreenTests(AdminPortalFactory factory) : IClass
         var (_, html) = await AdminPortalFactory.PostAndFollowAsync(
             client,
             "/CustomOrders/AdvanceStatus",
-            AdminPortalFactory.Form(token, ("saleId", Guid.NewGuid().ToString())),
+            AdminPortalFactory.Form(token, ("orderId", Guid.NewGuid().ToString())),
             referer: "/CustomOrders");
 
         Assert.Contains("This custom order is no longer available.", html);

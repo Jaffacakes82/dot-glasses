@@ -1,4 +1,5 @@
 using DotGlasses.Application.Common;
+using DotGlasses.Application.CustomOrders;
 using DotGlasses.Application.Customers;
 using DotGlasses.Application.VisionTests;
 using DotGlasses.Contracts.Common;
@@ -13,32 +14,34 @@ public class LeadService(
     ILeadRepository repository,
     IVisionTestRepository testRepository,
     ICustomerRepository customerRepository,
+    ICustomOrderRepository customOrderRepository,
     IUnitOfWork unitOfWork) : ILeadService
 {
     public async Task<LeadDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var entity = await repository.GetByIdAsync(id, cancellationToken);
-        if (entity is null)
-        {
-            return null;
-        }
-
-        var customer = await customerRepository.GetByIdAsync(entity.CustomerId, cancellationToken);
-        return ToDto(entity, customer);
+        return entity is null ? null : (await ToDtosAsync([entity], cancellationToken))[0];
     }
 
-    public async Task<IReadOnlyList<LeadDto>> ListAsync(CancellationToken cancellationToken = default)
-    {
-        var entities = await repository.ListAsync(cancellationToken);
-        var customers = await customerRepository.GetByIdsAsync(entities.Select(l => l.CustomerId), cancellationToken);
-        return entities.Select(l => ToDto(l, customers.GetValueOrDefault(l.CustomerId))).ToList();
-    }
+    public async Task<IReadOnlyList<LeadDto>> ListAsync(CancellationToken cancellationToken = default) =>
+        await ToDtosAsync(await repository.ListAsync(cancellationToken), cancellationToken);
 
-    public async Task<IReadOnlyList<LeadDto>> ListOpenAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<LeadDto>> ListOpenAsync(CancellationToken cancellationToken = default) =>
+        await ToDtosAsync(await repository.ListOpenAsync(cancellationToken), cancellationToken);
+
+    /// <summary>A Lead's DTO needs three things that aren't on its own row — the customer, the
+    /// Coating set an ordering Lead carries, and the order it placed — each read once for the
+    /// whole batch rather than once per Lead.</summary>
+    private async Task<IReadOnlyList<LeadDto>> ToDtosAsync(IReadOnlyList<Lead> entities, CancellationToken cancellationToken)
     {
-        var entities = await repository.ListOpenAsync(cancellationToken);
+        var ids = entities.Select(l => l.Id).ToList();
         var customers = await customerRepository.GetByIdsAsync(entities.Select(l => l.CustomerId), cancellationToken);
-        return entities.Select(l => ToDto(l, customers.GetValueOrDefault(l.CustomerId))).ToList();
+        var coatings = await repository.GetCoatingRefIdsByLeadIdsAsync(ids, cancellationToken);
+        var orders = await customOrderRepository.GetByLeadIdsAsync(ids, cancellationToken);
+
+        return entities
+            .Select(l => ToDto(l, customers.GetValueOrDefault(l.CustomerId), coatings.GetValueOrDefault(l.Id, []), orders.GetValueOrDefault(l.Id)))
+            .ToList();
     }
 
     /// <summary>The most recent open Lead for an exact name+phone match — backs the Field App's
@@ -59,7 +62,7 @@ public class LeadService(
         }
 
         var entity = await repository.FindOpenByCustomerIdAsync(customer.Id, cancellationToken);
-        return entity is null ? null : ToDto(entity, customer);
+        return entity is null ? null : (await ToDtosAsync([entity], cancellationToken))[0];
     }
 
     public async Task<LeadDto> CreateAsync(CreateLeadRequest request, Guid technicianUserId, string hierarchyPath, CancellationToken cancellationToken = default)
@@ -69,11 +72,12 @@ public class LeadService(
             throw new DomainRuleViolationException("Your account isn't assigned to an organisation, so it can't record a lead. Ask an admin to assign you.");
         }
 
+        // Already recorded (the outbox retrying): answered with what exists, so a repeat places no
+        // second order.
         var existing = await repository.GetByIdAsync(request.Id, cancellationToken);
         if (existing is not null)
         {
-            var existingCustomer = await customerRepository.GetByIdAsync(existing.CustomerId, cancellationToken);
-            return ToDto(existing, existingCustomer);
+            return (await ToDtosAsync([existing], cancellationToken))[0];
         }
 
         // Resolved before anything is built, so a refusal leaves nothing half-written — not even
@@ -126,17 +130,44 @@ public class LeadService(
 
         repository.Add(entity);
 
+        // A Lead that orders its lens carries the Coating set it was ordered with, and places the
+        // order in this same unit of work (ADR-0008): the Lead and its order exist together or
+        // not at all.
+        CustomOrder? order = null;
+        var coatingRefIds = request.OrderFromDotGlasses ? request.CoatingRefIds.Distinct().ToList() : [];
+        if (request.OrderFromDotGlasses)
+        {
+            repository.AddCoatings(coatingRefIds.Select(coatingRefId => new LeadCoating
+            {
+                Id = Guid.NewGuid(),
+                LeadId = entity.Id,
+                CoatingRefId = coatingRefId,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            }));
+
+            order = new CustomOrder
+            {
+                Id = Guid.NewGuid(),
+                HierarchyPath = hierarchyPath,
+                Status = Domain.Enums.FulfilmentStatus.Submitted,
+                PlacedAtUtc = DateTimeOffset.UtcNow,
+                LeadId = entity.Id,
+            };
+            customOrderRepository.Add(order);
+        }
+
         if (sourceTest is not null)
         {
             sourceTest.ConvertedToLeadId = entity.Id;
             testRepository.Update(sourceTest);
         }
 
-        // Single SaveChangesAsync call: the Lead create and the source Test's ConvertedToLeadId
-        // update (if any) commit atomically in one transaction — see CLAUDE.md's IUnitOfWork note.
+        // Single SaveChangesAsync call: the Lead create, its order (if any) and the source Test's
+        // ConvertedToLeadId update (if any) commit atomically in one transaction — see CLAUDE.md's
+        // IUnitOfWork note.
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return ToDto(entity, customer);
+        return ToDto(entity, customer, coatingRefIds, order);
     }
 
     /// <summary>
@@ -183,7 +214,9 @@ public class LeadService(
         return customer;
     }
 
-    private static LeadDto ToDto(Lead entity, Customer? customer) => new()
+    /// <summary>Internal rather than private: SaleService builds the same DTO for the Lead a
+    /// Sale converts, to ask OrderedLeadConversion the one question both layers ask.</summary>
+    internal static LeadDto ToDto(Lead entity, Customer? customer, IReadOnlyList<Guid> coatingRefIds, CustomOrder? order) => new()
     {
         Id = entity.Id,
         HierarchyPath = entity.HierarchyPath,
@@ -221,6 +254,9 @@ public class LeadService(
         PresetPupilDistanceBucket = entity.PresetPupilDistanceBucket,
         ChildrensFrame = entity.ChildrensFrame,
         CoatingPreferenceRefId = entity.CoatingPreferenceRefId,
+        OrderFromDotGlasses = order is not null,
+        CoatingRefIds = coatingRefIds.ToList(),
+        CustomOrderStatus = order?.Status.ToContract(),
         ConvertedFlag = entity.ConvertedFlag,
         SaleId = entity.SaleId,
         CreatedAtUtc = entity.CreatedAtUtc,

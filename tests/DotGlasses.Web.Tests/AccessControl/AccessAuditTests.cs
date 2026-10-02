@@ -214,8 +214,8 @@ public class AccessAuditTests(AccessAuditFixture fixture) : IClassFixture<Access
         new("Portal.CustomOrders.Index GET", _ => "/CustomOrders", Expect.Denied, Expect.Denied),
         new("Portal.CustomOrders.Export GET", _ => "/CustomOrders/Export", Expect.Denied, Expect.Denied),
         new("Portal.CustomOrders.AdvanceStatus POST", _ => "/CustomOrders/AdvanceStatus", Expect.Denied, Expect.Denied,
-            (f, _) => [("saleId", f.Own.SaleId.ToString())],
-            Written: (f, _, db) => db.Sales.IgnoreQueryFilters().AnyAsync(s => s.Id == f.Own.SaleId && s.FulfilmentStatus != Domain.Enums.FulfilmentStatus.Submitted)),
+            (f, _) => [("orderId", f.Own.OrderId.ToString())],
+            Written: (f, _, db) => db.CustomOrders.IgnoreQueryFilters().AnyAsync(o => o.Id == f.Own.OrderId && o.Status != Domain.Enums.FulfilmentStatus.Submitted)),
 
         new("Portal.Catalogues.Index GET", _ => "/Catalogues", Expect.Denied, Expect.Denied),
         new("Portal.Catalogues.Details GET", _ => $"/Catalogues/Details/{ExampleLensSets.SixLensSetId}", Expect.Denied, Expect.Denied),

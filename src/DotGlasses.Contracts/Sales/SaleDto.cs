@@ -31,7 +31,12 @@ public class SaleDto
     public decimal? AddRight { get; set; }
     public Guid? LensTypeRefId { get; set; }
     public string? LensTypeOtherText { get; set; }
+    /// <summary>Whether a custom order stands behind this Sale — one it placed, or one the Lead
+    /// it was converted from had already placed (ADR-0008).</summary>
     public bool OrderFromDotGlasses { get; set; }
+
+    /// <summary>How far that order has got; null when there is none.</summary>
+    public CustomOrderStatus? CustomOrderStatus { get; set; }
     public decimal? PupilDistanceMm { get; set; }
     public int? PresetPupilDistanceBucket { get; set; }
     public bool ChildrensFrame { get; set; }

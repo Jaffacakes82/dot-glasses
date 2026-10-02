@@ -5,6 +5,7 @@ using DotGlasses.Application.ReferenceData;
 using DotGlasses.Application.Sales;
 using DotGlasses.Contracts.Sales;
 using DotGlasses.Rules;
+using DotGlasses.Rules.Sales;
 using DotGlasses.Web.Validation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
@@ -91,6 +92,17 @@ public class SalesController(
         else if (lead.SaleId is not null)
         {
             modelState.AddModelError(nameof(request.SourceLeadId), "This lead has already been converted into a sale. Discard this record.");
+        }
+        else
+        {
+            // A Lead whose lens is already ordered locks the Sale's lens and coatings to what was
+            // ordered (ADR-0008). Reported here, field by field, for the same reason the source
+            // check is: SaleService guards it too, but as one unkeyed sentence the Field App
+            // can't put against a control.
+            foreach (var failure in OrderedLeadConversion.Check(request, lead).Failures)
+            {
+                modelState.AddModelError(failure.Key, failure.Message);
+            }
         }
     }
 

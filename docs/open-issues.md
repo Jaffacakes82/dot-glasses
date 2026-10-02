@@ -117,6 +117,23 @@ machine" rule.
   open the emailed link, set a password, and confirm it ends at the Field App's sign-in page; and
   try the screen with the device offline. Until the sender moves off Azure's shared domain the
   email may land in spam — an admin's Reset password button is the fallback.
+- **Spec F's Field App changes were checked once, in a local browser, by a coding session**
+  (`.scratch/custom-orders-and-reporting/`, 2026-10-02): the Lead form's order tick (Custom only,
+  last in the lens section), the swap from coating preference to the coating selector, the
+  messages for an incomplete ordering Lead, a saved ordering Lead, its badge in the Leads list,
+  the read-only lens when converting it, the match prompt for a customer whose Lead has an order,
+  and the converted order in the Admin Portal queue. Still to do by hand: reopen an ordering Lead
+  and a locked Sale from Failed records (a Failed Sale opens unlocked when the device is offline
+  and can't read the Lead — the server still refuses a mismatch); watch the Leads badge change
+  after an order is advanced; and all of it on a phone-sized screen. The tickets' `## Comments`
+  hold the checklists.
+- **Reporting figures that may not tally on staging** (Spec F). Two mismatches were found by
+  reading the code and are fixed: a referral counted on each record of one customer's journey, and
+  list conversion above 100%. Others can only be named once real data is looked at. Three things
+  that will look odd and are correct: a row with Sales and no Tests shows 0% conversion; "Custom
+  orders" counts by the day the order was placed, so an order placed from a Lead last month and
+  paid for this month is in last month's figure; and the tiles' links to Event History and Custom
+  Orders don't carry the Country or Retailer filter, so those screens list more.
 - **The Organisations screen's reactivate was not retested by hand.** The reported glitch (the
   page left in an odd state after Reactivate) is covered by an automated test that reads the page
   after reactivating a group; nobody has clicked through it in a browser since.

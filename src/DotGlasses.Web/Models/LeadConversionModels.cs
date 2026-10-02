@@ -195,6 +195,10 @@ public class LeadConversionViewModel
     /// "Children's frame" is ticked.</summary>
     public required IReadOnlyList<ReferenceDataItemDto> ChildFrameColours { get; init; }
 
+    /// <summary>The Coating set a Lead ordered its lens with, by name — shown read-only when the
+    /// Lead's lens is already ordered (ADR-0008). Empty for a Lead that placed no order.</summary>
+    public IReadOnlyList<string> OrderedCoatingLabels { get; init; } = [];
+
     /// <summary>Whether the Sale this form records is for a children's frame: the Lead's own
     /// answer when its lens carries over (the form then shows no tick to change), otherwise the
     /// form's tick. It decides which frame colour list is on offer.</summary>

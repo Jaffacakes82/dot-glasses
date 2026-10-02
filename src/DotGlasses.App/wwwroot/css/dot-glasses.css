@@ -302,6 +302,24 @@ html, body {
     margin: 4px 0 0;
 }
 
+/* A custom order's status on a Lead card. "Ready for Pickup" is the one that asks for action. */
+.dg-order-status {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 4px 12px;
+    border-radius: var(--radius-pill);
+    background: #eee;
+    color: #333;
+}
+
+.dg-order-status-ready {
+    background: #1b7f3b;
+    color: #fff;
+}
+
 .dg-lens-note {
     font-size: 12px;
     font-weight: 600;

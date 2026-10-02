@@ -11,10 +11,11 @@
 })
 
 <p style="max-width:680px; color:var(--text-muted-2); margin-bottom:var(--space-5);">
-    This queue is populated from the Field App's Sale flow whenever a technician records a Custom
-    prescription and marks it to order from Dot Glasses (the outlet doesn't have stock). Grouped by
-    retailer, then retail point, then customer. Multi-tier approval (outlet → retailer → country)
-    and the retailer/retail-point grouping toggle are Day 2 features.
+    Every Custom lens ordered from Dot Glasses, whether it was ordered when the sale was recorded
+    or from a lead before the customer paid. An order from a lead is marked "Not yet paid" until
+    that lead is converted into a sale. Grouped by retailer, then retail point, then customer.
+    Multi-tier approval (outlet → retailer → country) and the retailer/retail-point grouping
+    toggle are Day 2 features.
 </p>
 
 @if (!ViewData.ModelState.IsValid)
@@ -66,12 +67,18 @@ else
                             {
                                 <tr>
                                     <td class="dg-muted">@order.Prescription</td>
-                                    <td><span class="dg-badge" style="background:@DotGlasses.Web.Models.CustomOrder.StatusColor[order.Status]; color:@(order.Status == FulfilmentStatus.Fulfilled ? "var(--dot-white)" : "var(--dot-black)");">@DotGlasses.Web.Models.CustomOrder.StatusLabel[order.Status]</span></td>
+                                    <td>
+                                        <span class="dg-badge" style="background:@DotGlasses.Web.Models.CustomOrder.StatusColor[order.Status]; color:@(order.Status == FulfilmentStatus.Fulfilled ? "var(--dot-white)" : "var(--dot-black)");">@DotGlasses.Web.Models.CustomOrder.StatusLabel[order.Status]</span>
+                                        @if (order.NotYetPaid)
+                                        {
+                                            <span class="dg-badge" style="background:#f2f2f2; color:#555;" title="Ordered from a lead. The customer hasn't paid yet.">Not yet paid</span>
+                                        }
+                                    </td>
                                     <td>
                                         @if (order.NextStatus is { } next)
                                         {
                                             <form asp-action="AdvanceStatus" method="post" style="display:inline;">
-                                                <input type="hidden" name="saleId" value="@order.SaleId" />
+                                                <input type="hidden" name="orderId" value="@order.OrderId" />
                                                 <button class="dg-btn dg-btn-ghost" style="padding:6px 14px; font-size:12px;" type="submit">Advance to @DotGlasses.Web.Models.CustomOrder.StatusLabel[next]</button>
                                             </form>
                                         }

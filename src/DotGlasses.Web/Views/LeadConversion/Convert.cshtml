@@ -296,6 +296,20 @@
             </div>
         }
 
+        @if (Model.Lead.OrderFromDotGlasses)
+        {
+            @* The lens is already being made (ADR-0008): its coatings are what was ordered, shown
+               for information, and there is no second order to place. The server keeps both
+               whatever is posted. *@
+            <div style="margin-top:12px;" id="orderedLens">
+                <p style="margin:0;"><strong>This lens is already ordered</strong> — @(Model.Lead.CustomOrderStatus?.Label() ?? "status unknown").</p>
+                <p style="font-size:13px; color:var(--text-muted-2); margin:4px 0 0;">
+                    Coatings ordered: @string.Join(", ", Model.OrderedCoatingLabels). The lens and its coatings can't be changed here; to sell a different lens, record a new sale.
+                </p>
+            </div>
+        }
+        else
+        {
         @* Coatings: the ones both chosen lenses come in (LensSetLenses.CoatingsFor — the same rules the
            server checks with), with a pairing's coating ticked and locked once its trigger is ticked.
            Every coating is rendered so the script can offer it again after a lens change; one the pair
@@ -326,6 +340,7 @@
            Admin Portal wants ConsultationRules to say "Custom range only" on submit, unlike the Field
            App, which hides it outside a Custom range (CLAUDE.md: deliberately not unified). *@
         <label style="display:block; margin-top:12px;"><input type="checkbox" asp-for="Form.OrderFromDotGlasses" style="width:auto; margin-right:6px;" />Order this lens from Dot Glasses (Custom range only)</label>
+        }
     </div>
 
     <div>

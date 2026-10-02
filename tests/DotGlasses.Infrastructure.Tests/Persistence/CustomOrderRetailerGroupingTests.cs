@@ -62,13 +62,21 @@ public class CustomOrderRetailerGroupingTests(PostgresContainerFixture postgres)
     {
         await using var seedContext = CreateContext(connectionString);
 
-        seedContext.Sales.Add(new Sale
+        var sale = new Sale
         {
             Id = Guid.NewGuid(),
             HierarchyPath = hierarchyPath,
             TechnicianUserId = Guid.NewGuid(),
             CustomerId = Guid.NewGuid(),
-            FulfilmentStatus = FulfilmentStatus.Submitted,
+        };
+        seedContext.Sales.Add(sale);
+        seedContext.CustomOrders.Add(new CustomOrder
+        {
+            Id = Guid.NewGuid(),
+            HierarchyPath = hierarchyPath,
+            Status = FulfilmentStatus.Submitted,
+            PlacedAtUtc = DateTimeOffset.UtcNow,
+            SaleId = sale.Id,
         });
 
         await seedContext.SaveChangesAsync();

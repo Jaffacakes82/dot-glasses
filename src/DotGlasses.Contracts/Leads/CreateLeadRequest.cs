@@ -73,6 +73,15 @@ public class CreateLeadRequest
 
     public bool ChildrensFrame { get; set; }
 
-    /// <summary>Optional — some leads carry no known product preference.</summary>
+    /// <summary>Optional — some leads carry no known product preference. Not sent by a Lead that
+    /// orders its lens, which carries a full <see cref="CoatingRefIds"/> set instead.</summary>
     public Guid? CoatingPreferenceRefId { get; set; }
+
+    /// <summary>Places a custom order for this Lead's lens (ADR-0008) — before the customer has
+    /// paid. Custom range only, and the Lead must then hold the complete lens, its pupil distance
+    /// and a Coating set, because the lab makes what is ordered.</summary>
+    public bool OrderFromDotGlasses { get; set; }
+
+    /// <summary>The Coating set of an ordered lens. Empty unless <see cref="OrderFromDotGlasses"/>.</summary>
+    public List<Guid> CoatingRefIds { get; set; } = [];
 }

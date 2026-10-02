@@ -16,4 +16,11 @@ public interface ILeadRepository
 
     void Add(Lead entity);
     void Update(Lead entity);
+
+    /// <summary>The Coating set of each ordering Lead, keyed by Lead id (LeadCoating, ADR-0008) —
+    /// batched so a list's DTO mapping doesn't run one query per Lead. A Lead that didn't order
+    /// has no rows and is absent.</summary>
+    Task<IReadOnlyDictionary<Guid, IReadOnlyList<Guid>>> GetCoatingRefIdsByLeadIdsAsync(IReadOnlyCollection<Guid> leadIds, CancellationToken cancellationToken = default);
+
+    void AddCoatings(IEnumerable<LeadCoating> coatings);
 }

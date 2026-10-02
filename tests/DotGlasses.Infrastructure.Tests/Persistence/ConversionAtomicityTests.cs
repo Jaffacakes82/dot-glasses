@@ -183,10 +183,10 @@ public class ConversionAtomicityTests(PostgresContainerFixture postgres)
             FakeHttpContextAccessor.Create(isAuthenticated: true, hierarchyPathPrefix));
 
     private static LeadService LeadServiceOver(DotGlassesDbContext context) =>
-        new(new LeadRepository(context), new TestRepository(context), new CustomerRepository(context), context);
+        new(new LeadRepository(context), new TestRepository(context), new CustomerRepository(context), new CustomOrderRepository(context), context);
 
     private static SaleService SaleServiceOver(DotGlassesDbContext context) =>
-        new(new SaleRepository(context), new LeadRepository(context), new CustomerRepository(context), context);
+        new(new SaleRepository(context), new LeadRepository(context), new CustomerRepository(context), new CustomOrderRepository(context), context);
 
     /// <summary>Seeds through a context scoped at the row's own path, so the global filter doesn't
     /// hide what is being written.</summary>

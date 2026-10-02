@@ -201,17 +201,31 @@ token surfaces Identity's own error text. Setting a password never unsuspends an
 **Route** `/` · **Access** any authenticated user · **Data** automatically scoped to the viewer's
 subtree.
 
-A **date range filter** (From/To, Apply button) sits above the tiles — leave both blank for
-all-time. Six stat tiles across the top:
+Three filters sit above the tiles, sent as query-string parameters and applied together: a
+**date range** (From/To — leave both blank for all-time), a **Country** and a **Retailer**. The
+two dropdowns offer only what the viewer's scope contains: a country admin sees their own country
+and its retailers, and someone below Country level is still offered the country they sit in.
+Choosing a country narrows the Retailer choices to that country. **"No retailer"** is offered
+where a retail point hangs directly off a country, and selects exactly those retail points. A
+Retailer is matched by position in the tree, so choosing a distributor includes every retailer
+beneath it. A value outside the viewer's scope (a hand-edited address) shows zeroes, never anyone
+else's figures. "Clear filters" resets all three.
+
+A choice narrows **everything** on the page: the six tiles, Referrals logged, the trend, the gender
+split and the four lists. Six stat tiles across the top:
 
 | Tile | Exactly what it counts |
 |---|---|
 | Pending leads | Leads where `ConvertedFlag` is false |
 | Total tests | All visible Tests |
-| Standard sales | All visible Sales *minus* custom orders |
-| Custom orders | Sales where `FulfilmentStatus` is set (i.e. created with "order from DOT Glasses") |
+| Standard sales | Sales with **no custom order** behind them |
+| Custom orders | Custom order records (§4.7), **paid or not**, by the date the order was **placed** |
 | Test-to-sale conversion | % of all Tests that reached a Sale, walking `Test.ConvertedToLeadId` → `Lead.SaleId` |
 | Needed-to-sale conversion | Same numerator rule, but the denominator is only Tests with outcome *Needs glasses* |
+
+The two order tiles never overlap. A Sale that converted a Lead whose lens was already ordered
+belongs to the order's tile, not to Standard sales; and an order placed from a Lead counts from the
+day the Lead was recorded, whether or not anyone has paid since.
 
 There is no direct Test → Sale link in the data model, so **both conversion figures only count
 Tests that were converted via the Lead route.** A technician who records a Test and then records
@@ -223,22 +237,31 @@ converted.
 
 **Four of the six tiles, plus Referrals logged, are clickable** — each links through to the
 matching Event History tab (or the Custom Orders screen, for the Custom orders tile), carrying
-the current date filter along so the drill-down shows exactly the rows behind the number.
+the current date filter along. The Country and Retailer are **not** carried — those screens have
+no such filter — so while one is chosen a line under the tiles says the linked screens list more
+than the figures count.
 
 Right-hand column, three cards:
-- **Referrals logged** — count of Tests with outcome *Referred*, links to Event History's
-  Referrals tab.
+- **Referrals logged** — counts **customer journeys**, not records. A Test continued into a Lead,
+  and a Lead converted into a Sale, are one journey (`Test.ConvertedToLeadId`, `Lead.SaleId`), and
+  "Referred or treated" is asked afresh at each step, so the same referral is often on two or
+  three records. A journey counts once when any of its referred records falls in the date range; a
+  record with no link is a journey of its own. Links to Event History's Referrals tab, which lists
+  the records themselves and says so.
 - **Conversion trend (last 6 weeks)** — six bars, each a rolling 7-day window ending at "now",
   showing that window's test-to-sale conversion %. **Always the real last 6 weeks, unaffected by
   the date filter above** — a "trend over time" widget re-scoped to an arbitrary custom window
-  would defeat its own purpose. Bar height is the percentage; the tooltip is the raw number. No
-  axis, no dates, no labels.
+  would defeat its own purpose — though it does follow the Country and Retailer. Bar height is the
+  percentage; the tooltip is the raw number. No axis, no dates, no labels.
 - **Gender split** — a two-segment bar computed from `Test.Gender` only. Only Female and Male exist
   in the domain; there is no third value or "unspecified".
 
-Main card, **Top performing** — four fixed top-5-by-sales-volume lists (not filterable, not
-clickable), each row showing a name, its sale count and its own conversion % (that key's Sales ÷
-that key's Tests):
+Main card, **Top performing** — four top-5 lists (not clickable). Each row shows a name and four
+figures: **Tests, Leads, Sales and Conversion**. Conversion is the tiles' definition applied to
+that row: of the Tests recorded there, the share that reached a Sale through a Lead — so it can
+never exceed 100%, and a row with Sales but no Tests shows 0%. A switch on the card ranks the lists
+by **Most sales** (the default) or **Best conversion**; it is kept with the other filters, and
+ranking by conversion leaves out rows with no Tests. The four lists:
 - **Top outlets** — exact hierarchy-path match on the org node.
 - **Top retailers** — the **Retailer**: the nearest `Intermediate`-level ancestor.
 - **Top countries** — the `Country`-level ancestor.
@@ -249,18 +272,18 @@ failing. Sales at a retail point that sits directly under a Country are ranked u
 **"No retailer"** row — that outlet genuinely has none, and reporting says so rather than
 substituting the country (2026-09-05). "No retailer" and "Unknown retailer" are different rows
 carrying different facts: the first means "there is none", the second "we cannot resolve this
-path". If all four lists are empty the whole card collapses to "No sales recorded yet."
+path". If all four lists are empty the whole card collapses to "Nothing recorded yet."
 
 **Organisations flagged `IsTrainingOrg` are excluded from every figure on this page** — the tile
 counts, the conversions, the trend, the gender split and all four rankings. Training exclusion is
 applied on this screen only.
 
 **Not built**
-- No country, outlet or role filters — only the date range.
-- Top-performing lists stay non-interactive — no drill-down or per-key filter.
+- No outlet, technician or role filters — the date range, Country and Retailer are the three.
+- Top-performing lists stay non-interactive — no drill-down, and no custom orders or pending
+  leads per row.
 - No export (CSV/PDF), no scheduled or emailed reports.
-- No retail-point-type distribution — no such taxonomy exists in the domain.
-- Per-key conversion % can exceed 100% (a Sale recorded where no Test was, at that key).
+- No retail-point-type distribution or filter — no such taxonomy exists in the domain.
 - Training-org exclusion is *not* applied to Event History, Custom Orders or the User Directory's
   sales counts — those still include training data.
 
@@ -349,15 +372,23 @@ deactivated organisation the same way.
 user · **Data** automatically scoped to the viewer's subtree. Four tabs, 25 rows per page, plus a
 date range filter shared with the Dashboard's drill-down links.
 
-**Sales tab** — columns: Type badge (green "Sale", suffixed "· Custom" when the lens range was
-Custom), customer name, outlet, country, **Consent** (Yes/No, from `ConsentGiven`), absolute local
-timestamp (`yyyy-MM-dd HH:mm`). Newest first.
+**Sales tab** — columns: Type badge (green "Sale"), customer name, **Consent** (Yes/No, from
+`ConsentGiven`), outlet, country, **Lens range** (the lens set's name, or "Custom"), **Lens power
+LE** and **Lens power RE** (each eye in the one lens-power format, e.g. `SPH -1.25 CYL -0.75 × 90
+ADD +2.00`; "—" where the record holds no power), absolute local timestamp (`yyyy-MM-dd HH:mm`).
+Newest first.
+
+**A "Training" badge** follows the outlet name on every tab, on any row recorded at a training
+organisation or beneath one — the rows the Dashboard leaves out, so a reviewer can see why the two
+screens disagree. There is no filter for them.
 
 **Tests tab** — Type badge, outlet, country, timestamp. **There is no Name column at all** — `Test`
 carries no customer reference of any kind (the unused `CustomerId` field was removed); Tests are
 genuinely anonymous records, not just displayed without a name.
 
-**Leads tab** — columns: name, masked phone, outlet, reason not purchased, **Consent**, a
+**Leads tab** — columns: name, masked phone, outlet, reason not purchased, **Aware of price**
+(Yes / No, or "—" for a Lead recorded before the question existed), **Lens range**, **Lens power
+LE**, **Lens power RE**, **Consent**, a
 **convert-to-sale action** (shows "Converted" once done, otherwise a "Convert to sale" link
 opening the admin conversion form described below), relative "Logged" time ("just now", "N
 minutes/hours/days ago", falling back to an absolute date beyond a week). Phone masking keeps the
@@ -366,13 +397,18 @@ of 7 characters or fewer are shown unmasked, and a missing number shows "—". I
 *before* paging so page numbers stay meaningful. The match is **case-insensitive** (`ILIKE`).
 
 **Referrals tab** — columns: outlet, country, reason, absolute time, preceded by a note that these
-are tracked for government reporting. This is a filtered view of the same Tests data
+are tracked for government reporting, and that each record is listed — a customer referred at
+their test and again as a lead appears twice here, where the Dashboard's "Referrals logged" counts
+them once. This is a filtered view of the same Tests data
 (outcome = *Referred*), not a separate record type — a referred test correctly appears in both
 tabs.
 
 The **admin conversion form** (`/Leads/Convert/{id}`) asks for the Sale fields a Lead has no
 equivalent for — coating, frame colour, hard case, "order from DOT Glasses", and the lens range
-where the Lead captured no preference — plus **referred or treated**, with a referral reason, its
+where the Lead captured no preference. **For a Lead whose lens is already ordered** the coatings
+and the order tick are replaced by a read-only "This lens is already ordered" block with the
+order's status and the coatings ordered; the Sale keeps the Lead's lens and coating set whatever
+is posted, and shares its order. Either way the form also asks **referred or treated**, with a referral reason, its
 "Other" free text, a treated-in-facility flag and an optional referral location, following exactly
 the same rules as every other capture path. That block is the form's last section, after hard case,
 as on the Field App. The frame colour dropdown offers the adult list, or the children's list when
@@ -422,7 +458,16 @@ page/tab links.
   filters.
 - No row detail view — you cannot open the underlying Test, Lead or Sale from here (except Leads'
   convert-to-sale action, which is a write path, not a detail view).
-- Training-org data is included here (unlike the Dashboard).
+- Training-org data is included here (unlike the Dashboard), marked with the "Training" badge;
+  there is no filter for it.
+- Lens type and coatings are in the CSV only, not on screen.
+
+**CSV export** follows the open tab, search and date range. The Sales and Leads exports hold the
+lens in separate columns so a spreadsheet can sort and filter on them: Lens range; Sphere,
+Cylinder, Axis and Add for the left eye, then the right; Lens type; Coatings (an ordering Lead's
+full set, otherwise a Lead's one preference). Every tab's export has a **Training org** Yes/No
+column, and the Leads export has **Aware of price**. The screen and the export are fed by the same
+rows.
 
 ---
 
@@ -668,10 +713,17 @@ show.
 or Country level only. Hidden entirely below that. The same policy gates both viewing and
 advancing status.
 
-The queue lists every Sale with a fulfilment status set — that is, every Sale recorded as a Custom
-prescription with "Order this lens from DOT Glasses" ticked. Unpaged (custom-order volume is
-naturally small), with a status-filter pill row (`Submitted` / `In Lab` / `Ready for Pickup` /
+**A custom order is a record of its own** (ADR-0008). It is placed when a Lead or a Sale is
+recorded as a Custom prescription with "Order this lens from DOT Glasses" ticked, and it points
+back at that record; the lens, coatings, pupil distance and customer are read from the Lead or
+Sale, never copied. The queue lists every order, whichever placed it. Unpaged (custom-order volume
+is naturally small), with a status-filter pill row (`Submitted` / `In Lab` / `Ready for Pickup` /
 `Fulfilled`) above the list.
+
+An order placed from a Lead that has not yet converted carries a **"Not yet paid"** badge beside
+its status: the lens is being made and nobody has paid for it. When that Lead is converted, the
+Sale is linked to the same order — there is never a second one — and the badge goes. An unpaid
+order advances through the lab like any other. There is no cancel.
 
 Orders are grouped **Retailer → retail point → customer**, each order showing its **Prescription**
 (a formatted string, `OD <right> / OS <left>`, each eye showing sphere and, where non-zero, `cyl`
@@ -698,11 +750,11 @@ retail point still sees their own Retailer named rather than "Unknown".
 
 **Advance status** is a single button labelled with the next state. The flow is linear and
 forward-only: **Submitted → In Lab → Ready for Pickup → Fulfilled**. Status is set to *Submitted*
-automatically at the moment the sale is created. Once Fulfilled the button disappears, and the
+automatically at the moment the Lead or Sale is recorded. Once Fulfilled the button disappears, and the
 service refuses any further advance. There is no way to set an arbitrary status.
 
 A refused advance — the order was already Fulfilled (a colleague got there first, a double click,
-a browser resubmit), it isn't a custom order, or it isn't visible to the caller — comes back as a
+a browser resubmit), or it isn't visible to the caller — comes back as a
 sentence in a red banner above the queue, not an error page (2026-09-04).
 
 Empty state: "No custom orders yet" (or a filtered variant when a status pill with no matches is
@@ -908,6 +960,16 @@ with no range, every active coating. A preference the chosen lenses don't offer 
 server against `CoatingPreferenceRefId`, and choosing different lenses clears one that's no longer
 offered.
 
+**Ordering the lens from a Lead.** When the range is Custom, one more control appears, last in the
+lens section: *"Order this lens from DOT Glasses"*. Ticking it orders the lens when the Lead is
+saved, before the customer pays (ADR-0008), and changes what the Lead must hold: both eyes' power,
+the **pupil distance** (otherwise optional on a Lead), a lens type where there is an add, and a
+**coating set** — the coating preference radios are replaced by the coating selector a Sale uses,
+held to the same rules (at least one, no two that exclude each other). The order appears in the
+Admin Portal queue as *Submitted*, marked "Not yet paid". A tick left over from an earlier Custom
+choice is ignored once the range is no longer Custom. An order can only be placed when the Lead is
+recorded, never added to an existing Lead, and the server refuses the tick on any other range.
+
 Server rules: full name required (≤ 200), phone required (≤ 32), reason not purchased must be an
 active option with its free text present if Other, the price question answered, age 0–120, and if
 a `sourceTestId` is carried
@@ -937,19 +999,30 @@ case, and last the **Referred or treated** block described in 5.3.
   found in the set again by matching its power and lens type; one that is no longer there is left
   unchosen under a note (§5.6). Frame colour, hard case and "order from DOT Glasses" still need
   filling in fresh — a Lead has no equivalent fields for any of those.
+  **A Lead whose lens is already ordered** opens differently: in place of the lens controls, the
+  coatings and the order tick there is a read-only card — *"This lens is already ordered"* with
+  the order's status, each eye's power, the pupil distance and the coatings ordered. The Sale is
+  sent with exactly that lens and coating set and shares the Lead's order. Frame colour, hard case
+  and referral are asked as usual. The server enforces the lock on whatever is sent: a different
+  lens, a different coating set or a second order request is refused against the field concerned.
+  To sell a different lens, record a new Sale.
 - **Automatic match prompt** — for a fresh Sale (not already opened from a specific Lead), the app
   checks once per form visit whether the entered name + phone matches an existing open Lead. If it
   does, a card appears before the Sale is saved: *"Existing lead found — `<name>` already
   has an open lead from an earlier visit. Convert it into this sale instead of creating a separate
   record?"* — accepting sets `SourceLeadId` and saves; declining saves an ordinary unlinked Sale.
-  This prompt is the only step between Save and saving.
+  This prompt is the only step between Save and saving. When the matched Lead's lens **is already
+  ordered**, the card offers no convert button — the lens just typed can't be swapped for the
+  ordered one — and instead says to open that Lead from the Leads list, with "Go to Leads" and
+  "Save as a separate sale" (which leaves the order unpaid).
 
 The **Coating** list follows the lens range (5.6): a lens set offers the coatings both chosen lenses
 come in, a Custom prescription offers **every** active coating. **When the range is Custom**, one
 more control appears, last in the lens section:
 - *"Order this lens from DOT Glasses (outlet doesn't have stock)"* — a checkbox. Ticking it is what
-  creates a Custom Order: the sale is stamped *Submitted* and appears in the Admin Portal queue.
-  Server-rejected if the range is not Custom.
+  places a Custom Order with the Sale: an order record starting at *Submitted*, which appears in
+  the Admin Portal queue. Server-rejected if the range is not Custom. Not shown when converting a
+  Lead whose lens is already ordered.
 
 Then, for every sale:
 - **Frame colour** — a row of swatches, each with the colour's picture (a "?" placeholder where it
@@ -1069,7 +1142,10 @@ range must not carry millimetres and a Custom range must not carry a bucket. The
 
 **Leads — `/leads`.** Lists the technician's own outlet's **open** Leads (not yet converted), each
 showing the customer's name, phone and when it was logged, with a **"Convert to sale"** button that
-opens the Sale form pre-filled (see 5.5). Empty state: "No open leads at this outlet — everything's
+opens the Sale form pre-filled (see 5.5). A Lead that ordered its lens shows a badge with the
+order's status in the Custom Orders screen's wording — "Lens ordered · In Lab" — highlighted once
+it is Ready for Pickup, so the technician knows when to call the customer. The list is read when
+the screen opens (online only), so a status change shows after reopening it. Empty state: "No open leads at this outlet — everything's
 been converted or nothing's been logged yet."
 
 **Failed records — `/failed-records`.** Every permanently-rejected outbox item (see §6), each with
@@ -1201,9 +1277,9 @@ to create a Test, Lead or Sale through the API — there's no role/level gate on
 endpoints, and the Admin Portal still has no general-purpose form for it (only the narrower
 Lead-conversion screen, see §4.4). What the API *does* enforce, regardless of role or level, is the
 current-location rule above: the attempt only succeeds against an active retail point the caller
-is directly assigned to. The API applies no separate level restriction on custom orders — a Sale
-posted with `OrderFromDotGlasses` from any eligible Retail Point enters the fulfilment queue
-regardless.
+is directly assigned to. The API applies no separate level restriction on custom orders — a Lead
+or Sale posted with `OrderFromDotGlasses` from any eligible Retail Point places an order in the
+fulfilment queue regardless. Sending the same record twice (the outbox retrying) places one order.
 
 Cross-origin access is restricted to two hard-coded localhost development origins.
 

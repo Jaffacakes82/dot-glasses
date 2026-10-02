@@ -50,6 +50,65 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.ToTable("CoatingExclusions", (string)null);
                 });
 
+            modelBuilder.Entity("DotGlasses.Domain.Entities.CustomOrder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTimeOffset?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("HierarchyPath")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("LeadId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ModifiedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTimeOffset>("PlacedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("SaleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HierarchyPath");
+
+                    b.HasIndex("LeadId")
+                        .IsUnique();
+
+                    b.HasIndex("SaleId")
+                        .IsUnique();
+
+                    b.ToTable("CustomOrders", (string)null);
+                });
+
             modelBuilder.Entity("DotGlasses.Domain.Entities.Customer", b =>
                 {
                     b.Property<Guid>("Id")
@@ -263,6 +322,30 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.HasIndex("TechnicianUserId");
 
                     b.ToTable("Leads", (string)null);
+                });
+
+            modelBuilder.Entity("DotGlasses.Domain.Entities.LeadCoating", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CoatingRefId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("LeadId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LeadId");
+
+                    b.HasIndex("LeadId", "CoatingRefId")
+                        .IsUnique();
+
+                    b.ToTable("LeadCoatings", (string)null);
                 });
 
             modelBuilder.Entity("DotGlasses.Domain.Entities.LensOption", b =>
@@ -1230,9 +1313,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.Property<int>("FrameCoverage")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("FulfilmentStatus")
-                        .HasColumnType("integer");
-
                     b.Property<int>("Gender")
                         .HasColumnType("integer");
 
@@ -1277,9 +1357,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("OccupationRefId")
                         .HasColumnType("uuid");
-
-                    b.Property<bool>("OrderFromDotGlasses")
-                        .HasColumnType("boolean");
 
                     b.Property<Guid?>("PresetCatalogueId")
                         .HasColumnType("uuid");

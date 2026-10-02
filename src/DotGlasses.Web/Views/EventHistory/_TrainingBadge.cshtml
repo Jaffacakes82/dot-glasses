@@ -1,0 +1,6 @@
+@model bool
+@* Marks a row at a training organisation, or beneath one: the rows the dashboard leaves out. *@
+@if (Model)
+{
+    <span class="dg-badge" style="background:var(--dot-yellow); font-size:10px; padding:2px 6px;" title="Training organisation. Left out of the dashboard.">Training</span>
+}

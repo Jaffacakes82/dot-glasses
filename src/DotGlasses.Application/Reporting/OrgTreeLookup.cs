@@ -95,6 +95,13 @@ public sealed class OrgTreeLookup
 
     public string RetailerName(HierarchyPath path) => ResolveRetailer(path).Name;
 
+    /// <summary>True when the path is the organisation with this id or sits beneath it — how a
+    /// report narrows to one Retailer or distributor and everything under it. False for an id
+    /// that names no organisation in the tree.</summary>
+    public bool IsAtOrBeneath(HierarchyPath path, Guid organisationId) =>
+        _byPath.Values.FirstOrDefault(n => n.Summary.Id == organisationId) is { } organisation
+        && path.IsSelfOrDescendantOf(organisation.Path);
+
     /// <summary>True when the path is a training org or sits beneath one — the descendant
     /// direction, and the one exclusion Dashboard aggregates apply.</summary>
     public bool IsUnderTrainingOrg(HierarchyPath path) =>

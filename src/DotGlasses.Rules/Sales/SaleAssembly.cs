@@ -42,7 +42,10 @@ public static class SaleAssembly
     /// (ADR-0007), never a lens id, so which lens it is in the set is the form's own question
     /// (<see cref="LensSets.LensSetLenses.Match"/>, asked where the form pre-selects it). The Sale's <b>Coating set</b> is seeded from the Lead's single <b>Coating
     /// preference</b>, which is the one place those two different concepts meet (CONTEXT.md); a
-    /// Lead with no preference seeds an empty set, and the technician picks one. <b>Not carried:</b>
+    /// Lead with no preference seeds an empty set, and the technician picks one. A Lead that
+    /// <b>ordered its lens</b> (ADR-0008) carries the Coating set it ordered with instead — the
+    /// lab is making exactly that — and the converting forms then lock the lens and that set
+    /// (<see cref="OrderedLeadConversion"/> is the server's side of the same lock). <b>Not carried:</b>
     /// frame colour, hard case, and the coating decisions beyond that seed — genuinely new choices
     /// made at the point of sale, which no Lead could have recorded. <b>Also not carried:</b> the
     /// "referred or treated" answers. Test/Lead/Sale are separate create-once events and each asks
@@ -69,7 +72,11 @@ public static class SaleAssembly
             OccupationRefId = lead.OccupationRefId,
             OccupationOtherText = lead.OccupationOtherText,
             ConsentGiven = lead.ConsentGiven,
-            CoatingRefIds = lead.CoatingPreferenceRefId is { } coatingRefId ? [coatingRefId] : [],
+            // A Lead that ordered its lens carries the Coating set it ordered with (ADR-0008); any
+            // other Lead seeds the set from its single preference.
+            CoatingRefIds = lead.OrderFromDotGlasses
+                ? [.. lead.CoatingRefIds]
+                : lead.CoatingPreferenceRefId is { } coatingRefId ? [coatingRefId] : [],
         };
 
         return CarriesLens(lead)

@@ -22,8 +22,8 @@ public class CustomOrdersController(ICustomOrderService customOrderService) : Co
     {
         var orders = await customOrderService.ExportAsync(status, cancellationToken);
         var csv = CsvExport.Build(
-            ["Customer", "Outlet", "Prescription", "Status", "ConsentGiven", "Created"],
-            orders.Select(o => (IReadOnlyList<string?>)[o.CustomerName, o.Outlet, o.Prescription, o.Status.ToString(), o.ConsentGiven.ToString(), o.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)]));
+            ["Customer", "Outlet", "Prescription", "Status", "Paid", "ConsentGiven", "Created"],
+            orders.Select(o => (IReadOnlyList<string?>)[o.CustomerName, o.Outlet, o.Prescription, o.Status.ToString(), o.IsPaid ? "Yes" : "No", o.ConsentGiven.ToString(), o.PlacedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)]));
 
         return File(csv, "text/csv", $"custom-orders-{DateTime.UtcNow:yyyyMMddHHmmss}.csv");
     }
@@ -33,13 +33,13 @@ public class CustomOrdersController(ICustomOrderService customOrderService) : Co
     /// queue at all.</summary>
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> AdvanceStatus(Guid saleId, CancellationToken cancellationToken)
+    public async Task<IActionResult> AdvanceStatus(Guid orderId, CancellationToken cancellationToken)
     {
-        // Already-Fulfilled (a colleague got there first, a double click, a browser resubmit),
-        // not-a-custom-order and out-of-scope all leave the service as DomainRuleViolationException
-        // and are rendered inline by DomainRuleViolationFilter — no catch here, deliberately
-        // (ADR-0003: a controller that catches one is the pattern the filter exists to remove).
-        await customOrderService.AdvanceStatusAsync(saleId, cancellationToken);
+        // Already-Fulfilled (a colleague got there first, a double click, a browser resubmit)
+        // and out-of-scope both leave the service as DomainRuleViolationException and are
+        // rendered inline by DomainRuleViolationFilter — no catch here, deliberately (ADR-0003:
+        // a controller that catches one is the pattern the filter exists to remove).
+        await customOrderService.AdvanceStatusAsync(orderId, cancellationToken);
 
         return RedirectToAction(nameof(Index));
     }
@@ -63,5 +63,5 @@ public class CustomOrdersController(ICustomOrderService customOrderService) : Co
         new(g.RetailPointName, g.ActiveCount, g.Customers.Select(ToWebModel).ToList());
 
     private static CustomerGroup ToWebModel(CustomerOrderGroup g) =>
-        new(g.CustomerName, g.Orders.Select(o => new CustomOrder(o.SaleId, o.CustomerName, o.Outlet, o.Prescription, o.Status)).ToList());
+        new(g.CustomerName, g.Orders.Select(o => new CustomOrder(o.OrderId, o.CustomerName, o.Outlet, o.Prescription, o.Status, NotYetPaid: !o.IsPaid)).ToList());
 }

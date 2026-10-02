@@ -66,13 +66,18 @@ public static class ConsultationRules
                 .Concat(Referral(request.ReferredOrTreated, request.ReferralReasonRefId, request.ReferralOtherText, request.ReferralLocationFreeText, request.TreatedInFacility, snapshot))
                 .Concat(ReasonNotPurchased(request.ReasonNotPurchasedRefId, request.ReasonNotPurchasedOtherText, snapshot))
                 .Concat(PriceAwareness(request.CustomerToldPrice))
+                // A Lead that orders its lens is held to what the lab needs to make it: the
+                // pupil distance stops being optional (ADR-0008). Only a Custom lens can be
+                // ordered, so a tick on any other range is LeadOrder's one failure, not a second
+                // one about that range's pupil distance.
                 .Concat(LensRange(
                     request.LensRangeType, request.PresetCatalogueId,
                     request.SphereLeft, request.CylinderLeft, request.AxisLeft, request.AddLeft,
                     request.SphereRight, request.CylinderRight, request.AxisRight, request.AddRight,
                     request.LensTypeRefId, request.LensTypeOtherText,
                     request.PupilDistanceMm, request.PresetPupilDistanceBucket, request.ChildrensFrame,
-                    pupilDistanceRequired: false, snapshot))
+                    pupilDistanceRequired: request.OrderFromDotGlasses && request.LensRangeType == LensRangeType.Custom, snapshot))
+                .Concat(LeadOrder(request, snapshot))
                 .Concat(CoatingPreference(
                     request.CoatingPreferenceRefId,
                     LensSetPair(
@@ -81,6 +86,37 @@ public static class ConsultationRules
                         request.SphereRight, request.CylinderRight, request.AxisRight, request.AddRight,
                         request.LensTypeRefId, snapshot),
                     availabilityBeforeActiveItem: false, snapshot)));
+
+    /// <summary>
+    /// Ordering a custom lens from a Lead, before the customer has paid (ADR-0008). Only a Custom
+    /// prescription can be ordered, and an ordering Lead carries a Coating set — the lab makes
+    /// what is ordered — held to the standard a Custom Sale's is (<see cref="Coatings"/>: at least
+    /// one, each active, no exclusion broken), in place of the single optional preference. A Lead
+    /// that isn't ordering sends no set at all: its one preference is the whole of what it knows.
+    /// The complete lens itself is <see cref="CustomBranch"/>'s, with the pupil distance required.
+    /// </summary>
+    private static IEnumerable<RuleFailure> LeadOrder(CreateLeadRequest request, ReferenceDataSnapshot snapshot)
+    {
+        if (!request.OrderFromDotGlasses)
+        {
+            return request.CoatingRefIds.Count > 0
+                ? [new RuleFailure(CoatingRefIdsKey, "Coatings are only chosen on a lead when its lens is being ordered. Clear them, or tick \"Order this lens from Dot Glasses\".")]
+                : [];
+        }
+
+        if (request.LensRangeType != LensRangeType.Custom)
+        {
+            return [new RuleFailure(nameof(CreateLeadRequest.OrderFromDotGlasses), OrderNeedsCustomMessage)];
+        }
+
+        var failures = Coatings(request.CoatingRefIds, lensSetPair: null, snapshot);
+        return request.CoatingPreferenceRefId is null
+            ? failures
+            : failures.Append(new RuleFailure(CoatingPreferenceRefIdKey, "An ordered lens has its coatings chosen, so it has no coating preference. Clear the preference."));
+    }
+
+    private const string OrderNeedsCustomMessage =
+        "Only a Custom prescription can be ordered from Dot Glasses — untick \"Order this lens from Dot Glasses\".";
 
     public static RuleResult Check(CreateSaleRequest request, ReferenceDataSnapshot snapshot) =>
         RuleResult.From(
@@ -175,7 +211,7 @@ public static class ConsultationRules
             .Concat(MaximumLength(request.ReferralLocationFreeText, ReferralLocationFreeTextKey, "the referral location", 500))
             .Concat(MaximumLength(request.LensTypeOtherText, LensTypeOtherTextKey, "the other lens type", 200))
             .Concat(request.OrderFromDotGlasses && request.LensRangeType != LensRangeType.Custom
-                ? [new RuleFailure(nameof(CreateSaleRequest.OrderFromDotGlasses), "Only a Custom prescription can be ordered from Dot Glasses — untick \"Order this lens from Dot Glasses\".")]
+                ? [new RuleFailure(nameof(CreateSaleRequest.OrderFromDotGlasses), OrderNeedsCustomMessage)]
                 : []);
 
     /// <summary>An id the caller actually filled in. Guid.Empty is what a missing id deserialises

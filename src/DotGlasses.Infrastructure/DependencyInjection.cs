@@ -67,6 +67,7 @@ public static class DependencyInjection
         services.AddScoped<ILeadService, LeadService>();
 
         services.AddScoped<ISaleRepository, SaleRepository>();
+        services.AddScoped<ICustomOrderRepository, CustomOrderRepository>();
         services.AddScoped<ISaleService, SaleService>();
 
         return services;

@@ -40,7 +40,7 @@ public class AccessAuditFixture : AccessControlFixture
 
     public const string OutletTargetUser = "outlet-target@test.local";
 
-    public sealed record Records(Guid CustomerId, Guid TestId, Guid LeadId, Guid SaleId);
+    public sealed record Records(Guid CustomerId, Guid TestId, Guid LeadId, Guid SaleId, Guid OrderId);
 
     public sealed record Account(string UserName, Guid UserId);
 
@@ -173,8 +173,15 @@ public class AccessAuditFixture : AccessControlFixture
             CustomerId = customer.Id,
             ConsentGiven = true,
             LensRangeType = LensRangeType.Custom,
-            OrderFromDotGlasses = true,
-            FulfilmentStatus = FulfilmentStatus.Submitted,
+            CreatedAtUtc = now,
+        };
+        var order = new CustomOrder
+        {
+            Id = Guid.NewGuid(),
+            HierarchyPath = hierarchyPath,
+            Status = FulfilmentStatus.Submitted,
+            PlacedAtUtc = now,
+            SaleId = sale.Id,
             CreatedAtUtc = now,
         };
 
@@ -182,6 +189,7 @@ public class AccessAuditFixture : AccessControlFixture
         db.Tests.Add(test);
         db.Leads.Add(lead);
         db.Sales.Add(sale);
-        return new Records(customer.Id, test.Id, lead.Id, sale.Id);
+        db.CustomOrders.Add(order);
+        return new Records(customer.Id, test.Id, lead.Id, sale.Id, order.Id);
     }
 }

@@ -1,3 +1,4 @@
+using DotGlasses.Application.Dashboard;
 using DotGlasses.Application.Reporting;
 using DotGlasses.Domain.Entities;
 using DotGlasses.Domain.Enums;
@@ -70,7 +71,7 @@ public class DashboardTopPerformingTests(PostgresContainerFixture postgres)
         await SeedSaleAsync(connectionString, OrganisationSeedConfiguration.DgiPath);
 
         await using var context = CreateContext(connectionString, hierarchyPathPrefix: OrganisationSeedConfiguration.DgiPath);
-        var snapshot = await CreateService(context).GetAsync(null, null);
+        var snapshot = (await CreateService(context).GetAsync(new DashboardFilter())).Figures;
 
         Assert.Empty(snapshot.TopRetailers);
         Assert.Empty(snapshot.TopCountries);
@@ -89,7 +90,7 @@ public class DashboardTopPerformingTests(PostgresContainerFixture postgres)
         await SeedSaleAsync(connectionString, CountryDirectOutletPath);
 
         await using var context = CreateContext(connectionString, hierarchyPathPrefix: OrganisationSeedConfiguration.DgiPath);
-        var snapshot = await CreateService(context).GetAsync(null, null);
+        var snapshot = (await CreateService(context).GetAsync(new DashboardFilter())).Figures;
 
         Assert.Empty(snapshot.TopRetailers);
 
@@ -110,7 +111,7 @@ public class DashboardTopPerformingTests(PostgresContainerFixture postgres)
         await SeedSaleAsync(connectionString, OrphanedPath);
 
         await using var context = CreateContext(connectionString, hierarchyPathPrefix: OrganisationSeedConfiguration.DgiPath);
-        var snapshot = await CreateService(context).GetAsync(null, null);
+        var snapshot = (await CreateService(context).GetAsync(new DashboardFilter())).Figures;
 
         Assert.Empty(snapshot.TopRetailers);
         Assert.Equal("Kenya", Assert.Single(snapshot.TopCountries).Name);
@@ -125,7 +126,7 @@ public class DashboardTopPerformingTests(PostgresContainerFixture postgres)
         await SeedSaleAsync(connectionString, OrganisationSeedConfiguration.KenyaRetailPointPath);
 
         await using var context = CreateContext(connectionString, hierarchyPathPrefix: OrganisationSeedConfiguration.DgiPath);
-        var snapshot = await CreateService(context).GetAsync(null, null);
+        var snapshot = (await CreateService(context).GetAsync(new DashboardFilter())).Figures;
 
         Assert.Equal("Kangemi Vision Centre — Outreach Post", Assert.Single(snapshot.TopOutlets).Name);
         Assert.Equal("Kangemi Vision Centre", Assert.Single(snapshot.TopRetailers).Name);

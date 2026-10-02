@@ -1,5 +1,6 @@
 @page "/leads"
 @using DotGlasses.App.Leads
+@using DotGlasses.Contracts.Common
 @using DotGlasses.Contracts.Leads
 @inject ILeadsClient LeadsClient
 @inject NavigationManager Navigation
@@ -36,6 +37,14 @@
                 @if (!string.IsNullOrWhiteSpace(lead.CustomerPhoneNumber))
                 {
                     <p style="font-size:13px; color:#666; margin:4px 0 0;">@lead.CustomerPhoneNumber</p>
+                }
+                @if (lead.CustomOrderStatus is { } orderStatus)
+                {
+                    @* This Lead ordered its lens (ADR-0008): how far the order has got, so the
+                       technician knows when to call the customer. *@
+                    <p style="margin:8px 0 0;">
+                        <span class="dg-order-status @(orderStatus == CustomOrderStatus.ReadyForPickup ? "dg-order-status-ready" : "")">Lens ordered · @orderStatus.Label()</span>
+                    </p>
                 }
                 <a class="dg-btn dg-btn-primary" style="width:100%; margin-top:var(--space-3); text-align:center;"
                    href="@($"consultation/sale?sourceLeadId={lead.Id}")">

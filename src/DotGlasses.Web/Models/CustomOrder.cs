@@ -2,7 +2,9 @@ using DotGlasses.Domain.Enums;
 
 namespace DotGlasses.Web.Models;
 
-public record CustomOrder(Guid SaleId, string Customer, string Outlet, string Prescription, FulfilmentStatus Status)
+/// <summary>One row of the Custom Orders queue. NotYetPaid marks an order a Lead placed that
+/// hasn't converted to a Sale yet — the organisation is carrying it (ADR-0008).</summary>
+public record CustomOrder(Guid OrderId, string Customer, string Outlet, string Prescription, FulfilmentStatus Status, bool NotYetPaid = false)
 {
     public static readonly IReadOnlyDictionary<FulfilmentStatus, string> StatusLabel = new Dictionary<FulfilmentStatus, string>
     {

@@ -2331,11 +2331,11 @@ public class ConsultationRulesTests
     [Fact]
     public void CoatingPreference_IsASingleValueNotASet()
     {
-        // Per ADR-0001's scope correction a Test or Lead never carries a Coating set, so none of
-        // the set rules reach them: a preference that excludes nothing and duplicates nothing is
-        // simply one id, checked once.
+        // Per ADR-0001's scope correction a Test never carries a Coating set, so none of the set
+        // rules reach it: a preference that excludes nothing and duplicates nothing is simply one
+        // id, checked once. A Lead carries a set only when it orders its lens (ADR-0008) — the
+        // ordering-Lead rules below.
         Assert.Null(typeof(CreateTestRequest).GetProperty("CoatingRefIds"));
-        Assert.Null(typeof(CreateLeadRequest).GetProperty("CoatingRefIds"));
     }
 
     // --- Scalars --------------------------------------------------------------------------
@@ -2674,6 +2674,149 @@ public class ConsultationRulesTests
         yield return Test(r => r.CoatingPreferenceRefId = RetiredCoating, PresetTest);
         yield return Test(r => r.CoatingPreferenceRefId = UnavailableCoating, PresetTest);
         yield return Lead(r => r.CoatingPreferenceRefId = UnavailableCoating, PresetLead);
+
+        // A Lead ordering its lens.
+        yield return Lead(r => r.OrderFromDotGlasses = true, PresetLead);
+        yield return Lead(r => r.CoatingRefIds = [ActiveCoating], CustomLead);
+        yield return Lead(r => { r.CoatingRefIds = []; r.PupilDistanceMm = null; r.CoatingPreferenceRefId = ActiveCoating; }, OrderingLead);
+        yield return Lead(r => r.CoatingRefIds = [ActiveCoating, ExcludingCoating], OrderingLead);
+    }
+
+    // --- A Lead that orders its lens (ADR-0008) -------------------------------------------------
+
+    /// <summary>A Custom Lead ordering its lens before the customer pays: both eyes, the pupil
+    /// distance, and the Coating set the lens is made with.</summary>
+    private static CreateLeadRequest OrderingLead()
+    {
+        var request = CustomLead();
+        request.PupilDistanceMm = 62m;
+        request.OrderFromDotGlasses = true;
+        request.CoatingRefIds = [ActiveCoating, SecondCoating];
+        return request;
+    }
+
+    [Fact]
+    public void AnOrderingLead_WithACompleteLensAndCoatings_IsAccepted()
+    {
+        Assert.True(ConsultationRules.Check(OrderingLead(), Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void AnOrderingLead_OnALensSet_IsRefusedAgainstTheTick()
+    {
+        var request = PresetLead();
+        request.OrderFromDotGlasses = true;
+
+        Assert.Equal(
+            new RuleFailure("OrderFromDotGlasses", "Only a Custom prescription can be ordered from Dot Glasses — untick \"Order this lens from Dot Glasses\"."),
+            AssertSingleFailure(ConsultationRules.Check(request, Snapshot())));
+    }
+
+    [Fact]
+    public void AnOrderingLead_WithNoLensRangeAtAll_IsRefusedAgainstTheTick()
+    {
+        var request = ValidLead();
+        request.OrderFromDotGlasses = true;
+
+        Assert.Equal("OrderFromDotGlasses", AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Key);
+    }
+
+    [Theory]
+    [InlineData("SphereLeft")]
+    [InlineData("SphereRight")]
+    public void AnOrderingLead_MissingAnEyesPower_IsRefused(string missing)
+    {
+        var request = OrderingLead();
+        if (missing == "SphereLeft")
+        {
+            request.SphereLeft = null;
+        }
+        else
+        {
+            request.SphereRight = null;
+        }
+
+        // The same failure any Custom record gets for a missing eye — an ordering Lead has no
+        // lens rules of its own, it just can't skip these.
+        Assert.Equal(
+            new RuleFailure("LensRangeType", "Choose a sphere for each eye."),
+            AssertSingleFailure(ConsultationRules.Check(request, Snapshot())));
+    }
+
+    [Fact]
+    public void AnOrderingLead_NeedsThePupilDistanceALeadOtherwiseLeavesOptional()
+    {
+        var ordering = OrderingLead();
+        ordering.PupilDistanceMm = null;
+
+        Assert.Equal("PupilDistanceMm", AssertSingleFailure(ConsultationRules.Check(ordering, Snapshot())).Key);
+
+        // The same lens on a Lead that isn't ordering: still optional.
+        Assert.True(ConsultationRules.Check(CustomLead(), Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void AnOrderingLead_WithAnAdd_NeedsALensType()
+    {
+        var request = OrderingLead();
+        request.AddLeft = 2.00m;
+        request.AddRight = 2.00m;
+
+        Assert.Equal("LensTypeRefId", AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Key);
+
+        request.LensTypeRefId = ActiveLensType;
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void AnOrderingLead_WithNoCoatings_IsRefusedAgainstTheCoatings()
+    {
+        var request = OrderingLead();
+        request.CoatingRefIds = [];
+
+        Assert.Equal("CoatingRefIds", AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Key);
+    }
+
+    [Fact]
+    public void AnOrderingLead_IsHeldToTheSameCoatingRulesAsACustomSale()
+    {
+        // One rule set, two records: whatever a Custom Sale's coating set is refused for, an
+        // ordering Lead's is refused for in the same words.
+        foreach (var coatings in new List<Guid>[] { [ExcludingCoating, ActiveCoating], [RetiredCoating], [ActiveCoating, ActiveCoating], [NeverExisted] })
+        {
+            var lead = OrderingLead();
+            lead.CoatingRefIds = coatings;
+            var sale = CustomSale();
+            sale.CoatingRefIds = coatings;
+
+            var leadFailures = ConsultationRules.Check(lead, Snapshot()).Failures;
+
+            Assert.NotEmpty(leadFailures);
+            Assert.Equal(ConsultationRules.Check(sale, Snapshot()).Failures, leadFailures);
+        }
+    }
+
+    [Fact]
+    public void AnOrderingLead_HasNoCoatingPreference()
+    {
+        var request = OrderingLead();
+        request.CoatingPreferenceRefId = ActiveCoating;
+
+        Assert.Equal("CoatingPreferenceRefId", AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Key);
+    }
+
+    [Fact]
+    public void ALeadThatIsNotOrdering_SendsNoCoatingSet()
+    {
+        var request = CustomLead();
+        request.CoatingRefIds = [ActiveCoating];
+
+        Assert.Equal("CoatingRefIds", AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Key);
+
+        // Its one optional preference is untouched by any of this.
+        var withPreference = CustomLead();
+        withPreference.CoatingPreferenceRefId = ActiveCoating;
+        Assert.True(ConsultationRules.Check(withPreference, Snapshot()).IsValid);
     }
 
     [Fact]
