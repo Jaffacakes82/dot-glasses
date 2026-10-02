@@ -895,7 +895,7 @@ none do. A token that already carries a location (the ordinary case) skips this 
 - **Four action tiles** — Record Test (blue, "Vision test outcome"), Record Lead (yellow,
   "Customer needs glasses, not ready to buy"), Record Sale (green, "Standard or custom order"),
   and **Leads** (orange, "Convert an open lead into a sale" — see 5.7a).
-- **Links** to Messages and Settings.
+- **Link** to Settings.
 - **Bottom button**, one of: "Queued (N) — waiting for signal" (disabled, when offline), "Sync now
   (N)" (active, when online with a backlog), or "Synced" (disabled).
 
@@ -1183,9 +1183,6 @@ rendering a broken form. Carries the same queued-records guard as Settings' sign
 records must be sent first ("Send now (N)"), with the same explanation, before Sign out becomes
 available — otherwise they'd be filed under whoever signs in next.
 
-**Messages — `/messages`.** Two hard-coded announcements ("Reference data updated", "Reminder").
-Nothing is fetched; the "Refreshes on sync" note is aspirational. Still a placeholder.
-
 **Not found** — the router's fallback.
 
 One routing note: the consultation route accepts any type segment, and anything that isn't "test"
@@ -1292,7 +1289,6 @@ These exist in the running product but are not real product capability:
 
 | Surface | Status |
 |---|---|
-| Field App **Messages** | Two hard-coded announcements. No backing data or API. |
 | **Developer user seeder** | Creates up to three accounts (DGI / Country / Retail Point) on start-up so RBAC is exercisable locally — gated behind `DevSeed:*` configuration values, sourced from user secrets, never committed and never set in production. Each account seeds independently based on which of its secrets is present. |
 | **Seeded org tree** | Four nodes: DOT Glasses International → Kenya → Kangemi Vision Centre → Kangemi Vision Centre — Outreach Post. |
 | **Automatic database migration on start-up** | Development only — real environments apply migrations via an explicit CI step instead. |
@@ -1317,7 +1313,7 @@ reports.
 **No audit trail is surfaced.** Created/modified user and timestamp are captured on every entity
 but no screen displays them.
 
-**No notifications** in either direction — the Field App's Messages screen is static and nothing
+**No notifications** in either direction — the Field App has no messages screen and nothing
 server-side can push to it.
 
 **Search and paging are now present on most list screens** (Event History's Leads tab, User
