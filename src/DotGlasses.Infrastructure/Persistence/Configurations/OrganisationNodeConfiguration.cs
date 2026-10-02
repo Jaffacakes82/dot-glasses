@@ -23,7 +23,6 @@ public class OrganisationNodeConfiguration : IEntityTypeConfiguration<Organisati
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).ValueGeneratedNever();
         builder.Property(x => x.Name).IsRequired().HasMaxLength(200);
-        builder.Property(x => x.Kind).HasMaxLength(200);
         builder.Property(x => x.HierarchyPath).IsRequired().HasMaxLength(1000);
         builder.Property(x => x.CreatedBy).HasMaxLength(256);
         builder.Property(x => x.ModifiedBy).HasMaxLength(256);
@@ -31,6 +30,7 @@ public class OrganisationNodeConfiguration : IEntityTypeConfiguration<Organisati
         // Deliberately unfiltered by IsDeleted — the backstop behind PathSegmentSequence.
         builder.HasIndex(x => x.HierarchyPath).IsUnique();
         builder.HasIndex(x => x.ParentId);
+        builder.HasIndex(x => x.DeactivationGroupId);
 
         builder.HasOne<OrganisationNode>()
             .WithMany()

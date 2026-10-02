@@ -19,13 +19,102 @@ public class LeadServiceTests
         out FakeLeadRepository leads,
         out FakeVisionTestRepository tests,
         out FakeCustomerRepository customers,
-        out FakeUnitOfWork unitOfWork)
+        out FakeUnitOfWork unitOfWork) =>
+        CreateSut(out leads, out tests, out customers, out unitOfWork, out _);
+
+    private static LeadService CreateSut(
+        out FakeLeadRepository leads,
+        out FakeVisionTestRepository tests,
+        out FakeCustomerRepository customers,
+        out FakeUnitOfWork unitOfWork,
+        out FakeCustomOrderRepository orders)
     {
         leads = new FakeLeadRepository();
         tests = new FakeVisionTestRepository();
         customers = new FakeCustomerRepository();
         unitOfWork = new FakeUnitOfWork();
-        return new LeadService(leads, tests, customers, unitOfWork);
+        orders = new FakeCustomOrderRepository();
+        return new LeadService(leads, tests, customers, orders, unitOfWork);
+    }
+
+    private static readonly Guid BlueBlock = Guid.NewGuid();
+    private static readonly Guid Photochromic = Guid.NewGuid();
+
+    /// <summary>A Custom-range Lead that orders its lens, with the Coating set it orders.</summary>
+    private static CreateLeadRequest AnOrderingLead(Guid? id = null)
+    {
+        var request = ARecordedLead(id);
+        request.LensRangeType = LensRangeType.Custom;
+        request.OrderFromDotGlasses = true;
+        request.CoatingRefIds = [BlueBlock, Photochromic, BlueBlock];
+        return request;
+    }
+
+    [Fact]
+    public async Task ALeadThatOrdersItsLens_PlacesOneOrderAndKeepsItsCoatingSet()
+    {
+        var sut = CreateSut(out var leads, out _, out _, out var unitOfWork, out var orders);
+
+        var lead = await sut.CreateAsync(AnOrderingLead(), Guid.NewGuid(), RetailPoint);
+
+        var order = Assert.Single(orders.All);
+        Assert.Equal(lead.Id, order.LeadId);
+        Assert.Null(order.SaleId);
+        Assert.Equal(RetailPoint, order.HierarchyPath);
+        Assert.Equal(Domain.Enums.FulfilmentStatus.Submitted, order.Status);
+
+        // The Coating set is a set: a coating named twice is stored once.
+        Assert.Equal([BlueBlock, Photochromic], leads.StoredCoatings.Select(c => c.CoatingRefId).ToList());
+        Assert.Equal([BlueBlock, Photochromic], lead.CoatingRefIds);
+        Assert.True(lead.OrderFromDotGlasses);
+        Assert.Equal(CustomOrderStatus.Submitted, lead.CustomOrderStatus);
+
+        // The Lead and its order are one unit of work.
+        Assert.Equal(1, unitOfWork.SaveCount);
+    }
+
+    [Fact]
+    public async Task ALeadThatDoesNotOrder_PlacesNoOrderAndStoresNoCoatingSet()
+    {
+        var sut = CreateSut(out var leads, out _, out _, out _, out var orders);
+
+        var lead = await sut.CreateAsync(ARecordedLead(), Guid.NewGuid(), RetailPoint);
+
+        Assert.Empty(orders.All);
+        Assert.Empty(leads.StoredCoatings);
+        Assert.False(lead.OrderFromDotGlasses);
+        Assert.Null(lead.CustomOrderStatus);
+    }
+
+    [Fact]
+    public async Task AnOrderingLeadSentTwice_PlacesOneOrder()
+    {
+        // The outbox retries a record whose first response never arrived.
+        var sut = CreateSut(out var leads, out _, out _, out var unitOfWork, out var orders);
+        var request = AnOrderingLead();
+
+        var first = await sut.CreateAsync(request, Guid.NewGuid(), RetailPoint);
+        var again = await sut.CreateAsync(request, Guid.NewGuid(), RetailPoint);
+
+        Assert.Equal(first.Id, again.Id);
+        Assert.Single(orders.All);
+        Assert.Equal(1, leads.Count);
+        Assert.Equal(2, leads.StoredCoatings.Count);
+        Assert.Equal(1, unitOfWork.SaveCount);
+        Assert.Equal(CustomOrderStatus.Submitted, again.CustomOrderStatus);
+    }
+
+    [Fact]
+    public async Task AnOrderedLeadReadBack_ShowsItsOrdersCurrentStatus()
+    {
+        var sut = CreateSut(out _, out _, out _, out _, out var orders);
+        var lead = await sut.CreateAsync(AnOrderingLead(), Guid.NewGuid(), RetailPoint);
+
+        orders.All[0].Status = Domain.Enums.FulfilmentStatus.ReadyForPickup;
+
+        var open = Assert.Single(await sut.ListOpenAsync());
+        Assert.Equal(lead.Id, open.Id);
+        Assert.Equal(CustomOrderStatus.ReadyForPickup, open.CustomOrderStatus);
     }
 
     private static CreateLeadRequest ARecordedLead(
@@ -61,7 +150,7 @@ public class LeadServiceTests
         var rejection = await Assert.ThrowsAsync<DomainRuleViolationException>(
             () => sut.CreateAsync(ARecordedLead(), Guid.NewGuid(), hierarchyPath: ""));
 
-        Assert.Contains("no org assignment", rejection.Message);
+        Assert.Contains("isn't assigned to an organisation", rejection.Message);
         Assert.Empty(await sut.ListAsync());
         Assert.Equal(0, customers.Count);
         Assert.Equal(0, unitOfWork.SaveCount);
@@ -75,7 +164,7 @@ public class LeadServiceTests
         var rejection = await Assert.ThrowsAsync<DomainRuleViolationException>(
             () => sut.FindOpenMatchAsync(hierarchyPath: "", "Amina Okoro", "0700111222"));
 
-        Assert.Contains("no org assignment", rejection.Message);
+        Assert.Contains("isn't assigned to an organisation", rejection.Message);
     }
 
     [Fact]

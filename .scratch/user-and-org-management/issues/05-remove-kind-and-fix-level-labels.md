@@ -5,7 +5,7 @@ read "DGI", "Country", "Retailer/distributor" and "Retail Point" wherever a leve
 
 **Blocked by:** None
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **Model:** Sonnet 5.5.
 
@@ -13,17 +13,25 @@ read "DGI", "Country", "Retailer/distributor" and "Retail Point" wherever a leve
 
 ## Acceptance criteria
 
-- [ ] `OrganisationNode.Kind` is removed: entity, configuration, a migration dropping the column,
+- [x] `OrganisationNode.Kind` is removed: entity, configuration, a migration dropping the column,
       seed data, `CreateChildOrganisationRequest`, the Add dialog, the selected-organisation panel
       and the CSV export.
-- [ ] One helper produces the level label, used by the tree badge, the selected-organisation
+- [x] One helper produces the level label, used by the tree badge, the selected-organisation
       panel, the Add dialog and the CSV export.
-- [ ] No view compares against the display string to decide behaviour (the Add dialog currently
+- [x] No view compares against the display string to decide behaviour (the Add dialog currently
       tests `Type != "RetailPoint"`); it compares the level itself.
-- [ ] CLAUDE.md's `OrganisationNode` bullet no longer mentions a free-text `Kind` label.
-- [ ] Web.Tests cover: the page and the CSV carry no Kind; the labels read as specified.
+- [x] CLAUDE.md's `OrganisationNode` bullet no longer mentions a free-text `Kind` label.
+- [x] Web.Tests cover: the page and the CSV carry no Kind; the labels read as specified.
 
 ## Notes
 
 - Spec: `../spec.md` — user stories 20–21; "Organisations screen".
 - Skills: `/tdd`, then `/code-review`.
+
+## Comments
+
+**2026-10-01 — built.** `OrganisationNode.Kind` is gone (migration
+`RemoveOrganisationKindAddDeactivationGroup`). `OrganisationLevelLabels.For` is the one place a
+level becomes words; `OrgNode` now carries the level itself and views test `IsRetailPoint`. The
+"Add ..." button and dropdown use the same labels ("Add Retail Point"), replacing "Country
+office"/"Retail point". Tests: `OrganisationsManagementTests`, `UserEditPlanTests`.

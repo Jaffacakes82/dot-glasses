@@ -1,5 +1,6 @@
 using System.Globalization;
 using DotGlasses.Application.Reporting;
+using DotGlasses.Rules.LensPowers;
 using DotGlasses.Web.Export;
 using DotGlasses.Web.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -72,26 +73,26 @@ public class EventHistoryController(IEventHistoryQueryService eventHistoryQueryS
             case EventHistoryTab.Tests:
                 var tests = await eventHistoryQueryService.ListTestsAsync(fromUtc, toUtcExclusive, paging: null, cancellationToken);
                 csv = CsvExport.Build(
-                    ["Type", "Outlet", "Country", "Created"],
-                    tests.Rows.Select(r => (IReadOnlyList<string?>)[r.Type, r.Outlet, r.Country, FormatCsvDate(r.CreatedAtUtc)]));
+                    ["Type", "Outlet", "Training org", "Country", "Created"],
+                    tests.Rows.Select(r => (IReadOnlyList<string?>)[r.Type, r.Outlet, YesNo(r.IsTraining), r.Country, FormatCsvDate(r.CreatedAtUtc)]));
                 break;
             case EventHistoryTab.Leads:
                 var leads = await eventHistoryQueryService.ListLeadsAsync(search, fromUtc, toUtcExclusive, paging: null, cancellationToken);
                 csv = CsvExport.Build(
-                    ["Name", "Phone", "Outlet", "Reason", "ConsentGiven", "Created", "Converted"],
-                    leads.Rows.Select(r => (IReadOnlyList<string?>)[r.Name, r.PhoneMasked, r.Outlet, r.Reason, r.ConsentGiven.ToString(), FormatCsvDate(r.CreatedAtUtc), r.ConvertedFlag.ToString()]));
+                    ["Name", "Phone", "Outlet", "Training org", "Reason", "Aware of price", .. LensCsvHeaders, "ConsentGiven", "Created", "Converted"],
+                    leads.Rows.Select(r => (IReadOnlyList<string?>)[r.Name, r.PhoneMasked, r.Outlet, YesNo(r.IsTraining), r.Reason, YesNoOrBlank(r.CustomerToldPrice), .. LensCsv(r.Lens), r.ConsentGiven.ToString(), FormatCsvDate(r.CreatedAtUtc), r.ConvertedFlag.ToString()]));
                 break;
             case EventHistoryTab.Referrals:
                 var referrals = await eventHistoryQueryService.ListReferralsAsync(fromUtc, toUtcExclusive, paging: null, cancellationToken);
                 csv = CsvExport.Build(
-                    ["Outlet", "Country", "Reason", "Created"],
-                    referrals.Rows.Select(r => (IReadOnlyList<string?>)[r.Outlet, r.Country, r.Reason, FormatCsvDate(r.CreatedAtUtc)]));
+                    ["Outlet", "Training org", "Country", "Reason", "Created"],
+                    referrals.Rows.Select(r => (IReadOnlyList<string?>)[r.Outlet, YesNo(r.IsTraining), r.Country, r.Reason, FormatCsvDate(r.CreatedAtUtc)]));
                 break;
             default:
                 var sales = await eventHistoryQueryService.ListSalesAsync(fromUtc, toUtcExclusive, paging: null, cancellationToken);
                 csv = CsvExport.Build(
-                    ["Type", "Custom", "Name", "Outlet", "Country", "Created", "ConsentGiven"],
-                    sales.Rows.Select(r => (IReadOnlyList<string?>)[r.Type, r.Custom.ToString(), r.Name, r.Outlet, r.Country, FormatCsvDate(r.CreatedAtUtc), r.ConsentGiven?.ToString()]));
+                    ["Type", "Custom", "Name", "Outlet", "Training org", "Country", .. LensCsvHeaders, "Created", "ConsentGiven"],
+                    sales.Rows.Select(r => (IReadOnlyList<string?>)[r.Type, r.Custom.ToString(), r.Name, r.Outlet, YesNo(r.IsTraining), r.Country, .. LensCsv(r.Lens), FormatCsvDate(r.CreatedAtUtc), r.ConsentGiven?.ToString()]));
                 break;
         }
 
@@ -136,14 +137,58 @@ public class EventHistoryController(IEventHistoryQueryService eventHistoryQueryS
 
     private static string FormatCsvDate(DateTimeOffset timestamp) => timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
 
+    /// <summary>The export's lens columns: the range, each value of each eye's power in a column
+    /// of its own (so a spreadsheet can sort and filter on them), the lens type and the coatings.
+    /// The screen shows the same rows' range and powers as three columns of text.</summary>
+    private static readonly string[] LensCsvHeaders =
+    [
+        "Lens range",
+        "Sphere LE", "Cylinder LE", "Axis LE", "Add LE",
+        "Sphere RE", "Cylinder RE", "Axis RE", "Add RE",
+        "Lens type", "Coatings",
+    ];
+
+    private static IEnumerable<string?> LensCsv(EventLens? lens)
+    {
+        lens ??= EventLens.None;
+        return
+        [
+            lens.Range,
+            .. EyeCsv(lens.Left),
+            .. EyeCsv(lens.Right),
+            lens.LensType,
+            lens.Coatings,
+        ];
+    }
+
+    private static IEnumerable<string?> EyeCsv(EventEyePower? eye) =>
+    [
+        Power(eye?.Sphere),
+        Power(eye?.Cylinder),
+        eye?.Axis?.ToString("0", CultureInfo.InvariantCulture),
+        Power(eye?.Add),
+    ];
+
+    private static string? Power(decimal? value) => value is { } v ? LensPowerValues.FormatPower(v) : null;
+
+    private static string YesNo(bool value) => value ? "Yes" : "No";
+
+    private static string? YesNoOrBlank(bool? value) => value is { } v ? YesNo(v) : null;
+
+    private static LensColumns ToColumns(EventLens? lens) => new(
+        lens?.Range ?? LensColumns.None,
+        lens?.Left?.Formatted ?? LensColumns.None,
+        lens?.Right?.Formatted ?? LensColumns.None);
+
     private static SaleOrTestEvent ToWebModel(SaleOrTestEventRow row) =>
-        new(row.Type, row.Custom, row.Name, row.Outlet, row.Country, FormatAbsolute(row.CreatedAtUtc), row.ConsentGiven);
+        new(row.Type, row.Custom, row.Name, row.Outlet, row.Country, FormatAbsolute(row.CreatedAtUtc), row.ConsentGiven, row.IsTraining, ToColumns(row.Lens));
 
     private static LeadEvent ToWebModel(LeadEventRow row) =>
-        new(row.Id, row.Name, row.PhoneMasked, row.Outlet, row.Reason, FormatRelative(row.CreatedAtUtc), row.ConsentGiven, row.ConvertedFlag);
+        new(row.Id, row.Name, row.PhoneMasked, row.Outlet, row.Reason, FormatRelative(row.CreatedAtUtc), row.ConsentGiven, row.ConvertedFlag,
+            row.IsTraining, ToColumns(row.Lens), YesNoOrBlank(row.CustomerToldPrice) ?? LensColumns.None);
 
     private static ReferralEvent ToWebModel(ReferralEventRow row) =>
-        new(row.Source, row.Outlet, row.Country, row.Reason, row.TreatedInFacility, FormatAbsolute(row.CreatedAtUtc));
+        new(row.Source, row.Outlet, row.Country, row.Reason, row.TreatedInFacility, FormatAbsolute(row.CreatedAtUtc), row.IsTraining);
 
     private static string FormatAbsolute(DateTimeOffset timestamp) => timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
 

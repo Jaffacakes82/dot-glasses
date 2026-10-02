@@ -237,6 +237,44 @@ public class SaleAssemblyTests
         Assert.Equal([CoatingPreference], seeded.CoatingRefIds);
     }
 
+    /// <summary>ADR-0008 — a Lead that ordered its lens carries the Coating set the lab is making
+    /// it with, and that is what the Sale is seeded with, whole, in place of a preference.</summary>
+    [Fact]
+    public void Seed_carries_an_ordered_leads_coating_set_in_place_of_a_preference()
+    {
+        var second = Guid.Parse("00000000-0000-0000-0000-0000000000f3");
+        var lead = LeadWithLens();
+        lead.CoatingPreferenceRefId = null;
+        lead.OrderFromDotGlasses = true;
+        lead.CoatingRefIds = [Coating, second];
+
+        var seeded = SaleAssembly.Seed(lead);
+
+        Assert.Equal([Coating, second], seeded.CoatingRefIds);
+
+        // The Sale shares the Lead's order; the seed never asks for another.
+        Assert.False(seeded.OrderFromDotGlasses);
+
+        // A copy, so a form editing its seeded answers can't reach back into the Lead.
+        seeded.CoatingRefIds.Clear();
+        Assert.Equal(2, lead.CoatingRefIds.Count);
+    }
+
+    /// <summary>What the seed hands a form for an ordered Lead is, sent back unchanged, exactly
+    /// what the lock accepts — the two halves of one rule agree.</summary>
+    [Fact]
+    public void A_sale_built_from_an_ordered_leads_seed_satisfies_the_lock()
+    {
+        var lead = LeadWithLens();
+        lead.CoatingPreferenceRefId = null;
+        lead.OrderFromDotGlasses = true;
+        lead.CoatingRefIds = [Coating];
+
+        var request = SaleAssembly.Build(Guid.NewGuid(), lead.Id, SaleAssembly.Seed(lead));
+
+        Assert.True(OrderedLeadConversion.Check(request, lead).IsValid);
+    }
+
     [Fact]
     public void Seed_seeds_an_empty_coating_set_when_the_lead_expressed_no_preference()
     {

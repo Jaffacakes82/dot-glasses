@@ -29,6 +29,7 @@ public class ReferenceDataSeedConfiguration : IEntityTypeConfiguration<Reference
     public static readonly Guid CoatingClearId = new("b0000000-0000-0000-0000-000000000024");
     public static readonly Guid CoatingBlueBlockId = new("b0000000-0000-0000-0000-000000000025");
     public static readonly Guid LensTypeBifocalId = new("b0000000-0000-0000-0000-000000000059");
+    public static readonly Guid FrameColourChildOtherId = new("b0000000-0000-0000-0000-000000000063");
 
     // b0000000-…-000000000043 to …-000000000058 were the sixteen "Lens strength" items, deleted
     // with that category (ADR-0007, migration ResetLensSetsToLensPowers). Don't reuse them.
@@ -122,6 +123,12 @@ public class ReferenceDataSeedConfiguration : IEntityTypeConfiguration<Reference
         Add(new("b0000000-0000-0000-0000-000000000038"), ReferenceDataCategory.FrameColour, "pink_black", "Pink Black",
             imageUrl: "https://dotglasses.org/dot-glasses-ecommerce/assets/images/products/68e7914719e10_Purple_white_1.png");
         Add(new("b0000000-0000-0000-0000-000000000039"), ReferenceDataCategory.FrameColour, "other", "Other", isOther: true);
+
+        // FrameColourChild — children's frames come in their own colours, which DGI enters. Only
+        // "Other" is seeded, so a children's frame can be sold before they do. The adult colours
+        // are deliberately not copied across.
+        sort = 0;
+        Add(FrameColourChildOtherId, ReferenceDataCategory.FrameColourChild, "other", "Other", isOther: true);
 
         // HardCaseColour ← Orange/Green/Other (decision 5.1) — NOT Kobo's stale Blue/Pink/Purple/Black.
         sort = 0;

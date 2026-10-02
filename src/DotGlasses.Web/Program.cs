@@ -3,11 +3,14 @@ using System.Text;
 using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
 using DotGlasses.Application.Common;
+using DotGlasses.Application.ReferenceData;
+using DotGlasses.Application.Users;
 using DotGlasses.Domain.Enums;
 using DotGlasses.Infrastructure;
 using DotGlasses.Infrastructure.Identity;
 using DotGlasses.Infrastructure.Persistence;
 using DotGlasses.Infrastructure.Persistence.Interceptors;
+using DotGlasses.Infrastructure.Storage;
 using DotGlasses.Web.Auth;
 using DotGlasses.Web.Authorization;
 using DotGlasses.Web.Configuration;
@@ -78,6 +81,22 @@ builder.AddAzureNpgsqlDbContext<DotGlassesDbContext>("dotglassesdb", configureDb
 
 builder.Services.AddInfrastructure();
 
+// Reference-data pictures live in the private blob container AppHost provisions (Azurite when
+// run locally through AppHost) and references from this project — which is what puts this
+// connection string in configuration. Without it (a bare `dotnet run`, design-time tooling, the
+// test host before it swaps in its own store) uploads are refused with a message rather than
+// failing on a missing connection.
+const string ReferenceDataImagesContainer = "reference-data-images";
+if (!string.IsNullOrEmpty(builder.Configuration.GetConnectionString(ReferenceDataImagesContainer)))
+{
+    builder.AddAzureBlobContainerClient(ReferenceDataImagesContainer);
+    builder.Services.AddScoped<IReferenceDataPictureStore, BlobReferenceDataPictureStore>();
+}
+else
+{
+    builder.Services.AddScoped<IReferenceDataPictureStore, UnavailableReferenceDataPictureStore>();
+}
+
 // --- Identity: cookie auth (MVC) + JWT bearer (API/App) --------------------------------
 builder.Services
     .AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
@@ -92,6 +111,12 @@ builder.Services
     })
     .AddEntityFrameworkStores<DotGlassesDbContext>()
     .AddDefaultTokenProviders();
+
+// An invite or reset link works for one day. That is the framework's default too, but the
+// "Forgot password?" email promises it, so it is stated rather than inherited.
+builder.Services.Configure<DataProtectionTokenProviderOptions>(options => options.TokenLifespan = IPasswordResetService.LinkLifetime);
+builder.Services.Configure<FieldAppOptions>(builder.Configuration.GetSection(FieldAppOptions.SectionName));
+builder.Services.AddScoped<PasswordResetRequester>();
 
 // Access is re-read from the database on every request (ADR-0006) — see AccessRecheck. Wrapping
 // rather than replacing the validator AddIdentity installed keeps Identity's security-stamp check.

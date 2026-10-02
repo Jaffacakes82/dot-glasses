@@ -158,7 +158,7 @@ public class LensSetAvailabilityTests(PostgresContainerFixture postgres)
 
         var ex = await Assert.ThrowsAsync<DomainRuleViolationException>(
             () => admin.CreateAsync("Rejected range", null, OrganisationSeedConfiguration.KenyaRetailPointId));
-        Assert.Equal("A PresetCatalogue's owning org must be Dgi or Country level.", ex.Message);
+        Assert.Equal("A lens set can only belong to DGI or a country. Choose one of those.", ex.Message);
     }
 
     [Fact]

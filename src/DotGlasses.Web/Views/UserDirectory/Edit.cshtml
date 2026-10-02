@@ -1,0 +1,113 @@
+@model DotGlasses.Web.Models.EditUserViewModel
+@using DotGlasses.Application.Common
+@using DotGlasses.Web.Models
+@{
+    var user = Model.User;
+    ViewData["Title"] = $"Edit {(string.IsNullOrWhiteSpace(user.FullName) ? user.Email : user.FullName)}";
+    var displayName = string.IsNullOrWhiteSpace(user.FullName) ? user.Email : user.FullName;
+}
+
+<div class="dg-page-header">
+    <div>
+        <span class="dg-crumb">Access · User Directory</span>
+        <h1 class="dg-page-title">Edit @displayName</h1>
+    </div>
+    <a class="dg-btn dg-btn-ghost" asp-action="Index">Back to User Directory</a>
+</div>
+
+@if (!ViewData.ModelState.IsValid)
+{
+    <div class="alert alert-danger" style="border-radius:var(--radius-md); margin-bottom:var(--space-4);" asp-validation-summary="All"></div>
+}
+
+<div class="dg-card" style="max-width:640px;">
+    <form asp-action="Edit" asp-route-id="@user.Id" method="post" id="editUserForm"
+          data-user-name="@displayName"
+          data-retail-point-copy="@AccessChangeCopy.RetailPointRemoval(displayName, "{retailPoint}")"
+          data-demotion-copy="@AccessChangeCopy.AdminDemotion">
+        <input type="hidden" name="LoadedFullName" value="@user.FullName" />
+        <input type="hidden" name="LoadedRole" value="@user.Role" />
+        @foreach (var assignment in user.Assignments)
+        {
+            <input type="hidden" name="LoadedOrgNodeIds" value="@assignment.OrgNodeId" />
+        }
+
+        <div class="dg-auth-field">
+            <label>Email</label>
+            <p style="margin:0;">@user.Email <span class="dg-muted" style="font-size:12px;">· @user.Status · can't be changed here</span></p>
+        </div>
+
+        <div class="dg-auth-field">
+            <label for="FullName">Full name</label>
+            @if (Model.CanChangeName)
+            {
+                <input class="form-control" id="FullName" name="FullName" value="@user.FullName" maxlength="200" />
+            }
+            else
+            {
+                <input type="hidden" name="FullName" value="@user.FullName" />
+                <p style="margin:0;">@displayName</p>
+                <p style="font-size:12px; color:var(--text-muted); margin:4px 0 0;">@Model.RoleLockedReason</p>
+            }
+        </div>
+
+        <div class="dg-auth-field">
+            <label for="Role">Role</label>
+            @if (Model.CanChangeRole)
+            {
+                <select class="form-select" id="Role" name="Role" data-loaded="@user.Role">
+                    @foreach (var roleName in RoleNames.All)
+                    {
+                        <option value="@roleName" selected="@(user.Role == roleName ? "selected" : null)">@roleName</option>
+                    }
+                </select>
+            }
+            else
+            {
+                <input type="hidden" name="Role" value="@user.Role" />
+                <p style="margin:0;">@user.Role</p>
+                <p style="font-size:12px; color:var(--text-muted); margin:4px 0 0;" id="roleLockedReason">@Model.RoleLockedReason</p>
+            }
+        </div>
+
+        @await Html.PartialAsync("_OrgPicker", Model.Picker)
+
+        @if (user.OutsideScopeCount > 0)
+        {
+            <p style="font-size:13px; color:var(--text-muted-2);" id="outsideScope">
+                plus @user.OutsideScopeCount @(user.OutsideScopeCount == 1 ? "organisation" : "organisations") outside your scope, which you can't see or change.
+            </p>
+        }
+
+        <div style="display:flex; gap:8px; margin-top:var(--space-4);">
+            <a class="dg-btn dg-btn-ghost" asp-action="Index">Cancel</a>
+            <button class="dg-btn dg-btn-primary" type="submit">Save</button>
+        </div>
+    </form>
+</div>
+
+@section Scripts {
+    <script>
+        // Asks before a save that removes access at once. The server applies the same change
+        // either way; this only gives the admin the chance to stop.
+        document.getElementById('editUserForm').addEventListener('submit', function (event) {
+            var form = event.target;
+            var messages = [];
+
+            form.querySelectorAll('input[type=checkbox][data-level="RetailPoint"][data-loaded="true"]').forEach(function (box) {
+                if (!box.checked) {
+                    messages.push(form.dataset.retailPointCopy.split('{retailPoint}').join(box.dataset.name));
+                }
+            });
+
+            var role = form.querySelector('select[name=Role]');
+            if (role && role.dataset.loaded === '@RoleNames.Admin' && role.value === '@RoleNames.User') {
+                messages.push(form.dataset.demotionCopy);
+            }
+
+            if (messages.length > 0 && !window.confirm(messages.join('\n\n'))) {
+                event.preventDefault();
+            }
+        });
+    </script>
+}

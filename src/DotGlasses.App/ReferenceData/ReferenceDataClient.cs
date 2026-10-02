@@ -43,6 +43,7 @@ public class ReferenceDataClient : IReferenceDataClient
     private readonly HttpClient _httpClient;
     private readonly IJSRuntime _jsRuntime;
     private readonly AuthTokenStore _tokenStore;
+    private readonly FramePictureCache _framePictures;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private List<ReferenceDataItemDto> _items = [];
 
@@ -50,11 +51,12 @@ public class ReferenceDataClient : IReferenceDataClient
     /// while it was waiting was answered for a session that is gone, and starts again.</summary>
     private int _session;
 
-    public ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime, AuthTokenStore tokenStore)
+    public ReferenceDataClient(HttpClient httpClient, IJSRuntime jsRuntime, AuthTokenStore tokenStore, FramePictureCache framePictures)
     {
         _httpClient = httpClient;
         _jsRuntime = jsRuntime;
         _tokenStore = tokenStore;
+        _framePictures = framePictures;
 
         // Both live for the whole app (singletons), so there is nothing to unsubscribe.
         _tokenStore.Changed += Invalidate;
@@ -136,6 +138,11 @@ public class ReferenceDataClient : IReferenceDataClient
 
             await WriteCacheAsync(locationId);
 
+            // The frame colour pictures follow the lists onto the device. Not awaited: a slow or
+            // failed picture must never hold a form on "Loading options…" — the swatches show the
+            // address meanwhile and the copy lands for next time.
+            _ = _framePictures.SyncAsync(fetched.Items);
+
             // A sign-out or location switch during the write cleared what was just assigned.
             return session == _session;
         }
@@ -155,6 +162,7 @@ public class ReferenceDataClient : IReferenceDataClient
 
         if (cached is not null)
         {
+            await _framePictures.LoadStoredAsync();
             _items = cached.Items;
             Catalogues = LensSetsUsableAt(cached, locationId);
             CoatingExclusions = cached.CoatingExclusions;
@@ -239,6 +247,8 @@ public class ReferenceDataClient : IReferenceDataClient
         _items.Where(x => x.Category == category).ToList();
 
     public IReadOnlyList<ReferenceDataItemDto> AllItems => _items;
+
+    public string? PictureSource(ReferenceDataItemDto item) => _framePictures.SourceFor(item);
 
     /// <summary>
     /// CoatingExclusions defaults to an empty list so a cache payload written before that field

@@ -99,11 +99,24 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
     {
         var customers = await GetCustomersByIdAsync(sales.Select(s => (Guid?)s.CustomerId), cancellationToken);
         var orgLookup = await BuildOrgLookupAsync(cancellationToken);
+        var referenceData = await referenceDataSnapshotProvider.GetAsync(cancellationToken);
+
+        var saleIds = sales.Select(s => s.Id).ToList();
+        var coatings = (await dbContext.SaleCoatings.Where(c => saleIds.Contains(c.SaleId)).ToListAsync(cancellationToken))
+            .ToLookup(c => c.SaleId, c => c.CoatingRefId);
 
         return sales.Select(s =>
         {
             var (outlet, country) = Resolve(orgLookup, s.HierarchyPath);
-            return new SaleOrTestEventRow("Sale", s.LensRangeType == LensRangeType.Custom, CustomerName(customers, s.CustomerId), outlet, country, s.CreatedAtUtc, s.ConsentGiven);
+            var lens = new EventLens(
+                LensRange(referenceData, s.LensRangeType, s.PresetCatalogueId),
+                EventEyePower.From(s.SphereLeft, s.CylinderLeft, s.AxisLeft, s.AddLeft),
+                EventEyePower.From(s.SphereRight, s.CylinderRight, s.AxisRight, s.AddRight),
+                LensType(referenceData, s.LensTypeRefId, s.LensTypeOtherText),
+                EventLens.JoinCoatings(coatings[s.Id].Select(id => referenceData.ResolveLabel(id))));
+            return new SaleOrTestEventRow(
+                "Sale", s.LensRangeType == LensRangeType.Custom, CustomerName(customers, s.CustomerId), outlet, country, s.CreatedAtUtc, s.ConsentGiven,
+                orgLookup.IsRowUnderTrainingOrg(s.HierarchyPath), lens);
         }).ToList();
     }
 
@@ -124,7 +137,7 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
         return tests.Select(t =>
         {
             var (outlet, country) = Resolve(orgLookup, t.HierarchyPath);
-            return new SaleOrTestEventRow("Test", false, Name: null, outlet, country, t.CreatedAtUtc, ConsentGiven: null);
+            return new SaleOrTestEventRow("Test", false, Name: null, outlet, country, t.CreatedAtUtc, ConsentGiven: null, orgLookup.IsRowUnderTrainingOrg(t.HierarchyPath));
         }).ToList();
     }
 
@@ -157,12 +170,32 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
         var orgLookup = await BuildOrgLookupAsync(cancellationToken);
         var referenceData = await referenceDataSnapshotProvider.GetAsync(cancellationToken);
 
+        // An ordering Lead carries a Coating set (ADR-0008); any other Lead has at most its one
+        // preference.
+        var leadIds = leads.Select(l => l.Id).ToList();
+        var orderedCoatings = (await dbContext.LeadCoatings.Where(c => leadIds.Contains(c.LeadId)).ToListAsync(cancellationToken))
+            .ToLookup(c => c.LeadId, c => c.CoatingRefId);
+
         return leads.Select(l =>
         {
             var customer = customers.GetValueOrDefault(l.CustomerId);
             var (outlet, _) = Resolve(orgLookup, l.HierarchyPath);
             var reason = referenceData.ResolveLabel(l.ReasonNotPurchasedRefId, l.ReasonNotPurchasedOtherText);
-            return new LeadEventRow(l.Id, customer?.FullName ?? "—", MaskPhone(customer?.PhoneNumber), outlet, reason, l.CreatedAtUtc, l.ConsentGiven, l.ConvertedFlag);
+            var coatingIds = orderedCoatings[l.Id].ToList();
+            if (coatingIds.Count == 0 && l.CoatingPreferenceRefId is { } preference)
+            {
+                coatingIds.Add(preference);
+            }
+
+            var lens = new EventLens(
+                LensRange(referenceData, l.LensRangeType, l.PresetCatalogueId),
+                EventEyePower.From(l.SphereLeft, l.CylinderLeft, l.AxisLeft, l.AddLeft),
+                EventEyePower.From(l.SphereRight, l.CylinderRight, l.AxisRight, l.AddRight),
+                LensType(referenceData, l.LensTypeRefId, l.LensTypeOtherText),
+                EventLens.JoinCoatings(coatingIds.Select(id => referenceData.ResolveLabel(id))));
+            return new LeadEventRow(
+                l.Id, customer?.FullName ?? "—", MaskPhone(customer?.PhoneNumber), outlet, reason, l.CreatedAtUtc, l.ConsentGiven, l.ConvertedFlag,
+                orgLookup.IsRowUnderTrainingOrg(l.HierarchyPath), lens, l.CustomerToldPrice);
         }).ToList();
     }
 
@@ -175,7 +208,7 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
         {
             var (outlet, country) = Resolve(orgLookup, t.HierarchyPath);
             var reason = referenceData.ResolveLabel(t.ReferralReasonRefId, t.ReferralOtherText);
-            return new ReferralEventRow(t.Source, outlet, country, reason, t.TreatedInFacility, t.CreatedAtUtc);
+            return new ReferralEventRow(t.Source, outlet, country, reason, t.TreatedInFacility, t.CreatedAtUtc, orgLookup.IsRowUnderTrainingOrg(t.HierarchyPath));
         }).ToList();
     }
 
@@ -190,6 +223,19 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
         var customers = await dbContext.Customers.Where(c => distinctIds.Contains(c.Id)).ToListAsync(cancellationToken);
         return customers.ToDictionary(c => c.Id);
     }
+
+    /// <summary>The lens set's name (retired sets included — the snapshot keeps them), "Custom",
+    /// or null when the record chose no lens range.</summary>
+    private static string? LensRange(DotGlasses.Rules.ReferenceData.ReferenceDataSnapshot referenceData, LensRangeType? lensRangeType, Guid? presetCatalogueId) => lensRangeType switch
+    {
+        LensRangeType.Custom => "Custom",
+        LensRangeType.LensSet => referenceData.FindCatalogue(presetCatalogueId)?.Name ?? DotGlasses.Rules.ReferenceData.ReferenceDataSnapshot.MissingLabel,
+        _ => null,
+    };
+
+    /// <summary>Null for single vision, which is inferred and never stored (ADR-0007).</summary>
+    private static string? LensType(DotGlasses.Rules.ReferenceData.ReferenceDataSnapshot referenceData, Guid? lensTypeRefId, string? lensTypeOtherText) =>
+        lensTypeRefId is { } id ? referenceData.ResolveLabel(id, lensTypeOtherText) : null;
 
     private static string CustomerName(IReadOnlyDictionary<Guid, Customer> customers, Guid? customerId) =>
         customerId.HasValue && customers.TryGetValue(customerId.Value, out var customer) ? customer.FullName : "—";
@@ -222,7 +268,7 @@ public class EventHistoryQueryService(DotGlassesDbContext dbContext, IReferenceD
     /// OrgTreeLookup, shared with the Dashboard and Custom Orders (docs/adr/0004).</summary>
     private async Task<OrgTreeLookup> BuildOrgLookupAsync(CancellationToken cancellationToken)
     {
-        var nodes = await unscopedReportQueryService.GetOrganisationNodesUnscopedAsync(cancellationToken);
+        var nodes = await unscopedReportQueryService.GetOrganisationNodesForReportsAsync(cancellationToken);
         return new OrgTreeLookup(nodes);
     }
 

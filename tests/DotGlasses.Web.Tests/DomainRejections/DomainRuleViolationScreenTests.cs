@@ -39,21 +39,39 @@ public class DomainRuleViolationScreenTests(AdminPortalFactory factory) : IClass
     }
 
     [Fact]
-    public async Task Organisations_DeactivatingANodeWithChildren_ShowsTheMessageOnTheOrganisationsScreen()
+    public async Task Organisations_ReactivatingUnderADeactivatedParent_ShowsTheMessageOnTheOrganisationsScreen()
     {
+        // A retailer deactivated with its outlet: the outlet can't come back on its own.
+        var retailerId = Guid.NewGuid();
+        var outletId = Guid.NewGuid();
+        var segment = Random.Shared.Next(100_000, int.MaxValue);
+        factory.Seed(db =>
+        {
+            db.OrganisationNodes.Add(new OrganisationNode
+            {
+                Id = retailerId, ParentId = OrganisationSeedConfiguration.KenyaId, Name = "Closed Retailer", Level = OrganisationLevel.Intermediate,
+                HierarchyPath = $"{OrganisationSeedConfiguration.KenyaPath}{segment}/", IsDeleted = true,
+            });
+            db.OrganisationNodes.Add(new OrganisationNode
+            {
+                Id = outletId, ParentId = retailerId, Name = "Closed Outlet", Level = OrganisationLevel.RetailPoint,
+                HierarchyPath = $"{OrganisationSeedConfiguration.KenyaPath}{segment}/1/", IsDeleted = true,
+            });
+        });
+
         var client = factory.CreateAdminClient();
         var token = await AdminPortalFactory.GetAntiforgeryTokenAsync(client, "/Organisations");
 
         var (redirect, html) = await AdminPortalFactory.PostAndFollowAsync(
             client,
             "/Organisations/SetActive",
-            AdminPortalFactory.Form(token, ("id", OrganisationSeedConfiguration.KenyaId.ToString()), ("value", "false")),
+            AdminPortalFactory.Form(token, ("id", outletId.ToString()), ("value", "true")),
             referer: $"/Organisations?selectedId={OrganisationSeedConfiguration.KenyaId}");
 
         // The Referer carries the selected node through the redirect — the admin lands back on
         // the same node they were looking at, not on a bare Index.
         Assert.Contains($"selectedId={OrganisationSeedConfiguration.KenyaId}", redirect.Headers.Location?.ToString());
-        Assert.Contains("Deactivate this node&#x27;s child orgs first", html);
+        Assert.Contains("Reactivate the organisation above it first", html);
     }
 
     [Fact]
@@ -92,6 +110,7 @@ public class DomainRuleViolationScreenTests(AdminPortalFactory factory) : IClass
     public async Task CustomOrders_AdvancingAFulfilledOrder_ShowsTheMessageOnTheCustomOrdersScreen()
     {
         var saleId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
         var customerId = Guid.NewGuid();
         factory.Seed(dbContext =>
         {
@@ -109,8 +128,15 @@ public class DomainRuleViolationScreenTests(AdminPortalFactory factory) : IClass
                 TechnicianUserId = Guid.NewGuid(),
                 CustomerId = customerId,
                 LensRangeType = LensRangeType.Custom,
-                OrderFromDotGlasses = true,
-                FulfilmentStatus = FulfilmentStatus.Fulfilled,
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+            });
+            dbContext.CustomOrders.Add(new CustomOrder
+            {
+                Id = orderId,
+                HierarchyPath = OrganisationSeedConfiguration.KenyaRetailPointPath,
+                Status = FulfilmentStatus.Fulfilled,
+                PlacedAtUtc = DateTimeOffset.UtcNow,
+                SaleId = saleId,
                 CreatedAtUtc = DateTimeOffset.UtcNow,
             });
         });
@@ -121,19 +147,19 @@ public class DomainRuleViolationScreenTests(AdminPortalFactory factory) : IClass
         var (redirect, html) = await AdminPortalFactory.PostAndFollowAsync(
             client,
             "/CustomOrders/AdvanceStatus",
-            AdminPortalFactory.Form(token, ("saleId", saleId.ToString())));
+            AdminPortalFactory.Form(token, ("orderId", orderId.ToString())));
 
         Assert.Equal("/CustomOrders", redirect.Headers.Location?.ToString());
         Assert.Contains("This custom order is already Fulfilled.", html);
     }
 
-    /// <summary>A sale the caller can't see and a sale that doesn't exist are the same fact here —
+    /// <summary>An order the caller can't see and one that doesn't exist are the same fact here —
     /// the hierarchy filter hides the former, so the service cannot tell them apart and must not
-    /// try, or the screen would leak which sales exist elsewhere in the tree. Both get the one
+    /// try, or the screen would leak which orders exist elsewhere in the tree. Both get the one
     /// sentence CustomOrderService has for it, rather than the generic error page an unhandled
     /// missing row would produce.</summary>
     [Fact]
-    public async Task CustomOrders_AdvancingASaleTheCallerCannotSee_ShowsTheSameMessageAsOneThatDoesNotExist()
+    public async Task CustomOrders_AdvancingAnOrderTheCallerCannotSee_ShowsTheSameMessageAsOneThatDoesNotExist()
     {
         var client = factory.CreateAdminClient();
         var token = await AdminPortalFactory.GetAntiforgeryTokenAsync(client, "/CustomOrders");
@@ -141,7 +167,7 @@ public class DomainRuleViolationScreenTests(AdminPortalFactory factory) : IClass
         var (_, html) = await AdminPortalFactory.PostAndFollowAsync(
             client,
             "/CustomOrders/AdvanceStatus",
-            AdminPortalFactory.Form(token, ("saleId", Guid.NewGuid().ToString())),
+            AdminPortalFactory.Form(token, ("orderId", Guid.NewGuid().ToString())),
             referer: "/CustomOrders");
 
         Assert.Contains("This custom order is no longer available.", html);

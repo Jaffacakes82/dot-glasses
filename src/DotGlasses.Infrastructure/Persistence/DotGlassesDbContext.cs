@@ -45,6 +45,8 @@ public class DotGlassesDbContext(DbContextOptions<DotGlassesDbContext> options, 
     public DbSet<Lead> Leads => Set<Lead>();
     public DbSet<Sale> Sales => Set<Sale>();
     public DbSet<SaleCoating> SaleCoatings => Set<SaleCoating>();
+    public DbSet<LeadCoating> LeadCoatings => Set<LeadCoating>();
+    public DbSet<CustomOrder> CustomOrders => Set<CustomOrder>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

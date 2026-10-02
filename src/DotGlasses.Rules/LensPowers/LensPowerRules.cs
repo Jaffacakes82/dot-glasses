@@ -65,7 +65,7 @@ public static class LensPowerRules
     public static IEnumerable<RuleFailure> Check(
         decimal? sphere, decimal? cylinder, decimal? axis, decimal? add, LensPowerNames names) =>
         sphere is null
-            ? [new RuleFailure(names.Sphere, $"{names.SphereLabel} is required."), .. CheckValues(sphere, cylinder, axis, add, names)]
+            ? [new RuleFailure(names.Sphere, $"{names.SphereLabel}: choose a value."), .. CheckValues(sphere, cylinder, axis, add, names)]
             : CheckValues(sphere, cylinder, axis, add, names);
 
     /// <summary>
@@ -96,20 +96,20 @@ public static class LensPowerRules
         {
             if (cylinderIsAllowed && !HasCylinder(cylinder))
             {
-                yield return new RuleFailure(names.Axis, $"{names.AxisLabel} must be empty when {names.CylinderLabel} is 0.00 — an axis only applies to a cylinder.");
+                yield return new RuleFailure(names.Axis, $"{names.AxisLabel}: clear the axis — it only applies when {names.CylinderLabel} isn't 0.00.");
             }
             else if (!LensPowerValues.AxisRange.Allows(a))
             {
                 yield return new RuleFailure(
                     names.Axis,
-                    $"{names.AxisLabel} must be a whole number of degrees between {AllowedRange.Describe(LensPowerValues.AxisRange.Min)} and {AllowedRange.Describe(LensPowerValues.AxisRange.Max)}.");
+                    $"{names.AxisLabel}: choose a whole number of degrees from {AllowedRange.Describe(LensPowerValues.AxisRange.Min)} to {AllowedRange.Describe(LensPowerValues.AxisRange.Max)}.");
             }
         }
         else if (cylinderIsAllowed && HasCylinder(cylinder))
         {
             yield return new RuleFailure(
                 names.Axis,
-                $"{names.AxisLabel} is required when {names.CylinderLabel} isn't 0.00 — choose an axis from {AllowedRange.Describe(LensPowerValues.AxisRange.Min)} to {AllowedRange.Describe(LensPowerValues.AxisRange.Max)}.");
+                $"{names.AxisLabel}: choose an axis from {AllowedRange.Describe(LensPowerValues.AxisRange.Min)} to {AllowedRange.Describe(LensPowerValues.AxisRange.Max)} — {names.CylinderLabel} isn't 0.00.");
         }
 
         foreach (var failure in Power(add, names.Add, names.AddLabel, LensPowerValues.AddRange))
@@ -159,6 +159,6 @@ public static class LensPowerRules
     /// <see cref="AllowedRange"/>.</summary>
     private static IEnumerable<RuleFailure> Power(decimal? value, string name, string label, AllowedRange range) =>
         value is { } v && !range.Allows(v)
-            ? [new RuleFailure(name, $"{label} must be between {AllowedRange.Describe(range.Min)} and {AllowedRange.Describe(range.Max)} in {AllowedRange.Describe(range.Step)} increments.")]
+            ? [new RuleFailure(name, $"{label}: choose a value between {AllowedRange.Describe(range.Min)} and {AllowedRange.Describe(range.Max)}, in steps of {AllowedRange.Describe(range.Step)}.")]
             : [];
 }

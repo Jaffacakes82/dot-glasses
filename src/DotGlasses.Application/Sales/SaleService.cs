@@ -1,10 +1,12 @@
 using DotGlasses.Application.Common;
+using DotGlasses.Application.CustomOrders;
 using DotGlasses.Application.Customers;
 using DotGlasses.Application.Leads;
 using DotGlasses.Contracts.Sales;
 using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Entities;
 using DotGlasses.Rules.LensPowers;
+using DotGlasses.Rules.Sales;
 using DomainFrameCoverage = DotGlasses.Domain.Enums.FrameCoverage;
 using ContractFrameCoverage = DotGlasses.Contracts.Sales.FrameCoverage;
 
@@ -14,44 +16,45 @@ public class SaleService(
     ISaleRepository repository,
     ILeadRepository leadRepository,
     ICustomerRepository customerRepository,
+    ICustomOrderRepository customOrderRepository,
     IUnitOfWork unitOfWork) : ISaleService
 {
     public async Task<SaleDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         var entity = await repository.GetByIdAsync(id, cancellationToken);
-        if (entity is null)
-        {
-            return null;
-        }
-
-        var coatingsBySale = await repository.GetCoatingRefIdsBySaleIdsAsync([entity.Id], cancellationToken);
-        return ToDto(entity, coatingsBySale.GetValueOrDefault(entity.Id, []));
+        return entity is null ? null : (await ToDtosAsync([entity], cancellationToken))[0];
     }
 
-    public async Task<IReadOnlyList<SaleDto>> ListAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<SaleDto>> ListAsync(CancellationToken cancellationToken = default) =>
+        await ToDtosAsync(await repository.ListAsync(cancellationToken), cancellationToken);
+
+    private async Task<IReadOnlyList<SaleDto>> ToDtosAsync(IReadOnlyList<Sale> entities, CancellationToken cancellationToken)
     {
-        var entities = await repository.ListAsync(cancellationToken);
-        var coatingsBySale = await repository.GetCoatingRefIdsBySaleIdsAsync(entities.Select(e => e.Id).ToList(), cancellationToken);
-        return entities.Select(e => ToDto(e, coatingsBySale.GetValueOrDefault(e.Id, []))).ToList();
+        var ids = entities.Select(e => e.Id).ToList();
+        var coatings = await repository.GetCoatingRefIdsBySaleIdsAsync(ids, cancellationToken);
+        var orders = await customOrderRepository.GetBySaleIdsAsync(ids, cancellationToken);
+        return entities.Select(e => ToDto(e, coatings.GetValueOrDefault(e.Id, []), orders.GetValueOrDefault(e.Id))).ToList();
     }
 
     public async Task<SaleDto> CreateAsync(CreateSaleRequest request, Guid technicianUserId, string hierarchyPath, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(hierarchyPath))
         {
-            throw new DomainRuleViolationException("Your account has no org assignment and cannot record a sale.");
+            throw new DomainRuleViolationException("Your account isn't assigned to an organisation, so it can't record a sale. Ask an admin to assign you.");
         }
 
+        // Already recorded (the outbox retrying): answered with what exists, so a repeat places no
+        // second order.
         var existing = await repository.GetByIdAsync(request.Id, cancellationToken);
         if (existing is not null)
         {
-            var existingCoatings = await repository.GetCoatingRefIdsBySaleIdsAsync([existing.Id], cancellationToken);
-            return ToDto(existing, existingCoatings.GetValueOrDefault(existing.Id, []));
+            return (await ToDtosAsync([existing], cancellationToken))[0];
         }
 
         // Resolved before anything is built, so a refusal leaves nothing half-written — not even
         // a Customer row.
         var sourceLead = await ResolveSourceLeadAsync(request.SourceLeadId, cancellationToken);
+        var leadsOrder = await ResolveLeadsOrderAsync(request, sourceLead, cancellationToken);
 
         var customerId = await FindOrCreateCustomerAsync(hierarchyPath, request.FullName, request.PhoneNumber, cancellationToken);
         var lensRangeType = request.LensRangeType.ToDomain();
@@ -89,8 +92,6 @@ public class SaleService(
             AddRight = right.Add,
             LensTypeRefId = request.LensTypeRefId,
             LensTypeOtherText = request.LensTypeOtherText,
-            OrderFromDotGlasses = request.OrderFromDotGlasses,
-            FulfilmentStatus = request.OrderFromDotGlasses ? Domain.Enums.FulfilmentStatus.Submitted : null,
             PupilDistanceMm = request.PupilDistanceMm,
             PresetPupilDistanceBucket = request.PresetPupilDistanceBucket,
             ChildrensFrame = request.ChildrensFrame,
@@ -118,11 +119,52 @@ public class SaleService(
             leadRepository.Update(sourceLead);
         }
 
-        // Single SaveChangesAsync call: the Sale create and the source Lead's ConvertedFlag/
-        // SaleId update (if any) commit atomically — see CLAUDE.md's IUnitOfWork note.
+        // The order behind this Sale (ADR-0008): the one its Lead already placed, now paid for —
+        // linked, never duplicated — or a new one this Sale places. Either way it is part of the
+        // same unit of work as the Sale.
+        var order = leadsOrder;
+        if (order is not null)
+        {
+            order.SaleId = entity.Id;
+            customOrderRepository.Update(order);
+        }
+        else if (request.OrderFromDotGlasses)
+        {
+            order = CustomOrder.Place(hierarchyPath, saleId: entity.Id);
+            customOrderRepository.Add(order);
+        }
+
+        // Single SaveChangesAsync call: the Sale create, its order, and the source Lead's
+        // ConvertedFlag/SaleId update (if any) commit atomically — see CLAUDE.md's IUnitOfWork note.
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        return ToDto(entity, request.CoatingRefIds);
+        return ToDto(entity, request.CoatingRefIds, order);
+    }
+
+    /// <summary>
+    /// The order the converted Lead already placed, or null when there is none. A Sale converting
+    /// an ordered Lead must keep the lens and Coating set that were ordered and must not ask for
+    /// another order — OrderedLeadConversion, the rule both controllers report field by field.
+    /// This is the guard behind them: reached only by a caller that skipped that check, so it
+    /// refuses the whole record in one sentence (ADR-0003).
+    /// </summary>
+    private async Task<CustomOrder?> ResolveLeadsOrderAsync(CreateSaleRequest request, Lead? sourceLead, CancellationToken cancellationToken)
+    {
+        if (sourceLead is null
+            || !(await customOrderRepository.GetByLeadIdsAsync([sourceLead.Id], cancellationToken)).TryGetValue(sourceLead.Id, out var order))
+        {
+            return null;
+        }
+
+        var leadCoatings = await leadRepository.GetCoatingRefIdsByLeadIdsAsync([sourceLead.Id], cancellationToken);
+        var lead = LeadService.ToDto(sourceLead, customer: null, leadCoatings.GetValueOrDefault(sourceLead.Id, []), order);
+        if (!OrderedLeadConversion.Check(request, lead).IsValid)
+        {
+            throw new DomainRuleViolationException(
+                "This lead's lens is already ordered, so the sale has to keep the lens and coatings that were ordered — nothing has been saved. To sell a different lens, record a new sale.");
+        }
+
+        return order;
     }
 
     /// <summary>
@@ -138,9 +180,20 @@ public class SaleService(
             return null;
         }
 
-        return await leadRepository.GetByIdAsync(id, cancellationToken)
+        var lead = await leadRepository.GetByIdAsync(id, cancellationToken)
             ?? throw new DomainRuleViolationException(
                 "The Lead this Sale was converted from isn't available at your location — nothing has been saved.");
+
+        // A Lead converts once. The controllers report this against the field first; this is the
+        // guard behind them, and what stops a second Sale taking over the Lead's back-link — and,
+        // for a Lead that ordered its lens, its order — from the Sale that already has them. (A
+        // retry of that same Sale never gets here: CreateAsync has already answered it.)
+        if (lead.SaleId is not null)
+        {
+            throw new DomainRuleViolationException("This lead has already been converted into a sale — nothing has been saved.");
+        }
+
+        return lead;
     }
 
     /// <summary>Exact name+phone match within the retail point — see LeadService's identical helper.</summary>
@@ -164,7 +217,7 @@ public class SaleService(
         return customer.Id;
     }
 
-    private static SaleDto ToDto(Sale entity, IReadOnlyList<Guid> coatingRefIds) => new()
+    private static SaleDto ToDto(Sale entity, IReadOnlyList<Guid> coatingRefIds, CustomOrder? order) => new()
     {
         Id = entity.Id,
         HierarchyPath = entity.HierarchyPath,
@@ -193,7 +246,8 @@ public class SaleService(
         AddRight = entity.AddRight,
         LensTypeRefId = entity.LensTypeRefId,
         LensTypeOtherText = entity.LensTypeOtherText,
-        OrderFromDotGlasses = entity.OrderFromDotGlasses,
+        OrderFromDotGlasses = order is not null,
+        CustomOrderStatus = order?.Status.ToContract(),
         PupilDistanceMm = entity.PupilDistanceMm,
         PresetPupilDistanceBucket = entity.PresetPupilDistanceBucket,
         ChildrensFrame = entity.ChildrensFrame,

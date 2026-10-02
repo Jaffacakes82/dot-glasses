@@ -1,8 +1,15 @@
 namespace DotGlasses.Web.Models;
 
-public record SaleOrTestEvent(string Type, bool Custom, string? Name, string Outlet, string Country, string Time, bool? ConsentGiven);
-public record LeadEvent(Guid Id, string Name, string PhoneMasked, string Outlet, string Reason, string Logged, bool ConsentGiven, bool ConvertedFlag);
-public record ReferralEvent(string Source, string Outlet, string Country, string Reason, bool TreatedInFacility, string Time);
+/// <summary>The three lens columns the Sales and Leads tabs show: the lens range, then each eye's
+/// lens power, left eye first, each already in its display text ("—" where there is none).</summary>
+public record LensColumns(string Range, string Left, string Right)
+{
+    public const string None = "—";
+}
+
+public record SaleOrTestEvent(string Type, bool Custom, string? Name, string Outlet, string Country, string Time, bool? ConsentGiven, bool IsTraining, LensColumns Lens);
+public record LeadEvent(Guid Id, string Name, string PhoneMasked, string Outlet, string Reason, string Logged, bool ConsentGiven, bool ConvertedFlag, bool IsTraining, LensColumns Lens, string AwareOfPrice);
+public record ReferralEvent(string Source, string Outlet, string Country, string Reason, bool TreatedInFacility, string Time, bool IsTraining);
 
 public class EventHistoryViewModel
 {

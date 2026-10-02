@@ -14,6 +14,7 @@ public class FakeLeadRepository : ILeadRepository
     private readonly Dictionary<Guid, Lead> _store = [];
     private readonly Dictionary<Guid, int> _insertionOrder = [];
     private readonly HashSet<Guid> _hidden = [];
+    private readonly List<LeadCoating> _coatings = [];
     private int _nextInsertion;
 
     public void Seed(Lead entity)
@@ -30,6 +31,8 @@ public class FakeLeadRepository : ILeadRepository
 
     public int Count => _store.Count;
 
+    public IReadOnlyList<LeadCoating> StoredCoatings => _coatings;
+
     public Task<Lead?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         Task.FromResult(_hidden.Contains(id) ? null : _store.GetValueOrDefault(id));
 
@@ -45,6 +48,17 @@ public class FakeLeadRepository : ILeadRepository
     public void Add(Lead entity) => Seed(entity);
 
     public void Update(Lead entity) => _store[entity.Id] = entity;
+
+    public Task<IReadOnlyDictionary<Guid, IReadOnlyList<Guid>>> GetCoatingRefIdsByLeadIdsAsync(
+        IReadOnlyCollection<Guid> leadIds,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyDictionary<Guid, IReadOnlyList<Guid>>>(
+            _coatings
+                .Where(x => leadIds.Contains(x.LeadId))
+                .GroupBy(x => x.LeadId)
+                .ToDictionary(g => g.Key, g => (IReadOnlyList<Guid>)g.Select(x => x.CoatingRefId).ToList()));
+
+    public void AddCoatings(IEnumerable<LeadCoating> coatings) => _coatings.AddRange(coatings);
 
     private IEnumerable<Lead> Visible() =>
         _store.Values

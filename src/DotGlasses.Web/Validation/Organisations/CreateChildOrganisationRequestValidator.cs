@@ -11,9 +11,10 @@ public class CreateChildOrganisationRequestValidator : AbstractValidator<CreateC
 {
     public CreateChildOrganisationRequestValidator(IOrganisationAdminService organisationAdminService)
     {
-        RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
-        RuleFor(x => x.Level).IsInEnum();
-        RuleFor(x => x.Kind).MaximumLength(100);
+        RuleFor(x => x.Name)
+            .NotEmpty().WithMessage("Enter a name for the organisation.")
+            .MaximumLength(200).WithMessage("Keep the name to 200 characters or fewer.");
+        RuleFor(x => x.Level).IsInEnum().WithMessage("Choose a level from the list.");
 
         RuleFor(x => x).CustomAsync(async (request, context, cancellationToken) =>
         {
@@ -21,13 +22,13 @@ public class CreateChildOrganisationRequestValidator : AbstractValidator<CreateC
             var parent = nodes.FirstOrDefault(n => n.Id == request.ParentId);
             if (parent is null)
             {
-                context.AddFailure(nameof(request.ParentId), "ParentId must reference an existing, visible organisation node.");
+                context.AddFailure(nameof(request.ParentId), "The organisation this one sits under can't be found. Reload the page and try again.");
                 return;
             }
 
             if (!organisationAdminService.IsValidChildLevel(parent.Level, request.Level))
             {
-                context.AddFailure(nameof(request.Level), $"{request.Level} is not a valid child level under a {parent.Level} node.");
+                context.AddFailure(nameof(request.Level), "That level can't sit directly under this organisation. Choose another level.");
             }
         });
     }

@@ -9,7 +9,7 @@ namespace DotGlasses.Domain.Enums;
 /// <b>6 is retired, not free.</b> It was "Lens strength" — curated labels a lens set lens pointed
 /// at — until ADR-0007 made a lens set lens a lens power (2026-09-28). The value is never reused:
 /// the column is a plain integer, so a reused number would silently give any stray row or cached
-/// payload that still says 6 a new meaning. The next new category takes 8.
+/// payload that still says 6 a new meaning. The next new category takes 9.
 /// </summary>
 public enum ReferenceDataCategory
 {
@@ -26,4 +26,10 @@ public enum ReferenceDataCategory
     /// prescription and on a lens set lens alike; single vision is inferred and is not an item
     /// here (ADR-0007).</summary>
     LensType = 7,
+
+    /// <summary>The colours children's frames come in — their own list with their own pictures.
+    /// <see cref="FrameColour"/> (4) is the adult list. A Sale's colour comes from the list that
+    /// matches its "children's frame" tick; Sales recorded before the split keep the id they
+    /// have.</summary>
+    FrameColourChild = 8,
 }

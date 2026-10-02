@@ -65,7 +65,7 @@ public class RoleResolutionTests(PostgresContainerFixture postgres)
         });
         await context.SaveChangesAsync();
 
-        var service = new UserAdminService(userManager, context, new FakeCurrentUserContext
+        var service = new UserAdminService(userManager, context, Microsoft.Extensions.Logging.Abstractions.NullLogger<UserAdminService>.Instance, new FakeCurrentUserContext
         {
             ScopePaths = [HierarchyPath.Parse(OrganisationSeedConfiguration.DgiPath)],
         });

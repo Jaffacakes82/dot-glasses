@@ -103,6 +103,52 @@ machine" rule.
   that the tests cover, but the Blazor UI has no test project and no coding session has run it.
   Each ticket's `## Comments` holds a manual checklist
   (`.scratch/lens-power-and-lens-sets/issues/09-field-app-lens-choice.md`, `…/10-field-app-coating-choices.md`).
+- **Two recording-form behaviours are unverified in a browser** (Spec D,
+  `.scratch/recording-forms-and-wording/`). The question order on all three forms, the Test-to-Lead
+  referral prefill, the Lead's price question and a Sale saving with no extra step were checked in
+  a local browser on 2026-10-01. Still to do by hand: reopen a Lead and a Sale from Failed records
+  and confirm the referral block and the price answer come back filled in; and switch location
+  with the device offline ("You're offline. Connect to switch location.") and with the server
+  failing ("Couldn't switch location. Try again."), in Settings and on the outlet picker.
+- **The forgot-password email's link is unverified end to end by a person** (Spec C,
+  `.scratch/user-and-org-management/issues/09-field-app-forgot-password-screen.md`). In a local
+  browser on 2026-10-01 the Field App's link, screen, blank-field message and the one answer for a
+  real and a made-up address were checked. Still to do by hand, on an environment with real email:
+  open the emailed link, set a password, and confirm it ends at the Field App's sign-in page; and
+  try the screen with the device offline. Until the sender moves off Azure's shared domain the
+  email may land in spam — an admin's Reset password button is the fallback.
+- **Spec F's Field App changes were checked once, in a local browser, by a coding session**
+  (`.scratch/custom-orders-and-reporting/`, 2026-10-02): the Lead form's order tick (Custom only,
+  last in the lens section), the swap from coating preference to the coating selector, the
+  messages for an incomplete ordering Lead, a saved ordering Lead, its badge in the Leads list,
+  the read-only lens when converting it, the match prompt for a customer whose Lead has an order,
+  and the converted order in the Admin Portal queue. Still to do by hand: reopen an ordering Lead
+  and a locked Sale from Failed records (a Failed Sale opens unlocked when the device is offline
+  and can't read the Lead — the server still refuses a mismatch); watch the Leads badge change
+  after an order is advanced; and all of it on a phone-sized screen. The tickets' `## Comments`
+  hold the checklists.
+- **Reporting figures that may not tally on staging** (Spec F). Two mismatches were found by
+  reading the code and are fixed: a referral counted on each record of one customer's journey, and
+  list conversion above 100%. Others can only be named once real data is looked at. Three things
+  that will look odd and are correct: a row with Sales and no Tests shows 0% conversion; "Custom
+  orders" counts by the day the order was placed, so an order placed from a Lead last month and
+  paid for this month is in last month's figure; and the tiles' links to Event History and Custom
+  Orders don't carry the Country or Retailer filter, so those screens list more.
+- **The Organisations screen's reactivate was not retested by hand.** The reported glitch (the
+  page left in an odd state after Reactivate) is covered by an automated test that reads the page
+  after reactivating a group; nobody has clicked through it in a browser since.
+- **Before go-live: the children's frame colours and the adult pictures are DGI's to enter.** The
+  child frame colour list ships with "Other" only, so until DGI adds the colours a children's frame
+  can only be sold as "Other". The six adult colours still point at pictures on the online shop's
+  website: they display online, are not copied onto devices (so they don't show offline), and break
+  if that site changes. DGI uploads each one on Reference Data to fix both.
+- **Frame pictures offline were checked in a browser online only** (Spec E). On 2026-10-01 an
+  uploaded picture was seen stored on the device and rendered from that copy, and a replaced
+  picture was picked up. Opening the Sale form with the device actually offline has not been done.
+- **Uploaded pictures in a deployed environment are untested.** The upload, serving and delete were
+  exercised against the local storage emulator. The first deploy should confirm the Admin Portal's
+  identity can write to the `reference-data-images` container (AppHost grants it through the
+  container reference).
 - **Before go-live: production has no active lens sets until DGI builds them.** The lens-set
   redesign retired every earlier set and created none, so the Field App offers only *Custom
   prescription* at every outlet until an admin builds real lens sets on Lens Sets and assigns them.
@@ -111,10 +157,6 @@ machine" rule.
 
 ## Deliberately deferred (not started, not forgotten)
 
-- **No upload feature for reference-data images.** `ReferenceDataItem.ImageUrl` is a plain
-  admin-pasted URL (Frame colours only). The blob storage *infrastructure* to build a real upload
-  against already exists (`AppHost`'s `reference-data-images` container, RBAC-wired to Web's
-  identity) — building the actual upload UI/API is separate, unstarted application-layer work.
 - **No frame-coverage question anywhere.** `Sale.FrameCoverage` is kept on the record but is not
   editable from any screen — the Field App's dropdown was removed at the reviewer's explicit
   request (commit `3fdf9be`, it was reading as "you're only selling eye frames"), and the Admin
@@ -144,9 +186,9 @@ machine" rule.
   the body" is not a safe shortcut.
 - **Location switching only works online.** `POST switch-org` re-issues a JWT, which is inherently
   a server round trip — there's no such thing as an offline-issued, server-verifiable JWT. Settings
-  and the outlet picker show the same generic "check your connection" message for *any* failure,
-  not one specific to being offline. Not fixable client-side; a clearer message is the honest fix,
-  not yet done.
+  and the outlet picker say so when the device is offline ("You're offline. Connect to switch
+  location.") and say "Couldn't switch location. Try again." for any other failure. Not fixable
+  client-side.
 - **Offline sync conflict resolution is last-write-wins** (idempotent upsert keyed on the
   client-generated GUID) — no version/ETag column exists. Don't build anything that assumes
   ordering or conflict detection until this is addressed.
@@ -171,12 +213,40 @@ machine" rule.
   locked against each other, so two racing requests can each see one assignment left (of two) and
   both proceed. Accepted as unlikely (ticket 03); revisit if it's ever seen in practice.
 
-- **No history of who changed a user's role or org assignments.** These changes take effect on the
-  user's next request and nothing in the portal shows who made them. The Edit user page (CEO
-  feedback ticket 03, not yet built) is specified to write an application log entry per change and
-  no more; a change-history screen was left out as its own piece of work.
+- **No history screen for who changed a user's role, name or org assignments.** These changes take
+  effect on the user's next request. Each one writes an application log entry (who made it, on
+  whom, what changed) from the Edit user page and the Organisations screen alike; nothing in the
+  portal shows them. A change-history screen was left out as its own piece of work.
+
+- **Forgot password: three hardening gaps found in review (2026-10-02), none fixed.** (1) The
+  answer is the same for every address but the *time* is not: an address that gets an email waits
+  on the email send, one that doesn't returns after one query, so response time can still be used
+  to probe for accounts. The fix is to send off the request path. (2) The emailed link's host is
+  taken from the request (`LinkGenerator.GetUriByAction`) and `AllowedHosts` is `*`, so the only
+  thing stopping a forged `Host` header from putting another site's address in a real reset email
+  is the Container App's ingress refusing unknown hosts — which nobody has verified. Pin
+  `AllowedHosts` or build the link from configuration. The invite email is built the same way.
+  (3) After a Field App reset, the redirect goes to `FieldApp:BaseUrlByAdminHost`'s entry for the
+  host the request arrived on and falls back to `http://localhost:5253/` for any other — so a
+  reset completed through the Container App's raw `azurecontainerapps.io` address ends at
+  localhost.
+- **Two different Sales converting the same Lead at the same instant can both be saved.** Each
+  passes the "already converted?" check before the other commits; the Lead's back-link, and its
+  custom order if it has one, then point at whichever saved last, and the other Sale stands
+  unlinked. `SaleService` refuses the second in every ordinary case; closing the last gap needs a
+  concurrency token on `Lead`. Needs the Field App and the Admin Portal converting one Lead within
+  milliseconds.
 
 ## Real, visible interim gaps (the system tells the user, doesn't hide it)
+
+- **A frame colour picture over 8 MB is refused with a bare error page**, not the "keep it under
+  1 MB" message every other oversize file gets: the request size limit rejects it before the
+  controller runs.
+- **Replacing a frame colour's picture can leave the old file behind.** The item is saved first
+  and the old blob deleted after; if that delete fails the admin sees an error for a change that
+  did save, and the old file stays in storage until someone removes it.
+- **The Field App says "You're offline" for any failed location switch it can't get an answer
+  to** — including the server being down. It can't tell the two apart from a failed request.
 
 - **`FrameColour`'s seeded "Other" row** is an assumption made while seeding reference data, not
   explicitly confirmed against real DGI usage — the original call named exactly 6 fixed colours. The

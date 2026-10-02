@@ -108,7 +108,7 @@ public class SaveLensRequestValidator : AbstractValidator<SaveLensRequest>
             }
             else if (label.Length > LabelMaxLength)
             {
-                Fail(nameof(request.Label), $"A label can be at most {LabelMaxLength} characters.");
+                Fail(nameof(request.Label), $"Keep the label to {LabelMaxLength} characters or fewer.");
             }
             else if (others.Any(o => string.Equals(o.Label.Trim(), label, StringComparison.OrdinalIgnoreCase)))
             {
@@ -125,7 +125,7 @@ public class SaveLensRequestValidator : AbstractValidator<SaveLensRequest>
             FailAll(lensTypeFailures);
             if (otherText is { Length: > OtherTextMaxLength })
             {
-                Fail(nameof(request.LensTypeOtherText), $"{OtherTextShown} can be at most {OtherTextMaxLength} characters.");
+                Fail(nameof(request.LensTypeOtherText), $"Keep the other lens type to {OtherTextMaxLength} characters or fewer.");
             }
 
             // Only asked of a valid power and lens type: a duplicate of something that is itself
@@ -169,7 +169,7 @@ public class SaveLensRequestValidator : AbstractValidator<SaveLensRequest>
                 }
                 else if (!coatingIds.Contains(t) || !coatingIds.Contains(p))
                 {
-                    Fail(key, "Both coatings in a pairing must be ticked for this lens.");
+                    Fail(key, "Tick both coatings for this lens, or remove the pairing.");
                 }
                 else if (referenceData.AreCoatingsExcluded(t, p))
                 {

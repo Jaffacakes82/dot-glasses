@@ -7,7 +7,7 @@ which returns the person to the app they came from.
 
 **Blocked by:** None
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **Model:** Opus 5.5 — an anonymous endpoint that must not leak or be abusable.
 
@@ -15,27 +15,27 @@ which returns the person to the app they came from.
 
 ## Acceptance criteria
 
-- [ ] An anonymous Admin Portal page and an anonymous `api/v1/auth` endpoint, both taking an email
+- [x] An anonymous Admin Portal page and an anonymous `api/v1/auth` endpoint, both taking an email
       address and both always answering "If that email has an account, we've sent a link."
-- [ ] An email is sent for an Active or Invited account. None for a Suspended account, an unknown
+- [x] An email is sent for an Active or Invited account. None for a Suspended account, an unknown
       address, or an account emailed within the last five minutes. The last-sent time is stored on
       the user row (a migration), so the limit holds across replicas.
-- [ ] A "Forgot password?" link on the Admin Portal's sign-in page.
-- [ ] A new `IEmailSender` method with the subject "Reset your Dot Glasses password" and its own
+- [x] A "Forgot password?" link on the Admin Portal's sign-in page.
+- [x] A new `IEmailSender` method with the subject "Reset your Dot Glasses password" and its own
       wording, saying the link works for 24 hours. `AzureEmailSender` and `LoggingEmailSender`
       both implement it; neither throws.
-- [ ] The link works for one day and stops working once the password has been changed. Confirm
+- [x] The link works for one day and stops working once the password has been changed. Confirm
       the token lifetime is one day (set it explicitly if it relies on a framework default).
-- [ ] The email is sent after the last-sent time is committed, never before (CLAUDE.md: anything
+- [x] The email is sent after the last-sent time is committed, never before (CLAUDE.md: anything
       an operation emits is produced after the commit).
-- [ ] An Invited account that never set a password gets the email, and the link lets them set
+- [x] An Invited account that never set a password gets the email, and the link lets them set
       one.
-- [ ] The link opens the existing set-password page and carries which app asked. After a
+- [x] The link opens the existing set-password page and carries which app asked. After a
       successful reset the page redirects to that app's sign-in; the Field App's address comes from
       configuration, never from the link itself.
-- [ ] The link is never rendered on screen or returned by the API.
-- [ ] A reset doesn't unsuspend anyone.
-- [ ] Web.Tests cover: identical responses for a known, unknown and suspended address; one email
+- [x] The link is never rendered on screen or returned by the API.
+- [x] A reset doesn't unsuspend anyone.
+- [x] Web.Tests cover: identical responses for a known, unknown and suspended address; one email
       for an active account and for an invited one; none for a suspended one; none on a second
       request within five minutes; a link used once no longer works; the redirect target for each
       app.
@@ -46,3 +46,19 @@ which returns the person to the app they came from.
 - The redirect target must be a fixed, configured address: an open redirect on a password page is
   a phishing aid.
 - Skills: `/tdd`, then `/code-review`.
+
+## Comments
+
+**2026-10-01 — built.** `IPasswordResetService`/`PasswordResetService`, `PasswordResetRequester`,
+`AccountController.ForgotPassword`, `POST api/v1/auth/forgot-password`,
+`IEmailSender.SendPasswordResetAsync`, migration `AddPasswordResetEmailSentAt`.
+
+- The five-minute limit is one conditional `UPDATE` on the account's last-sent time, so exactly one
+  of any simultaneous requests sends, on any replica; the token is minted and the email sent after
+  it commits.
+- The token lifetime is set explicitly to one day in `Program.cs`.
+- The Field App's address is `FieldApp` in `appsettings.json`, looked up by the Admin Portal host
+  the request arrived on (one build serves both environments), with a localhost fallback. The link
+  carries only `app=field`.
+
+Tests: `ForgotPasswordTests` with a recording `IEmailSender`.

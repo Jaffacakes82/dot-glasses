@@ -128,10 +128,9 @@
         _error = null;
         try
         {
-            var succeeded = await LocationClient.SwitchOrgAsync(orgNodeId);
-            if (!succeeded)
+            _error = await LocationClient.SwitchOrgAsync(orgNodeId);
+            if (_error is not null)
             {
-                _error = "Couldn't set that as your active location — check your connection and try again.";
                 return;
             }
 

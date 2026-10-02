@@ -72,7 +72,7 @@ public class CreateLensSetOwningOrgTests(AdminPortalFactory factory) : IClassFix
             token, ("Name", name), ("OwningOrgNodeId", outsideCountryId.ToString())));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains("Choose which org this lens set belongs to.", await response.Content.ReadAsStringAsync());
+        Assert.Contains("Choose which organisation this lens set belongs to.", await response.Content.ReadAsStringAsync());
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DotGlassesDbContext>();

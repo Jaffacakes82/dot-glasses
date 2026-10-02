@@ -6,7 +6,7 @@ answer saves, and the answer is stored on the Lead.
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **Model:** Sonnet 5.5.
 
@@ -17,21 +17,21 @@ endpoint; the form by hand.
 
 ## Acceptance criteria
 
-- [ ] The confirmation step after Save is removed from the Lead and Sale forms.
-- [ ] The Lead form has "Has the customer been told the price?" with Yes and No buttons, straight
+- [x] The confirmation step after Save is removed from the Lead and Sale forms.
+- [x] The Lead form has "Has the customer been told the price?" with Yes and No buttons, straight
       after "Reason not purchased".
-- [ ] `CreateLeadRequest`, `LeadDto` and `Lead` gain a nullable Yes/No for it, with a migration.
+- [x] `CreateLeadRequest`, `LeadDto` and `Lead` gain a nullable Yes/No for it, with a migration.
       Existing Leads have no answer.
-- [ ] A rule in `ConsultationRules.Check(CreateLeadRequest, …)` requires an answer, keyed on the
+- [x] A rule in `ConsultationRules.Check(CreateLeadRequest, …)` requires an answer, keyed on the
       request property's name. Yes and No both pass.
-- [ ] The Field App's pre-submit check uses the same rule and shows the message under the
+- [x] The Field App's pre-submit check uses the same rule and shows the message under the
       buttons.
-- [ ] Nothing carries into a Sale: `SaleAssembly.Seed` ignores it, and `SaleAssemblyTests` still
+- [x] Nothing carries into a Sale: `SaleAssembly.Seed` ignores it, and `SaleAssemblyTests` still
       passes with no new entry.
-- [ ] A Lead reopened from Failed records pre-fills the answer when the queued payload has one.
-- [ ] Rule tests: no answer refused; Yes accepted; No accepted. Web.Tests: a Lead with no answer
+- [x] A Lead reopened from Failed records pre-fills the answer when the queued payload has one.
+- [x] Rule tests: no answer refused; Yes accepted; No accepted. Web.Tests: a Lead with no answer
       is a 400 keyed on the property; a Lead with either answer is created and returns it.
-- [ ] Manual checklist recorded in Comments: a Sale saves with no extra step; the Lead question
+- [x] Manual checklist recorded in Comments: a Sale saves with no extra step; the Lead question
       appears, blocks when unanswered and saves on either answer.
 
 ## Notes
@@ -39,3 +39,19 @@ endpoint; the form by hand.
 - Spec: `../spec.md` — user stories 7–9; "Price awareness".
 - The "Aware of price" column on Event History is Spec F, ticket 05.
 - Skills: `/tdd`, then `/code-review`.
+
+## Comments
+
+**2026-10-01 — built.** `CustomerToldPrice` (nullable Yes/No) is on `CreateLeadRequest`, `LeadDto`
+and `Lead`, with migration `AddLeadCustomerToldPrice`. The rule's message is "Choose Yes or No for
+"Has the customer been told the price?".", keyed on `CustomerToldPrice`. The step after Save is gone
+from both forms; the Sale's existing-Lead prompt now saves on either answer.
+
+Manual checklist (local browser, 2026-10-01):
+
+- [x] A Sale saves with no extra step (Custom prescription, new customer: Save went straight home).
+- [x] The Lead question appears after "Reason not purchased" and blocks Save when unanswered, with
+      the message under the buttons.
+- [x] A Lead saves with "No" chosen.
+- [ ] A Lead saved with "Yes", and a Lead reopened from Failed records showing its answer. Not
+      checked in a browser (both answers are covered over HTTP by `RecordingFormApiTests`).

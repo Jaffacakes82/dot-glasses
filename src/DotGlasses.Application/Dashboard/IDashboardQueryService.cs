@@ -1,44 +1,38 @@
 namespace DotGlasses.Application.Dashboard;
 
 /// <summary>Read-only aggregate backing the Admin Portal's MI Reporting Dashboard. Hierarchy
-/// scoping is automatic (Test/Lead/Sale/OrganisationNode all implement IHierarchyScoped), so a
-/// single GetAsync just needs to query normally — same insight as Event History/Custom Orders.
-/// Rows attributed to an OrganisationNode.IsTrainingOrg subtree are explicitly excluded (per
-/// OrganisationNode's own doc comment: "excluded from MI dashboards/reporting via an explicit
-/// query condition, not a global filter").
+/// scoping is automatic (Test/Lead/Sale/CustomOrder/OrganisationNode all implement
+/// IHierarchyScoped), so GetAsync just needs to query normally — same insight as Event
+/// History/Custom Orders. Rows attributed to an OrganisationNode.IsTrainingOrg subtree are
+/// explicitly excluded (per OrganisationNode's own doc comment: "excluded from MI
+/// dashboards/reporting via an explicit query condition, not a global filter").
 ///
-/// Deliberately does NOT include a "distribution by retail-point type" tile — no such concept
-/// exists anywhere in the domain (OrganisationNode.Kind is a free-text display label with no
-/// fixed taxonomy behind it), and the design mockup's Physical/Mobile Agent/Outreach categories
-/// were never confirmed with the user. Deliberately has no filters or a sales-vs-conversion sort
-/// toggle either — top-N lists are a fixed sort by sales volume (both were explicit 2026-08-05
-/// scope decisions, see CLAUDE.md).</summary>
+/// The figures themselves are DashboardCalculator's; this loads what the caller can see and
+/// works out which Countries and Retailers they can filter by.
+///
+/// Deliberately does NOT include a "distribution by retail-point type" tile or filter — no such
+/// concept exists anywhere in the domain.</summary>
 public interface IDashboardQueryService
 {
-    /// <summary>fromUtc/toUtcExclusive filter every aggregate (Tests/Leads/Sales) by
-    /// CreatedAtUtc; either or both may be null for an open-ended/all-time range. The rolling
-    /// 6-week ConversionTrendPercent bucket is unaffected by the range — it always covers the
-    /// most recent 6 real-time weeks, since a "trend over time" widget doesn't make sense
-    /// re-scoped to an arbitrary custom window.</summary>
-    Task<DashboardSnapshot> GetAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, CancellationToken cancellationToken = default);
+    /// <summary>The date range filters every aggregate by when the record was made (a custom
+    /// order: when it was placed); either end may be null. The Country and Retailer narrow every
+    /// figure, the trend included. The rolling 6-week trend is unaffected by the date range — it
+    /// always covers the most recent 6 real-time weeks, since a "trend over time" widget doesn't
+    /// make sense re-scoped to an arbitrary custom window.</summary>
+    Task<DashboardSnapshot> GetAsync(DashboardFilter filter, CancellationToken cancellationToken = default);
 }
 
+/// <summary>The figures, plus what the two organisation filters can offer this caller: only
+/// Countries and Retailers their scope contains. HasNoRetailerOption is true when some retail
+/// point they can see hangs directly off a Country.</summary>
 public record DashboardSnapshot(
-    int PendingLeads,
-    int TotalTests,
-    int StandardSales,
-    int CustomOrders,
-    double TestToSaleConversionPercent,
-    double NeededToSaleConversionPercent,
-    int ReferralsLogged,
-    /// <summary>Test-to-sale conversion %, one rolling 7-day bucket per entry, oldest first —
-    /// 6 buckets covering the last 42 days.</summary>
-    IReadOnlyList<int> ConversionTrendPercent,
-    int GenderMalePercent,
-    int GenderFemalePercent,
-    IReadOnlyList<DashboardRankedEntry> TopOutlets,
-    IReadOnlyList<DashboardRankedEntry> TopRetailers,
-    IReadOnlyList<DashboardRankedEntry> TopCountries,
-    IReadOnlyList<DashboardRankedEntry> TopTechnicians);
+    DashboardFigures Figures,
+    IReadOnlyList<DashboardOrgOption> Countries,
+    IReadOnlyList<DashboardOrgOption> Retailers,
+    bool HasNoRetailerOption);
 
-public record DashboardRankedEntry(string Name, int Sales, double ConversionPercent);
+public record DashboardOrgOption(Guid Id, string Name);
+
+/// <summary>One row of a "Top performing" list. ConversionPercent is, of the Tests recorded
+/// under this name, the share that reached a Sale through a Lead — never above 100.</summary>
+public record DashboardRankedEntry(string Name, int Tests, int Leads, int Sales, double ConversionPercent);

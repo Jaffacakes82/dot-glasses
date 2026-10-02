@@ -116,6 +116,9 @@ public class AccessAuditTests(AccessAuditFixture fixture) : IClassFixture<Access
         new("Portal.Account.Login POST", _ => "/Account/Login", Expect.Open, Expect.Open,
             (_, _) => [("UserName", "nobody@test.local"), ("Password", "not-the-password")]),
         new("Portal.Account.AccessDenied GET", _ => "/Account/AccessDenied", Expect.Open, Expect.Open),
+        new("Portal.Account.ForgotPassword GET", _ => "/Account/ForgotPassword", Expect.Open, Expect.Open),
+        new("Portal.Account.ForgotPassword POST", _ => "/Account/ForgotPassword", Expect.Open, Expect.Open,
+            (_, _) => [("Email", "nobody@test.local")]),
         new("Portal.Account.SetPassword GET", _ => "/Account/SetPassword?userId=x&token=y", Expect.Open, Expect.Open),
         new("Portal.Account.SetPassword POST", _ => "/Account/SetPassword", Expect.Open, Expect.Open,
             (_, _) => [("UserId", Guid.NewGuid().ToString()), ("Token", "not-a-token"), ("Password", "An0ther!Passw0rd"), ("ConfirmPassword", "An0ther!Passw0rd")]),
@@ -138,11 +141,11 @@ public class AccessAuditTests(AccessAuditFixture fixture) : IClassFixture<Access
             (_, _) => [("id", KenyaRetailPointId.ToString()), ("value", "true")],
             Written: (_, _, db) => db.OrganisationNodes.IgnoreQueryFilters().AnyAsync(o => o.Id == KenyaRetailPointId && o.IsTrainingOrg)),
         // The escalation that matters most: a caller assigning *themselves* somewhere.
-        new("Portal.Organisations.AssignUser POST", _ => "/Organisations/AssignUser", Expect.Denied, Expect.Denied,
-            (f, c) => [("orgNodeId", f.SiblingOutletId.ToString()), ("userId", c.Account.UserId.ToString())],
+        new("Portal.Organisations.AssignUsers POST", _ => "/Organisations/AssignUsers", Expect.Denied, Expect.Denied,
+            (f, c) => [("orgNodeId", f.SiblingOutletId.ToString()), ("userIds", c.Account.UserId.ToString())],
             Written: (f, c, db) => db.UserOrgAssignments.AnyAsync(a => a.UserId == c.Account.UserId && a.OrgNodeId == f.SiblingOutletId)),
-        new("Portal.Organisations.AssignUser POST", _ => "/Organisations/AssignUser", Expect.Denied, Expect.Denied,
-            (f, _) => [("orgNodeId", KenyaRetailPointId.ToString()), ("userId", f.OutOfScopeTargetUserId.ToString())],
+        new("Portal.Organisations.AssignUsers POST", _ => "/Organisations/AssignUsers", Expect.Denied, Expect.Denied,
+            (f, _) => [("orgNodeId", KenyaRetailPointId.ToString()), ("userIds", f.OutOfScopeTargetUserId.ToString())],
             Written: (f, _, db) => db.UserOrgAssignments.AnyAsync(a => a.UserId == f.OutOfScopeTargetUserId && a.OrgNodeId == KenyaRetailPointId)),
         new("Portal.Organisations.UnassignUser POST", _ => "/Organisations/UnassignUser", Expect.Denied, Expect.Denied,
             (f, _) => [("orgNodeId", KenyaRetailPointId.ToString()), ("userId", f.InScopeTargetUserId.ToString())],
@@ -198,6 +201,11 @@ public class AccessAuditTests(AccessAuditFixture fixture) : IClassFixture<Access
         new("Portal.UserDirectory.ChangeRole POST", _ => "/UserDirectory/ChangeRole", Expect.Denied, Expect.Denied,
             (f, _) => [("id", f.InScopeTargetUserId.ToString()), ("role", RoleNames.Admin)],
             Written: (f, _, db) => db.UserRoles.AnyAsync(ur => ur.UserId == f.InScopeTargetUserId && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == RoleNames.Admin))),
+        // The Edit user page is an Admin's: neither caller reaches it, to look or to save.
+        new("Portal.UserDirectory.Edit GET", f => $"/UserDirectory/Edit/{f.InScopeTargetUserId}", Expect.Denied, Expect.Denied),
+        new("Portal.UserDirectory.Edit POST", f => $"/UserDirectory/Edit/{f.InScopeTargetUserId}", Expect.Denied, Expect.Denied,
+            (f, _) => [("FullName", "Renamed By The Audit"), ("LoadedFullName", ""), ("Role", RoleNames.Admin), ("LoadedRole", RoleNames.User), ("OrgNodeIds", f.SiblingOutletId.ToString())],
+            Written: (f, _, db) => db.Users.AnyAsync(u => u.Id == f.InScopeTargetUserId && u.FullName == "Renamed By The Audit")),
         // ...and a caller promoting themselves.
         new("Portal.UserDirectory.ChangeRole POST", _ => "/UserDirectory/ChangeRole", Expect.Denied, Expect.Denied,
             (_, c) => [("id", c.Account.UserId.ToString()), ("role", RoleNames.Admin)]),
@@ -206,8 +214,8 @@ public class AccessAuditTests(AccessAuditFixture fixture) : IClassFixture<Access
         new("Portal.CustomOrders.Index GET", _ => "/CustomOrders", Expect.Denied, Expect.Denied),
         new("Portal.CustomOrders.Export GET", _ => "/CustomOrders/Export", Expect.Denied, Expect.Denied),
         new("Portal.CustomOrders.AdvanceStatus POST", _ => "/CustomOrders/AdvanceStatus", Expect.Denied, Expect.Denied,
-            (f, _) => [("saleId", f.Own.SaleId.ToString())],
-            Written: (f, _, db) => db.Sales.IgnoreQueryFilters().AnyAsync(s => s.Id == f.Own.SaleId && s.FulfilmentStatus != Domain.Enums.FulfilmentStatus.Submitted)),
+            (f, _) => [("orderId", f.Own.OrderId.ToString())],
+            Written: (f, _, db) => db.CustomOrders.IgnoreQueryFilters().AnyAsync(o => o.Id == f.Own.OrderId && o.Status != Domain.Enums.FulfilmentStatus.Submitted)),
 
         new("Portal.Catalogues.Index GET", _ => "/Catalogues", Expect.Denied, Expect.Denied),
         new("Portal.Catalogues.Details GET", _ => $"/Catalogues/Details/{ExampleLensSets.SixLensSetId}", Expect.Denied, Expect.Denied),
@@ -233,6 +241,8 @@ public class AccessAuditTests(AccessAuditFixture fixture) : IClassFixture<Access
         new("Portal.Catalogues.UnassignCatalogue POST", _ => "/Catalogues/UnassignCatalogue", Expect.Denied, Expect.Denied,
             (_, _) => [("catalogueId", ExampleLensSets.SixLensSetId.ToString()), ("orgNodeId", OrganisationSeedConfiguration.DgiId.ToString())]),
 
+        // Anonymous by design (the Field App shows frame colour pictures), and holds nothing scoped.
+        new("Portal.ReferenceDataPictures.Get GET", _ => "/reference-data/pictures/" + new string('0', 32) + ".png", Expect.NotFound, Expect.NotFound),
         new("Portal.ReferenceData.Index GET", _ => "/ReferenceData", Expect.Denied, Expect.Denied),
         new("Portal.ReferenceData.Create POST", _ => "/ReferenceData/Create", Expect.Denied, Expect.Denied,
             (_, _) => [("Category", "Occupation"), ("Label", "Added by the audit")],
@@ -258,6 +268,8 @@ public class AccessAuditTests(AccessAuditFixture fixture) : IClassFixture<Access
     [
         new("Api.Auth.Login POST", _ => "api/v1/auth/login", Expect.Open, Expect.Open,
             (_, _) => new LoginRequest { UserName = "nobody@test.local", Password = "not-the-password" }),
+        new("Api.Auth.ForgotPassword POST", _ => "api/v1/auth/forgot-password", Expect.Open, Expect.Open,
+            (_, _) => new ForgotPasswordRequest { Email = "nobody@test.local" }),
         new("Api.Auth.MyOrgs GET", _ => "api/v1/auth/my-orgs", Expect.NoRows, Expect.NoRows),
         // A retail point the caller isn't directly assigned to, then the org (b) *is* assigned to.
         new("Api.Auth.SwitchOrg POST", _ => "api/v1/auth/switch-org", Expect.BadRequest, Expect.BadRequest,

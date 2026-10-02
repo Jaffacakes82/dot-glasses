@@ -47,13 +47,42 @@ public interface IEventHistoryQueryService
 public record EventHistoryResult<T>(IReadOnlyList<T> Rows, int TotalCount);
 
 /// <summary>Name/ConsentGiven are null for a Test row — Tests stay deliberately anonymous (no
-/// name/phone captured at all) and carry no consent concept.</summary>
-public record SaleOrTestEventRow(string Type, bool Custom, string? Name, string Outlet, string Country, DateTimeOffset CreatedAtUtc, bool? ConsentGiven);
+/// name/phone captured at all) and carry no consent concept.
+///
+/// IsTraining marks a row at a training organisation or beneath one — the rows the Dashboard
+/// leaves out, so a reviewer can see why the two screens disagree. Lens is the record's lens
+/// (Sales only on this shape; a Test row has none).</summary>
+public record SaleOrTestEventRow(string Type, bool Custom, string? Name, string Outlet, string Country, DateTimeOffset CreatedAtUtc, bool? ConsentGiven, bool IsTraining = false, EventLens? Lens = null);
+
+/// <summary>What a Sale or Lead recorded about its lens, as Event History shows and exports it.
+/// Range is the lens set's name or "Custom"; null when the record chose no lens range. Each eye
+/// is null when it has no power. Coatings is the coatings' names in one string ("A; B"), empty
+/// when there are none — a string rather than a list so two rows holding the same lens compare
+/// equal, which the list and the export sharing one row shape relies on.</summary>
+public record EventLens(string? Range, EventEyePower? Left, EventEyePower? Right, string? LensType, string Coatings)
+{
+    public static readonly EventLens None = new(null, null, null, null, string.Empty);
+
+    public static string JoinCoatings(IEnumerable<string> names) => string.Join("; ", names);
+}
+
+/// <summary>One eye's lens power. <see cref="Formatted"/> is the one display format a lens power
+/// has (LensPowerValues.FormatLensPower, ADR-0007) — nothing restates it.</summary>
+public record EventEyePower(decimal Sphere, decimal? Cylinder, decimal? Axis, decimal? Add)
+{
+    public string Formatted => DotGlasses.Rules.LensPowers.LensPowerValues.FormatLensPower(Sphere, Cylinder, Axis, Add);
+
+    public static EventEyePower? From(decimal? sphere, decimal? cylinder, decimal? axis, decimal? add) =>
+        sphere is { } value ? new EventEyePower(value, cylinder, axis, add) : null;
+}
 
 /// <summary>Id/ConvertedFlag back the Admin Portal's Leads tab conversion action (Phase 4) — a
 /// row needs its own Lead Id to link to the conversion form, and ConvertedFlag to know whether
-/// to show "Convert to sale" or an already-converted state.</summary>
-public record LeadEventRow(Guid Id, string Name, string PhoneMasked, string Outlet, string Reason, DateTimeOffset CreatedAtUtc, bool ConsentGiven, bool ConvertedFlag);
+/// to show "Convert to sale" or an already-converted state.
+///
+/// CustomerToldPrice is the Lead's answer to "Has the customer been told the price?" — null for a
+/// Lead recorded before the question was asked.</summary>
+public record LeadEventRow(Guid Id, string Name, string PhoneMasked, string Outlet, string Reason, DateTimeOffset CreatedAtUtc, bool ConsentGiven, bool ConvertedFlag, bool IsTraining = false, EventLens? Lens = null, bool? CustomerToldPrice = null);
 /// <summary>Source is "Test"/"Lead"/"Sale" — which entity this referral/treatment was recorded
 /// against, since the same real-world event may be logged at more than one stage.</summary>
-public record ReferralEventRow(string Source, string Outlet, string Country, string Reason, bool TreatedInFacility, DateTimeOffset CreatedAtUtc);
+public record ReferralEventRow(string Source, string Outlet, string Country, string Reason, bool TreatedInFacility, DateTimeOffset CreatedAtUtc, bool IsTraining = false);

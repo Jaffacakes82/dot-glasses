@@ -1,6 +1,6 @@
 # Spec F — Custom orders and reporting
 
-Status: ready-for-agent
+Status: resolved
 Source: wayfinder map `.scratch/ceo-feedback-2026-09-27/` — tickets 11 (ordering a custom lens from
 a lead), 12 (Event History's lens columns and the training-org marker) and 21 (dashboard gaps
 against the demo app). Decision: ADR-0008. Vocabulary: `CONTEXT.md` — **Custom order**, **Coating

@@ -60,7 +60,7 @@
                     <div class="modal fade" id="editRefDataModal-@option.Id" tabindex="-1" aria-hidden="true">
                         <div class="modal-dialog">
                             <div class="modal-content" style="border-radius:var(--radius-md); border:none;">
-                                <form asp-action="Update" method="post">
+                                <form asp-action="Update" method="post" enctype="multipart/form-data">
                                     <input type="hidden" name="Id" value="@option.Id" />
                                     <div class="modal-header">
                                         <h2 class="dg-page-title" style="font-size:20px;">Edit @option.Label</h2>
@@ -74,8 +74,21 @@
                                         @if (list.ShowImageField)
                                         {
                                             <div class="dg-auth-field">
-                                                <label>Image URL</label>
-                                                <input class="form-control" name="ImageUrl" value="@option.ImageUrl" />
+                                                <label>Picture</label>
+                                                @if (!string.IsNullOrEmpty(option.ImageUrl))
+                                                {
+                                                    <img src="@option.ImageUrl" alt="Current picture of @option.Label" style="display:block; width:96px; height:96px; object-fit:contain; margin-bottom:8px; border:1px solid var(--border-default); border-radius:var(--radius-sm);" />
+                                                    <label class="dg-check-row" style="margin-bottom:8px;">
+                                                        <input type="checkbox" name="RemovePicture" value="true" />
+                                                        <span>Remove picture</span>
+                                                    </label>
+                                                }
+                                                else
+                                                {
+                                                    <p class="dg-muted" style="font-size:13px; margin:0 0 8px;">No picture yet.</p>
+                                                }
+                                                <input class="form-control" type="file" name="Picture" accept="image/png,image/jpeg,image/webp" style="padding:8px 12px;" />
+                                                <p style="font-size:12px; color:var(--text-muted); margin:6px 0 0;">@(string.IsNullOrEmpty(option.ImageUrl) ? "PNG, JPEG or WebP, up to 1 MB." : "Choose a file to replace it. PNG, JPEG or WebP, up to 1 MB.")</p>
                                             </div>
                                         }
                                     </div>
@@ -150,7 +163,7 @@
                 </div>
             }
 
-            <form asp-action="Create" method="post">
+            <form asp-action="Create" method="post" enctype="multipart/form-data">
                 <input type="hidden" name="Category" value="@((int)list.Category)" />
                 <div style="display:flex; gap:var(--space-2); margin-bottom:6px;">
                     <input class="form-control" name="Label" placeholder="Add option" />
@@ -158,7 +171,10 @@
                 </div>
                 @if (list.ShowImageField)
                 {
-                    <input class="form-control" name="ImageUrl" placeholder="Image URL (optional)" style="margin-bottom:6px;" />
+                    <label style="display:block; font-size:12px; color:#888; margin-bottom:6px;">
+                        Picture (optional) — PNG, JPEG or WebP, up to 1 MB
+                        <input class="form-control" type="file" name="Picture" accept="image/png,image/jpeg,image/webp" style="margin-top:4px;" />
+                    </label>
                 }
                 <label style="display:flex; align-items:center; gap:6px; font-size:12px; color:#888;">
                     <input type="checkbox" name="IsOtherOption" value="true" disabled="@(list.HasActiveOtherOption ? "disabled" : null)" />

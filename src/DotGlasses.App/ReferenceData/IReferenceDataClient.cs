@@ -39,6 +39,11 @@ public interface IReferenceDataClient
     /// the shared rules' snapshot from. Active items only, because that is all the API returns.</summary>
     IReadOnlyList<ReferenceDataItemDto> AllItems { get; }
 
+    /// <summary>What an image element should load for an item's picture: the copy kept on this
+    /// device when there is one (so it shows offline), otherwise its address, or null when the
+    /// item has no picture. See <see cref="FramePictureCache"/>.</summary>
+    string? PictureSource(ReferenceDataItemDto item);
+
     IReadOnlyList<PresetCatalogueDto> Catalogues { get; }
 
     /// <summary>Coating exclusions (see ADR-0001) — cached the same way as the rest of reference

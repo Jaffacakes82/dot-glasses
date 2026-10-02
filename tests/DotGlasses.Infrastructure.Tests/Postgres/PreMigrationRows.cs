@@ -46,9 +46,11 @@ public static class PreMigrationRows
 
     /// <summary>Any other table's row, for a table the current model no longer maps or maps
     /// differently (lens-power ticket 03 removed LensStrengthCoatingOptions and CoatingPairings, and
-    /// reshaped LensOptions). Every NOT NULL column must be given.</summary>
+    /// reshaped LensOptions). Every NOT NULL column must be given. A column named twice takes the
+    /// later value, so a test's <c>extra</c> can override one of the defaults above.</summary>
     public static async Task InsertAsync(DotGlassesDbContext context, string table, params (string Column, object? Value)[] values)
     {
+        values = values.GroupBy(v => v.Column).Select(g => g.Last()).ToArray();
         var columns = string.Join(", ", values.Select(v => $"\"{v.Column}\""));
         var placeholders = string.Join(", ", values.Select((_, i) => $"{{{i}}}"));
 #pragma warning disable EF1002 // Column and table names are this helper's own literals, never input; values are parameters.

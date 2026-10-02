@@ -20,10 +20,6 @@ public class OrganisationNode : IAuditable, ISoftDeletable, IHierarchyScoped
 
     public OrganisationLevel Level { get; set; }
 
-    /// <summary>Free-text display label only (e.g. "Distributor", "Standalone") — no business
-    /// rule keys off this; only Level does.</summary>
-    public string? Kind { get; set; }
-
     public string HierarchyPath { get; set; } = string.Empty;
 
     /// <summary>Excluded from MI dashboards/reporting via an explicit query condition, not a
@@ -38,4 +34,9 @@ public class OrganisationNode : IAuditable, ISoftDeletable, IHierarchyScoped
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAtUtc { get; set; }
     public string? DeletedBy { get; set; }
+
+    /// <summary>Shared by every organisation deactivated in one action — the one chosen and
+    /// everything active beneath it at the time — so reactivating restores exactly that group and
+    /// leaves alone anything beneath it that was deactivated separately. Null while active.</summary>
+    public Guid? DeactivationGroupId { get; set; }
 }

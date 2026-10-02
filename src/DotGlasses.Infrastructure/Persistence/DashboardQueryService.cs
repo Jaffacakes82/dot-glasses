@@ -1,6 +1,6 @@
 using DotGlasses.Application.Dashboard;
 using DotGlasses.Application.Reporting;
-using DotGlasses.Domain.Entities;
+using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,151 +12,62 @@ namespace DotGlasses.Infrastructure.Persistence;
 /// not a plain scoped OrganisationNodes query — a caller scoped at RetailPoint level can never
 /// see their own Country/Intermediate ancestors via the standard hierarchy filter (it only ever
 /// shows a caller their own subtree), so a plain query would silently resolve every
-/// outlet/retailer/country name to "Unknown" for anyone below Country level. Same bug class
-/// PresetCatalogueQueryService hit earlier this session, see CLAUDE.md. The resolution itself is
-/// OrgTreeLookup's, shared with Event History and Custom Orders rather than reimplemented here, so
-/// all three screens name the same Retailer for the same retail point (docs/adr/0004).</summary>
+/// outlet/retailer/country name to "Unknown" for anyone below Country level. The resolution itself
+/// is OrgTreeLookup's, shared with Event History and Custom Orders rather than reimplemented here,
+/// so all three screens name the same Retailer for the same retail point (docs/adr/0004). The
+/// figures are DashboardCalculator's.</summary>
 public class DashboardQueryService(DotGlassesDbContext dbContext, IUnscopedReportQueryService unscopedReportQueryService) : IDashboardQueryService
 {
-    private const int TopN = 5;
-    private const int TrendBuckets = 6;
-    private static readonly TimeSpan BucketWidth = TimeSpan.FromDays(7);
-
-    public async Task<DashboardSnapshot> GetAsync(DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive, CancellationToken cancellationToken = default)
+    public async Task<DashboardSnapshot> GetAsync(DashboardFilter filter, CancellationToken cancellationToken = default)
     {
-        var orgLookup = new OrgTreeLookup(await unscopedReportQueryService.GetOrganisationNodesUnscopedAsync(cancellationToken));
+        var orgLookup = new OrgTreeLookup(await unscopedReportQueryService.GetOrganisationNodesForReportsAsync(cancellationToken));
 
-        var allTests = (await dbContext.Tests.ToListAsync(cancellationToken))
-            .Where(t => !orgLookup.IsRowUnderTrainingOrg(t.HierarchyPath))
-            .ToList();
-        var tests = allTests.Where(t => InRange(t.CreatedAtUtc, fromUtc, toUtcExclusive)).ToList();
-        var allLeads = (await dbContext.Leads.ToListAsync(cancellationToken))
-            .Where(l => !orgLookup.IsRowUnderTrainingOrg(l.HierarchyPath))
-            .ToList();
-        var leads = allLeads.Where(l => InRange(l.CreatedAtUtc, fromUtc, toUtcExclusive)).ToList();
-        var sales = (await dbContext.Sales.ToListAsync(cancellationToken))
-            .Where(s => !orgLookup.IsRowUnderTrainingOrg(s.HierarchyPath) && InRange(s.CreatedAtUtc, fromUtc, toUtcExclusive))
-            .ToList();
-
-        // Built from allLeads (unfiltered), not the date-filtered leads above — whether a Test
-        // converted is a fact about the Test→Lead→Sale chain regardless of when the resulting
-        // Lead/Sale record was created, so narrowing the date range narrows which Tests are being
-        // measured, not the universe used to determine whether each one converted.
-        var leadsById = allLeads.ToDictionary(l => l.Id);
-
-        bool TestConvertedToSale(Test t) =>
-            t.ConvertedToLeadId is { } leadId && leadsById.TryGetValue(leadId, out var lead) && lead.SaleId is not null;
-
-        var pendingLeads = leads.Count(l => !l.ConvertedFlag);
-        var customOrders = sales.Count(s => s.FulfilmentStatus is not null);
-        var standardSales = sales.Count - customOrders;
-        // "Referred or treated" is captured independently on each of Test/Lead/Sale (2026-09-03)
-        // — no longer tied to Test.Outcome, and the same real-world referral may legitimately be
-        // logged more than once across a converting Test → Lead → Sale journey (each stage counts).
-        var referralsLogged = tests.Count(t => t.ReferredOrTreated) + leads.Count(l => l.ReferredOrTreated) + sales.Count(s => s.ReferredOrTreated);
-
-        var testToSaleConversion = ConversionPercent(tests, TestConvertedToSale);
-        var neededTests = tests.Where(t => t.Outcome == TestOutcome.NeedsGlasses).ToList();
-        var neededToSaleConversion = ConversionPercent(neededTests, TestConvertedToSale);
-
-        var maleCount = tests.Count(t => t.Gender == Gender.Male);
-        var femaleCount = tests.Count(t => t.Gender == Gender.Female);
-        var genderTotal = maleCount + femaleCount;
-        var genderMalePercent = genderTotal == 0 ? 0 : (int)Math.Round(100.0 * maleCount / genderTotal);
-        var genderFemalePercent = genderTotal == 0 ? 0 : 100 - genderMalePercent;
-
-        // Always the real last 6 weeks, not date-range-filtered — see IDashboardQueryService's
-        // doc comment for why a "trend over time" widget stays fixed regardless of the filter.
-        var trend = BuildTrend(allTests, TestConvertedToSale);
+        var tests = await dbContext.Tests.ToListAsync(cancellationToken);
+        var leads = await dbContext.Leads.ToListAsync(cancellationToken);
+        var sales = await dbContext.Sales.ToListAsync(cancellationToken);
+        var orders = await dbContext.CustomOrders.ToListAsync(cancellationToken);
 
         var technicianNames = await dbContext.Users
             .ToDictionaryAsync(u => u.Id, u => string.IsNullOrWhiteSpace(u.FullName) ? u.UserName ?? "—" : u.FullName, cancellationToken);
 
-        return new DashboardSnapshot(
-            pendingLeads,
-            tests.Count,
-            standardSales,
-            customOrders,
-            testToSaleConversion,
-            neededToSaleConversion,
-            referralsLogged,
-            trend,
-            genderMalePercent,
-            genderFemalePercent,
-            RankByKey(sales, tests, s => orgLookup.RowOutletName(s.HierarchyPath), t => orgLookup.RowOutletName(t.HierarchyPath)),
-            // Unlike Outlets, a row that OrgTreeLookup can't honestly name a Retailer/Country for
-            // ("No retailer" — genuinely hangs directly off a Country; "Unknown retailer"/"Unknown
-            // country" — the path isn't in the tree at all) is excluded here rather than ranked
-            // under that fallback string as if it were a real competing entity — a leaderboard
-            // entry reading "No retailer" or "Unknown country" (possibly #1, if it has the most
-            // sales) reads as a real attribution rather than "we can't say." It still counts
-            // toward every other Dashboard number; only these two rankings exclude it. Custom
-            // Orders and Event History deliberately keep showing "No retailer" as a real group
-            // heading — a different kind of screen (a full listing, not a top-N leaderboard) — so
-            // this exclusion is local to these two RankByKey calls, not to OrgTreeLookup itself.
-            RankByKey(
-                sales, tests, s => orgLookup.RowRetailerName(s.HierarchyPath), t => orgLookup.RowRetailerName(t.HierarchyPath),
-                s => orgLookup.RowRetailer(s.HierarchyPath).HasRetailer, t => orgLookup.RowRetailer(t.HierarchyPath).HasRetailer),
-            RankByKey(
-                sales, tests, s => orgLookup.RowCountryName(s.HierarchyPath), t => orgLookup.RowCountryName(t.HierarchyPath),
-                s => orgLookup.RowHasCountry(s.HierarchyPath), t => orgLookup.RowHasCountry(t.HierarchyPath)),
-            RankByKey(sales, tests, s => technicianNames.GetValueOrDefault(s.TechnicianUserId, "—"), t => technicianNames.GetValueOrDefault(t.TechnicianUserId, "—")));
-    }
+        var figures = DashboardCalculator.Calculate(tests, leads, sales, orders, orgLookup, technicianNames, filter, DateTimeOffset.UtcNow);
 
-    private static bool InRange(DateTimeOffset createdAtUtc, DateTimeOffset? fromUtc, DateTimeOffset? toUtcExclusive) =>
-        (fromUtc is null || createdAtUtc >= fromUtc) && (toUtcExclusive is null || createdAtUtc < toUtcExclusive);
+        // What the filters can offer: the scoped (and so active) organisations the caller can
+        // see. A caller below Country level sees no Country node of their own, so the Country of
+        // each organisation they do see is resolved upward through the lookup.
+        var scopedNodes = await dbContext.OrganisationNodes.ToListAsync(cancellationToken);
+        var scopedPaths = scopedNodes.Select(n => (Node: n, Path: HierarchyPath.Parse(n.HierarchyPath))).ToList();
 
-    private static double ConversionPercent<T>(IReadOnlyCollection<T> population, Func<T, bool> converted) =>
-        population.Count == 0 ? 0 : 100.0 * population.Count(converted) / population.Count;
-
-    private static IReadOnlyList<int> BuildTrend(IReadOnlyList<Test> tests, Func<Test, bool> testConvertedToSale)
-    {
-        var now = DateTimeOffset.UtcNow;
-        var buckets = new List<int>();
-
-        for (var i = TrendBuckets - 1; i >= 0; i--)
-        {
-            var bucketEnd = now - i * BucketWidth;
-            var bucketStart = bucketEnd - BucketWidth;
-            var bucketTests = tests.Where(t => t.CreatedAtUtc >= bucketStart && t.CreatedAtUtc < bucketEnd).ToList();
-            buckets.Add((int)Math.Round(ConversionPercent(bucketTests, testConvertedToSale)));
-        }
-
-        return buckets;
-    }
-
-    /// <summary>Groups Sales and Tests by the same key (outlet/retailer/country/technician),
-    /// ranks by sales volume descending, and pairs each with its own conversion % (that key's
-    /// share of Tests that became a Sale) — top 5. isAttributable, when given, drops rows that
-    /// can't be meaningfully grouped by this key (e.g. no Retailer/Country above them) from the
-    /// ranking entirely, rather than grouping them under a fallback label as if it were a real
-    /// competing entity — Outlets/Technicians never pass one, since every row is either a real
-    /// named node or data corruption, both handled by the fallback string itself.</summary>
-    private static IReadOnlyList<DashboardRankedEntry> RankByKey(
-        IReadOnlyList<Sale> sales, IReadOnlyList<Test> tests, Func<Sale, string> saleKey, Func<Test, string> testKey,
-        Func<Sale, bool>? saleIsAttributable = null, Func<Test, bool>? testIsAttributable = null)
-    {
-        if (saleIsAttributable is not null)
-        {
-            sales = sales.Where(saleIsAttributable).ToList();
-        }
-
-        if (testIsAttributable is not null)
-        {
-            tests = tests.Where(testIsAttributable).ToList();
-        }
-
-        var testCountsByKey = tests.GroupBy(testKey).ToDictionary(g => g.Key, g => g.Count());
-
-        return sales.GroupBy(saleKey)
-            .Select(g =>
-            {
-                var testCount = testCountsByKey.GetValueOrDefault(g.Key, 0);
-                var conversion = testCount == 0 ? 0 : 100.0 * g.Count() / testCount;
-                return new DashboardRankedEntry(g.Key, g.Count(), Math.Round(conversion, 1));
-            })
-            .OrderByDescending(e => e.Sales)
-            .Take(TopN)
+        var countries = scopedPaths
+            .Select(n => orgLookup.FindCountry(n.Path))
+            .Where(c => c is not null)
+            .DistinctBy(c => c!.Id)
+            .Select(c => new DashboardOrgOption(c!.Id, c.Name))
+            .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+        // Narrowed to the chosen Country, so the two dropdowns can't be set to contradict each other.
+        var inChosenCountry = scopedPaths
+            .Where(n => filter.CountryId is not { } countryId || orgLookup.FindCountry(n.Path)?.Id == countryId)
+            .ToList();
+
+        // Every retailer/distributor tier the caller can see, plus — resolved upward, as the
+        // Country is — the Retailer over anything they can see, so a retail-point caller is
+        // offered their own.
+        var retailers = inChosenCountry
+            .Where(n => n.Node.Level == OrganisationLevel.Intermediate)
+            .Select(n => new DashboardOrgOption(n.Node.Id, n.Node.Name))
+            .Concat(inChosenCountry
+                .Select(n => orgLookup.ResolveRetailer(n.Path).Node)
+                .Where(r => r is not null)
+                .Select(r => new DashboardOrgOption(r!.Id, r.Name)))
+            .DistinctBy(r => r.Id)
+            .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var hasNoRetailerOption = inChosenCountry.Any(n =>
+            n.Node.Level == OrganisationLevel.RetailPoint && orgLookup.ResolveRetailer(n.Path).Kind == RetailerResolutionKind.NoRetailer);
+
+        return new DashboardSnapshot(figures, countries, retailers, hasNoRetailerOption);
     }
 }

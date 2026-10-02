@@ -3,6 +3,8 @@
     ViewData["Title"] = "Organisations";
     ViewData["SelectedId"] = Model.Selected.Id;
     var addChildLabel = Model.ValidChildLevels.Count == 1 ? Model.ValidChildLevels[0].Label : "sub-organisation";
+    var beneath = Model.Deactivation.OrganisationsBeneath;
+    var people = Model.Deactivation.PeopleAssigned;
 }
 
 @await Html.PartialAsync("_PageHeader", new DotGlasses.Web.Models.PageHeaderViewModel
@@ -13,10 +15,10 @@
 
 <p style="max-width:640px; color:var(--text-muted-2); margin-bottom:var(--space-5);">
     The hierarchy is arbitrary depth — DGI is always the root and Retail Points are always the
-    leaves, but any number of Retailer/Reseller layers can sit between them. For affiliated
-    networks (e.g. a diocese), model one Retailer for the umbrella organisation and give each
-    Retail Point a combined "Name / Location" field. You only see and manage your own node and
-    everything below it.
+    leaves, but any number of Retailer/distributor layers can sit between them. For affiliated
+    networks (e.g. a diocese), model one Retailer/distributor for the umbrella organisation and give
+    each Retail Point a combined "Name / Location" name. You only see and manage your own
+    organisations and everything below them.
 </p>
 
 <div style="display:flex; justify-content:flex-end; margin-bottom:var(--space-4);">
@@ -36,17 +38,13 @@
         }
     </div>
     <div class="dg-card">
-        <span class="dg-badge" style="background:@DotGlasses.Web.Models.OrgNode.TypeColor[Model.Selected.Type]; color:var(--dot-white);">@Model.Selected.Type</span>
+        <span class="dg-badge" style="background:@Model.Selected.LevelColor; color:var(--dot-white);">@Model.Selected.LevelLabel</span>
         @if (Model.Selected.IsTrainingOrg)
         {
             <span class="dg-badge" style="background:var(--dot-yellow);">Training org — excluded from MI dashboards</span>
         }
         <h2 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin: var(--space-3) 0;">@Model.Selected.Name</h2>
-        @if (!string.IsNullOrEmpty(Model.Selected.Kind))
-        {
-            <p class="dg-stat-label">@Model.Selected.Kind</p>
-        }
-        @if (Model.Selected.Type == "RetailPoint")
+        @if (Model.Selected.IsRetailPoint)
         {
             <p style="font-size:13px; color:var(--text-muted-2);">No inventory/SKU data shown here — stock is tracked externally in Zoho.</p>
         }
@@ -59,10 +57,11 @@
                     @foreach (var user in Model.SelectedAssignedUsers)
                     {
                         <li style="display:flex; align-items:center; gap:6px; margin-bottom:2px;">
-                            @user.DisplayName
+                            @user.DisplayName <span class="dg-muted">· @user.Role</span>
                             @if (Model.CanManage)
                             {
-                                <form asp-action="UnassignUser" method="post" style="display:inline;">
+                                <form asp-action="UnassignUser" method="post" style="display:inline;"
+                                      data-dg-confirm="@(Model.Selected.IsRetailPoint ? DotGlasses.Web.Models.AccessChangeCopy.RetailPointRemoval(user.DisplayName, Model.Selected.Name) : null)">
                                     <input type="hidden" name="orgNodeId" value="@Model.Selected.Id" />
                                     <input type="hidden" name="userId" value="@user.UserId" />
                                     <button type="submit" aria-label="Unassign @user.DisplayName" style="border:none; background:none; cursor:pointer; padding:0; color:#888; font-size:12px; line-height:1;">&times;</button>
@@ -76,7 +75,7 @@
 
         @if (!Model.CanManage)
         {
-            <p style="font-size:12px; color:#999; margin-top:var(--space-3);">You don't have permission to manage this node.</p>
+            <p style="font-size:12px; color:#999; margin-top:var(--space-3);">You don't have permission to manage this organisation.</p>
         }
         else
         {
@@ -91,44 +90,37 @@
                     </button>
                 </form>
 
-                @if (Model.Selected.Type != "RetailPoint")
+                @if (!Model.Selected.IsRetailPoint)
                 {
                     <button class="dg-btn dg-btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#addChildModal">Add @addChildLabel</button>
                 }
 
-                @if (Model.AssignableUsers.Count > 0)
-                {
-                    <button class="dg-btn dg-btn-ghost" type="button" data-bs-toggle="modal" data-bs-target="#assignUserModal">Assign users</button>
-                }
+                <button class="dg-btn dg-btn-ghost" type="button" data-bs-toggle="modal" data-bs-target="#assignUserModal">Assign users</button>
 
-                @if (Model.SelectedHasChildren)
+                @if (Model.Deactivation.BlockedReason is { } blocked)
                 {
-                    <p style="font-size:12px; color:#999; margin:0;">Deactivate this node's child orgs first before deactivating it.</p>
+                    <p style="font-size:12px; color:#999; margin:0;" id="deactivateBlocked">@blocked</p>
                 }
                 else
                 {
-                    <form asp-action="SetActive" method="post" onsubmit="return confirm('Deactivate @Model.Selected.Name? It will disappear from the tree until reactivated.');">
-                        <input type="hidden" name="id" value="@Model.Selected.Id" />
-                        <input type="hidden" name="value" value="false" />
-                        <button class="dg-btn dg-btn-ghost" style="width:100%; color:#b00;" type="submit">Deactivate</button>
-                    </form>
+                    <button class="dg-btn dg-btn-ghost" style="color:#b00;" type="button" data-bs-toggle="modal" data-bs-target="#deactivateModal">Deactivate</button>
                 }
             </div>
         }
     </div>
 </div>
 
-@if (Model.DeactivatedNodes.Count > 0)
+@if (Model.DeactivatedGroups.Count > 0)
 {
     <div class="dg-card" style="margin-top:var(--space-4);">
         <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin-top:0; font-size:14px;">Deactivated orgs</h3>
         <div style="display:flex; flex-wrap:wrap; gap:6px;">
-            @foreach (var node in Model.DeactivatedNodes)
+            @foreach (var group in Model.DeactivatedGroups)
             {
                 <span class="dg-badge" style="background:#f2f2f2; color:#999; display:inline-flex; align-items:center; gap:6px;">
-                    @node.Name
+                    @group.Name@(group.BeneathCount > 0 ? $" and {group.BeneathCount} beneath it" : "")
                     <form asp-action="SetActive" method="post" style="display:inline;">
-                        <input type="hidden" name="id" value="@node.Id" />
+                        <input type="hidden" name="id" value="@group.Id" />
                         <input type="hidden" name="value" value="true" />
                         <button class="dg-btn dg-btn-ghost" style="padding:4px 12px; font-size:12px;" type="submit">Reactivate</button>
                     </form>
@@ -162,7 +154,55 @@
     </div>
 </div>
 
-@if (Model.CanManage && Model.Selected.Type != "RetailPoint")
+@if (Model.CanManage && Model.Deactivation.BlockedReason is null)
+{
+    <div class="modal fade" id="deactivateModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content" style="border-radius:var(--radius-md); border:none;">
+                <form asp-action="SetActive" method="post">
+                    <input type="hidden" name="id" value="@Model.Selected.Id" />
+                    <input type="hidden" name="value" value="false" />
+                    <div class="modal-header">
+                        <h2 class="dg-page-title" style="font-size:20px;">Deactivate @Model.Selected.Name?</h2>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body" id="deactivateSummary">
+                        <ul style="padding-left:18px; margin:0;">
+                            <li>
+                                @if (beneath == 0)
+                                {
+                                    <text>No other organisation sits beneath it.</text>
+                                }
+                                else
+                                {
+                                    <text><strong>@beneath</strong> @(beneath == 1 ? "organisation" : "organisations") beneath it @(beneath == 1 ? "is" : "are") deactivated with it.</text>
+                                }
+                            </li>
+                            <li>
+                                @if (people == 0)
+                                {
+                                    <text>Nobody is assigned here@(beneath == 0 ? "" : " or beneath it").</text>
+                                }
+                                else
+                                {
+                                    <text><strong>@people</strong> @(people == 1 ? "person loses" : "people lose") the access @(people == 1 ? "their assignment" : "their assignments") here give@(people == 1 ? "s" : "") them. The assignments are kept and work again if it is reactivated.</text>
+                                }
+                            </li>
+                            <li>Unsent Field App records for @(Model.Selected.IsRetailPoint ? "this retail point" : "its retail points") will be refused when they are sent.</li>
+                            <li>Existing records stay in the reports, marked "(deactivated)".</li>
+                        </ul>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="dg-btn dg-btn-ghost" type="button" data-bs-dismiss="modal">Cancel</button>
+                        <button class="dg-btn dg-btn-primary" style="background:#b00; border-color:#b00;" type="submit">Deactivate</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+}
+
+@if (Model.CanManage && !Model.Selected.IsRetailPoint)
 {
     <div class="modal fade" id="addChildModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
@@ -177,10 +217,6 @@
                         <div class="dg-auth-field">
                             <label>Name</label>
                             <input class="form-control" name="Name" />
-                        </div>
-                        <div class="dg-auth-field">
-                            <label>Kind (optional display label, e.g. "Distributor")</label>
-                            <input class="form-control" name="Kind" />
                         </div>
                         @if (Model.ValidChildLevels.Count > 1)
                         {
@@ -210,31 +246,52 @@
     </div>
 }
 
-@if (Model.CanManage && Model.AssignableUsers.Count > 0)
+@if (Model.CanManage)
 {
     <div class="modal fade" id="assignUserModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content" style="border-radius:var(--radius-md); border:none;">
-                <form asp-action="AssignUser" method="post">
-                    <input type="hidden" name="OrgNodeId" value="@Model.Selected.Id" />
+                <form asp-action="AssignUsers" method="post">
+                    <input type="hidden" name="orgNodeId" value="@Model.Selected.Id" />
                     <div class="modal-header">
-                        <h2 class="dg-page-title" style="font-size:20px;">Assign a user to @Model.Selected.Name</h2>
+                        <h2 class="dg-page-title" style="font-size:20px;">Assign users to @Model.Selected.Name</h2>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
-                        <div class="dg-auth-field">
-                            <label>User</label>
-                            <select class="form-select" name="UserId">
+                        <p id="assignGrants" style="font-size:13px; color:var(--text-muted-2);">
+                            @if (Model.Selected.IsRetailPoint)
+                            {
+                                <text>Everyone you tick will be able to record here in the Field App.</text>
+                            }
+                            else
+                            {
+                                <text>Everyone you tick gets Admin Portal access to @Model.Selected.Name and everything beneath it. It doesn't let them record in the Field App.</text>
+                            }
+                        </p>
+                        @if (Model.AssignableUsers.Count == 0)
+                        {
+                            <p class="dg-muted" style="font-size:13px;">Every active user you can see is already assigned here. Invited and suspended users are assigned from their Edit page in the User Directory.</p>
+                        }
+                        else
+                        {
+                            <input class="form-control" type="search" placeholder="Filter by name or email" aria-label="Filter users" data-dg-filter="#assignUserList" style="margin-bottom:8px;" />
+                            <div id="assignUserList" style="max-height:260px; overflow-y:auto; border:1px solid var(--border-default); border-radius:8px; padding:8px;">
                                 @foreach (var user in Model.AssignableUsers)
                                 {
-                                    <option value="@user.Id">@user.DisplayName</option>
+                                    <label class="dg-check-row" data-dg-filter-text="@user.DisplayName @user.Email">
+                                        <input type="checkbox" name="userIds" value="@user.Id" />
+                                        <span>@user.DisplayName <span class="dg-muted">· @user.Role · @user.Email</span></span>
+                                    </label>
                                 }
-                            </select>
-                        </div>
+                            </div>
+                        }
                     </div>
                     <div class="modal-footer">
                         <button class="dg-btn dg-btn-ghost" type="button" data-bs-dismiss="modal">Cancel</button>
-                        <button class="dg-btn dg-btn-primary" type="submit">Assign</button>
+                        @if (Model.AssignableUsers.Count > 0)
+                        {
+                            <button class="dg-btn dg-btn-primary" type="submit">Assign</button>
+                        }
                     </div>
                 </form>
             </div>

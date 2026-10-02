@@ -27,21 +27,20 @@ public class OrganisationSeedConfiguration : IEntityTypeConfiguration<Organisati
         var now = new DateTimeOffset(2026, 8, 4, 0, 0, 0, TimeSpan.Zero);
 
         builder.HasData(
-            Node(DgiId, null, "DOT Glasses International", OrganisationLevel.Dgi, null, DgiPath, now),
-            Node(KenyaId, DgiId, "Kenya", OrganisationLevel.Country, null, KenyaPath, now),
-            Node(KenyaRetailerId, KenyaId, "Kangemi Vision Centre", OrganisationLevel.Intermediate, "Retailer", KenyaRetailerPath, now),
-            Node(KenyaRetailPointId, KenyaRetailerId, "Kangemi Vision Centre — Outreach Post", OrganisationLevel.RetailPoint, "Standalone", KenyaRetailPointPath, now));
+            Node(DgiId, null, "DOT Glasses International", OrganisationLevel.Dgi, DgiPath, now),
+            Node(KenyaId, DgiId, "Kenya", OrganisationLevel.Country, KenyaPath, now),
+            Node(KenyaRetailerId, KenyaId, "Kangemi Vision Centre", OrganisationLevel.Intermediate, KenyaRetailerPath, now),
+            Node(KenyaRetailPointId, KenyaRetailerId, "Kangemi Vision Centre — Outreach Post", OrganisationLevel.RetailPoint, KenyaRetailPointPath, now));
     }
 
     private static OrganisationNode Node(
-        Guid id, Guid? parentId, string name, OrganisationLevel level, string? kind, string path,
+        Guid id, Guid? parentId, string name, OrganisationLevel level, string path,
         DateTimeOffset createdAtUtc) => new()
     {
         Id = id,
         ParentId = parentId,
         Name = name,
         Level = level,
-        Kind = kind,
         HierarchyPath = path,
         IsTrainingOrg = false,
         CreatedAtUtc = createdAtUtc,

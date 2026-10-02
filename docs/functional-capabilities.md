@@ -160,28 +160,39 @@ that. The email itself is truncated with an ellipsis rather than overflowing the
 
 **Login** — `/Account/Login`, anonymous.
 
-Two fields, both required client-side: `UserName`, `Password`. Optional `returnUrl`, honoured only
+Two fields, both required: Email and Password. Optional `returnUrl`, honoured only
 if local. Sign-in is persistent (a lasting cookie) and counts failures toward lockout. On success
 `LastLoginUtc` is stamped and the user lands on the Dashboard or their return URL. On any failure
-— wrong password, unknown user, or a suspended account — the same message appears: *"Invalid
-username or password."* Suspension is deliberately not distinguishable from a bad password.
+— wrong password, unknown user, or a suspended account — the same message appears: *"Email or
+password is incorrect."* Suspension is deliberately not distinguishable from a bad password.
 
 **Sign out** — a real POST action, reachable from a button in the sidebar on every authenticated
 page. Ends the cookie session and returns to Login.
 
-**Set password** — `/Account/SetPassword?userId=…&token=…`, anonymous.
+**Forgot password** — `/Account/ForgotPassword`, anonymous, linked from the sign-in page.
 
-The target of an invite or reset link. Fields: hidden `UserId`, hidden `Token`, `Password`. The
-token is a genuine ASP.NET Identity password-reset token. Password rules as configured (tightened
-2026-08-12): minimum 8 characters, **at least one digit, one uppercase letter and one
+One field, Email. Whatever is entered, the page answers *"If that email has an account, we've
+sent a link."* — it never says whether the address has an account. An email is sent to an
+**Active or Invited** account; none to a suspended account or an unknown address, and none if
+that account was emailed in the last **five minutes** (the last-sent time is stored on the
+account, so the limit holds across replicas). The link is only ever emailed, never shown on
+screen. The Field App has the same thing through `POST /api/v1/auth/forgot-password` (§5.1).
+
+**Set password** — `/Account/SetPassword?userId=…&token=…[&app=…]`, anonymous.
+
+The target of an invite, an admin's reset, or a forgot-password link. Fields: hidden `UserId`,
+hidden `Token`, `Password`. The token is a genuine ASP.NET Identity password-reset token: it works
+for **one day** and stops working once the password has changed. Password rules as configured
+(tightened 2026-08-12): minimum 8 characters, **at least one digit, one uppercase letter and one
 non-alphanumeric character all required.** On success the account's `EmailConfirmed` is set to
-true and the user is redirected to Login with "Password set — you can now log in." An invalid or
-expired token surfaces Identity's own error text.
+true and the person is sent back to the app the link was asked for from: the Admin Portal's Login
+with "Password set — you can now log in.", or the Field App's sign-in page. The link says only
+*which* app; the Field App's address is configuration (`FieldApp` in `appsettings.json`, looked up
+by the Admin Portal host), so a crafted link can't redirect anywhere else. An invalid or expired
+token surfaces Identity's own error text. Setting a password never unsuspends an account.
 
 **Not built**
-- No self-service "forgot password" — a reset can only be initiated by an admin from the User
-  Directory.
-- No password change for a signed-in user, no MFA, no account lockout feedback.
+- No MFA, no account lockout feedback.
 
 ---
 
@@ -190,17 +201,31 @@ expired token surfaces Identity's own error text.
 **Route** `/` · **Access** any authenticated user · **Data** automatically scoped to the viewer's
 subtree.
 
-A **date range filter** (From/To, Apply button) sits above the tiles — leave both blank for
-all-time. Six stat tiles across the top:
+Three filters sit above the tiles, sent as query-string parameters and applied together: a
+**date range** (From/To — leave both blank for all-time), a **Country** and a **Retailer**. The
+two dropdowns offer only what the viewer's scope contains: a country admin sees their own country
+and its retailers, and someone below Country level is still offered the country they sit in.
+Choosing a country narrows the Retailer choices to that country. **"No retailer"** is offered
+where a retail point hangs directly off a country, and selects exactly those retail points. A
+Retailer is matched by position in the tree, so choosing a distributor includes every retailer
+beneath it. A value outside the viewer's scope (a hand-edited address) shows zeroes, never anyone
+else's figures. "Clear filters" resets all three.
+
+A choice narrows **everything** on the page: the six tiles, Referrals logged, the trend, the gender
+split and the four lists. Six stat tiles across the top:
 
 | Tile | Exactly what it counts |
 |---|---|
 | Pending leads | Leads where `ConvertedFlag` is false |
 | Total tests | All visible Tests |
-| Standard sales | All visible Sales *minus* custom orders |
-| Custom orders | Sales where `FulfilmentStatus` is set (i.e. created with "order from DOT Glasses") |
+| Standard sales | Sales with **no custom order** behind them |
+| Custom orders | Custom order records (§4.7), **paid or not**, by the date the order was **placed** |
 | Test-to-sale conversion | % of all Tests that reached a Sale, walking `Test.ConvertedToLeadId` → `Lead.SaleId` |
 | Needed-to-sale conversion | Same numerator rule, but the denominator is only Tests with outcome *Needs glasses* |
+
+The two order tiles never overlap. A Sale that converted a Lead whose lens was already ordered
+belongs to the order's tile, not to Standard sales; and an order placed from a Lead counts from the
+day the Lead was recorded, whether or not anyone has paid since.
 
 There is no direct Test → Sale link in the data model, so **both conversion figures only count
 Tests that were converted via the Lead route.** A technician who records a Test and then records
@@ -212,22 +237,31 @@ converted.
 
 **Four of the six tiles, plus Referrals logged, are clickable** — each links through to the
 matching Event History tab (or the Custom Orders screen, for the Custom orders tile), carrying
-the current date filter along so the drill-down shows exactly the rows behind the number.
+the current date filter along. The Country and Retailer are **not** carried — those screens have
+no such filter — so while one is chosen a line under the tiles says the linked screens list more
+than the figures count.
 
 Right-hand column, three cards:
-- **Referrals logged** — count of Tests with outcome *Referred*, links to Event History's
-  Referrals tab.
+- **Referrals logged** — counts **customer journeys**, not records. A Test continued into a Lead,
+  and a Lead converted into a Sale, are one journey (`Test.ConvertedToLeadId`, `Lead.SaleId`), and
+  "Referred or treated" is asked afresh at each step, so the same referral is often on two or
+  three records. A journey counts once when any of its referred records falls in the date range; a
+  record with no link is a journey of its own. Links to Event History's Referrals tab, which lists
+  the records themselves and says so.
 - **Conversion trend (last 6 weeks)** — six bars, each a rolling 7-day window ending at "now",
   showing that window's test-to-sale conversion %. **Always the real last 6 weeks, unaffected by
   the date filter above** — a "trend over time" widget re-scoped to an arbitrary custom window
-  would defeat its own purpose. Bar height is the percentage; the tooltip is the raw number. No
-  axis, no dates, no labels.
+  would defeat its own purpose — though it does follow the Country and Retailer. Bar height is the
+  percentage; the tooltip is the raw number. No axis, no dates, no labels.
 - **Gender split** — a two-segment bar computed from `Test.Gender` only. Only Female and Male exist
   in the domain; there is no third value or "unspecified".
 
-Main card, **Top performing** — four fixed top-5-by-sales-volume lists (not filterable, not
-clickable), each row showing a name, its sale count and its own conversion % (that key's Sales ÷
-that key's Tests):
+Main card, **Top performing** — four top-5 lists (not clickable). Each row shows a name and four
+figures: **Tests, Leads, Sales and Conversion**. Conversion is the tiles' definition applied to
+that row: of the Tests recorded there, the share that reached a Sale through a Lead — so it can
+never exceed 100%, and a row with Sales but no Tests shows 0%. A switch on the card ranks the lists
+by **Most sales** (the default) or **Best conversion**; it is kept with the other filters, and
+ranking by conversion leaves out rows with no Tests. The four lists:
 - **Top outlets** — exact hierarchy-path match on the org node.
 - **Top retailers** — the **Retailer**: the nearest `Intermediate`-level ancestor.
 - **Top countries** — the `Country`-level ancestor.
@@ -238,18 +272,18 @@ failing. Sales at a retail point that sits directly under a Country are ranked u
 **"No retailer"** row — that outlet genuinely has none, and reporting says so rather than
 substituting the country (2026-09-05). "No retailer" and "Unknown retailer" are different rows
 carrying different facts: the first means "there is none", the second "we cannot resolve this
-path". If all four lists are empty the whole card collapses to "No sales recorded yet."
+path". If all four lists are empty the whole card collapses to "Nothing recorded yet."
 
 **Organisations flagged `IsTrainingOrg` are excluded from every figure on this page** — the tile
 counts, the conversions, the trend, the gender split and all four rankings. Training exclusion is
 applied on this screen only.
 
 **Not built**
-- No country, outlet or role filters — only the date range.
-- Top-performing lists stay non-interactive — no drill-down or per-key filter.
+- No outlet, technician or role filters — the date range, Country and Retailer are the three.
+- Top-performing lists stay non-interactive — no drill-down, and no custom orders or pending
+  leads per row.
 - No export (CSV/PDF), no scheduled or emailed reports.
-- No retail-point-type distribution — no such taxonomy exists in the domain.
-- Per-key conversion % can exceed 100% (a Sale recorded where no Test was, at that key).
+- No retail-point-type distribution or filter — no such taxonomy exists in the domain.
 - Training-org exclusion is *not* applied to Event History, Custom Orders or the User Directory's
   sales counts — those still include training data.
 
@@ -261,52 +295,73 @@ applied on this screen only.
 can view; write actions require `Organisations.ManageInScope`.
 
 **Left panel — the tree.** Rendered recursively with 24px indentation per level, a coloured dot
-per level (DGI black, Country blue, Intermediate orange, Retail Point green), the node name, a
-yellow "Training" badge where applicable, and the level name right-aligned. Children sort
+per level (DGI black, Country blue, Retailer/distributor orange, Retail Point green), the node
+name, a yellow "Training" badge where applicable, and the level right-aligned. Levels are always
+shown as words — "DGI", "Country", "Retailer/distributor", "Retail Point" — here, in the Add
+dialog, in the org picker and in the CSV export. Children sort
 alphabetically. Every node is a link that selects it.
 
 Because reads are scoped downward only, **your own node becomes the displayed root** — an Admin
 at Country level sees their own country as the top of the tree with DGI absent entirely, not
 greyed out. A Retail Point user sees a single-node "tree" consisting of themselves.
 
-A separate collapsed **"Deactivated orgs"** list, below the tree, shows the caller's own
-deactivated nodes with a Reactivate link per row.
+A separate **"Deactivated orgs"** strip, below the tree, lists each group deactivated together
+once, by its top organisation — "`<name>` and N beneath it" — with one Reactivate button. An
+organisation deactivated on its own is listed by name. Organisations beneath a deactivated one
+aren't offered on their own. The strip is absent when there is nothing to list.
 
 **Right panel — the selected node.** Shows the level badge, a training badge if flagged, the name,
-the free-text `Kind` label, a Retail-Point-only note that stock is tracked externally in Zoho, and
-a list of users assigned to this node (each with an × to un-assign). If the viewer fails the scope
+a Retail-Point-only note that stock is tracked externally in Zoho, and a list of users assigned to
+this node, each with their role and an × to un-assign. If the viewer fails the scope
 check the panel says "You don't have permission to manage this node." and no actions render.
 
 **Actions** (all re-checked server-side; hidden buttons are never trusted alone):
 
 1. **Flag / unflag as training organisation** — one-click toggle, available at any level. Excludes
    the node and everything beneath it from Dashboard aggregates.
-2. **Rename** — a modal, `Name` only (≤ 200 chars). `Kind` and level are still fixed after
-   creation.
-3. **Deactivate / Reactivate** — soft-delete via the node's existing `IsDeleted` flag. Deactivating
-   a node with active (non-deactivated) children is refused — deactivate the children first, so
-   nothing gets silently orphaned under a node that's disappeared from every admin's tree. A
-   deactivated node moves to the "Deactivated orgs" list; Reactivate moves it back into the tree.
-4. **Add child node** — a modal. Fields: `Name` (required, ≤ 200 chars), `Kind` (optional free-text
-   display label, ≤ 100 chars), `Level` (a select only when more than one level is legal; a hidden
+2. **Rename** — a modal, `Name` only (≤ 200 chars). The level is fixed after creation.
+3. **Deactivate / Reactivate** — soft-delete via the node's existing `IsDeleted` flag.
+   **Deactivating takes every active organisation beneath it too**, in one step, after a
+   confirmation that states how many organisations go with it, how many people hold an
+   assignment in it, and that unsent Field App records for its retail points will be refused.
+   Assignments are kept; they give no access while the organisation is deactivated and work again
+   afterwards. **Reactivating restores exactly the group that was deactivated together** — an
+   organisation beneath it that had been deactivated separately stays deactivated — and is refused
+   ("Reactivate the organisation above it first") while the organisation directly above is
+   deactivated, so nothing comes back outside the tree. Nothing is ever re-parented and no path
+   changes. An organisation your own access comes through can't be deactivated — including the
+   root — because you couldn't undo it.
+4. **Add child node** — a modal. Fields: `Name` (required, ≤ 200 chars), `Level` (a select only
+   when more than one level is legal; a hidden
    field with an explanatory line when exactly one is; the button is hidden entirely for Retail
    Points). Level legality is enforced three times over — in the UI, in the validator, and in the
    service. The new node's hierarchy path is *parent path + the next value of a database
    sequence*, so segments are globally unique rather than per-parent, and a segment is never
    handed out twice — not even one belonging to a deactivated org, which keeps its path in case it
    is reactivated. The database also refuses two orgs on one path outright.
-5. **Assign users** — a modal with a single-select dropdown of every user in the caller's own
-   scope. Creates a `UserOrgAssignment` row; re-submitting the same pair is a silent no-op. Every
-   assignment counts equally toward the user's Admin Portal scope and highest level — there is no
-   "primary" assignment to designate, and this has no bearing on the Field App's separate,
-   per-device *current location* (see §5.7).
-6. **Un-assign a user** — the × next to a name in the "Assigned users" list. Refused (with an
-   inline error, not a crash) only if it is that user's **last** remaining assignment — a user
-   always keeps at least one; suspending them from User Directory (§4.5) is how all of their access
-   is removed instead.
+5. **Assign users** — a modal listing, as tick boxes with a filter box, every **Active** user in
+   the caller's scope who isn't already assigned here, each with their role and email. One submit
+   assigns everyone ticked, all or nothing: if any one of them can't be assigned (not Active, or
+   not visible to the caller), nobody is. A line under the title says what the assignment grants —
+   at a Retail Point, recording there in the Field App; higher up, Admin Portal access to that
+   organisation and everything beneath it. Invited and Suspended users are assigned from their
+   Edit page (§4.5). Every assignment counts equally toward the user's Admin Portal scope and
+   highest level — there is no "primary" assignment to designate, and this has no bearing on the
+   Field App's separate, per-device *current location* (see §5.7).
+6. **Un-assign a user** — the × next to a name in the "Assigned users" list, one at a time; at a
+   Retail Point it asks first, since it applies at once and unsent Field App records for that
+   retail point will be refused. Refused (with an inline error, not a crash) if it is that user's
+   **last** remaining assignment — a user always keeps at least one; suspending them from User
+   Directory (§4.5) is how all of their access is removed instead — and if it is your own
+   assignment and removing it would shrink your scope.
+
+**Reports and deactivated organisations.** Records made at an organisation that was deactivated
+afterwards keep counting on the Dashboard, in Event History and in Custom Orders, under the
+organisation's real name followed by "(deactivated)". The User Directory marks an assignment to a
+deactivated organisation the same way.
 
 **Not built**
-- No edit of `Kind` or level after creation (only the name).
+- No change of level after creation (only the name).
 - No move/re-parent.
 
 ---
@@ -317,15 +372,23 @@ check the panel says "You don't have permission to manage this node." and no act
 user · **Data** automatically scoped to the viewer's subtree. Four tabs, 25 rows per page, plus a
 date range filter shared with the Dashboard's drill-down links.
 
-**Sales tab** — columns: Type badge (green "Sale", suffixed "· Custom" when the lens range was
-Custom), customer name, outlet, country, **Consent** (Yes/No, from `ConsentGiven`), absolute local
-timestamp (`yyyy-MM-dd HH:mm`). Newest first.
+**Sales tab** — columns: Type badge (green "Sale"), customer name, **Consent** (Yes/No, from
+`ConsentGiven`), outlet, country, **Lens range** (the lens set's name, or "Custom"), **Lens power
+LE** and **Lens power RE** (each eye in the one lens-power format, e.g. `SPH -1.25 CYL -0.75 × 90
+ADD +2.00`; "—" where the record holds no power), absolute local timestamp (`yyyy-MM-dd HH:mm`).
+Newest first.
+
+**A "Training" badge** follows the outlet name on every tab, on any row recorded at a training
+organisation or beneath one — the rows the Dashboard leaves out, so a reviewer can see why the two
+screens disagree. There is no filter for them.
 
 **Tests tab** — Type badge, outlet, country, timestamp. **There is no Name column at all** — `Test`
 carries no customer reference of any kind (the unused `CustomerId` field was removed); Tests are
 genuinely anonymous records, not just displayed without a name.
 
-**Leads tab** — columns: name, masked phone, outlet, reason not purchased, **Consent**, a
+**Leads tab** — columns: name, masked phone, outlet, reason not purchased, **Aware of price**
+(Yes / No, or "—" for a Lead recorded before the question existed), **Lens range**, **Lens power
+LE**, **Lens power RE**, **Consent**, a
 **convert-to-sale action** (shows "Converted" once done, otherwise a "Convert to sale" link
 opening the admin conversion form described below), relative "Logged" time ("just now", "N
 minutes/hours/days ago", falling back to an absolute date beyond a week). Phone masking keeps the
@@ -334,15 +397,23 @@ of 7 characters or fewer are shown unmasked, and a missing number shows "—". I
 *before* paging so page numbers stay meaningful. The match is **case-insensitive** (`ILIKE`).
 
 **Referrals tab** — columns: outlet, country, reason, absolute time, preceded by a note that these
-are tracked for government reporting. This is a filtered view of the same Tests data
+are tracked for government reporting, and that each record is listed — a customer referred at
+their test and again as a lead appears twice here, where the Dashboard's "Referrals logged" counts
+them once. This is a filtered view of the same Tests data
 (outcome = *Referred*), not a separate record type — a referred test correctly appears in both
 tabs.
 
 The **admin conversion form** (`/Leads/Convert/{id}`) asks for the Sale fields a Lead has no
 equivalent for — coating, frame colour, hard case, "order from DOT Glasses", and the lens range
-where the Lead captured no preference — plus **referred or treated**, with a referral reason, its
-"Other" free text, a treated-in-facility flag and a referral location, following exactly the same
-conditional rules as every other capture path (2026-09-04). Frame coverage is **not** asked here,
+where the Lead captured no preference. **For a Lead whose lens is already ordered** the coatings
+and the order tick are replaced by a read-only "This lens is already ordered" block with the
+order's status and the coatings ordered; the Sale keeps the Lead's lens and coating set whatever
+is posted, and shares its order. Either way the form also asks **referred or treated**, with a referral reason, its
+"Other" free text, a treated-in-facility flag and an optional referral location, following exactly
+the same rules as every other capture path. That block is the form's last section, after hard case,
+as on the Field App. The frame colour dropdown offers the adult list, or the children's list when
+"Children's frame" is ticked (the Lead's own answer when its lens carries over), and a colour from
+the other list is refused on submit. Frame coverage is **not** asked here,
 matching the Field App's Sale form; the sale records the Full frame default. Outside the lens
 section every field is rendered unconditionally with its condition stated in the label — the
 rules are enforced server-side and reported as a validation summary on submit, not by live
@@ -387,7 +458,16 @@ page/tab links.
   filters.
 - No row detail view — you cannot open the underlying Test, Lead or Sale from here (except Leads'
   convert-to-sale action, which is a write path, not a detail view).
-- Training-org data is included here (unlike the Dashboard).
+- Training-org data is included here (unlike the Dashboard), marked with the "Training" badge;
+  there is no filter for it.
+- Lens type and coatings are in the CSV only, not on screen.
+
+**CSV export** follows the open tab, search and date range. The Sales and Leads exports hold the
+lens in separate columns so a spreadsheet can sort and filter on them: Lens range; Sphere,
+Cylinder, Axis and Add for the left eye, then the right; Lens type; Coatings (an ordering Lead's
+full set, otherwise a Lead's one preference). Every tab's export has a **Training org** Yes/No
+column, and the Leads export has **Aware of price**. The screen and the export are fed by the same
+rows.
 
 ---
 
@@ -400,11 +480,11 @@ one (so a country admin can't act on a DGI admin who also happens to hold a reta
 assignment in that country). Listing applies the scope-paths filter manually, since
 `ApplicationUser` is outside the automatic query filter.
 
-**The table** — Name, Role, Scope, Last login, Sales, Status, actions. A search box (name or
+**The table** — Name, Role, Organisations, Last login, Sales, Status, actions. A search box (name or
 email), a Role filter, a Status filter and Previous/Next paging sit above it.
 
 - **Name** is `FullName`, falling back to username where absent.
-- **Scope** is a set of badges listing the org names from the user's `UserOrgAssignment` rows —
+- **Organisations** is a set of badges listing the org names from the user's `UserOrgAssignment` rows —
   every assignment counts, there is no primary among them. A viewer sees the name of an assignment
   that's within their own scope; one outside it renders as a badge reading "Outside your scope"
   rather than disclosing an org name the viewer can't otherwise see. A user is listed at all if
@@ -417,7 +497,8 @@ email), a Role filter, a Status filter and Previous/Next paging sit above it.
 - **Status** is derived, never stored: **Invited** if the account has no password hash at all;
   otherwise **Suspended** if the lockout end date is in the future; otherwise **Active**.
 
-**Actions per row**, shown only where the viewer passes the scope check:
+**Actions per row.** An Admin sees **Edit** on every row they can see (below). The other two are
+shown only where the viewer passes the all-assignments scope check:
 
 1. **Reset password** — generates a fresh Identity reset token and a `/Account/SetPassword` link,
    attempts email delivery (see below), and displays the link on screen regardless. Does *not*
@@ -427,12 +508,39 @@ email), a Role filter, a Status filter and Previous/Next paging sit above it.
    the generic invalid-credentials message, and — unlike a removed assignment or a role change,
    which bite on the user's next request — a signed-in session is also cut off on its very next
    request, both apps, rather than waiting for the cookie or JWT to expire. Suspension is the only
-   way to remove all of a user's access; there is no delete.
+   way to remove all of a user's access; there is no delete. You can't suspend yourself.
 
-There is also a **change-role capability with no button yet**: `UserDirectory/ChangeRole` is a
-real, `Users.ManageInScope`-checked POST endpoint (transactional, every `IdentityResult` checked),
-but nothing in this screen's markup calls it — a user's role can only be changed today by a
-request built by hand against that route.
+**Edit user** — `/UserDirectory/Edit/{id}`, Admins only. One page for a user's **full name**,
+**role** and **organisations**; the email is shown and can't be changed. Invited, Active and
+Suspended users can all be edited, and editing never unsuspends or emails anyone.
+
+- **One Save applies only what changed since the page loaded.** The form carries the name, role
+  and organisations it was rendered with, and the server works out the differences — so an
+  assignment another admin added in the meantime is left alone. Everything is written in one
+  transaction.
+- **Each kind of change keeps its own permission.** Changing the role or the name acts on the
+  user as a whole, so it needs *every* one of their assignments in the admin's scope; adding or
+  removing one organisation needs only that organisation in scope.
+- **A user partly outside the admin's scope** shows a read-only role and name with the reason,
+  and a line "plus N organisations outside your scope" — those are never named and never changed.
+  An admin may remove every assignment they can see as long as the user keeps one elsewhere; the
+  directory then says the user is no longer in their scope. With none left anywhere, the save is
+  refused with the "suspend them instead" message.
+- **Confirmation.** Saving asks first when a Retail Point assignment is being removed or an Admin
+  is becoming a User, naming the consequence.
+- **Editing yourself.** Your own name can be changed. Your own role is read-only ("Another admin
+  must change it"). You may add an assignment for yourself, and remove one only when your scope
+  is no smaller afterwards — that is, the organisation sits beneath another assignment you keep.
+  The same rules apply to assigning and un-assigning yourself on the Organisations screen.
+- **The organisation picker**, shared with Invite: the admin's organisations as an indented tree,
+  each with its level, a filter box, and a line explaining that only a direct Retail Point
+  assignment lets someone record in the Field App. A deactivated organisation is never offered;
+  an existing assignment to one is shown ticked, marked "deactivated", and can be unticked.
+- Every role, name or assignment change — from here or from the Organisations screen — writes a
+  line to the application log naming who made it, on whom, and what changed. There is no history
+  screen.
+
+`UserDirectory/ChangeRole` remains as a role-only POST endpoint under the same rules.
 
 **Invite platform user** — a modal, opened from a button that renders for *every* viewer
 regardless of permission (the refusal happens on submit). Fields:
@@ -441,7 +549,7 @@ regardless of permission (the refusal happens on submit). Fields:
 |---|---|
 | Full name | Required, ≤ 200 characters |
 | Email | Required, valid email format, ≤ 256 characters, must not already exist |
-| Hierarchy scope | A scrollable checkbox list of every org in the caller's own scope. At least one required — refused with "At least one location must be assigned" otherwise — and every selection re-validated as in-scope server-side. Ticking more than one box is meaningful: every checked org becomes a real, equal assignment, with no ordering and nothing "primary" among them. |
+| Organisations | The shared organisation picker (see Edit user): every active org in the caller's own scope, indented by depth with its level, and a filter box. At least one required — refused with "Choose at least one organisation." otherwise — and every selection re-validated as in-scope server-side. Ticking more than one box is meaningful: every checked org becomes a real, equal assignment, with no ordering and nothing "primary" among them. |
 | Role | Select: **Admin / User**, defaulting to User |
 
 On submit the system creates the account **with no password at all** (which is what "Invited"
@@ -458,9 +566,8 @@ Reloading the page loses the on-screen copy; the only recovery at that point is 
 which mints a new one.
 
 **Not built**
-- No edit of a user's name or email after invite. Assignments are edited one at a time from the
-  Organisations screen instead (§4.3) — assign or un-assign a single org — not from here; role has
-  the server-only endpoint noted above, with no form yet.
+- No edit of a user's email.
+- No history screen for changes to a user (they are in the application log only).
 - No delete or deactivate (only suspend).
 - No resend of an existing invite without invalidating it.
 - No bulk invite or import.
@@ -606,10 +713,17 @@ show.
 or Country level only. Hidden entirely below that. The same policy gates both viewing and
 advancing status.
 
-The queue lists every Sale with a fulfilment status set — that is, every Sale recorded as a Custom
-prescription with "Order this lens from DOT Glasses" ticked. Unpaged (custom-order volume is
-naturally small), with a status-filter pill row (`Submitted` / `In Lab` / `Ready for Pickup` /
+**A custom order is a record of its own** (ADR-0008). It is placed when a Lead or a Sale is
+recorded as a Custom prescription with "Order this lens from DOT Glasses" ticked, and it points
+back at that record; the lens, coatings, pupil distance and customer are read from the Lead or
+Sale, never copied. The queue lists every order, whichever placed it. Unpaged (custom-order volume
+is naturally small), with a status-filter pill row (`Submitted` / `In Lab` / `Ready for Pickup` /
 `Fulfilled`) above the list.
+
+An order placed from a Lead that has not yet converted carries a **"Not yet paid"** badge beside
+its status: the lens is being made and nobody has paid for it. When that Lead is converted, the
+Sale is linked to the same order — there is never a second one — and the badge goes. An unpaid
+order advances through the lab like any other. There is no cancel.
 
 Orders are grouped **Retailer → retail point → customer**, each order showing its **Prescription**
 (a formatted string, `OD <right> / OS <left>`, each eye showing sphere and, where non-zero, `cyl`
@@ -636,11 +750,11 @@ retail point still sees their own Retailer named rather than "Unknown".
 
 **Advance status** is a single button labelled with the next state. The flow is linear and
 forward-only: **Submitted → In Lab → Ready for Pickup → Fulfilled**. Status is set to *Submitted*
-automatically at the moment the sale is created. Once Fulfilled the button disappears, and the
+automatically at the moment the Lead or Sale is recorded. Once Fulfilled the button disappears, and the
 service refuses any further advance. There is no way to set an arbitrary status.
 
 A refused advance — the order was already Fulfilled (a colleague got there first, a double click,
-a browser resubmit), it isn't a custom order, or it isn't visible to the caller — comes back as a
+a browser resubmit), or it isn't visible to the caller — comes back as a
 sentence in a red banner above the queue, not an error page (2026-09-04).
 
 Empty state: "No custom orders yet" (or a filtered variant when a status pill with no matches is
@@ -661,15 +775,16 @@ selected).
 **Route** `/ReferenceData` · **Access** `ReferenceData.Manage` — **Admin at DGI only.** The single
 most restricted screen in the product.
 
-Seven category cards in a fixed display order, each with an explanatory scope note:
+Eight category cards in a fixed display order, each with an explanatory scope note:
 
 | Category | Where the values are consumed |
 |---|---|
 | Reasons not purchased | Field App Lead form (required) |
-| Referral reasons | Field App Test form when outcome is *Referred* |
+| Referral reasons | Every recording form, when "Referred or treated" is ticked |
 | Coatings & tints | Lead coating preference and Sale coating, and the coatings each lens set lens is ticked for on Lens Sets |
-| Frame colors | Sale frame-colour swatches |
-| Hard case colors | Sale, when a hard case is sold |
+| Frame colours (adult) | Sale frame-colour swatches, unless "children's frame" is ticked |
+| Frame colours (child) | Sale frame-colour swatches when "children's frame" is ticked |
+| Hard case colours | Sale, when a hard case is sold |
 | Occupations | Optional on Test, Lead and Sale |
 | Lens types | Bifocal / Progressive / Other, asked when a lens has an add — on a Custom prescription and on a lens set lens alike |
 
@@ -680,9 +795,9 @@ hold together, added and removed here and enforced everywhere, on a lens set and
 prescription alike. Adding an exclusion is refused if a lens set lens pairs those two coatings
 ("Can't add this exclusion — a lens in a lens set pairs these two coatings."). None ship.
 
-**Each card shows** its active options as chips — with a circular 18px thumbnail where an image URL
-is set, on the Frame colors card only — each carrying a **pencil icon to edit** (label and image
-URL only — category, code and the Other flag stay fixed after creation), **↑/↓ buttons to
+**Each card shows** its active options as chips — with a circular 18px thumbnail where the option
+has a picture, on the two Frame colours cards only — each carrying a **pencil icon to edit** (label
+and picture only — category, code and the Other flag stay fixed after creation), **↑/↓ buttons to
 reorder**, and a × to retire it, plus a collapsed "Retired (N)" section with a Restore link per
 option.
 
@@ -695,8 +810,17 @@ Retired options disappear from every Field App dropdown immediately but remain r
 | Field | Rules |
 |---|---|
 | Label | Required, ≤ 200 characters. The machine code is auto-slugified from it (lowercased, non-alphanumeric runs → hyphens). Sort order is assigned as (current maximum in category + 1). |
-| Image URL | ≤ 2000 characters. **Rendered on the Frame colors card only.** A pasted URL — there is no upload. |
+| Picture | **On the two Frame colours cards only.** A file upload: PNG, JPEG or WebP, up to 1 MB, checked by reading the file's own signature rather than its name. Refused with "Upload a PNG, JPEG or WebP picture." or "Upload a picture of 1 MB or smaller." There is no address to type. |
 | "Mark as this category's Other option" | A checkbox. Disabled with the note "(already set — retire it first)" when the category already has an active Other option, and independently enforced server-side. |
+
+**Pictures.** An uploaded picture goes into the private `reference-data-images` storage container
+under a newly generated name, and the option's picture address becomes
+`/reference-data/pictures/<name>` — a path the Admin Portal serves anonymously (the Field App shows
+these with no session) with a year-long cache lifetime, for generated names only; anything else is
+a 404. The container itself has no public access. The edit dialog shows the current picture, takes
+a replacement file, and has a **Remove picture** tick; replacing or removing deletes the old file.
+The six adult colours seeded with pictures on the online shop's website keep those addresses and
+keep displaying until DGI uploads replacements.
 
 The Other flag matters functionally: every consuming dropdown in the Field App keys off it to
 reveal a free-text "please specify" field, and the API requires that free text whenever an
@@ -704,20 +828,18 @@ Other-flagged option is chosen. Two active Others in one category would be ambig
 one-per-category rule.
 
 **Out of the box** the system seeds: 12 Occupations, 9 Reasons not purchased, 6 Referral reasons,
-5 Coatings (Photochromic, Clear, Blue block, Polarized, Sunglasses), 7 Frame colors, 3 Hard case
-colors, and 3 Lens types (Bifocal, Progressive, Other). Every category except Coatings ships with
+5 Coatings (Photochromic, Clear, Blue block, Polarized, Sunglasses), 7 adult Frame colours, one
+child Frame colour ("Other" — DGI enters the children's colours), 3 Hard case colours, and 3 Lens
+types (Bifocal, Progressive, Other). Every category except Coatings ships with
 an "Other" row.
 
 **Not built**
 - No hard delete for a mistyped entry (edit covers a mislabel; retire covers removal).
-- Image is a URL only. No upload, no validation that the URL resolves, no image for any category
-  other than Frame colors.
-- Seven identical forms share a single page-level error banner, so a validation failure does not
+- No picture for any category other than the two Frame colours lists; no resizing or cropping.
+- Eight identical forms share a single page-level error banner, so a validation failure does not
   indicate which card produced it.
 - Gender, frame coverage, lens range type and fulfilment status are hard-coded enumerations and
   are not editable here or anywhere else.
-- The Frame colors swatch shown in the *Field App* is not driven by the image URL — it uses a
-  hard-coded hex table matched against six known colour names, falling back to grey.
 
 ---
 
@@ -733,8 +855,15 @@ the token is **persisted to IndexedDB**, not just held in memory. Password rules
 2026-08-12, same as the Admin Portal): minimum 8 characters, at least one digit, one uppercase
 letter and one non-alphanumeric character.
 
-Errors: "Invalid username or password." for a rejected credential, "Could not reach the server —
-check your connection." for a network failure. If already signed in, a green banner shows the token
+Errors: "Email or password is incorrect." for a rejected credential, "Couldn't reach the server.
+Check your connection and try again." for a network failure.
+
+**Forgot password?** links to `/forgot-password`: one Email field, which calls
+`POST /api/v1/auth/forgot-password` directly (it needs a connection, and there is nothing to
+queue). The answer is always "If that email has an account, we've sent a link."; with no
+connection the screen says "You're offline. Connect to get a reset link." and sends nothing. The
+emailed link opens the Admin Portal's set-password page (§4.1) and then returns here, where the
+sign-in page shows "Password set. Sign in with your new password." If already signed in, a green banner shows the token
 expiry time. Footer text: *"Log in once online — you can keep working fully offline after that.
 Sign out from Settings when you hand the device to someone else."*
 
@@ -774,62 +903,76 @@ The counts refresh only on page load and after a manual sync, so they go stale w
 timer syncs underneath.
 
 **Every consultation form's real save action shows "Recording at `<name>`" beside it** — the
-bottom Save/Save-test button, the price-confirmation card's "Yes, save", and the Test→Lead
+bottom Save/Save-test button and the Test→Lead
 "Continue as Lead" button (which also saves, before navigating on) — so the technician sees the
 current location at the moment they commit a record, not just once on Home.
 
 ### 5.3 Record Test — `/consultation/test`
 
-**Client-side validation runs before submit** — required fields are checked and shown inline
-before anything reaches the price-confirmation step or the network, matching the server's own
-rules exactly (see 6).
+**Client-side validation runs before submit** — the form builds the request it would send and
+runs the same shared rules the server runs, so required fields are shown inline before anything
+reaches the network (see 6).
 
-Fields, in order:
+**Every recording form uses one order:** Age, Gender and Occupation open it, and "Referred or
+treated" closes it. Fields on a Test, in order:
 
 | Field | Control | Rules |
 |---|---|---|
-| Age | Number input, min 0, no upper bound in the UI | Optional; server accepts 0–120 |
+| Age | Number input | Optional; 0–120 |
 | Gender | Select: Female / Male, defaulting to Female | — |
-| Outcome | Select: No glasses needed / Needs glasses / Referred, defaulting to *No glasses needed* | — |
+| Occupation (optional) | Reference dropdown; "Other" reveals a free-text field | Free text required when Other is chosen (≤ 200 chars) |
+| Outcome | Select: No glasses needed / Needs glasses, defaulting to *No glasses needed* | — |
 
-The form then branches on outcome:
+**Needs glasses** then shows the shared **lens range selector** (5.6) with "No preference yet"
+permitted, and **Coating preference (optional)**.
 
-**Referred** →
-- *Reason for referral* — reference dropdown; choosing the "Other" row reveals a "please specify"
-  text field. Required, must be an active Referral reason, free text required when Other is chosen
-  (≤ 200 chars).
-- *Referral location (hospital, clinic, etc.)* — free text, required (≤ 500 chars), now enforced
-  and marked in the UI as well as the server.
+**Referred or treated** comes next, whatever the outcome — a tick box that reveals:
+- *Reason for referral/treatment* — reference dropdown with Other free-text. Required when the box
+  is ticked.
+- *Treated in facility* — a tick box. When ticked, there is no location to give.
+- *Referral location (optional)* — free text (≤ 500 chars), shown when the customer wasn't treated
+  in the facility. It may be left blank.
 
-**Needs glasses** →
-- *Occupation (optional)* — reference dropdown with Other free-text.
-- *"Did the customer share contact details?"* — a No / Yes pair of buttons.
-  - **Yes** reveals **"Continue as Lead →"**, which saves the Test and navigates to the Lead form
-    carrying `sourceTestId` plus the age and gender as pre-filled values. This is the only path
-    that links a Test to a Lead, and therefore the only path that produces a conversion figure on
-    the Dashboard.
-  - **No** shows "Recorded as a test only — not entered into the leads pipeline."
+**Needs glasses** then ends with *"Did the customer share contact details?"* — a No / Yes pair of
+buttons.
+- **Yes** reveals **"Continue as Lead →"**, which saves the Test and opens the Lead form carrying
+  `sourceTestId`, the age and gender, and the Test's referral answers as the Lead form's starting
+  values (the technician can change them; each record stores its own answer). This is the only
+  path that links a Test to a Lead, and therefore the only path that produces a conversion figure
+  on the Dashboard.
+- **No** shows "Recorded as a test only — not entered into the leads pipeline."
 
-**No glasses needed** → *Occupation (optional)* only.
-
-Saving a Test is immediate — no price-confirmation step. A Test carries no customer name or phone
-at all. A Test opened via `?fixOutboxId=` (from the failed-records review screen) pre-fills every
-field from the originally-queued payload.
+Saving a Test is immediate. A Test carries no customer name or phone at all. A Test opened via
+`?fixOutboxId=` (from the failed-records review screen) pre-fills every field from the
+originally-queued payload, the referral block included.
 
 ### 5.4 Record Lead — `/consultation/lead`
 
-Client-side validation as above. Fields: Age, Gender, **Full name**, **Phone number**, Occupation
-(optional), a consent checkbox ("Customer consents to be contacted by DOT Glasses for
-follow-ups/marketing"), **Reason not purchased** (reference dropdown + Other free-text), the
-shared **lens range selector** with "No preference yet" permitted, and **Coating preference
-(optional)**, a radio group with "No preference" first. On a lens set it lists only the coatings
+Client-side validation as above. Fields, in order: Age, Gender, Occupation (optional), **Full
+name**, **Phone number**, a consent checkbox ("Customer consents to be contacted by DOT Glasses for
+follow-ups/marketing"), **Reason not purchased** (reference dropdown + Other free-text), **"Has
+the customer been told the price?"** (Yes / No buttons — one must be chosen, either saves, and the
+answer is stored on the Lead), the shared **lens range selector** with "No preference yet"
+permitted, **Coating preference (optional)**, a radio group with "No preference" first, and last
+the **Referred or treated** block described in 5.3. On a lens set it lists only the coatings
 both chosen lenses come in (nothing until both eyes have a lens); on a Custom prescription, or
 with no range, every active coating. A preference the chosen lenses don't offer is refused by the
 server against `CoatingPreferenceRefId`, and choosing different lenses clears one that's no longer
 offered.
 
+**Ordering the lens from a Lead.** When the range is Custom, one more control appears, last in the
+lens section: *"Order this lens from DOT Glasses"*. Ticking it orders the lens when the Lead is
+saved, before the customer pays (ADR-0008), and changes what the Lead must hold: both eyes' power,
+the **pupil distance** (otherwise optional on a Lead), a lens type where there is an add, and a
+**coating set** — the coating preference radios are replaced by the coating selector a Sale uses,
+held to the same rules (at least one, no two that exclude each other). The order appears in the
+Admin Portal queue as *Submitted*, marked "Not yet paid". A tick left over from an earlier Custom
+choice is ignored once the range is no longer Custom. An order can only be placed when the Lead is
+recorded, never added to an existing Lead, and the server refuses the tick on any other range.
+
 Server rules: full name required (≤ 200), phone required (≤ 32), reason not purchased must be an
-active option with its free text present if Other, age 0–120, and if a `sourceTestId` is carried
+active option with its free text present if Other, the price question answered, age 0–120, and if
+a `sourceTestId` is carried
 it must reference an existing Test that has **not already been converted** (a second attempt is
 rejected). "Existing" means existing *and visible to the caller* — a Test at another outlet is
 hidden by hierarchy scoping and so is refused exactly like one that was never recorded. Either
@@ -840,14 +983,14 @@ The customer is matched or created server-side by exact **name + phone within th
 a repeat visitor with identical details reuses their existing customer record rather than creating
 a duplicate.
 
-Submitting shows the **price-awareness confirmation**: *"Has the customer been told the price for
-this order?"* with "Not yet" (returns to the form) and "Yes, save".
+Save saves straight away; there is no step after it. The price answer does not carry into a Sale.
 
 ### 5.5 Record Sale — `/consultation/sale`
 
-Client-side validation as above. Fields: Age, Gender, **Full name**, Phone number *(optional
-here)*, Occupation, consent checkbox, then the shared **lens range selector** with no "no
-preference" option — a Sale must always have a range.
+Client-side validation as above. Fields, in order: Age, Gender, Occupation (optional), **Full
+name**, Phone number *(optional here)*, consent checkbox, the shared **lens range selector** with
+no "no preference" option — a Sale must always have a range — then coatings, frame colour, hard
+case, and last the **Referred or treated** block described in 5.3.
 
 **Two ways a Sale gets linked to a Lead** (`SourceLeadId`):
 - **Opened from the Leads worklist** (`/leads`, see 5.7a) via `?sourceLeadId=…` — every field the
@@ -856,25 +999,40 @@ preference" option — a Sale must always have a range.
   found in the set again by matching its power and lens type; one that is no longer there is left
   unchosen under a note (§5.6). Frame colour, hard case and "order from DOT Glasses" still need
   filling in fresh — a Lead has no equivalent fields for any of those.
+  **A Lead whose lens is already ordered** opens differently: in place of the lens controls, the
+  coatings and the order tick there is a read-only card — *"This lens is already ordered"* with
+  the order's status, each eye's power, the pupil distance and the coatings ordered. The Sale is
+  sent with exactly that lens and coating set and shares the Lead's order. Frame colour, hard case
+  and referral are asked as usual. The server enforces the lock on whatever is sent: a different
+  lens, a different coating set or a second order request is refused against the field concerned.
+  To sell a different lens, record a new Sale. A coating or lens type retired after the order was
+  placed doesn't block the sale — the lens is already being made with it.
 - **Automatic match prompt** — for a fresh Sale (not already opened from a specific Lead), the app
   checks once per form visit whether the entered name + phone matches an existing open Lead. If it
-  does, a card appears before the price-confirmation step: *"Existing lead found — `<name>` already
+  does, a card appears before the Sale is saved: *"Existing lead found — `<name>` already
   has an open lead from an earlier visit. Convert it into this sale instead of creating a separate
-  record?"* — accepting sets `SourceLeadId` and proceeds; declining continues as an ordinary
-  unlinked Sale and doesn't ask again on that visit.
+  record?"* — accepting sets `SourceLeadId` and saves; declining saves an ordinary unlinked Sale.
+  This prompt is the only step between Save and saving. When the matched Lead's lens **is already
+  ordered**, the card offers no convert button — the lens just typed can't be swapped for the
+  ordered one — and instead says to open that Lead from the Leads list, with "Go to Leads" and
+  "Save as a separate sale" (which leaves the order unpaid).
 
 The **Coating** list follows the lens range (5.6): a lens set offers the coatings both chosen lenses
 come in, a Custom prescription offers **every** active coating. **When the range is Custom**, one
 more control appears, last in the lens section:
 - *"Order this lens from DOT Glasses (outlet doesn't have stock)"* — a checkbox. Ticking it is what
-  creates a Custom Order: the sale is stamped *Submitted* and appears in the Admin Portal queue.
-  Server-rejected if the range is not Custom.
+  places a Custom Order with the Sale: an order record starting at *Submitted*, which appears in
+  the Admin Portal queue. Server-rejected if the range is not Custom. Not shown when converting a
+  Lead whose lens is already ordered.
 
 Then, for every sale:
-- **Frame colour** — a row of circular colour swatches, one per active Frame colour reference item.
-  The colour shown comes from a hard-coded six-entry hex table matched by name substring, falling
-  back to grey; the admin-entered image URL is not used here. Selecting the "Other" swatch reveals
-  a "please specify" text field. Required server-side.
+- **Frame colour** — a row of swatches, each with the colour's picture (a "?" placeholder where it
+  has none). The swatches come from the **adult** list, or from the **children's** list when
+  "Children's frame" is ticked; changing the tick clears a colour already chosen, and the server
+  refuses a colour from the wrong list ("Choose a children's frame colour."). The pictures are
+  copied onto the device whenever reference data loads, so they show offline; a picture still
+  hosted on another website shows online only. Selecting the "Other" swatch reveals a "say which"
+  text field. Required server-side.
 - **Hard case sold** — a checkbox; ticking it reveals a **Hard case colour** reference dropdown
   with Other free-text. Server-enforced both ways: colour required when sold, and both colour
   fields must be empty when not.
@@ -891,8 +1049,8 @@ other — "`<Paired>` comes with `<Trigger>` on these lenses — add `<Paired>`,
 applies, and exclusions still do. A pair on which no coating can be made is refused against the
 right eye's lens.
 
-Submitting shows the same price-awareness confirmation as a Lead. A Sale opened via
-`?fixOutboxId=` pre-fills from the originally-queued payload, same as Test/Lead.
+A Sale is not asked about price: the customer has paid. A Sale opened via `?fixOutboxId=`
+pre-fills from the originally-queued payload, same as Test/Lead.
 
 ### 5.6 The lens range selector (shared by Lead and Sale)
 
@@ -985,7 +1143,10 @@ range must not carry millimetres and a Custom range must not carry a bucket. The
 
 **Leads — `/leads`.** Lists the technician's own outlet's **open** Leads (not yet converted), each
 showing the customer's name, phone and when it was logged, with a **"Convert to sale"** button that
-opens the Sale form pre-filled (see 5.5). Empty state: "No open leads at this outlet — everything's
+opens the Sale form pre-filled (see 5.5). A Lead that ordered its lens shows a badge with the
+order's status in the Custom Orders screen's wording — "Lens ordered · In Lab" — highlighted once
+it is Ready for Pickup, so the technician knows when to call the customer. The list is read when
+the screen opens (online only), so a status change shows after reopening it. Empty state: "No open leads at this outlet — everything's
 been converted or nothing's been logged yet."
 
 **Failed records — `/failed-records`.** Every permanently-rejected outbox item (see §6), each with
@@ -1094,6 +1255,7 @@ Versioned at `v1`, with Swagger exposed in development only.
 
 | Endpoint | Auth | Who | Behaviour |
 |---|---|---|---|
+| `POST /api/v1/auth/forgot-password` | Anonymous | Anyone | Email → always 200 with the same message; a reset link is emailed to an Active or Invited account, at most once every five minutes. The link is never returned. |
 | `POST /api/v1/auth/login` | Anonymous | Anyone | Username + password → JWT (60 min default), plus an optional `PreferredLocationId` (the device's remembered location). Issues a token carrying that location if it's still eligible, the caller's single eligible location if there's exactly one, or none otherwise. Failures count toward lockout; suspended accounts are refused as invalid credentials. |
 | `GET /api/v1/auth/my-orgs` · `POST /api/v1/auth/switch-org` | JWT | Any authenticated user | Lists only the caller's *eligible* locations — active, Retail-Point-level orgs they're directly assigned to, never a broader assignment. Switching issues a fresh JWT carrying the chosen eligible location; nothing is written to the user row. Rejects a target that isn't eligible. |
 | `GET /api/v1/tests` · `GET /api/v1/tests/{id}` | JWT | Any authenticated user | Hierarchy-scoped list / fetch — for the Field App this is the caller's current location alone, not their whole assignment set. |
@@ -1116,9 +1278,9 @@ to create a Test, Lead or Sale through the API — there's no role/level gate on
 endpoints, and the Admin Portal still has no general-purpose form for it (only the narrower
 Lead-conversion screen, see §4.4). What the API *does* enforce, regardless of role or level, is the
 current-location rule above: the attempt only succeeds against an active retail point the caller
-is directly assigned to. The API applies no separate level restriction on custom orders — a Sale
-posted with `OrderFromDotGlasses` from any eligible Retail Point enters the fulfilment queue
-regardless.
+is directly assigned to. The API applies no separate level restriction on custom orders — a Lead
+or Sale posted with `OrderFromDotGlasses` from any eligible Retail Point places an order in the
+fulfilment queue regardless. Sending the same record twice (the outbox retrying) places one order.
 
 Cross-origin access is restricted to two hard-coded localhost development origins.
 

@@ -1,5 +1,7 @@
+using DotGlasses.Application.Common;
 using DotGlasses.Application.Organisations;
 using DotGlasses.Application.Users;
+using DotGlasses.Domain.Common;
 using DotGlasses.Domain.Enums;
 using DotGlasses.Web.Authorization;
 using DotGlasses.Web.Export;
@@ -17,7 +19,8 @@ public class OrganisationsController(
     IUserAdminService userAdminService,
     IAuthorizationService authorizationService,
     IValidator<CreateChildOrganisationRequest> createChildValidator,
-    IValidator<RenameOrganisationRequest> renameValidator) : Controller
+    IValidator<RenameOrganisationRequest> renameValidator,
+    ICurrentUserContext currentUser) : Controller
 {
     public Task<IActionResult> Index(Guid? selectedId, CancellationToken cancellationToken) =>
         IndexViewAsync(selectedId, cancellationToken);
@@ -28,8 +31,8 @@ public class OrganisationsController(
     {
         var nodes = await organisationAdminService.ListAsync(cancellationToken);
         var csv = CsvExport.Build(
-            ["Name", "Level", "Kind", "HierarchyPath", "IsTrainingOrg"],
-            nodes.Select(n => (IReadOnlyList<string?>)[n.Name, n.Level.ToString(), n.Kind, n.HierarchyPath, n.IsTrainingOrg.ToString()]));
+            ["Name", "Level", "HierarchyPath", "IsTrainingOrg"],
+            nodes.Select(n => (IReadOnlyList<string?>)[n.Name, OrganisationLevelLabels.For(n.Level), n.HierarchyPath, n.IsTrainingOrg.ToString()]));
 
         return File(csv, "text/csv", $"organisations-{DateTime.UtcNow:yyyyMMddHHmmss}.csv");
     }
@@ -50,7 +53,7 @@ public class OrganisationsController(
             return await IndexViewAsync(request.ParentId, cancellationToken);
         }
 
-        var created = await organisationAdminService.CreateChildAsync(request.ParentId, request.Name, request.Level, request.Kind, cancellationToken);
+        var created = await organisationAdminService.CreateChildAsync(request.ParentId, request.Name, request.Level, cancellationToken);
         return RedirectToAction(nameof(Index), new { selectedId = created.Id });
     }
 
@@ -67,18 +70,20 @@ public class OrganisationsController(
         return RedirectToAction(nameof(Index), new { selectedId = id });
     }
 
-    /// <summary>Reuses ManageOrgInScope (against the org being assigned into), not the separate
-    /// user-scoped ManageUsersInScope — see OrganisationsIndexViewModel's doc comment for why.</summary>
+    /// <summary>Assigns everyone ticked in the Assign users dialog to one organisation, all or
+    /// nothing. Reuses ManageOrgInScope (against the org being assigned into), not the separate
+    /// user-scoped ManageUsersInScope — see OrganisationsIndexViewModel's doc comment for why.
+    /// Who may be assigned this way (Active users the caller can see) is the service's rule.</summary>
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> AssignUser(Guid orgNodeId, Guid userId, CancellationToken cancellationToken)
+    public async Task<IActionResult> AssignUsers(Guid orgNodeId, List<Guid> userIds, CancellationToken cancellationToken)
     {
         if (!await CanManageAsync(orgNodeId, cancellationToken))
         {
             return Forbid();
         }
 
-        await userAdminService.AssignUserToOrgAsync(userId, orgNodeId, cancellationToken);
+        await userAdminService.AssignUsersToOrgAsync(userIds, orgNodeId, cancellationToken);
         return RedirectToAction(nameof(Index), new { selectedId = orgNodeId });
     }
 
@@ -190,21 +195,54 @@ public class OrganisationsController(
 
         var validChildLevels = new[] { OrganisationLevel.Country, OrganisationLevel.Intermediate, OrganisationLevel.RetailPoint }
             .Where(level => organisationAdminService.IsValidChildLevel(selectedAdmin.Level, level))
-            .Select(level => (Value: level.ToString(), Label: ChildLevelLabel(level)))
+            .Select(level => (Value: level.ToString(), Label: OrganisationLevelLabels.For(level)))
             .ToList();
 
         var users = await userAdminService.ListAsync(cancellationToken);
-        var assignableUsers = users.Select(u => (u.Id, DisplayName: $"{u.DisplayName} ({u.Email})")).ToList();
+
+        // Only Active users not already here: an Invited or Suspended user is assigned from their
+        // Edit page, where the admin sees the whole of what they are changing.
+        var assignableUsers = users
+            .Where(u => u.Status == UserStatuses.Active && !u.OrgNodeIds.Contains(selected.Id))
+            .Select(u => new AssignableUser(u.Id, u.DisplayName, u.Email, u.Role))
+            .ToList();
         var selectedAssignedUsers = users
             .Where(u => u.OrgNodeIds.Contains(selected.Id))
-            .Select(u => (u.Id, u.DisplayName))
+            .Select(u => new AssignedUser(u.Id, u.DisplayName, u.Role))
             .ToList();
 
-        var deactivatedNodes = (await organisationAdminService.ListDeactivatedAsync(cancellationToken))
-            .Select(n => (n.Id, n.Name))
-            .ToList();
+        var subtreeIds = Flatten(selected).Select(n => n.Id).ToHashSet();
+        var deactivation = new DeactivationPreview(
+            OrganisationsBeneath: subtreeIds.Count - 1,
+            PeopleAssigned: users.Count(u => u.OrgNodeIds.Any(subtreeIds.Contains)),
+            BlockedReason: OwnAccess.ComesThrough(HierarchyPath.Parse(selectedAdmin.HierarchyPath), currentUser.ScopePaths)
+                ? OwnAccess.DeactivationRefusal
+                : null);
 
-        return new OrganisationsIndexViewModel(trees, selected, canManage, selected.Children.Count > 0, validChildLevels, assignableUsers, selectedAssignedUsers, deactivatedNodes);
+        return new OrganisationsIndexViewModel(
+            trees, selected, canManage, validChildLevels, assignableUsers, selectedAssignedUsers,
+            DeactivatedGroups(await organisationAdminService.ListDeactivatedAsync(cancellationToken)), deactivation);
+    }
+
+    private static IEnumerable<OrgNode> Flatten(OrgNode node) => node.Children.SelectMany(Flatten).Prepend(node);
+
+    /// <summary>The Deactivated orgs strip: each group once, by its top organisation, with how
+    /// many went with it. A top is a deactivated organisation whose parent isn't itself in the
+    /// list — anything beneath a deactivated organisation can't be reactivated until that one is,
+    /// so it isn't offered. An organisation deactivated on its own is a group of one.</summary>
+    private static IReadOnlyList<DeactivatedGroup> DeactivatedGroups(IReadOnlyList<OrganisationAdminNode> deactivated)
+    {
+        var ids = deactivated.Select(n => n.Id).ToHashSet();
+
+        return deactivated
+            .Where(n => n.ParentId is null || !ids.Contains(n.ParentId.Value))
+            .Select(top => new DeactivatedGroup(
+                top.Id,
+                top.Name,
+                top.DeactivationGroupId is { } groupId
+                    ? deactivated.Count(n => n.Id != top.Id && n.DeactivationGroupId == groupId && HierarchyPath.Parse(n.HierarchyPath).IsSelfOrDescendantOf(HierarchyPath.Parse(top.HierarchyPath)))
+                    : 0))
+            .ToList();
     }
 
     /// <summary>Every root in the scoped node set — highest level first (DGI, then Country, ...),
@@ -226,7 +264,7 @@ public class OrganisationsController(
             .Select(c => BuildTree(c.Id, byId, byParent))
             .ToList();
 
-        return new OrgNode(node.Id, node.Name, LevelDisplay(node.Level), node.Kind, node.IsTrainingOrg, children);
+        return new OrgNode(node.Id, node.Name, node.Level, node.IsTrainingOrg, children);
     }
 
     private static OrgNode? FindNode(IReadOnlyList<OrgNode> trees, Guid id) =>
@@ -234,20 +272,4 @@ public class OrganisationsController(
 
     private static OrgNode? FindNode(OrgNode node, Guid id) =>
         node.Id == id ? node : node.Children.Select(c => FindNode(c, id)).FirstOrDefault(n => n is not null);
-
-    /// <summary>The tree/badge display for a node's own level ("DGI" for the root, otherwise the
-    /// raw enum name) — contrast with <see cref="ChildLevelLabel"/> below, which labels the level
-    /// a new child is about to be created at, not an existing node's own level.</summary>
-    private static string LevelDisplay(OrganisationLevel level) => level == OrganisationLevel.Dgi ? "DGI" : level.ToString();
-
-    /// <summary>Level-appropriate label for the "add child" action and its target-level dropdown
-    /// — replaces the generic "node" wording the Organisations screen used to show regardless of
-    /// what level/kind was actually being added.</summary>
-    private static string ChildLevelLabel(OrganisationLevel level) => level switch
-    {
-        OrganisationLevel.Country => "Country office",
-        OrganisationLevel.Intermediate => "Retailer/distributor",
-        OrganisationLevel.RetailPoint => "Retail point",
-        _ => level.ToString(),
-    };
 }

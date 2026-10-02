@@ -40,7 +40,7 @@ public class LensPowerRulesTests
         var failure = Assert.Single(Check(sphere: null));
 
         Assert.Equal("Sphere", failure.Key);
-        Assert.Equal("Sphere is required.", failure.Message);
+        Assert.Equal("Sphere: choose a value.", failure.Message);
     }
 
     [Theory]
@@ -52,7 +52,7 @@ public class LensPowerRulesTests
         var failure = Assert.Single(Check(sphere));
 
         Assert.Equal("Sphere", failure.Key);
-        Assert.Equal("Sphere must be between -10 and 10 in 0.25 increments.", failure.Message);
+        Assert.Equal("Sphere: choose a value between -10 and 10, in steps of 0.25.", failure.Message);
     }
 
     [Theory]
@@ -68,7 +68,7 @@ public class LensPowerRulesTests
         var failure = Assert.Single(Check(sphere: 0m, cylinder: cylinder));
 
         Assert.Equal("Cylinder", failure.Key);
-        Assert.Equal("Cylinder must be between -6 and 0 in 0.25 increments.", failure.Message);
+        Assert.Equal("Cylinder: choose a value between -6 and 0, in steps of 0.25.", failure.Message);
     }
 
     [Theory]
@@ -80,7 +80,7 @@ public class LensPowerRulesTests
         var failure = Assert.Single(Check(sphere: 0m, add: add));
 
         Assert.Equal("Add", failure.Key);
-        Assert.Equal("Add must be between 0 and 3 in 0.25 increments.", failure.Message);
+        Assert.Equal("Add: choose a value between 0 and 3, in steps of 0.25.", failure.Message);
     }
 
     // --- Axis ---------------------------------------------------------------------------------
@@ -91,7 +91,7 @@ public class LensPowerRulesTests
         var failure = Assert.Single(Check(sphere: 0m, cylinder: -1.00m));
 
         Assert.Equal("Axis", failure.Key);
-        Assert.Equal("Axis is required when Cylinder isn't 0.00 — choose an axis from 0 to 180.", failure.Message);
+        Assert.Equal("Axis: choose an axis from 0 to 180 — Cylinder isn't 0.00.", failure.Message);
     }
 
     [Theory]
@@ -111,7 +111,7 @@ public class LensPowerRulesTests
         var failure = Assert.Single(Check(sphere: 0m, cylinder: cylinder is null ? null : Convert.ToDecimal(cylinder), axis: 90m));
 
         Assert.Equal("Axis", failure.Key);
-        Assert.Equal("Axis must be empty when Cylinder is 0.00 — an axis only applies to a cylinder.", failure.Message);
+        Assert.Equal("Axis: clear the axis — it only applies when Cylinder isn't 0.00.", failure.Message);
     }
 
     [Theory]
@@ -123,7 +123,7 @@ public class LensPowerRulesTests
         var failure = Assert.Single(Check(sphere: 0m, cylinder: -1.00m, axis: axis));
 
         Assert.Equal("Axis", failure.Key);
-        Assert.Equal("Axis must be a whole number of degrees between 0 and 180.", failure.Message);
+        Assert.Equal("Axis: choose a whole number of degrees from 0 to 180.", failure.Message);
     }
 
     // --- Add normalisation --------------------------------------------------------------------

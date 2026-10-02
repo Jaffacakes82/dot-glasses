@@ -23,9 +23,10 @@ public interface IUserLocationClient
 {
     Task<IReadOnlyList<AssignedOrgDto>> GetMyOrgsAsync();
 
-    /// <summary>False on any failure (network, or the server rejecting a non-assigned org) —
-    /// callers should treat that as "stayed on the previous location" and show a message.</summary>
-    Task<bool> SwitchOrgAsync(Guid orgNodeId);
+    /// <summary>Null when the switch worked. Otherwise the technician stayed on the previous
+    /// location and this is the message to show: one for having no connection (find one), another
+    /// for the server refusing or failing (try again).</summary>
+    Task<string?> SwitchOrgAsync(Guid orgNodeId);
 
     /// <summary>Non-null only when the most recent GetMyOrgsAsync call's live request failed *and*
     /// this device has no cached copy to fall back to — same shape as ReferenceDataClient's
@@ -63,28 +64,37 @@ public class UserLocationClient(HttpClient httpClient, AuthTokenStore tokenStore
         }
     }
 
-    public async Task<bool> SwitchOrgAsync(Guid orgNodeId)
+    public const string SwitchOffline = "You're offline. Connect to switch location.";
+    public const string SwitchFailed = "Couldn't switch location. Try again.";
+
+    public async Task<string?> SwitchOrgAsync(Guid orgNodeId)
     {
         try
         {
             var response = await httpClient.PostAsJsonAsync("api/v1/auth/switch-org", new SwitchOrgRequest { OrgNodeId = orgNodeId });
             if (!response.IsSuccessStatusCode)
             {
-                return false;
+                return SwitchFailed;
             }
 
             var body = await response.Content.ReadFromJsonAsync<LoginResponse>();
             if (body is null)
             {
-                return false;
+                return SwitchFailed;
             }
 
             await tokenStore.SetTokenAsync(body.AccessToken, body.ExpiresAtUtc, body.DisplayName, body.CurrentLocationId, body.CurrentLocationName);
-            return true;
+            return null;
+        }
+        catch (HttpRequestException)
+        {
+            // In the browser a request that never reached a server (no connection, DNS, CORS
+            // preflight never answered) surfaces as this; a server that answered is handled above.
+            return SwitchOffline;
         }
         catch (Exception)
         {
-            return false;
+            return SwitchFailed;
         }
     }
 

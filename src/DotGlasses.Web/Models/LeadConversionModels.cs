@@ -188,7 +188,21 @@ public class LeadConversionViewModel
     /// <see cref="CoatingTickEffects"/>.</summary>
     public IReadOnlyDictionary<Guid, CoatingTickEffect> TickEffects() =>
         CoatingTickEffects.For(OfferedCoatingIds, CoatingPairings);
+    /// <summary>The adult frame colours.</summary>
     public required IReadOnlyList<ReferenceDataItemDto> FrameColours { get; init; }
+
+    /// <summary>The children's frame colours — offered in place of the adult ones when
+    /// "Children's frame" is ticked.</summary>
+    public required IReadOnlyList<ReferenceDataItemDto> ChildFrameColours { get; init; }
+
+    /// <summary>The Coating set a Lead ordered its lens with, by name — shown read-only when the
+    /// Lead's lens is already ordered (ADR-0008). Empty for a Lead that placed no order.</summary>
+    public IReadOnlyList<string> OrderedCoatingLabels { get; init; } = [];
+
+    /// <summary>Whether the Sale this form records is for a children's frame: the Lead's own
+    /// answer when its lens carries over (the form then shows no tick to change), otherwise the
+    /// form's tick. It decides which frame colour list is on offer.</summary>
+    public required bool ChildrensFrame { get; init; }
     public required IReadOnlyList<ReferenceDataItemDto> Coatings { get; init; }
     public required IReadOnlyList<ReferenceDataItemDto> HardCaseColours { get; init; }
     public required IReadOnlyList<ReferenceDataItemDto> ReferralReasons { get; init; }

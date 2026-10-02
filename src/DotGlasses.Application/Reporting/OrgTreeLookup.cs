@@ -8,7 +8,8 @@ namespace DotGlasses.Application.Reporting;
 /// flat set of org nodes and asked about a HierarchyPath, with no database of its own.
 ///
 /// Every question it answers is an *ancestor* one, so what it is fed matters: hand it
-/// IUnscopedReportQueryService.GetOrganisationNodesUnscopedAsync's nodes, never a plain scoped
+/// IUnscopedReportQueryService.GetOrganisationNodesForReportsAsync's nodes (deactivated
+/// organisations included, so their records keep their name, marked "(deactivated)"), never a plain scoped
 /// OrganisationNodes query — the hierarchy filter only ever shows a caller their own subtree, so a
 /// scoped feed silently cannot see the caller's own country and every row resolves to
 /// UnknownCountry (CLAUDE.md's standing gotcha, caught twice independently). The module reports the
@@ -67,13 +68,13 @@ public sealed class OrgTreeLookup
     public OrganisationNodeSummary? FindOutlet(HierarchyPath path) =>
         _byPath.TryGetValue(path, out var node) ? node.Summary : null;
 
-    public string OutletName(HierarchyPath path) => FindOutlet(path)?.Name ?? UnknownOutlet;
+    public string OutletName(HierarchyPath path) => FindOutlet(path)?.ReportName ?? UnknownOutlet;
 
     /// <summary>The Country-level node at or above the path — there is at most one on any path.</summary>
     public OrganisationNodeSummary? FindCountry(HierarchyPath path) =>
         _countries.FirstOrDefault(c => c.Path.IsSelfOrAncestorOf(path))?.Summary;
 
-    public string CountryName(HierarchyPath path) => FindCountry(path)?.Name ?? UnknownCountry;
+    public string CountryName(HierarchyPath path) => FindCountry(path)?.ReportName ?? UnknownCountry;
 
     /// <summary>Nearest (deepest) Intermediate-level node at or above the path — an Intermediate
     /// can itself sit under another Intermediate, so depth decides which one is the Retailer.</summary>
@@ -93,6 +94,13 @@ public sealed class OrgTreeLookup
     }
 
     public string RetailerName(HierarchyPath path) => ResolveRetailer(path).Name;
+
+    /// <summary>True when the path is the organisation with this id or sits beneath it — how a
+    /// report narrows to one Retailer or distributor and everything under it. False for an id
+    /// that names no organisation in the tree.</summary>
+    public bool IsAtOrBeneath(HierarchyPath path, Guid organisationId) =>
+        _byPath.Values.FirstOrDefault(n => n.Summary.Id == organisationId) is { } organisation
+        && path.IsSelfOrDescendantOf(organisation.Path);
 
     /// <summary>True when the path is a training org or sits beneath one — the descendant
     /// direction, and the one exclusion Dashboard aggregates apply.</summary>
@@ -138,7 +146,7 @@ public sealed record RetailerResolution
         new(RetailerResolutionKind.UnknownOrganisation, null, OrgTreeLookup.UnknownRetailer);
 
     public static RetailerResolution Of(OrganisationNodeSummary retailer) =>
-        new(RetailerResolutionKind.Resolved, retailer, retailer.Name);
+        new(RetailerResolutionKind.Resolved, retailer, retailer.ReportName);
 
     public RetailerResolutionKind Kind { get; }
 

@@ -181,13 +181,18 @@ public class LeadConversionController(
         // has nothing to do here: it asks whether this Lead is already converted, and the
         // ConvertedFlag guard above has answered that with friendlier copy — SaleService sets
         // ConvertedFlag and SaleId together in one transaction, so the two can't disagree.
-        var rules = ConsultationRules.Check(request, atLeadsLocation);
-        if (!rules.IsValid)
+        //
+        // A Lead whose lens is already ordered adds the lock on that lens and its coatings
+        // (ADR-0008) — the rule the Sale endpoint reports beside its own source check. This form
+        // shows both read-only and BuildSaleAnswers takes them from the Lead, so it holds here by
+        // construction; it is asked anyway so the two write paths answer to the same rule.
+        var failures = OrderedLeadConversion.Over(ConsultationRules.Check(request, atLeadsLocation), request, lead).Failures;
+        if (failures.Count > 0)
         {
             // Failures come back keyed by CreateSaleRequest's own property names — LeadConversionFormModel
             // deliberately mirrors those names 1:1 so a straight "Form.{PropertyName}" remap is enough,
             // no per-field translation table needed.
-            foreach (var failure in rules.Failures)
+            foreach (var failure in failures)
             {
                 ModelState.AddModelError($"{nameof(form)}.{failure.Key}", failure.Message);
             }
@@ -326,19 +331,24 @@ public class LeadConversionController(
     /// </summary>
     private static SaleAnswers BuildSaleAnswers(LeadDto lead, LeadConversionFormModel form, bool leadLensCarriesOver)
     {
-        var answers = SaleAssembly.Seed(lead) with
+        var seeded = SaleAssembly.Seed(lead);
+        var answers = seeded with
         {
             ConsentGiven = form.ConsentGiven,
             FrameColourRefId = form.FrameColourRefId,
             FrameColourOtherText = form.FrameColourOtherText,
-            CoatingRefIds = form.CoatingRefIds,
+            // A Lead whose lens is already ordered keeps the Coating set it was ordered with
+            // (ADR-0008): the form shows it read-only and nothing posted can change it.
+            CoatingRefIds = lead.OrderFromDotGlasses ? seeded.CoatingRefIds : form.CoatingRefIds,
             HardCaseSold = form.HardCaseSold,
             HardCaseColourRefId = form.HardCaseColourRefId,
             HardCaseOtherColourText = form.HardCaseOtherColourText,
             // Passed through as ticked. This form renders the checkbox unconditionally with its
             // "Custom range only" condition in the label, so ConsultationRules saying so on submit
             // is the intended feedback — see SaleAnswers.OrderFromDotGlasses.
-            OrderFromDotGlasses = form.OrderFromDotGlasses,
+            // ...except for a Lead that already ordered: its Sale shares that order, so the tick
+            // isn't shown and a second order is never asked for.
+            OrderFromDotGlasses = !lead.OrderFromDotGlasses && form.OrderFromDotGlasses,
             ReferredOrTreated = form.ReferredOrTreated,
             ReferralReasonRefId = form.ReferralReasonRefId,
             ReferralOtherText = form.ReferralOtherText,
@@ -402,7 +412,14 @@ public class LeadConversionController(
             CoatingsNote = coatings is { Offered.Count: 0 }
                 ? "No coating can be made on both of these lenses, so they can't be sold together on a lens set — choose another lens."
                 : null,
+            // Both lists: the form shows the one matching "children's frame" (Rules' choice of
+            // category) and the server checks the same thing on submit.
             FrameColours = referenceData.Where(x => x.Category == ReferenceDataCategory.FrameColour).OrderBy(x => x.SortOrder).ToList(),
+            ChildFrameColours = referenceData.Where(x => x.Category == ReferenceDataCategory.FrameColourChild).OrderBy(x => x.SortOrder).ToList(),
+            // Read against the snapshot (retired items included): these describe what the Lead
+            // already ordered, like the lens summary above.
+            OrderedCoatingLabels = lead.OrderFromDotGlasses ? lead.CoatingRefIds.Select(id => atLeadsLocation.ResolveLabel(id)).ToList() : [],
+            ChildrensFrame = lensCarriesOver ? lead.ChildrensFrame : form.ChildrensFrame,
             Coatings = referenceData.Where(x => x.Category == ReferenceDataCategory.Coating).OrderBy(x => x.SortOrder).ToList(),
             HardCaseColours = referenceData.Where(x => x.Category == ReferenceDataCategory.HardCaseColour).OrderBy(x => x.SortOrder).ToList(),
             ReferralReasons = referenceData.Where(x => x.Category == ReferenceDataCategory.ReferralReason).OrderBy(x => x.SortOrder).ToList(),

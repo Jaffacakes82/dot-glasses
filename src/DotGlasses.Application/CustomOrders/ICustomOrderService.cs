@@ -3,10 +3,10 @@ using DotGlasses.Domain.Enums;
 namespace DotGlasses.Application.CustomOrders;
 
 /// <summary>Read + one write action backing the Admin Portal's Custom Orders screen — the
-/// fulfilment-status queue over Sale rows with FulfilmentStatus set (i.e. OrderFromDotGlasses was
-/// true at creation). Hierarchy scoping is automatic (Sale/Customer/OrganisationNode all
-/// implement IHierarchyScoped), so ListGroupedAsync just needs to query normally — a Country-level
-/// caller only ever sees their own subtree's custom orders, matching
+/// fulfilment-status queue over the CustomOrder records (ADR-0008), whether a Lead or a Sale
+/// placed them. Hierarchy scoping is automatic (CustomOrder/Lead/Sale/Customer/OrganisationNode
+/// all implement IHierarchyScoped), so ListGroupedAsync just needs to query normally — a
+/// Country-level caller only ever sees their own subtree's custom orders, matching
 /// AuthorizationPolicies.CustomOrdersView's page-level gate.
 ///
 /// Which orders are *visible* is that scoping. Naming the Retailer or retail point above one is a
@@ -31,18 +31,22 @@ public interface ICustomOrderService
     Task<IReadOnlyList<CustomOrderRow>> ExportAsync(FulfilmentStatus? status, CancellationToken cancellationToken = default);
 
     /// <summary>Linear, forward-only: Submitted -> InLab -> ReadyForPickup -> Fulfilled. Throws
-    /// DomainRuleViolationException carrying user-facing copy if the Sale isn't visible to the
-    /// caller, isn't a custom order (FulfilmentStatus is null), or is already Fulfilled — the last
-    /// is the live case, since a shared fulfilment queue means a colleague, a double click or a
-    /// browser resubmit can all advance the same order twice. See the implementation's doc comment
-    /// for why the not-visible case is a rejection rather than a leaked missing row.</summary>
-    Task AdvanceStatusAsync(Guid saleId, CancellationToken cancellationToken = default);
+    /// DomainRuleViolationException carrying user-facing copy if the order isn't visible to the
+    /// caller or is already Fulfilled — the last is the live case, since a shared fulfilment queue
+    /// means a colleague, a double click or a browser resubmit can all advance the same order
+    /// twice. See the implementation's doc comment for why the not-visible case is a rejection
+    /// rather than a leaked missing row. An order nobody has paid for yet advances like any other.</summary>
+    Task AdvanceStatusAsync(Guid orderId, CancellationToken cancellationToken = default);
 }
 
 /// <summary>ConsentGiven is carried through even though the on-screen Custom Orders list doesn't
 /// display it — the export must include it wherever a row derives from lead/customer data (this
-/// one does, via CustomerName), per the binding requirement in docs/open-issues.md.</summary>
-public record CustomOrderRow(Guid SaleId, string CustomerName, string Outlet, string Prescription, FulfilmentStatus Status, DateTimeOffset CreatedAtUtc, bool ConsentGiven);
+/// one does, via CustomerName), per the binding requirement in docs/open-issues.md.
+///
+/// IsPaid is false for an order a Lead placed that hasn't converted to a Sale yet — the queue
+/// marks it "Not yet paid". PlacedAtUtc is when the order was placed (the Lead's or Sale's
+/// recording), not when it was paid for.</summary>
+public record CustomOrderRow(Guid OrderId, string CustomerName, string Outlet, string Prescription, FulfilmentStatus Status, DateTimeOffset PlacedAtUtc, bool ConsentGiven, bool IsPaid);
 
 /// <summary>"Active" = not yet Fulfilled (Submitted/InLab/ReadyForPickup) — see ListGroupedAsync's
 /// doc comment for why this count ignores the current status filter. One group per Retailer, where

@@ -50,6 +50,65 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.ToTable("CoatingExclusions", (string)null);
                 });
 
+            modelBuilder.Entity("DotGlasses.Domain.Entities.CustomOrder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTimeOffset?>("DeletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("HierarchyPath")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("LeadId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ModifiedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTimeOffset>("PlacedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("SaleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HierarchyPath");
+
+                    b.HasIndex("LeadId")
+                        .IsUnique();
+
+                    b.HasIndex("SaleId")
+                        .IsUnique();
+
+                    b.ToTable("CustomOrders", (string)null);
+                });
+
             modelBuilder.Entity("DotGlasses.Domain.Entities.Customer", b =>
                 {
                     b.Property<Guid>("Id")
@@ -149,6 +208,9 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uuid");
+
+                    b.Property<bool?>("CustomerToldPrice")
+                        .HasColumnType("boolean");
 
                     b.Property<decimal?>("CylinderLeft")
                         .HasPrecision(5, 2)
@@ -262,6 +324,30 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.ToTable("Leads", (string)null);
                 });
 
+            modelBuilder.Entity("DotGlasses.Domain.Entities.LeadCoating", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CoatingRefId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("LeadId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LeadId");
+
+                    b.HasIndex("LeadId", "CoatingRefId")
+                        .IsUnique();
+
+                    b.ToTable("LeadCoatings", (string)null);
+                });
+
             modelBuilder.Entity("DotGlasses.Domain.Entities.LensOption", b =>
                 {
                     b.Property<Guid>("Id")
@@ -358,6 +444,9 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<Guid?>("DeactivationGroupId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset?>("DeletedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -375,10 +464,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
 
                     b.Property<bool>("IsTrainingOrg")
                         .HasColumnType("boolean");
-
-                    b.Property<string>("Kind")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
 
                     b.Property<int>("Level")
                         .HasColumnType("integer");
@@ -399,6 +484,8 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DeactivationGroupId");
 
                     b.HasIndex("HierarchyPath")
                         .IsUnique();
@@ -436,7 +523,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                             HierarchyPath = "/1/2/3/",
                             IsDeleted = false,
                             IsTrainingOrg = false,
-                            Kind = "Retailer",
                             Level = 2,
                             Name = "Kangemi Vision Centre",
                             ParentId = new Guid("a0000000-0000-0000-0000-000000000002")
@@ -448,7 +534,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                             HierarchyPath = "/1/2/3/4/",
                             IsDeleted = false,
                             IsTrainingOrg = false,
-                            Kind = "Standalone",
                             Level = 3,
                             Name = "Kangemi Vision Centre — Outreach Post",
                             ParentId = new Guid("a0000000-0000-0000-0000-000000000003")
@@ -1079,6 +1164,18 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                         },
                         new
                         {
+                            Id = new Guid("b0000000-0000-0000-0000-000000000063"),
+                            Category = 8,
+                            Code = "other",
+                            CreatedAtUtc = new DateTimeOffset(new DateTime(2026, 8, 4, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
+                            IsActive = true,
+                            IsDeleted = false,
+                            IsOtherOption = true,
+                            Label = "Other",
+                            SortOrder = 0
+                        },
+                        new
+                        {
                             Id = new Guid("b0000000-0000-0000-0000-000000000040"),
                             Category = 5,
                             Code = "orange",
@@ -1216,9 +1313,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
                     b.Property<int>("FrameCoverage")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("FulfilmentStatus")
-                        .HasColumnType("integer");
-
                     b.Property<int>("Gender")
                         .HasColumnType("integer");
 
@@ -1263,9 +1357,6 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid?>("OccupationRefId")
                         .HasColumnType("uuid");
-
-                    b.Property<bool>("OrderFromDotGlasses")
-                        .HasColumnType("boolean");
 
                     b.Property<Guid?>("PresetCatalogueId")
                         .HasColumnType("uuid");
@@ -1551,6 +1642,9 @@ namespace DotGlasses.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("PasswordHash")
                         .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("PasswordResetEmailSentAtUtc")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("PhoneNumber")
                         .HasColumnType("text");

@@ -563,6 +563,30 @@ body {
     background: var(--dot-white);
 }
 
+/* A checkbox or radio beside its label, inside or outside .dg-auth-field (whose text inputs are
+   full width — a checkbox must not be). */
+.dg-check-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-weight: 400;
+    font-size: var(--text-body);
+    padding: 3px 0;
+    margin: 0;
+}
+
+.dg-check-row[hidden] {
+    display: none;
+}
+
+.dg-auth-field .dg-check-row input[type="checkbox"],
+.dg-check-row input[type="checkbox"] {
+    width: auto;
+    flex: 0 0 auto;
+    margin-top: 4px;
+    padding: 0;
+}
+
 .dg-auth-field input:focus {
     outline: 2px solid var(--focus-ring);
     outline-offset: 1px;

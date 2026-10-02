@@ -79,8 +79,8 @@ public class DevUserSeeder(IServiceScopeFactory scopeFactory, IOptions<DevSeedOp
     /// org assignments — the local Postgres data volume is deliberately persisted across sessions
     /// (see CLAUDE.md's Deployment section), so an account seeded before an assignment was added
     /// here gets it on the next start. An account's access is exactly its UserOrgAssignment rows
-    /// (ADR-0006), so these rows are the whole of the seeding. AssignUserToOrgAsync is a no-op for
-    /// a row that already exists, and nothing is ever removed. Password is only set on first
+    /// (ADR-0006), so these rows are the whole of the seeding. UpdateAsync skips an assignment the
+    /// account already has, and nothing is ever removed. Password is only set on first
     /// creation, never reset here.
     /// </summary>
     private static async Task CreateOrUpdateAsync(
@@ -113,10 +113,8 @@ public class DevUserSeeder(IServiceScopeFactory scopeFactory, IOptions<DevSeedOp
             }
         }
 
-        foreach (var orgNodeId in account.OrgNodeIds)
-        {
-            await userAdminService.AssignUserToOrgAsync(user.Id, orgNodeId, cancellationToken);
-        }
+        await userAdminService.UpdateAsync(
+            user.Id, new UserEditPlan(NewFullName: null, NewRole: null, OrgsToAdd: account.OrgNodeIds, OrgsToRemove: []), cancellationToken);
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

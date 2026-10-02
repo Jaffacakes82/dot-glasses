@@ -25,8 +25,20 @@ public interface IUnscopedReportQueryService
     /// caller who may be scoped well below those ancestors and so could never see them via a
     /// plain scoped query).</summary>
     Task<IReadOnlyList<OrganisationNodeSummary>> GetOrganisationNodesUnscopedAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>As GetOrganisationNodesUnscopedAsync, plus every deactivated organisation, flagged
+    /// — what a report feeds OrgTreeLookup. A record made at an organisation that was deactivated
+    /// afterwards is still that organisation's record: it keeps counting, and the reports name it
+    /// with "(deactivated)" rather than "Unknown outlet". Not for anything that decides access or
+    /// what is on offer — a deactivated organisation gives neither.</summary>
+    Task<IReadOnlyList<OrganisationNodeSummary>> GetOrganisationNodesForReportsAsync(CancellationToken cancellationToken = default);
 }
 
 public record OrganisationNodePath(Guid Id, string HierarchyPath);
 
-public record OrganisationNodeSummary(Guid Id, string Name, OrganisationLevel Level, string HierarchyPath, bool IsTrainingOrg);
+public record OrganisationNodeSummary(Guid Id, string Name, OrganisationLevel Level, string HierarchyPath, bool IsTrainingOrg, bool IsDeactivated = false)
+{
+    /// <summary>The name as a report shows it: a deactivated organisation keeps its real name,
+    /// marked, so its records stay attributable.</summary>
+    public string ReportName => IsDeactivated ? $"{Name} (deactivated)" : Name;
+}

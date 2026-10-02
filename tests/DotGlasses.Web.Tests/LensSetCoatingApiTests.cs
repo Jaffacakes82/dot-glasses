@@ -103,7 +103,7 @@ public class LensSetCoatingApiTests(CustomWebApplicationFactory factory)
         var errors = await ErrorsAsync(response);
         Assert.Equal([nameof(CreateSaleRequest.CoatingRefIds)], errors.Keys);
         Assert.Equal(
-            "Every coating must be configured as available for the chosen lenses (see Lens Sets).",
+            "One of the chosen coatings isn't made on these lenses — choose the coatings again.",
             errors[nameof(CreateSaleRequest.CoatingRefIds)].Single());
     }
 
@@ -146,6 +146,7 @@ public class LensSetCoatingApiTests(CustomWebApplicationFactory factory)
             FullName = "Amina Okoro",
             PhoneNumber = "0700111222",
             ReasonNotPurchasedRefId = ActiveItem(DomainReferenceDataCategory.ReasonNotPurchased),
+            CustomerToldPrice = true,
             LensRangeType = LensRangeType.LensSet,
             PresetCatalogueId = lensSetId,
             SphereLeft = 3.00m,

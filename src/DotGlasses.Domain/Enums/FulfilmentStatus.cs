@@ -1,7 +1,7 @@
 namespace DotGlasses.Domain.Enums;
 
-/// <summary>Linear, forward-only progression for a custom order routed to fulfilment
-/// (Sale.OrderFromDotGlasses) — see Sale.FulfilmentStatus.</summary>
+/// <summary>Linear, forward-only progression of a custom order through the lab — see
+/// CustomOrder.Status (ADR-0008).</summary>
 public enum FulfilmentStatus
 {
     Submitted = 0,

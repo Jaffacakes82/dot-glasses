@@ -14,5 +14,9 @@ public class SetPasswordViewModel
     [DataType(DataType.Password)]
     public string Password { get; set; } = string.Empty;
 
+    /// <summary>Which sign-in page asked for the link (RequestingApp), so the person is returned
+    /// to it. Absent on an invite or an admin's reset, which return to the Admin Portal.</summary>
+    public string? App { get; set; }
+
     public string? Error { get; set; }
 }

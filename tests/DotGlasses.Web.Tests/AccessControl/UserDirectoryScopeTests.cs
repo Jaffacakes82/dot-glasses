@@ -65,7 +65,7 @@ public class UserDirectoryScopeTests(AccessControlFixture fixture) : IClassFixtu
 
         // Repaired from the portal: assigning them an org is the per-org check, as for anyone.
         var retailPoint = OrganisationSeedConfiguration.KenyaRetailPointId.ToString();
-        AssertRedirectedTo("/Organisations", await PostAsync(dgiAdmin, "/Organisations/AssignUser", ("orgNodeId", retailPoint), ("userId", userId.ToString())));
+        AssertRedirectedTo("/Organisations", await PostAsync(dgiAdmin, "/Organisations/AssignUsers", ("orgNodeId", retailPoint), ("userIds", userId.ToString())));
         Assert.True(IsListed(await DirectoryAsync(countryAdmin, userName), userName));
     }
 
@@ -126,7 +126,7 @@ public class UserDirectoryScopeTests(AccessControlFixture fixture) : IClassFixtu
             AdminPortalFactory.Form(token, ("id", userId.ToString()), ("role", "Supervisor")),
             referer: "/UserDirectory");
 
-        Assert.Contains("Role must be one of", html);
+        Assert.Contains("Choose a role.", html);
         Assert.True(IsListed(await DirectoryAsync(dgiAdmin, userName, role: RoleNames.User), userName));
     }
 
@@ -140,8 +140,8 @@ public class UserDirectoryScopeTests(AccessControlFixture fixture) : IClassFixtu
         var countryAdmin = await fixture.SignInAsync(AccessControlFixture.CountryAdmin);
 
         // In Kenya: allowed, even though the user also has an assignment outside it.
-        AssertRedirectedTo("/Organisations", await PostAsync(countryAdmin, "/Organisations/AssignUser",
-            ("orgNodeId", AccessControlFixture.ResellerId.ToString()), ("userId", userId.ToString())));
+        AssertRedirectedTo("/Organisations", await PostAsync(countryAdmin, "/Organisations/AssignUsers",
+            ("orgNodeId", AccessControlFixture.ResellerId.ToString()), ("userIds", userId.ToString())));
         AssertRedirectedTo("/Organisations", await PostAsync(countryAdmin, "/Organisations/UnassignUser",
             ("orgNodeId", OrganisationSeedConfiguration.KenyaRetailPointId.ToString()), ("userId", userId.ToString())));
 
@@ -240,7 +240,7 @@ public class UserDirectoryScopeTests(AccessControlFixture fixture) : IClassFixtu
             ("OrgNodeIds", fixture.SecondCountryRetailPointId.ToString()));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains("outside your own scope", await response.Content.ReadAsStringAsync());
+        Assert.Contains("outside the ones you manage", await response.Content.ReadAsStringAsync());
         Assert.Null(await FindUserIdAsync(email));
     }
 

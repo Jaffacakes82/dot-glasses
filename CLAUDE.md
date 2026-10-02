@@ -48,9 +48,11 @@ are the record of *how* things got built; don't restate that here.
 - **There is no consultation request validator.** `ConsultationRules.Check` holds *every* rule for
   a `Test`/`Lead`/`Sale` create — including the scalar ones (`NotEmpty`, length caps, `IsInEnum`,
   the age range). A message a form control can cause is a plain instruction naming the control by
-  its on-screen label ("Choose a reason not purchased."), never a property or enum name; only the
-  ones no form can produce (an empty `Id`, an out-of-enum value, fields the forms always blank)
-  stay technical. The three create endpoints call the module directly: load the
+  its on-screen label ("Choose a reason not purchased."), never a property or enum name. The ones no
+  form can produce (an empty `Id`, an out-of-enum value, fields the forms always blank) can still
+  reach a technician on Failed records, so each group shares one plain sentence saying what to do;
+  `ConsultationRulesTests` has a guard test that fails if any message names a request property or
+  enum member. The three create endpoints call the module directly: load the
   snapshot once, `Check`, `ToModelStateDictionary()`, `ValidationProblem`. Don't reintroduce a
   validator for these three DTOs, and don't reword a message without treating it as the
   client-visible change it is.
@@ -74,7 +76,13 @@ are the record of *how* things got built; don't restate that here.
   the Lead is found only *after* the form is filled in), overwrite everything just typed.
   Attribution stays out of it — `TechnicianUserId`/`HierarchyPath` are not on the DTO and must not
   be added; `LeadConversionController` passes the *Lead's* own values to `ISaleService.CreateAsync`
-  as separate arguments. `SaleAssemblyTests` walks `CreateSaleRequest` by reflection and fails
+  as separate arguments. **A Lead that ordered its lens** (ADR-0008) seeds differently in one way:
+  it carries the Coating set it ordered with, whole, in place of a set seeded from a preference —
+  and both forms then show that lens and set read-only rather than in controls. The lock itself is
+  `OrderedLeadConversion` (`Rules/Sales`), one pure check over the request and the Lead that the
+  Sale endpoint, the Admin Portal's conversion and `SaleService` all ask. On the locked fields it
+  **replaces** the ordinary Sale rules rather than adding to them (`Over`): the lens was checked
+  when it was ordered, and a coating retired since must not leave an order nobody can pay for. `SaleAssemblyTests` walks `CreateSaleRequest` by reflection and fails
   unless every property is either carried from `SaleAnswers` or listed in `DeliberatelyNotCarried`
   with a reason — so **adding a field to `CreateSaleRequest` means adding it to `SaleAnswers` and
   `Build` too**. One thing deliberately stays with each form rather than moving into the builder:
@@ -104,7 +112,11 @@ are the record of *how* things got built; don't restate that here.
   (e.g. `EventHistoryQueryService`, `DashboardQueryService`, `CustomOrderService`,
   `OrganisationAdminService`, `ReferenceDataAdminService`, `PresetCatalogueAdminService`); a
   repository interface exists only where a service genuinely needs `Add`/`Update`/`GetById`
-  (`IVisionTestRepository`/`ILeadRepository`/`ISaleRepository`, `ICustomerRepository`).
+  (`IVisionTestRepository`/`ILeadRepository`/`ISaleRepository`, `ICustomerRepository`, and
+  `ICustomOrderRepository` — `LeadService`/`SaleService` place and link orders through it; the
+  queue's own reads stay on `CustomOrderService`). A reporting figure with a definition worth
+  testing is a pure function over loaded rows (`DashboardCalculator`), and the query service only
+  loads.
 - Controller-based Web API (not Minimal APIs), versioned from `v1`, Swagger-visible (dev only).
 - **A business-rule rejection throws `DomainRuleViolationException`** (`Domain/Common`, the only
   layer `Application`, `Infrastructure` and `Web` can all see — see ADR-0003). Its message is
@@ -154,7 +166,8 @@ are the record of *how* things got built; don't restate that here.
 ## Data scoping vs RBAC — do not conflate
 
 - **Data scoping** (which rows a user can see) is a global EF Core query filter on
-  `IHierarchyScoped` entities (`OrganisationNode`, `Customer`, `Test`, `Lead`, `Sale`), keyed off
+  `IHierarchyScoped` entities (`OrganisationNode`, `Customer`, `Test`, `Lead`, `Sale`,
+  `CustomOrder`), keyed off
   `ICurrentUserContext.ScopePaths` — a row is visible if its `HierarchyPath` starts with *any* of
   them (`patterns.Any(p => EF.Functions.Like(HierarchyPath, p))`, a `LIKE ANY`-style predicate, so
   a row that matches more than one scope path is still counted once). It is role-independent.
@@ -220,14 +233,21 @@ Real domain entities, in `DotGlasses.Domain/Entities` and `/Enums`:
 
 - **`OrganisationNode`** — arbitrary-depth org hierarchy. `OrganisationLevel`:
   `Dgi` (0) → `Country` (1) → `Intermediate` (2) → `RetailPoint` (3), ordered, only these four
-  carry business rules (`Intermediate` covers every reseller/distributor tier via a free-text
-  `Kind` label). Tree shape is enforced: DGI's only child level is Country; Country/Intermediate
+  carry business rules (`Intermediate` covers every reseller/distributor tier). A level is shown
+  to people only through `OrganisationLevelLabels` ("Retailer/distributor", "Retail Point"); views
+  decide behaviour by the level, never by its label. Tree shape is enforced: DGI's only child level is Country; Country/Intermediate
   may have Intermediate or RetailPoint children; RetailPoint is always a leaf. `HierarchyPath`
   segments are drawn from a Postgres sequence (`OrganisationPathSegments`) — globally unique,
   not per-parent, and **never reused**: a deactivated node keeps its path and can be reactivated,
   so its segments stay spent. Don't go back to "current max + 1" — it re-minted a deactivated
   node's segment and put two orgs on `/1/2/`, merging their data scopes. `HierarchyPath` is
-  unique across every row (deactivated included) as the backstop. `IsTrainingOrg` nodes
+  unique across every row (deactivated included) as the backstop. Deactivating takes every active
+  organisation beneath it too, stamped with one `DeactivationGroupId`; reactivating restores
+  exactly that group and is refused while the parent is deactivated. The cascade sets the
+  soft-delete fields by hand — `Remove()` on a parent nulls the `ParentId` of its tracked children
+  before the interceptor's soft-delete flip. Reports feed `OrgTreeLookup` from
+  `GetOrganisationNodesForReportsAsync`, which includes deactivated organisations so their records
+  keep their name, marked "(deactivated)". `IsTrainingOrg` nodes
   are excluded from Dashboard aggregates only (not Event History/Custom Orders/User Directory).
 - **`Test`/`Lead`/`Sale`** — separate atomic create-once events, no update endpoint by design
   (server-side linking happens inside the service layer instead): a Test converts to a Lead
@@ -238,6 +258,19 @@ Real domain entities, in `DotGlasses.Domain/Entities` and `/Enums`:
   `IVisionTestRepository`/`IVisionTestService`/`VisionTestService`, not `ITestRepository` — that
   name would collide with the `DotGlasses.Application.Tests` xUnit project's own root namespace.
   The Domain entity itself is still `Test`.
+- **`CustomOrder`** — a custom lens ordered from DOT Glasses is a record of its own (ADR-0008),
+  hierarchy-scoped, holding only where it was placed, when, its `FulfilmentStatus` and the Lead or
+  Sale that placed it. The lens, coatings, pupil distance and customer are read through that
+  record, never copied — a Lead or Sale can't be edited, so they can't drift. It is placed inside
+  the same unit of work as the Lead or Sale (`LeadService`/`SaleService`), and only then: there is
+  no ordering on an existing record and no cancel. `OrderFromDotGlasses` on the two request DTOs is
+  the *instruction* to place one; nothing on `Sale` or `Lead` stores it — a record "has an order"
+  when an order points at it. A Lead that orders carries a Coating set (`LeadCoating`) in place of
+  its single preference, and must hold a complete Custom lens. An order with a `LeadId` and no
+  `SaleId` is unpaid; converting that Lead links the Sale to the **same** order, and both create
+  paths answer a repeated client id with the existing record so an outbox retry never places a
+  second. On the Dashboard, "Custom orders" counts these records by `PlacedAtUtc`, and "Standard
+  sales" is Sales with no order linked.
 - **`PresetCatalogue`/`LensOption`** — a **lens set** in product language (`CONTEXT.md`). A
   lens set's lens is a **lens power** (sphere, and optionally cylinder/axis/add — typed columns on
   `LensOption`) with a typed label (unique within the set), a lens type when it has an add
@@ -255,11 +288,17 @@ Real domain entities, in `DotGlasses.Domain/Entities` and `/Enums`:
   came from, and holds no pointer to a `LensOption`.
 - **`ReferenceDataItem`** — one generic table backing every admin-managed dropdown, keyed by
   `ReferenceDataCategory` (Reasons not purchased, Referral reasons, Coatings & tints, Frame
-  colours, Hard case colours, Occupations, Lens types; the old Lens strengths category is retired
+  colours (adult), Frame colours (child), Hard case colours, Occupations, Lens types; the old Lens strengths category is retired
   and its enum value reserved, never to be reused). Retiring an option sets `IsActive =
   false`, never a hard delete — historical `Test`/`Lead`/`Sale` rows may reference it by Id, and
   Event History resolves labels against retired items too. At most one *active* `IsOtherOption`
   item per category (server-enforced), which is what makes a dropdown reveal a free-text field.
+  A Sale's frame colour comes from the list matching its "children's frame" tick —
+  `ConsultationRules.FrameColourCategory` is the one definition both forms offer from and the rule
+  checks. A frame colour's picture is an upload held in the private `reference-data-images` blob
+  container (`IReferenceDataPictureStore`); `ImageUrl` holds the *path* the Admin Portal serves it
+  from (`/reference-data/pictures/<generated name>`), not a full address, so a row works on every
+  host. The type is read from the file's signature (`ReferenceDataPictures.Detect`), never its name.
 - **`Customer`** — internal-only, matched by exact name + phone within an outlet, find-or-create,
   no public API, no fuzzy matching.
 
@@ -288,7 +327,12 @@ under *any* of `ScopePaths`). `Users.ManageInScope` is stricter than the per-org
 purpose — seeing a user in the directory needs only one assignment in scope, but suspending them,
 resetting their password or changing their role acts on all of their access at once, so it needs
 *every* assignment in scope (`AllAssignmentsInScopeRequirement`); adding or removing a single
-assignment stays on the per-org check. Dashboard, Organisations, Event History and User Directory
+assignment stays on the per-org check. The Edit user page applies both in one Save: it works out
+what changed since the page loaded (`UserEditPlan`) and checks each change under its own rule.
+**Nobody edits their own access into a corner**, whoever they are: `UserAdminService` refuses a
+change to your own role, suspending yourself, and removing one of your own assignments unless
+another you keep covers it (`OwnAssignments`); `OrganisationAdminService` refuses deactivating an
+organisation your own access comes through (`OwnAccess`). Dashboard, Organisations, Event History and User Directory
 carry only `[Authorize]` — any authenticated user reaches them; what they see is narrowed by data
 scoping, not by policy.
 
@@ -316,7 +360,9 @@ table — used for both client-side pre-submit checks and mapping a server rejec
 The JWT (`AuthTokenStore`) and reference data/preset catalogues (`ReferenceDataClient`) are both
 persisted/cached in IndexedDB (write-through on a successful load, fallback to last-cached copy
 on failure) — a technician who's been online at least once can keep working, and stay signed in
-across a refresh, with no connectivity. First-ever use still needs one online session. The cache
+across a refresh, with no connectivity. The frame colour pictures follow the lists onto the device
+(`FramePictureCache`, as data URLs): only pictures the Admin Portal serves are copied — never an
+address on another website, which would send the app's bearer token there. First-ever use still needs one online session. The cache
 outlives releases, so a change to the *meaning* of a cached shape (not just adding a field) bumps
 `ReferenceDataClient.LensSetShape`: a cache written before it loses its lens sets on an offline load
 rather than presenting old lenses as zero-power ones. The cached lens sets belong to the location

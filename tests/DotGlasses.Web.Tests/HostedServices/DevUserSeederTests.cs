@@ -191,7 +191,7 @@ public class DevUserSeederTests : IAsyncLifetime
         }
     }
 
-    /// <summary>Only what UserAdminService.AssignUserToOrgAsync actually reads — it never
+    /// <summary>Only what UserAdminService.UpdateAsync actually reads when adding assignments — it never
     /// consults the caller's scope, so this doesn't need to carry one.</summary>
     private sealed class FakeCurrentUserContext : ICurrentUserContext
     {

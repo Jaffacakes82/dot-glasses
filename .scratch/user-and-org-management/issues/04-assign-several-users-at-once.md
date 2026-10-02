@@ -7,7 +7,7 @@ assignment grants at this level.
 
 **Blocked by:** None
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 **Model:** Sonnet 5.5.
 
@@ -17,21 +17,21 @@ assignment grants at this level.
 
 ## Acceptance criteria
 
-- [ ] The dialog lists users as checkboxes with a filter box and posts a list of user ids for one
+- [x] The dialog lists users as checkboxes with a filter box and posts a list of user ids for one
       organisation.
-- [ ] All ticked users are assigned in one transaction through the execution strategy. Any
+- [x] All ticked users are assigned in one transaction through the execution strategy. Any
       refusal rolls back the whole batch.
-- [ ] Only Active users not already assigned to this organisation are offered. The server refuses
+- [x] Only Active users not already assigned to this organisation are offered. The server refuses
       an Invited or Suspended user id.
-- [ ] A user the admin can't see in the User Directory is not offered and is refused by the
+- [x] A user the admin can't see in the User Directory is not offered and is refused by the
       server; someone higher up assigns them.
-- [ ] Each user's role is shown beside their name in the dialog and in the Assigned users list.
-- [ ] A line under the title, by level. At a retail point: they will be able to record here in
+- [x] Each user's role is shown beside their name in the dialog and in the Assigned users list.
+- [x] A line under the title, by level. At a retail point: they will be able to record here in
       the Field App. Higher up: Admin Portal access to this organisation and everything beneath it.
-- [ ] Unassign stays one user at a time, and asks for confirmation at a retail point with the Edit
+- [x] Unassign stays one user at a time, and asks for confirmation at a retail point with the Edit
       page's copy.
-- [ ] Each assign and unassign writes the same structured log entry as ticket 01.
-- [ ] Web.Tests cover: several users in one request; an Invited or Suspended id refused; one bad
+- [x] Each assign and unassign writes the same structured log entry as ticket 01.
+- [x] Web.Tests cover: several users in one request; an Invited or Suspended id refused; one bad
       id leaves nobody assigned.
 
 ## Notes
@@ -39,3 +39,13 @@ assignment grants at this level.
 - Spec: `../spec.md` — user stories 16–19; "Assign users dialog".
 - Authorisation stays `Organisations.ManageInScope` against the target organisation.
 - Skills: `/tdd`, then `/code-review`.
+
+## Comments
+
+**2026-10-01 — built.** `OrganisationsController.AssignUsers` and
+`UserAdminService.AssignUsersToOrgAsync`: every id is checked against the caller's own directory
+(visible and Active) before anything is written, then all are added in one transaction through the
+execution strategy. Tests: `OrganisationsManagementTests`.
+
+Checked in a local browser (2026-10-01): the dialog lists users with role and email, the filter
+narrows them, and the line under the title changes with the level.

@@ -1,5 +1,6 @@
 using DotGlasses.Application.Reporting;
 using DotGlasses.Domain.Common;
+using DotGlasses.Domain.Enums;
 
 namespace DotGlasses.Application.Users;
 
@@ -47,9 +48,23 @@ public interface IUserAdminService
     /// DomainRuleViolationException for a role that isn't one of RoleNames.All.</summary>
     Task ChangeRoleAsync(Guid userId, string role, CancellationToken cancellationToken = default);
 
-    /// <summary>Adds orgNodeId as an org assignment for an existing user — the Organisations
-    /// screen's "Assign users" action. No-op if already assigned.</summary>
-    Task AssignUserToOrgAsync(Guid userId, Guid orgNodeId, CancellationToken cancellationToken = default);
+    /// <summary>Assigns every one of userIds to orgNodeId as one unit of work — the Organisations
+    /// screen's "Assign users" action. Someone already assigned is skipped. Refused as a whole
+    /// (DomainRuleViolationException, nobody assigned) when any id is a user the caller can't see
+    /// or one who isn't Active: an Invited or Suspended user's organisations are changed from
+    /// their Edit page.</summary>
+    Task AssignUsersToOrgAsync(IReadOnlyList<Guid> userIds, Guid orgNodeId, CancellationToken cancellationToken = default);
+
+    /// <summary>What the Edit user page shows, or null for a user the caller can't see at all.
+    /// Assignments outside the caller's scope are counted, never named.</summary>
+    Task<UserEditDetail?> GetForEditAsync(Guid userId, CancellationToken cancellationToken = default);
+
+    /// <summary>Applies one Save from the Edit user page — name, role and assignment changes — as
+    /// one unit of work. Whether the caller may make each change is the controller's check; the
+    /// rules that hold whoever is asking live here: a user keeps at least one assignment
+    /// (counting those the caller can't see), nobody is assigned to a deactivated organisation,
+    /// and nobody changes their own role or shrinks their own scope.</summary>
+    Task UpdateAsync(Guid userId, UserEditPlan plan, CancellationToken cancellationToken = default);
 
     /// <summary>Removes one org assignment — the Organisations screen's un-assign action. No-op if
     /// the pairing doesn't exist. Any assignment can go except the user's last one, which throws
@@ -80,3 +95,20 @@ public record UserAdminRow(
     int SalesCount);
 
 public record InviteUserResult(Guid UserId, string Email, string PasswordResetToken);
+
+/// <summary>A user as their Edit page needs them. Assignments holds only the organisations in the
+/// caller's scope (deactivated ones included, flagged); OutsideScopeCount is how many more the
+/// user holds elsewhere. AssignmentPaths is all of them, for the "may I change this user's role"
+/// check (ADR-0006).</summary>
+public record UserEditDetail(
+    Guid Id,
+    string Email,
+    string FullName,
+    string Role,
+    string Status,
+    IReadOnlyList<UserEditAssignment> Assignments,
+    int OutsideScopeCount,
+    IReadOnlyList<HierarchyPath> AssignmentPaths,
+    bool IsSelf);
+
+public record UserEditAssignment(Guid OrgNodeId, string Name, OrganisationLevel Level, HierarchyPath Path, bool IsDeactivated);

@@ -2,6 +2,7 @@ using DotGlasses.Application.ReferenceData;
 using DotGlasses.Domain.Enums;
 using DotGlasses.Web.Authorization;
 using DotGlasses.Web.Models;
+using DotGlasses.Web.Validation.ReferenceData;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authorization;
@@ -13,27 +14,34 @@ namespace DotGlasses.Web.Controllers;
 public class ReferenceDataController(
     IReferenceDataAdminService referenceDataAdminService,
     IValidator<CreateReferenceDataItemRequest> createValidator,
-    IValidator<UpdateReferenceDataItemRequest> updateValidator) : Controller
+    IValidator<UpdateReferenceDataItemRequest> updateValidator,
+    IReferenceDataPictureStore pictureStore) : Controller
 {
-    /// <summary>Display name/scope-note copy per category, and whether its Create form should
-    /// show the image-URL field (only Frame colour, per the CEO's ask for a swatch photo).
-    /// Ordering here is display order on the screen.</summary>
+    /// <summary>Display name/scope-note copy per category, and whether its forms take a picture
+    /// (the two frame colour lists). Ordering here is display order on the screen.</summary>
     private static readonly (ReferenceDataCategory Category, string Name, string ScopeNote, bool ShowImageField)[] CategoryMeta =
     [
         (ReferenceDataCategory.ReasonNotPurchased, "Reasons not purchased", "DGI-editable · shown in the field app Lead form", false),
         (ReferenceDataCategory.ReferralReason, "Referral reasons", "DGI-editable · shown when a Test is marked Referred", false),
         (ReferenceDataCategory.Coating, "Coatings & tints", "DGI-editable · Lead coating preference and Sale tint/coating checkboxes", false),
-        (ReferenceDataCategory.FrameColour, "Frame colors", "DGI-editable · Sale/custom color swatches, matches e-commerce site", true),
-        (ReferenceDataCategory.HardCaseColour, "Hard case colors", "DGI-editable · shown when a Sale includes a hard case", false),
+        (ReferenceDataCategory.FrameColour, "Frame colours (adult)", "DGI-editable · offered on a Sale unless \"children's frame\" is ticked", true),
+        (ReferenceDataCategory.FrameColourChild, "Frame colours (child)", "DGI-editable · offered on a Sale when \"children's frame\" is ticked", true),
+        (ReferenceDataCategory.HardCaseColour, "Hard case colours", "DGI-editable · shown when a Sale includes a hard case", false),
         (ReferenceDataCategory.Occupation, "Occupations", "DGI-editable · optional occupation field on Test, Lead and Sale", false),
         (ReferenceDataCategory.LensType, "Lens types", "DGI-editable · asked when a lens has an add, on a custom prescription or a lens set lens", false),
     ];
+
+    /// <summary>Well above the 1 MB a picture may be, so a picture that is a little too big is
+    /// answered with the validator's message rather than a bare "request too large" — and far
+    /// below the framework's default, so nobody can post hundreds of megabytes at these forms.</summary>
+    private const long MaxUploadRequestBytes = 8 * 1024 * 1024;
 
     public async Task<IActionResult> Index(CancellationToken cancellationToken) =>
         View(await BuildViewModelAsync(cancellationToken));
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [RequestSizeLimit(MaxUploadRequestBytes)]
     public async Task<IActionResult> Create(CreateReferenceDataItemRequest request, CancellationToken cancellationToken)
     {
         // ModelState as well as the validator: MVC binds a category number the enum doesn't define
@@ -47,12 +55,24 @@ public class ReferenceDataController(
             return View(nameof(Index), await BuildViewModelAsync(cancellationToken));
         }
 
-        await referenceDataAdminService.CreateAsync(request.Category, request.Label, request.ImageUrl, request.IsOtherOption, cancellationToken);
+        var imageUrl = request.Picture is { } picture ? await StoreAsync(picture, cancellationToken) : null;
+        try
+        {
+            await referenceDataAdminService.CreateAsync(request.Category, request.Label, imageUrl, request.IsOtherOption, cancellationToken);
+        }
+        catch
+        {
+            // The item wasn't saved, so nothing points at the picture just stored.
+            await DeleteStoredAsync(imageUrl, CancellationToken.None);
+            throw;
+        }
+
         return RedirectToAction(nameof(Index));
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [RequestSizeLimit(MaxUploadRequestBytes)]
     public async Task<IActionResult> Update(UpdateReferenceDataItemRequest request, CancellationToken cancellationToken)
     {
         var validationResult = await updateValidator.ValidateAsync(request, cancellationToken);
@@ -62,7 +82,25 @@ public class ReferenceDataController(
             return View(nameof(Index), await BuildViewModelAsync(cancellationToken));
         }
 
-        await referenceDataAdminService.UpdateAsync(request.Id, request.Label, request.ImageUrl, cancellationToken);
+        // A new picture wins over "Remove picture" when both are sent: the admin chose a file.
+        ReferenceDataPictureChange change = request.Picture is { } picture
+            ? new ReferenceDataPictureChange.Replace(await StoreAsync(picture, cancellationToken))
+            : request.RemovePicture ? new ReferenceDataPictureChange.Remove() : new ReferenceDataPictureChange.Keep();
+
+        string? previous;
+        try
+        {
+            previous = await referenceDataAdminService.UpdateAsync(request.Id, request.Label, change, cancellationToken);
+        }
+        catch
+        {
+            await DeleteStoredAsync((change as ReferenceDataPictureChange.Replace)?.ImageUrl, CancellationToken.None);
+            throw;
+        }
+
+        // Only after the item no longer points at it. An old pasted web address has nothing in
+        // storage to delete.
+        await DeleteStoredAsync(previous, cancellationToken);
         return RedirectToAction(nameof(Index));
     }
 
@@ -117,6 +155,29 @@ public class ReferenceDataController(
     {
         await referenceDataAdminService.RemoveCoatingExclusionAsync(id, cancellationToken);
         return RedirectToAction(nameof(Index));
+    }
+
+    /// <summary>Stores an upload the validator has already accepted and returns the address the
+    /// item will hold. The type is read again from the bytes rather than carried over from the
+    /// validator, so what is stored is described by what it is.</summary>
+    private async Task<string> StoreAsync(IFormFile picture, CancellationToken cancellationToken)
+    {
+        var (type, error) = await ReferenceDataPictureUpload.CheckAsync(picture, cancellationToken);
+        if (type is null)
+        {
+            throw new InvalidOperationException($"An unvalidated picture reached storage: {error}");
+        }
+
+        await using var content = picture.OpenReadStream();
+        return ReferenceDataPictures.UrlFor(await pictureStore.SaveAsync(content, type, cancellationToken));
+    }
+
+    private async Task DeleteStoredAsync(string? imageUrl, CancellationToken cancellationToken)
+    {
+        if (ReferenceDataPictures.StoredNameOf(imageUrl) is { } name)
+        {
+            await pictureStore.DeleteAsync(name, cancellationToken);
+        }
     }
 
     private async Task<IReadOnlyList<ReferenceDataList>> BuildViewModelAsync(CancellationToken cancellationToken)

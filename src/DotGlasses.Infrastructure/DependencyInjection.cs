@@ -44,6 +44,7 @@ public static class DependencyInjection
         services.AddScoped<IDashboardQueryService, DashboardQueryService>();
         services.AddEmailSender();
         services.AddScoped<IUserAdminService, UserAdminService>();
+        services.AddScoped<IPasswordResetService, PasswordResetService>();
         services.AddScoped<IUserAssignmentsQueryService, UserAssignmentsQueryService>();
 
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<DotGlassesDbContext>());
@@ -66,6 +67,7 @@ public static class DependencyInjection
         services.AddScoped<ILeadService, LeadService>();
 
         services.AddScoped<ISaleRepository, SaleRepository>();
+        services.AddScoped<ICustomOrderRepository, CustomOrderRepository>();
         services.AddScoped<ISaleService, SaleService>();
 
         return services;

@@ -24,13 +24,22 @@ public class SaleServiceTests
         out FakeSaleRepository sales,
         out FakeLeadRepository leads,
         out FakeCustomerRepository customers,
-        out FakeUnitOfWork unitOfWork)
+        out FakeUnitOfWork unitOfWork) =>
+        CreateSut(out sales, out leads, out customers, out unitOfWork, out _);
+
+    private static SaleService CreateSut(
+        out FakeSaleRepository sales,
+        out FakeLeadRepository leads,
+        out FakeCustomerRepository customers,
+        out FakeUnitOfWork unitOfWork,
+        out FakeCustomOrderRepository orders)
     {
         sales = new FakeSaleRepository();
         leads = new FakeLeadRepository();
         customers = new FakeCustomerRepository();
         unitOfWork = new FakeUnitOfWork();
-        return new SaleService(sales, leads, customers, unitOfWork);
+        orders = new FakeCustomOrderRepository();
+        return new SaleService(sales, leads, customers, orders, unitOfWork);
     }
 
     private static CreateSaleRequest ARecordedSale(
@@ -74,7 +83,7 @@ public class SaleServiceTests
         var rejection = await Assert.ThrowsAsync<DomainRuleViolationException>(
             () => sut.CreateAsync(ARecordedSale(), Guid.NewGuid(), hierarchyPath: ""));
 
-        Assert.Contains("no org assignment", rejection.Message);
+        Assert.Contains("isn't assigned to an organisation", rejection.Message);
         Assert.Equal(0, sales.Count);
         Assert.Equal(0, customers.Count);
         Assert.Equal(0, unitOfWork.SaveCount);
@@ -182,9 +191,9 @@ public class SaleServiceTests
     }
 
     [Fact]
-    public async Task ASaleRoutedForFulfilment_StartsAtTheFirstFulfilmentStatus()
+    public async Task ASaleRoutedForFulfilment_PlacesAnOrderAtTheFirstFulfilmentStatus()
     {
-        var sut = CreateSut(out var sales, out _, out _, out _);
+        var sut = CreateSut(out _, out _, out _, out _, out var orders);
 
         var sale = await sut.CreateAsync(
             ARecordedSale(lensRangeType: LensRangeType.Custom, orderFromDotGlasses: true),
@@ -192,15 +201,146 @@ public class SaleServiceTests
             RetailPoint);
 
         Assert.True(sale.OrderFromDotGlasses);
-        Assert.Equal(Domain.Enums.FulfilmentStatus.Submitted, sales.Inspect(sale.Id)!.FulfilmentStatus);
+        Assert.Equal(CustomOrderStatus.Submitted, sale.CustomOrderStatus);
+
+        var order = Assert.Single(orders.All);
+        Assert.Equal(sale.Id, order.SaleId);
+        Assert.Null(order.LeadId);
+        Assert.Equal(RetailPoint, order.HierarchyPath);
+        Assert.Equal(Domain.Enums.FulfilmentStatus.Submitted, order.Status);
     }
 
     [Fact]
-    public async Task ASaleNotRoutedForFulfilment_HasNoFulfilmentStatusAtAll()
+    public async Task AnOrderingSaleSentTwice_PlacesOneOrder()
+    {
+        var sut = CreateSut(out _, out _, out _, out _, out var orders);
+        var request = ARecordedSale(lensRangeType: LensRangeType.Custom, orderFromDotGlasses: true);
+
+        await sut.CreateAsync(request, Guid.NewGuid(), RetailPoint);
+        var again = await sut.CreateAsync(request, Guid.NewGuid(), RetailPoint);
+
+        Assert.Single(orders.All);
+        Assert.Equal(CustomOrderStatus.Submitted, again.CustomOrderStatus);
+    }
+
+    /// <summary>A Lead that ordered its lens, with the order it placed — the lens block and
+    /// Coating set a converting Sale has to keep.</summary>
+    private static Lead AnOrderedLead(FakeLeadRepository leads, FakeCustomOrderRepository orders)
+    {
+        var lead = AnOpenLead(Guid.NewGuid());
+        lead.LensRangeType = Domain.Enums.LensRangeType.Custom;
+        lead.SphereLeft = -1.25m;
+        lead.SphereRight = -1.50m;
+        lead.PupilDistanceMm = 62;
+        leads.Seed(lead);
+        leads.AddCoatings([new LeadCoating { Id = Guid.NewGuid(), LeadId = lead.Id, CoatingRefId = BlueBlock }]);
+        orders.Seed(new CustomOrder
+        {
+            Id = Guid.NewGuid(),
+            HierarchyPath = RetailPoint,
+            LeadId = lead.Id,
+            Status = Domain.Enums.FulfilmentStatus.InLab,
+        });
+        return lead;
+    }
+
+    private static CreateSaleRequest ASaleKeepingTheOrderedLens(Lead lead)
+    {
+        var request = ARecordedSale(sourceLeadId: lead.Id, lensRangeType: LensRangeType.Custom, coatingRefIds: [BlueBlock]);
+        request.SphereLeft = lead.SphereLeft;
+        request.SphereRight = lead.SphereRight;
+        request.PupilDistanceMm = lead.PupilDistanceMm;
+        return request;
+    }
+
+    [Fact]
+    public async Task ConvertingAnOrderedLead_LinksTheSaleToThatOrderRatherThanPlacingAnother()
+    {
+        var sut = CreateSut(out _, out var leads, out _, out _, out var orders);
+        var lead = AnOrderedLead(leads, orders);
+
+        var sale = await sut.CreateAsync(ASaleKeepingTheOrderedLens(lead), Guid.NewGuid(), RetailPoint);
+
+        var order = Assert.Single(orders.All);
+        Assert.Equal(lead.Id, order.LeadId);
+        Assert.Equal(sale.Id, order.SaleId);
+
+        // The order keeps the progress it had made before anyone paid.
+        Assert.Equal(Domain.Enums.FulfilmentStatus.InLab, order.Status);
+        Assert.True(sale.OrderFromDotGlasses);
+        Assert.Equal(CustomOrderStatus.InLab, sale.CustomOrderStatus);
+    }
+
+    [Fact]
+    public async Task ConvertingAnOrderedLeadWithADifferentLens_IsRefusedAndWritesNothing()
+    {
+        var sut = CreateSut(out var sales, out var leads, out var customers, out var unitOfWork, out var orders);
+        var lead = AnOrderedLead(leads, orders);
+        var request = ASaleKeepingTheOrderedLens(lead);
+        request.SphereLeft = -2.00m;
+
+        var rejection = await Assert.ThrowsAsync<DomainRuleViolationException>(
+            () => sut.CreateAsync(request, Guid.NewGuid(), RetailPoint));
+
+        Assert.Contains("already ordered", rejection.Message);
+        Assert.Equal(0, sales.Count);
+        Assert.Equal(0, customers.Count);
+        Assert.Equal(0, unitOfWork.SaveCount);
+        Assert.Null(orders.All[0].SaleId);
+        Assert.False(leads.Inspect(lead.Id)!.ConvertedFlag);
+    }
+
+    [Fact]
+    public async Task ASecondSaleConvertingTheSameLead_IsRefused_AndTheFirstKeepsTheLeadAndItsOrder()
+    {
+        var sut = CreateSut(out var sales, out var leads, out _, out _, out var orders);
+        var lead = AnOrderedLead(leads, orders);
+        var first = await sut.CreateAsync(ASaleKeepingTheOrderedLens(lead), Guid.NewGuid(), RetailPoint);
+
+        var rejection = await Assert.ThrowsAsync<DomainRuleViolationException>(
+            () => sut.CreateAsync(ASaleKeepingTheOrderedLens(lead), Guid.NewGuid(), RetailPoint));
+
+        Assert.Contains("already been converted", rejection.Message);
+        Assert.Equal(1, sales.Count);
+        Assert.Equal(first.Id, leads.Inspect(lead.Id)!.SaleId);
+        Assert.Equal(first.Id, Assert.Single(orders.All).SaleId);
+    }
+
+    [Fact]
+    public async Task TheSameConversionSentTwice_IsAnsweredWithTheSaleThatExists()
+    {
+        var sut = CreateSut(out var sales, out var leads, out _, out var unitOfWork, out var orders);
+        var lead = AnOrderedLead(leads, orders);
+        var request = ASaleKeepingTheOrderedLens(lead);
+
+        var first = await sut.CreateAsync(request, Guid.NewGuid(), RetailPoint);
+        var again = await sut.CreateAsync(request, Guid.NewGuid(), RetailPoint);
+
+        Assert.Equal(first.Id, again.Id);
+        Assert.Equal(1, sales.Count);
+        Assert.Equal(1, unitOfWork.SaveCount);
+        Assert.Single(orders.All);
+    }
+
+    [Fact]
+    public async Task ConvertingAnOrderedLeadWhileAskingForASecondOrder_IsRefused()
+    {
+        var sut = CreateSut(out _, out var leads, out _, out _, out var orders);
+        var lead = AnOrderedLead(leads, orders);
+        var request = ASaleKeepingTheOrderedLens(lead);
+        request.OrderFromDotGlasses = true;
+
+        await Assert.ThrowsAsync<DomainRuleViolationException>(() => sut.CreateAsync(request, Guid.NewGuid(), RetailPoint));
+
+        Assert.Single(orders.All);
+    }
+
+    [Fact]
+    public async Task ASaleNotRoutedForFulfilment_PlacesNoOrderAtAll()
     {
         // Nothing to advance through the lab/pickup queue — the glasses were handed over from
         // stock on the spot, so the Custom Orders screen must never see this row.
-        var sut = CreateSut(out var sales, out _, out _, out _);
+        var sut = CreateSut(out _, out _, out _, out _, out var orders);
 
         var sale = await sut.CreateAsync(
             ARecordedSale(lensRangeType: LensRangeType.Custom, orderFromDotGlasses: false),
@@ -208,18 +348,19 @@ public class SaleServiceTests
             RetailPoint);
 
         Assert.False(sale.OrderFromDotGlasses);
-        Assert.Null(sales.Inspect(sale.Id)!.FulfilmentStatus);
+        Assert.Null(sale.CustomOrderStatus);
+        Assert.Empty(orders.All);
     }
 
     [Fact]
-    public async Task APresetRangeSale_HasNoFulfilmentStatus()
+    public async Task APresetRangeSale_PlacesNoOrder()
     {
-        var sut = CreateSut(out var sales, out _, out _, out _);
+        var sut = CreateSut(out _, out _, out _, out _, out var orders);
 
-        var sale = await sut.CreateAsync(
+        await sut.CreateAsync(
             ARecordedSale(lensRangeType: LensRangeType.LensSet), Guid.NewGuid(), RetailPoint);
 
-        Assert.Null(sales.Inspect(sale.Id)!.FulfilmentStatus);
+        Assert.Empty(orders.All);
     }
 
     [Fact]

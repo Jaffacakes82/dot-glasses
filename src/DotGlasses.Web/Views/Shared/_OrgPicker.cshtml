@@ -1,0 +1,35 @@
+@model DotGlasses.Web.Models.OrgPickerViewModel
+@*
+    The organisation picker Invite and Edit user share. Rows carry their level and whether they
+    were ticked when the page loaded (data-loaded), which the Edit page's save confirmation reads;
+    nothing here decides what the server accepts.
+*@
+<div class="dg-auth-field">
+    <label>Organisations</label>
+    <input class="form-control" type="search" placeholder="Filter organisations" aria-label="Filter organisations"
+           data-dg-filter="#@Model.ElementId" style="margin-bottom:8px; padding:8px 12px;" />
+    <div id="@Model.ElementId" style="max-height:240px; overflow-y:auto; border:1px solid var(--border-default); border-radius:8px; padding:8px;">
+        @if (Model.Rows.Count == 0)
+        {
+            <p class="dg-muted" style="font-size:13px; margin:0;">There are no organisations you can assign.</p>
+        }
+        @foreach (var row in Model.Rows)
+        {
+            <label class="dg-check-row" style="padding-left:@(row.Depth * 20)px;" data-dg-filter-text="@row.Name @row.LevelLabel">
+                <input type="checkbox" name="@Model.FieldName" value="@row.Id" checked="@row.IsTicked"
+                       data-level="@row.Level.ToString()" data-name="@row.Name" data-loaded="@(row.IsTicked ? "true" : "false")" />
+                <span>
+                    @row.Name <span class="dg-muted" style="font-size:12px;">· @row.LevelLabel</span>
+                    @if (row.IsDeactivated)
+                    {
+                        <span class="dg-badge" style="background:#f2f2f2; color:#777; font-size:10px; padding:2px 6px;">deactivated</span>
+                    }
+                </span>
+            </label>
+        }
+    </div>
+    <p style="font-size:12px; color:var(--text-muted); margin:6px 0 0;">
+        Only a direct assignment to a Retail Point lets someone record there in the Field App. An
+        assignment higher up gives Admin Portal access to that organisation and everything beneath it.
+    </p>
+</div>

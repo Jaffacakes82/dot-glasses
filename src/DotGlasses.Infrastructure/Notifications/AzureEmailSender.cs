@@ -43,4 +43,37 @@ public class AzureEmailSender(EmailClient emailClient, string senderAddress, ILo
             logger.LogError(ex, "Failed to send password-setup invite to {Email} via Azure Communication Services — the set-password link is still shown in the Admin Portal for manual relay.", toEmail);
         }
     }
+
+    public async Task SendPasswordResetAsync(string toEmail, string recipientName, string resetUrl, CancellationToken cancellationToken = default)
+    {
+        var content = new EmailContent(PasswordResetEmail.Subject)
+        {
+            PlainText = PasswordResetEmail.Body(recipientName, resetUrl),
+        };
+
+        try
+        {
+            await emailClient.SendAsync(WaitUntil.Started, new EmailMessage(senderAddress, toEmail, content), cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            // Never thrown onwards: the person asking is told the same thing whether or not an
+            // email went out, and an admin's Reset password button is the fallback.
+            logger.LogError(ex, "Failed to send password-reset email to {Email} via Azure Communication Services.", toEmail);
+        }
+    }
+}
+
+/// <summary>The wording of the "Forgot password?" email, kept apart from the sender so it can be
+/// read and tested without a mail client.</summary>
+public static class PasswordResetEmail
+{
+    public const string Subject = "Reset your Dot Glasses password";
+
+    public static string Body(string recipientName, string resetUrl) =>
+        $"Hi {recipientName},\n\n"
+        + "Someone asked to reset the password for your Dot Glasses account. Set a new one using the link below:\n\n"
+        + $"{resetUrl}\n\n"
+        + "The link works for 24 hours, and stops working once you have set a new password.\n\n"
+        + "If you didn't ask for this, you can ignore this email and your password stays as it is.";
 }

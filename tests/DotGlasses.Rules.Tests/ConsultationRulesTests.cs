@@ -41,6 +41,8 @@ public class ConsultationRulesTests
     private static readonly Guid ActiveFrameColour = Guid.Parse("00000000-0000-0000-0000-0000000000d1");
     private static readonly Guid RetiredFrameColour = Guid.Parse("00000000-0000-0000-0000-0000000000d2");
     private static readonly Guid OtherFrameColour = Guid.Parse("00000000-0000-0000-0000-0000000000d3");
+    private static readonly Guid ActiveChildFrameColour = Guid.Parse("00000000-0000-0000-0000-0000000000d4");
+    private static readonly Guid OtherChildFrameColour = Guid.Parse("00000000-0000-0000-0000-0000000000d5");
 
     private static readonly Guid ActiveHardCaseColour = Guid.Parse("00000000-0000-0000-0000-0000000000e1");
     private static readonly Guid RetiredHardCaseColour = Guid.Parse("00000000-0000-0000-0000-0000000000e2");
@@ -116,6 +118,8 @@ public class ConsultationRulesTests
             new ReferenceItemSnapshot(ActiveFrameColour, ReferenceDataCategory.FrameColour, "Black", IsActive: true, IsOtherOption: false),
             new ReferenceItemSnapshot(RetiredFrameColour, ReferenceDataCategory.FrameColour, "Tortoiseshell", IsActive: false, IsOtherOption: false),
             new ReferenceItemSnapshot(OtherFrameColour, ReferenceDataCategory.FrameColour, "Other", IsActive: true, IsOtherOption: true),
+            new ReferenceItemSnapshot(ActiveChildFrameColour, ReferenceDataCategory.FrameColourChild, "Yellow", IsActive: true, IsOtherOption: false),
+            new ReferenceItemSnapshot(OtherChildFrameColour, ReferenceDataCategory.FrameColourChild, "Other", IsActive: true, IsOtherOption: true),
 
             new ReferenceItemSnapshot(ActiveHardCaseColour, ReferenceDataCategory.HardCaseColour, "Navy", IsActive: true, IsOtherOption: false),
             new ReferenceItemSnapshot(RetiredHardCaseColour, ReferenceDataCategory.HardCaseColour, "Maroon", IsActive: false, IsOtherOption: false),
@@ -176,6 +180,7 @@ public class ConsultationRulesTests
         FullName = "Amina Okoro",
         PhoneNumber = "+254700000000",
         ReasonNotPurchasedRefId = ActiveReasonNotPurchased,
+        CustomerToldPrice = true,
     };
 
     /// <summary>A Sale cannot decline to name a lens range: LensRangeType is non-nullable and its
@@ -412,17 +417,15 @@ public class ConsultationRulesTests
     [Fact]
     public void Referral_ReferredWithoutAReason_IsRejected()
     {
-        // Referred out, so a location is still expected too — the reason and the location are
-        // independent requirements, not a chain.
+        // Referred out with no location either: only the reason is asked for — the location is
+        // optional.
         var request = ValidTest();
         request.ReferredOrTreated = true;
 
-        var result = ConsultationRules.Check(request, Snapshot());
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
-        Assert.Equal(2, result.Failures.Count);
-        Assert.Equal("ReferralReasonRefId", result.Failures[0].Key);
-        Assert.Equal("Choose a reason for the referral or treatment.", result.Failures[0].Message);
-        Assert.Equal("ReferralLocationFreeText", result.Failures[1].Key);
+        Assert.Equal("ReferralReasonRefId", failure.Key);
+        Assert.Equal("Choose a reason for the referral or treatment.", failure.Message);
     }
 
     [Fact]
@@ -529,27 +532,40 @@ public class ConsultationRulesTests
     }
 
     [Fact]
-    public void Referral_ReferredOutWithoutALocation_IsRejected()
+    public void Referral_ReferredOutWithoutALocation_IsAccepted()
     {
+        // The technician often doesn't know where the customer will go.
         var request = ValidTest();
         request.ReferredOrTreated = true;
         request.ReferralReasonRefId = ActiveReferralReason;
 
-        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
-
-        Assert.Equal("ReferralLocationFreeText", failure.Key);
-        Assert.Equal("Enter the referral location, or tick \"Treated in facility\".", failure.Message);
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
     }
 
     [Fact]
-    public void Referral_ReferredOutWithWhitespaceOnlyLocation_IsRejected()
+    public void Referral_ReferredOutWithWhitespaceOnlyLocation_IsAccepted()
     {
         var request = ValidTest();
         request.ReferredOrTreated = true;
         request.ReferralReasonRefId = ActiveReferralReason;
         request.ReferralLocationFreeText = "   ";
 
-        Assert.Equal("ReferralLocationFreeText", AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Key);
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void Referral_ReferredOutWithoutALocation_IsAcceptedOnALeadAndASale()
+    {
+        var lead = ValidLead();
+        lead.ReferredOrTreated = true;
+        lead.ReferralReasonRefId = ActiveReferralReason;
+
+        var sale = ValidSale();
+        sale.ReferredOrTreated = true;
+        sale.ReferralReasonRefId = ActiveReferralReason;
+
+        Assert.True(ConsultationRules.Check(lead, Snapshot()).IsValid);
+        Assert.True(ConsultationRules.Check(sale, Snapshot()).IsValid);
     }
 
     [Fact]
@@ -568,6 +584,8 @@ public class ConsultationRulesTests
     {
         var request = ValidLead();
         request.ReferredOrTreated = true;
+        request.TreatedInFacility = true;
+        request.ReferralLocationFreeText = "Kisumu District Hospital";
 
         var result = ConsultationRules.Check(request, Snapshot());
 
@@ -579,10 +597,36 @@ public class ConsultationRulesTests
     {
         var request = ValidSale();
         request.ReferredOrTreated = true;
+        request.TreatedInFacility = true;
+        request.ReferralLocationFreeText = "Kisumu District Hospital";
 
         var result = ConsultationRules.Check(request, Snapshot());
 
         Assert.Equal(["ReferralReasonRefId", "ReferralLocationFreeText"], result.Failures.Select(f => f.Key));
+    }
+
+    [Fact]
+    public void PriceAwareness_NotAnsweredOnALead_IsRejected()
+    {
+        var request = ValidLead();
+        request.CustomerToldPrice = null;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("CustomerToldPrice", failure.Key);
+        Assert.Equal("Choose Yes or No for \"Has the customer been told the price?\".", failure.Message);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void PriceAwareness_EitherAnswer_IsAccepted(bool told)
+    {
+        // A note for whoever follows the Lead up, not a gate.
+        var request = ValidLead();
+        request.CustomerToldPrice = told;
+
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
     }
 
     [Fact]
@@ -699,6 +743,70 @@ public class ConsultationRulesTests
 
         Assert.Equal("FrameColourOtherText", failure.Key);
         Assert.Equal("Say what the other frame colour is.", failure.Message);
+    }
+
+    // Adult and children's frames come in different colours: the colour has to be from the list
+    // that matches the "children's frame" tick.
+
+    [Fact]
+    public void FrameColour_AChildColourOnAChildrensFrame_IsAccepted()
+    {
+        var request = ValidSale();
+        request.ChildrensFrame = true;
+        request.FrameColourRefId = ActiveChildFrameColour;
+
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void FrameColour_AnAdultColourOnAChildrensFrame_IsRejected()
+    {
+        var request = ValidSale();
+        request.ChildrensFrame = true;
+        request.FrameColourRefId = ActiveFrameColour;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("FrameColourRefId", failure.Key);
+        Assert.Equal("Choose a children's frame colour.", failure.Message);
+    }
+
+    [Fact]
+    public void FrameColour_AChildColourOnAnAdultFrame_IsRejected()
+    {
+        var request = ValidSale();
+        request.FrameColourRefId = ActiveChildFrameColour;
+
+        var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
+
+        Assert.Equal("FrameColourRefId", failure.Key);
+        Assert.Equal("Choose a frame colour.", failure.Message);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void FrameColour_OtherFromTheMatchingList_NeedsItsText_AndIsAcceptedWithIt(bool childrensFrame)
+    {
+        var request = ValidSale();
+        request.ChildrensFrame = childrensFrame;
+        request.FrameColourRefId = childrensFrame ? OtherChildFrameColour : OtherFrameColour;
+
+        Assert.Equal("FrameColourOtherText", AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Key);
+
+        request.FrameColourOtherText = "Two-tone blue and grey";
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void FrameColour_OtherFromTheWrongList_IsRejectedAgainstTheColour()
+    {
+        var request = ValidSale();
+        request.ChildrensFrame = true;
+        request.FrameColourRefId = OtherFrameColour;
+        request.FrameColourOtherText = "Two-tone blue and grey";
+
+        Assert.Equal("FrameColourRefId", AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Key);
     }
 
     [Fact]
@@ -858,7 +966,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("LensRangeType", failure.Key);
-        Assert.Equal("Lens set and custom lens fields must be empty when LensRangeType is not set.", failure.Message);
+        Assert.Equal("This record's lens details don't match its lens range. Open it and choose the lens again.", failure.Message);
     }
 
     [Fact]
@@ -870,7 +978,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("LensRangeType", failure.Key);
-        Assert.Equal("Lens set fields must be empty for a Custom LensRangeType.", failure.Message);
+        Assert.Equal("This record's lens details don't match its lens range. Open it and choose the lens again.", failure.Message);
     }
 
     // --- Lens range: the preset branch ----------------------------------------------------
@@ -959,7 +1067,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("PresetCatalogueId", failure.Key);
-        Assert.Equal("PresetCatalogueId is required for a LensSet LensRangeType.", failure.Message);
+        Assert.Equal("This record's lens details don't match its lens range. Open it and choose the lens again.", failure.Message);
     }
 
     [Fact]
@@ -1076,7 +1184,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("LensTypeRefId", failure.Key);
-        Assert.Equal("LensTypeRefId must be the chosen lenses' own lens type.", failure.Message);
+        Assert.Equal("This record's lens details don't match its lens range. Open it and choose the lens again.", failure.Message);
     }
 
     /// <summary>A lens set holding one lens of the "Other" lens type, with its own text — the only
@@ -1105,7 +1213,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, SnapshotWithAnOtherLens(lensSetId)));
 
         Assert.Equal("LensTypeOtherText", failure.Key);
-        Assert.Equal("LensTypeOtherText must be the chosen lenses' own lens type text (empty unless their lens type is \"Other\").", failure.Message);
+        Assert.Equal("This record's lens details don't match its lens range. Open it and choose the lens again.", failure.Message);
     }
 
     [Fact]
@@ -1150,7 +1258,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("SphereRight", failure.Key);
-        Assert.Equal("Both eyes' lenses must be the same lens type — choose a right-eye lens of the left eye's type.", failure.Message);
+        Assert.Equal("Choose a right-eye lens of the same lens type as the left eye's.", failure.Message);
     }
 
     [Fact]
@@ -1164,7 +1272,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("PupilDistanceMm", failure.Key);
-        Assert.Equal("PupilDistanceMm must be empty for a LensSet LensRangeType — use PresetPupilDistanceBucket instead.", failure.Message);
+        Assert.Equal("This record's lens details don't match its lens range. Open it and choose the lens again.", failure.Message);
     }
 
     [Theory]
@@ -1236,6 +1344,7 @@ public class ConsultationRulesTests
         lead.PresetPupilDistanceBucket = 3;
         var sale = ValidSale();
         sale.ChildrensFrame = true;
+        sale.FrameColourRefId = ActiveChildFrameColour;
         sale.PresetPupilDistanceBucket = null;
 
         Assert.Equal(
@@ -1310,7 +1419,7 @@ public class ConsultationRulesTests
         request.SphereLeft = 0.30m;
 
         Assert.Equal(
-            "Sphere (left) must be between -10 and 10 in 0.25 increments.",
+            "Sphere (left): choose a value between -10 and 10, in steps of 0.25.",
             AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Message);
     }
 
@@ -1336,7 +1445,7 @@ public class ConsultationRulesTests
         {
             var failure = Assert.Single(result.Failures);
             Assert.Equal("AddLeft", failure.Key);
-            Assert.Equal("Add power (left) must be between 0 and 3 in 0.25 increments.", failure.Message);
+            Assert.Equal("Add power (left): choose a value between 0 and 3, in steps of 0.25.", failure.Message);
         }
     }
 
@@ -1360,7 +1469,7 @@ public class ConsultationRulesTests
         {
             var failure = Assert.Single(result.Failures);
             Assert.Equal("AxisLeft", failure.Key);
-            Assert.Equal("Axis (left) must be a whole number of degrees between 0 and 180.", failure.Message);
+            Assert.Equal("Axis (left): choose a whole number of degrees from 0 to 180.", failure.Message);
         }
     }
 
@@ -1392,7 +1501,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("CylinderRight", failure.Key);
-        Assert.Equal("Cylinder (right) must be between -6 and 0 in 0.25 increments.", failure.Message);
+        Assert.Equal("Cylinder (right): choose a value between -6 and 0, in steps of 0.25.", failure.Message);
     }
 
     [Theory]
@@ -1417,7 +1526,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("AxisLeft", failure.Key);
-        Assert.Equal("Axis (left) is required when Cylinder (left) isn't 0.00 — choose an axis from 0 to 180.", failure.Message);
+        Assert.Equal("Axis (left): choose an axis from 0 to 180 — Cylinder (left) isn't 0.00.", failure.Message);
     }
 
     [Theory]
@@ -1432,7 +1541,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("AxisRight", failure.Key);
-        Assert.Equal("Axis (right) must be empty when Cylinder (right) is 0.00 — an axis only applies to a cylinder.", failure.Message);
+        Assert.Equal("Axis (right): clear the axis — it only applies when Cylinder (right) isn't 0.00.", failure.Message);
     }
 
     [Fact]
@@ -1586,7 +1695,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("PresetPupilDistanceBucket", failure.Key);
-        Assert.Equal("PresetPupilDistanceBucket must be empty for a Custom LensRangeType — use PupilDistanceMm instead.", failure.Message);
+        Assert.Equal("This record's lens details don't match its lens range. Open it and choose the lens again.", failure.Message);
     }
 
     [Theory]
@@ -1622,7 +1731,7 @@ public class ConsultationRulesTests
             "Choose a pupil distance between 54 and 74 mm.",
             AssertSingleFailure(ConsultationRules.Check(outOfRange, Snapshot())).Message);
         Assert.Equal(
-            "PupilDistanceMm must be a whole millimetre value.",
+            "Choose a pupil distance in whole millimetres.",
             AssertSingleFailure(ConsultationRules.Check(nonWhole, Snapshot())).Message);
     }
 
@@ -1700,7 +1809,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("CoatingRefIds", failure.Key);
-        Assert.Equal("CoatingRefIds must not contain duplicates.", failure.Message);
+        Assert.Equal("A coating is ticked twice on this record. Choose the coatings again.", failure.Message);
     }
 
     [Fact]
@@ -1738,7 +1847,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("CoatingRefIds", failure.Key);
-        Assert.Equal("Every coating must be configured as available for the chosen lenses (see Lens Sets).", failure.Message);
+        Assert.Equal("One of the chosen coatings isn't made on these lenses — choose the coatings again.", failure.Message);
     }
 
     [Fact]
@@ -1766,7 +1875,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("CoatingRefIds", failure.Key);
-        Assert.Equal("Every coating must be configured as available for the chosen lenses (see Lens Sets).", failure.Message);
+        Assert.Equal("One of the chosen coatings isn't made on these lenses — choose the coatings again.", failure.Message);
 
         request.CoatingRefIds = [ActiveCoating];
         Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
@@ -1825,7 +1934,7 @@ public class ConsultationRulesTests
         var failure = AssertSingleFailure(ConsultationRules.Check(request, Snapshot()));
 
         Assert.Equal("CoatingRefIds", failure.Key);
-        Assert.Equal("Every coating must be configured as available for the chosen lenses (see Lens Sets).", failure.Message);
+        Assert.Equal("One of the chosen coatings isn't made on these lenses — choose the coatings again.", failure.Message);
 
         request.CoatingRefIds = [ExcludingCoating];
         Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
@@ -2222,11 +2331,11 @@ public class ConsultationRulesTests
     [Fact]
     public void CoatingPreference_IsASingleValueNotASet()
     {
-        // Per ADR-0001's scope correction a Test or Lead never carries a Coating set, so none of
-        // the set rules reach them: a preference that excludes nothing and duplicates nothing is
-        // simply one id, checked once.
+        // Per ADR-0001's scope correction a Test never carries a Coating set, so none of the set
+        // rules reach it: a preference that excludes nothing and duplicates nothing is simply one
+        // id, checked once. A Lead carries a set only when it orders its lens (ADR-0008) — the
+        // ordering-Lead rules below.
         Assert.Null(typeof(CreateTestRequest).GetProperty("CoatingRefIds"));
-        Assert.Null(typeof(CreateLeadRequest).GetProperty("CoatingRefIds"));
     }
 
     // --- Scalars --------------------------------------------------------------------------
@@ -2234,8 +2343,8 @@ public class ConsultationRulesTests
     // These pin the copy character-for-character: nothing but these assertions stands between a
     // client and a silently reworded message, and the Field App renders these strings verbatim
     // against the control that produced them. What a form control can cause is a plain instruction
-    // naming the control; an empty Id and an out-of-enum value, which no form can cause, are still
-    // FluentValidation's generated copy.
+    // naming the control; an empty Id and an out-of-enum value, which no form can cause, share one
+    // plain sentence a technician can act on from Failed records.
 
     [Fact]
     public void AnIdThatWasNeverFilledIn_IsRejected()
@@ -2245,7 +2354,7 @@ public class ConsultationRulesTests
 
         var result = ConsultationRules.Check(request, Snapshot());
 
-        Assert.Equal(new RuleFailure("Id", "'Id' must not be empty."), Assert.Single(result.Failures));
+        Assert.Equal(new RuleFailure("Id", "This record can't be saved as it was sent. Open it, check each answer and save it again."), Assert.Single(result.Failures));
     }
 
     [Fact]
@@ -2290,7 +2399,7 @@ public class ConsultationRulesTests
         var result = ConsultationRules.Check(request, Snapshot());
 
         Assert.Equal(
-            new RuleFailure("Gender", "'Gender' has a range of values which does not include '99'."),
+            new RuleFailure("Gender", "This record can't be saved as it was sent. Open it, check each answer and save it again."),
             Assert.Single(result.Failures));
     }
 
@@ -2405,7 +2514,7 @@ public class ConsultationRulesTests
 
         Assert.True(ConsultationRules.Check(outOfEnumLead, Snapshot()).IsValid);
         Assert.Contains(
-            new RuleFailure("LensRangeType", "'Lens Range Type' has a range of values which does not include '99'."),
+            new RuleFailure("LensRangeType", "This record can't be saved as it was sent. Open it, check each answer and save it again."),
             ConsultationRules.Check(outOfEnumSale, Snapshot()).Failures);
     }
 
@@ -2435,6 +2544,8 @@ public class ConsultationRulesTests
         request.OccupationRefId = NeverExisted;
         request.ReferredOrTreated = true;
         request.ReferralReasonRefId = ActiveReferralReason;
+        request.TreatedInFacility = true;
+        request.ReferralLocationFreeText = "Kisumu District Hospital";
         request.FrameColourRefId = RetiredFrameColour;
         request.HardCaseOtherColourText = "Olive green";
 
@@ -2443,6 +2554,269 @@ public class ConsultationRulesTests
         Assert.Equal(
             ["OccupationRefId", "ReferralLocationFreeText", "FrameColourRefId", "HardCaseSold"],
             result.Failures.Select(f => f.Key));
+    }
+
+    // --- The voice ------------------------------------------------------------------------
+
+    /// <summary>
+    /// Every message is something a technician can read: it never names a request property or an
+    /// enum member, and never uses the developer phrasings the wording pass removed. This walks a
+    /// broad set of bad requests rather than every branch — its job is to catch developer copy
+    /// creeping back with a new rule, and the per-rule tests above pin the exact sentences.
+    /// </summary>
+    [Fact]
+    public void NoMessage_NamesARequestPropertyOrAnEnumMember_OrReadsAsDeveloperCopy()
+    {
+        var messages = BadRequests().SelectMany(failures => failures).Select(f => f.Message).Distinct().ToList();
+
+        // Enough bad requests to mean something.
+        Assert.True(messages.Count >= 40, $"Only {messages.Count} distinct messages were produced.");
+
+        var internalNames = new[] { typeof(CreateTestRequest), typeof(CreateLeadRequest), typeof(CreateSaleRequest) }
+            .SelectMany(type => type.GetProperties().Select(p => p.Name))
+            .Concat(new[] { typeof(LensRangeType), typeof(TestOutcome), typeof(Gender), typeof(FrameCoverage), typeof(ReferenceDataCategory) }
+                .SelectMany(Enum.GetNames))
+            // A one-word name ("Gender", "Custom", "Coating") is also an ordinary word on the
+            // screen; what gives developer copy away is a compound identifier.
+            .Where(name => name.Skip(1).Any(char.IsUpper))
+            .Distinct()
+            .ToList();
+
+        foreach (var message in messages)
+        {
+            Assert.DoesNotContain(internalNames, name => message.Contains(name, StringComparison.Ordinal));
+            Assert.DoesNotContain(" must ", message);
+            Assert.DoesNotContain("invalid", message, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("required", message, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("reference-data", message, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("please", message, StringComparison.OrdinalIgnoreCase);
+            Assert.EndsWith(".", message);
+        }
+    }
+
+    private static IEnumerable<IReadOnlyList<RuleFailure>> BadRequests()
+    {
+        IReadOnlyList<RuleFailure> Test(Action<CreateTestRequest> break_, Func<CreateTestRequest>? from = null)
+        {
+            var request = (from ?? ValidTest)();
+            break_(request);
+            return ConsultationRules.Check(request, Snapshot()).Failures;
+        }
+
+        IReadOnlyList<RuleFailure> Lead(Action<CreateLeadRequest> break_, Func<CreateLeadRequest>? from = null)
+        {
+            var request = (from ?? ValidLead)();
+            break_(request);
+            return ConsultationRules.Check(request, Snapshot()).Failures;
+        }
+
+        IReadOnlyList<RuleFailure> Sale(Action<CreateSaleRequest> break_, Func<CreateSaleRequest>? from = null)
+        {
+            var request = (from ?? ValidSale)();
+            break_(request);
+            return ConsultationRules.Check(request, Snapshot()).Failures;
+        }
+
+        var tooLong = new string('x', 501);
+
+        // The record itself, and the scalars.
+        yield return Test(r => { r.Id = Guid.Empty; r.Gender = (Gender)99; r.Outcome = (TestOutcome)99; r.AgeYears = 130; });
+        yield return Test(r => { r.OccupationOtherText = tooLong; r.ReferralOtherText = tooLong; r.ReferralLocationFreeText = tooLong; r.LensTypeOtherText = tooLong; });
+        yield return Lead(r => { r.FullName = " "; r.PhoneNumber = ""; r.ReasonNotPurchasedOtherText = tooLong; r.CustomerToldPrice = null; });
+        yield return Lead(r => { r.FullName = tooLong; r.PhoneNumber = tooLong; r.ReasonNotPurchasedRefId = Guid.Empty; });
+        yield return Lead(r => r.ReasonNotPurchasedRefId = OtherReasonNotPurchased);
+        yield return Sale(r => { r.FullName = ""; r.FrameCoverage = (FrameCoverage)99; r.FrameColourOtherText = tooLong; r.HardCaseOtherColourText = tooLong; });
+        yield return Sale(r => { r.LensRangeType = (LensRangeType)99; r.OrderFromDotGlasses = true; });
+
+        // Occupation, referral, frame colour, hard case.
+        yield return Test(r => r.OccupationRefId = RetiredOccupation);
+        yield return Test(r => r.OccupationRefId = OtherOccupation);
+        yield return Test(r => r.ReferralReasonRefId = ActiveReferralReason);
+        yield return Test(r => r.ReferredOrTreated = true);
+        yield return Test(r => { r.ReferredOrTreated = true; r.ReferralReasonRefId = OtherReferralReason; r.TreatedInFacility = true; r.ReferralLocationFreeText = "Kisumu"; });
+        yield return Sale(r => r.FrameColourRefId = RetiredFrameColour);
+        yield return Sale(r => r.FrameColourRefId = OtherFrameColour);
+        yield return Sale(r => r.HardCaseColourRefId = ActiveHardCaseColour);
+        yield return Sale(r => r.HardCaseSold = true);
+        yield return Sale(r => { r.HardCaseSold = true; r.HardCaseColourRefId = OtherHardCaseColour; });
+
+        // The lens range: fields from the wrong branch, and each branch's own checks.
+        yield return Test(r => r.SphereLeft = 1.00m);
+        yield return Test(r => r.PresetCatalogueId = null, PresetTest);
+        yield return Test(r => r.PresetCatalogueId = RetiredCatalogue, PresetTest);
+        yield return Test(r => { r.SphereLeft = null; r.SphereRight = null; }, PresetTest);
+        yield return Test(r => { r.SphereLeft = 9.75m; r.SphereRight = 9.75m; }, PresetTest);
+        yield return Test(r => { r.PupilDistanceMm = 60m; r.PresetPupilDistanceBucket = 9; }, PresetTest);
+        yield return Test(r => { r.ChildrensFrame = true; r.PresetPupilDistanceBucket = 4; }, PresetTest);
+        yield return Test(r => r.LensTypeRefId = ActiveLensType, PresetTest);
+        yield return Sale(r => r.LensTypeRefId = null, BifocalSale);
+        yield return Sale(r => r.LensTypeOtherText = "Office", BifocalSale);
+        yield return Sale(r => { r.AddRight = null; r.SphereRight = 2.50m; }, BifocalSale);
+        yield return Test(r => { r.PresetCatalogueId = CatalogueA; r.PresetPupilDistanceBucket = 1; }, CustomTest);
+        yield return Test(r => r.SphereLeft = null, CustomTest);
+        yield return Test(r => { r.SphereLeft = 10.25m; r.CylinderLeft = -6.25m; r.AddLeft = 3.25m; }, CustomTest);
+        yield return Test(r => { r.CylinderLeft = -1.00m; r.AxisRight = 90m; }, CustomTest);
+        yield return Test(r => { r.CylinderLeft = -1.00m; r.AxisLeft = 200m; }, CustomTest);
+        yield return Test(r => r.AddLeft = 2.00m, CustomTest);
+        yield return Test(r => r.LensTypeRefId = ActiveLensType, CustomTest);
+        yield return Test(r => { r.AddLeft = 2.00m; r.LensTypeRefId = RetiredLensType; }, CustomTest);
+        yield return Test(r => { r.AddLeft = 2.00m; r.LensTypeRefId = OtherLensType; }, CustomTest);
+        yield return Test(r => r.PupilDistanceMm = 53m, CustomTest);
+        yield return Test(r => r.PupilDistanceMm = 60.5m, CustomTest);
+        yield return Sale(r => r.PupilDistanceMm = null, CustomSale);
+
+        // Coatings.
+        yield return Sale(r => r.CoatingRefIds = []);
+        yield return Sale(r => r.CoatingRefIds = [ActiveCoating, ActiveCoating]);
+        yield return Sale(r => r.CoatingRefIds = [RetiredCoating]);
+        yield return Sale(r => r.CoatingRefIds = [UnavailableCoating]);
+        yield return Sale(r => r.CoatingRefIds = [ActiveCoating, ExcludingCoating], CustomSale);
+        yield return Test(r => r.CoatingPreferenceRefId = RetiredCoating, PresetTest);
+        yield return Test(r => r.CoatingPreferenceRefId = UnavailableCoating, PresetTest);
+        yield return Lead(r => r.CoatingPreferenceRefId = UnavailableCoating, PresetLead);
+
+        // A Lead ordering its lens.
+        yield return Lead(r => r.OrderFromDotGlasses = true, PresetLead);
+        yield return Lead(r => r.CoatingRefIds = [ActiveCoating], CustomLead);
+        yield return Lead(r => { r.CoatingRefIds = []; r.PupilDistanceMm = null; r.CoatingPreferenceRefId = ActiveCoating; }, OrderingLead);
+        yield return Lead(r => r.CoatingRefIds = [ActiveCoating, ExcludingCoating], OrderingLead);
+    }
+
+    // --- A Lead that orders its lens (ADR-0008) -------------------------------------------------
+
+    /// <summary>A Custom Lead ordering its lens before the customer pays: both eyes, the pupil
+    /// distance, and the Coating set the lens is made with.</summary>
+    private static CreateLeadRequest OrderingLead()
+    {
+        var request = CustomLead();
+        request.PupilDistanceMm = 62m;
+        request.OrderFromDotGlasses = true;
+        request.CoatingRefIds = [ActiveCoating, SecondCoating];
+        return request;
+    }
+
+    [Fact]
+    public void AnOrderingLead_WithACompleteLensAndCoatings_IsAccepted()
+    {
+        Assert.True(ConsultationRules.Check(OrderingLead(), Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void AnOrderingLead_OnALensSet_IsRefusedAgainstTheTick()
+    {
+        var request = PresetLead();
+        request.OrderFromDotGlasses = true;
+
+        Assert.Equal(
+            new RuleFailure("OrderFromDotGlasses", "Only a Custom prescription can be ordered from Dot Glasses — untick \"Order this lens from Dot Glasses\"."),
+            AssertSingleFailure(ConsultationRules.Check(request, Snapshot())));
+    }
+
+    [Fact]
+    public void AnOrderingLead_WithNoLensRangeAtAll_IsRefusedAgainstTheTick()
+    {
+        var request = ValidLead();
+        request.OrderFromDotGlasses = true;
+
+        Assert.Equal("OrderFromDotGlasses", AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Key);
+    }
+
+    [Theory]
+    [InlineData("SphereLeft")]
+    [InlineData("SphereRight")]
+    public void AnOrderingLead_MissingAnEyesPower_IsRefused(string missing)
+    {
+        var request = OrderingLead();
+        if (missing == "SphereLeft")
+        {
+            request.SphereLeft = null;
+        }
+        else
+        {
+            request.SphereRight = null;
+        }
+
+        // The same failure any Custom record gets for a missing eye — an ordering Lead has no
+        // lens rules of its own, it just can't skip these.
+        Assert.Equal(
+            new RuleFailure("LensRangeType", "Choose a sphere for each eye."),
+            AssertSingleFailure(ConsultationRules.Check(request, Snapshot())));
+    }
+
+    [Fact]
+    public void AnOrderingLead_NeedsThePupilDistanceALeadOtherwiseLeavesOptional()
+    {
+        var ordering = OrderingLead();
+        ordering.PupilDistanceMm = null;
+
+        Assert.Equal("PupilDistanceMm", AssertSingleFailure(ConsultationRules.Check(ordering, Snapshot())).Key);
+
+        // The same lens on a Lead that isn't ordering: still optional.
+        Assert.True(ConsultationRules.Check(CustomLead(), Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void AnOrderingLead_WithAnAdd_NeedsALensType()
+    {
+        var request = OrderingLead();
+        request.AddLeft = 2.00m;
+        request.AddRight = 2.00m;
+
+        Assert.Equal("LensTypeRefId", AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Key);
+
+        request.LensTypeRefId = ActiveLensType;
+        Assert.True(ConsultationRules.Check(request, Snapshot()).IsValid);
+    }
+
+    [Fact]
+    public void AnOrderingLead_WithNoCoatings_IsRefusedAgainstTheCoatings()
+    {
+        var request = OrderingLead();
+        request.CoatingRefIds = [];
+
+        Assert.Equal("CoatingRefIds", AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Key);
+    }
+
+    [Fact]
+    public void AnOrderingLead_IsHeldToTheSameCoatingRulesAsACustomSale()
+    {
+        // One rule set, two records: whatever a Custom Sale's coating set is refused for, an
+        // ordering Lead's is refused for in the same words.
+        foreach (var coatings in new List<Guid>[] { [ExcludingCoating, ActiveCoating], [RetiredCoating], [ActiveCoating, ActiveCoating], [NeverExisted] })
+        {
+            var lead = OrderingLead();
+            lead.CoatingRefIds = coatings;
+            var sale = CustomSale();
+            sale.CoatingRefIds = coatings;
+
+            var leadFailures = ConsultationRules.Check(lead, Snapshot()).Failures;
+
+            Assert.NotEmpty(leadFailures);
+            Assert.Equal(ConsultationRules.Check(sale, Snapshot()).Failures, leadFailures);
+        }
+    }
+
+    [Fact]
+    public void AnOrderingLead_HasNoCoatingPreference()
+    {
+        var request = OrderingLead();
+        request.CoatingPreferenceRefId = ActiveCoating;
+
+        Assert.Equal("CoatingPreferenceRefId", AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Key);
+    }
+
+    [Fact]
+    public void ALeadThatIsNotOrdering_SendsNoCoatingSet()
+    {
+        var request = CustomLead();
+        request.CoatingRefIds = [ActiveCoating];
+
+        Assert.Equal("CoatingRefIds", AssertSingleFailure(ConsultationRules.Check(request, Snapshot())).Key);
+
+        // Its one optional preference is untouched by any of this.
+        var withPreference = CustomLead();
+        withPreference.CoatingPreferenceRefId = ActiveCoating;
+        Assert.True(ConsultationRules.Check(withPreference, Snapshot()).IsValid);
     }
 
     [Fact]

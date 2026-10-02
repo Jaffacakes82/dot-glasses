@@ -19,6 +19,14 @@ public class UnscopedReportQueryService(DotGlassesDbContext dbContext) : IUnscop
         await dbContext.OrganisationNodes
             .IgnoreQueryFilters()
             .Where(x => !x.IsDeleted)
-            .Select(x => new OrganisationNodeSummary(x.Id, x.Name, x.Level, x.HierarchyPath, x.IsTrainingOrg))
+            .Select(x => new OrganisationNodeSummary(x.Id, x.Name, x.Level, x.HierarchyPath, x.IsTrainingOrg, false))
+            .ToListAsync(cancellationToken);
+
+    // The one query here that does include soft-deleted rows, on purpose and flagged: a
+    // deactivated organisation's records still belong to it in the reports.
+    public async Task<IReadOnlyList<OrganisationNodeSummary>> GetOrganisationNodesForReportsAsync(CancellationToken cancellationToken = default) =>
+        await dbContext.OrganisationNodes
+            .IgnoreQueryFilters()
+            .Select(x => new OrganisationNodeSummary(x.Id, x.Name, x.Level, x.HierarchyPath, x.IsTrainingOrg, x.IsDeleted))
             .ToListAsync(cancellationToken);
 }
