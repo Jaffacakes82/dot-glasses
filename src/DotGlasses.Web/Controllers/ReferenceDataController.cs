@@ -1,6 +1,7 @@
 using DotGlasses.Application.ReferenceData;
 using DotGlasses.Domain.Enums;
 using DotGlasses.Web.Authorization;
+using DotGlasses.Web.Filters;
 using DotGlasses.Web.Models;
 using DotGlasses.Web.Validation.ReferenceData;
 using FluentValidation;
@@ -33,7 +34,9 @@ public class ReferenceDataController(
 
     /// <summary>Well above the 1 MB a picture may be, so a picture that is a little too big is
     /// answered with the validator's message rather than a bare "request too large" — and far
-    /// below the framework's default, so nobody can post hundreds of megabytes at these forms.</summary>
+    /// below the framework's default, so nobody can post hundreds of megabytes at these forms. A
+    /// request over this is refused with the same message by RefuseOversizeUpload, before its
+    /// body is read.</summary>
     private const long MaxUploadRequestBytes = 8 * 1024 * 1024;
 
     public async Task<IActionResult> Index(CancellationToken cancellationToken) =>
@@ -42,6 +45,7 @@ public class ReferenceDataController(
     [HttpPost]
     [ValidateAntiForgeryToken]
     [RequestSizeLimit(MaxUploadRequestBytes)]
+    [RefuseOversizeUpload(MaxUploadRequestBytes, ReferenceDataPictures.SizeMessage)]
     public async Task<IActionResult> Create(CreateReferenceDataItemRequest request, CancellationToken cancellationToken)
     {
         // ModelState as well as the validator: MVC binds a category number the enum doesn't define
@@ -73,6 +77,7 @@ public class ReferenceDataController(
     [HttpPost]
     [ValidateAntiForgeryToken]
     [RequestSizeLimit(MaxUploadRequestBytes)]
+    [RefuseOversizeUpload(MaxUploadRequestBytes, ReferenceDataPictures.SizeMessage)]
     public async Task<IActionResult> Update(UpdateReferenceDataItemRequest request, CancellationToken cancellationToken)
     {
         var validationResult = await updateValidator.ValidateAsync(request, cancellationToken);

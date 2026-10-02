@@ -46,7 +46,8 @@
     else if (_showLeadMatchConfirm)
     {
         <div class="dg-card" style="text-align:center;">
-            <p style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; font-size:16px;">Existing lead found</p>
+            <p style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; font-size:16px;">
+                Existing lead found</p>
             @if (_leadMatch?.OrderFromDotGlasses == true)
             {
                 @* The Lead's lens is already being made (ADR-0008), and this form's lens has already
@@ -58,19 +59,26 @@
                     open the lead from the Leads list. Saving here records a separate sale and leaves the order unpaid.
                 </p>
                 <div style="display:flex; gap:8px; margin-top:var(--space-4);">
-                    <button class="dg-btn dg-btn-ghost" style="flex:1;" disabled="@_saving" @onclick="DeclineMatchedLead">Save as a separate sale</button>
+                    <button class="dg-btn dg-btn-ghost" style="flex:1;" disabled="@_saving"
+                            @onclick="DeclineMatchedLead">Save as a separate sale
+                    </button>
                     <a class="dg-btn dg-btn-primary" style="flex:1; text-align:center;" href="leads">Go to Leads</a>
                 </div>
             }
             else
             {
                 <p style="color:#555;">
-                    @_leadMatch?.CustomerFullName already has an open lead from an earlier visit. Convert it into this sale
+                    @_leadMatch?.CustomerFullName already has an open lead from an earlier visit. Convert it into this
+                    sale
                     instead of creating a separate record?
                 </p>
                 <div style="display:flex; gap:8px; margin-top:var(--space-4);">
-                    <button class="dg-btn dg-btn-ghost" style="flex:1;" disabled="@_saving" @onclick="DeclineMatchedLead">No, new customer</button>
-                    <button class="dg-btn dg-btn-primary" style="flex:1;" disabled="@_saving" @onclick="ConvertMatchedLead">Yes, convert it</button>
+                    <button class="dg-btn dg-btn-ghost" style="flex:1;" disabled="@_saving"
+                            @onclick="DeclineMatchedLead">No, new customer
+                    </button>
+                    <button class="dg-btn dg-btn-primary" style="flex:1;" disabled="@_saving"
+                            @onclick="ConvertMatchedLead">Yes, convert it
+                    </button>
                 </div>
             }
         </div>
@@ -81,7 +89,9 @@
             @if (ReferenceDataClient.IsFromCache)
             {
                 <p style="font-size:12px; color:#8a6d00; background:#fff8e1; border-radius:var(--radius-md); padding:8px 12px; margin-bottom:var(--space-3);">
-                    Using options saved on this device@(ReferenceDataClient.CachedAtUtc is { } at ? $" on {at.ToLocalTime():d MMM, HH:mm}" : "") — reconnect to pick up any changes.
+                    Using options saved on this
+                    device@(ReferenceDataClient.CachedAtUtc is { } at ? $" on {at.ToLocalTime():d MMM, HH:mm}" : "") —
+                    reconnect to pick up any changes.
                 </p>
             }
 
@@ -106,8 +116,9 @@
 
             <div class="dg-field">
                 <label>Age</label>
-                <input type="number" min="0" max="120" @bind="_age" @oninput="() => ClearErrors(nameof(CreateTestRequest.AgeYears))" />
-                <FieldError Errors="_errors" For="AgeYears" />
+                <input type="number" min="0" max="120" @bind="_age"
+                       @oninput="() => ClearErrors(nameof(CreateTestRequest.AgeYears))"/>
+                <FieldError Errors="_errors" For="AgeYears"/>
             </div>
             <div class="dg-field">
                 <label>Gender</label>
@@ -119,10 +130,11 @@
 
             @* One order on every form (Spec D): Age, Gender, Occupation open it and "Referred or
                treated" closes it — on a Test, just ahead of the contact-details question. *@
-            <ReferenceDataDropdown Label="Occupation (optional)" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Occupation)"
-                                    SelectedId="_occupationRefId" SelectedIdChanged="v => _occupationRefId = v"
-                                    OtherText="@_occupationOtherText" OtherTextChanged="v => _occupationOtherText = v"
-                                    Errors="_errors" Field="OccupationRefId" OtherField="OccupationOtherText" />
+            <ReferenceDataDropdown Label="Occupation (optional)"
+                                   Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Occupation)"
+                                   SelectedId="_occupationRefId" SelectedIdChanged="v => _occupationRefId = v"
+                                   OtherText="@_occupationOtherText" OtherTextChanged="v => _occupationOtherText = v"
+                                   Errors="_errors" Field="OccupationRefId" OtherField="OccupationOtherText"/>
 
             @if (IsTest)
             {
@@ -132,14 +144,16 @@
                         <option value="NoGlassesNeeded">No glasses needed</option>
                         <option value="NeedsGlasses">Needs glasses</option>
                     </select>
-                    <FieldError Errors="_errors" For="Outcome" />
+                    <FieldError Errors="_errors" For="Outcome"/>
                 </div>
 
                 @if (_testOutcome == TestOutcome.NeedsGlasses)
                 {
-                    <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues" ReferenceData="Snapshot"
+                    <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues"
+                                       ReferenceData="Snapshot"
                                        LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
-                                       AllowNoPreference="true" Errors="_errors" SelectionChanged="OnLensSelectionChanged" />
+                                       AllowNoPreference="true" Errors="_errors"
+                                       SelectionChanged="OnLensSelectionChanged"/>
 
                     @RenderCoatingPreference()
                 }
@@ -151,19 +165,28 @@
                     <div class="dg-field">
                         <label>Did the customer share contact details?</label>
                         <div style="display:flex; gap:8px;">
-                            <button type="button" class="dg-btn @(_contactShared == false ? "dg-btn-primary" : "dg-btn-ghost")" style="flex:1;" @onclick="() => SetContactShared(false)">No</button>
-                            <button type="button" class="dg-btn @(_contactShared == true ? "dg-btn-primary" : "dg-btn-ghost")" style="flex:1;" @onclick="() => SetContactShared(true)">Yes</button>
+                            <button type="button"
+                                    class="dg-btn @(_contactShared == false ? "dg-btn-primary" : "dg-btn-ghost")"
+                                    style="flex:1;" @onclick="() => SetContactShared(false)">No
+                            </button>
+                            <button type="button"
+                                    class="dg-btn @(_contactShared == true ? "dg-btn-primary" : "dg-btn-ghost")"
+                                    style="flex:1;" @onclick="() => SetContactShared(true)">Yes
+                            </button>
                         </div>
                         @if (_contactShared == true)
                         {
                             <p style="font-size:12px; color:#666; text-align:right; margin:var(--space-3) 0 4px;">
                                 Recording at @(TokenStore.CurrentLocationName ?? "—")
                             </p>
-                            <button type="button" class="dg-btn dg-btn-primary" style="width:100%;" disabled="@_saving" @onclick="ContinueAsLeadAsync">Continue as Lead &rarr;</button>
+                            <button type="button" class="dg-btn dg-btn-primary" style="width:100%;" disabled="@_saving"
+                                    @onclick="ContinueAsLeadAsync">Continue as Lead &rarr;
+                            </button>
                         }
                         else if (_contactShared == false)
                         {
-                            <p style="font-size:12px; color:#888; margin-top:var(--space-2);">Recorded as a test only — not entered into the leads pipeline.</p>
+                            <p style="font-size:12px; color:#888; margin-top:var(--space-2);">Recorded as a test only —
+                                not entered into the leads pipeline.</p>
                         }
                     </div>
                 }
@@ -172,16 +195,17 @@
             {
                 <div class="dg-field">
                     <label>Full name</label>
-                    <input @bind="_name" @oninput="() => ClearErrors(nameof(CreateLeadRequest.FullName))" />
-                    <FieldError Errors="_errors" For="FullName" />
+                    <input @bind="_name" @oninput="() => ClearErrors(nameof(CreateLeadRequest.FullName))"/>
+                    <FieldError Errors="_errors" For="FullName"/>
                 </div>
                 <div class="dg-field">
                     <label>Phone number@(IsSale ? " (optional)" : "")</label>
-                    <input @bind="_phone" @oninput="() => ClearErrors(nameof(CreateLeadRequest.PhoneNumber))" />
-                    <FieldError Errors="_errors" For="PhoneNumber" />
+                    <input @bind="_phone" @oninput="() => ClearErrors(nameof(CreateLeadRequest.PhoneNumber))"/>
+                    <FieldError Errors="_errors" For="PhoneNumber"/>
                 </div>
                 <div class="dg-field">
-                    <label><input type="checkbox" @bind="_consentGiven" style="width:auto; margin-right:8px;" />Customer consents to be contacted by Dot Glasses for follow-ups/marketing</label>
+                    <label><input type="checkbox" @bind="_consentGiven" style="width:auto; margin-right:8px;"/>Customer
+                        consents to be contacted by Dot Glasses for follow-ups/marketing</label>
                 </div>
 
                 @if (IsSale && _orderedLead is not null)
@@ -190,10 +214,12 @@
                 }
                 else if (IsSale)
                 {
-                    <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues" ReferenceData="Snapshot"
+                    <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues"
+                                       ReferenceData="Snapshot"
                                        LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
-                                       AllowNoPreference="false" Errors="_errors" SelectionChanged="OnLensSelectionChanged"
-                                       ChildrensFrameChanged="OnChildrensFrameChanged" />
+                                       AllowNoPreference="false" Errors="_errors"
+                                       SelectionChanged="OnLensSelectionChanged"
+                                       ChildrensFrameChanged="OnChildrensFrameChanged"/>
 
                     @RenderCoatingRemovedNote()
 
@@ -201,29 +227,36 @@
                     {
                         @if (pairCoatings.Offered.Count > 0)
                         {
-                            <CoatingMultiSelector Label="Coating" AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
-                                                   RestrictToIds="pairCoatings.Offered" RequiredPairings="pairCoatings.RequiredPairings"
-                                                   SelectedIds="_coatingRefIds" SelectedIdsChanged="v => _coatingRefIds = v"
-                                                   Exclusions="ReferenceDataClient.CoatingExclusions"
-                                                   Errors="_errors" Field="CoatingRefIds" />
+                            <CoatingMultiSelector Label="Coating"
+                                                  AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
+                                                  RestrictToIds="pairCoatings.Offered"
+                                                  RequiredPairings="pairCoatings.RequiredPairings"
+                                                  SelectedIds="_coatingRefIds"
+                                                  SelectedIdsChanged="v => _coatingRefIds = v"
+                                                  Exclusions="ReferenceDataClient.CoatingExclusions"
+                                                  Errors="_errors" Field="CoatingRefIds"/>
                         }
                         else
                         {
-                            <p class="dg-lens-note" role="status">No coating can be made on both of these lenses, so they can't be sold together. Choose different lenses.</p>
+                            <p class="dg-lens-note" role="status">No coating can be made on both of these lenses, so
+                                they can't be sold together. Choose different lenses.</p>
                         }
                     }
 
                     @if (_lensRange.LensRangeType == LensRangeType.Custom)
                     {
-                        <CoatingMultiSelector Label="Coating" AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
-                                               SelectedIds="_coatingRefIds" SelectedIdsChanged="v => _coatingRefIds = v"
-                                               Exclusions="ReferenceDataClient.CoatingExclusions"
-                                               Errors="_errors" Field="CoatingRefIds" />
+                        <CoatingMultiSelector Label="Coating"
+                                              AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
+                                              SelectedIds="_coatingRefIds" SelectedIdsChanged="v => _coatingRefIds = v"
+                                              Exclusions="ReferenceDataClient.CoatingExclusions"
+                                              Errors="_errors" Field="CoatingRefIds"/>
                         @* Last in the lens section: the order is placed once everything about the
                            lens, its coatings included, has been chosen. *@
                         <div class="dg-field">
-                            <label class="dg-choice"><input type="checkbox" @bind="_orderFromDotGlasses" @bind:after="() => ClearErrors(nameof(CreateSaleRequest.OrderFromDotGlasses))" />Order this lens from Dot Glasses (outlet doesn't have stock)</label>
-                            <FieldError Errors="_errors" For="OrderFromDotGlasses" />
+                            <label class="dg-choice"><input type="checkbox" @bind="_orderFromDotGlasses"
+                                                            @bind:after="() => ClearErrors(nameof(CreateSaleRequest.OrderFromDotGlasses))"/>Order
+                                this lens from Dot Glasses (outlet doesn't have stock)</label>
+                            <FieldError Errors="_errors" For="OrderFromDotGlasses"/>
                         </div>
                     }
                 }
@@ -233,45 +266,64 @@
                     @RenderFrameSwatches()
 
                     <div class="dg-field">
-                        <label><input type="checkbox" @bind="_hardCaseSold" @bind:after="() => ClearErrors(HardCaseFields)" style="width:auto; margin-right:8px;" />Did this person buy a hard case?</label>
+                        <label><input type="checkbox" @bind="_hardCaseSold"
+                                      @bind:after="() => ClearErrors(HardCaseFields)"
+                                      style="width:auto; margin-right:8px;"/>Did this person buy a hard case?</label>
                     </div>
                     @if (_hardCaseSold)
                     {
-                        <ReferenceDataDropdown Label="Hard case colour" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.HardCaseColour)"
-                                                SelectedId="_hardCaseColourRefId" SelectedIdChanged="v => _hardCaseColourRefId = v"
-                                                OtherText="@_hardCaseOtherColourText" OtherTextChanged="v => _hardCaseOtherColourText = v"
-                                                Errors="_errors" Field="HardCaseColourRefId" OtherField="HardCaseOtherColourText" />
+                        <ReferenceDataDropdown Label="Hard case colour"
+                                               Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.HardCaseColour)"
+                                               SelectedId="_hardCaseColourRefId"
+                                               SelectedIdChanged="v => _hardCaseColourRefId = v"
+                                               OtherText="@_hardCaseOtherColourText"
+                                               OtherTextChanged="v => _hardCaseOtherColourText = v"
+                                               Errors="_errors" Field="HardCaseColourRefId"
+                                               OtherField="HardCaseOtherColourText"/>
                     }
                 }
                 else
                 {
-                    <ReferenceDataDropdown Label="Reason not purchased" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.ReasonNotPurchased)"
-                                            SelectedId="_reasonNotPurchasedRefId" SelectedIdChanged="v => _reasonNotPurchasedRefId = v"
-                                            OtherText="@_reasonNotPurchasedOtherText" OtherTextChanged="v => _reasonNotPurchasedOtherText = v"
-                                            Errors="_errors" Field="ReasonNotPurchasedRefId" OtherField="ReasonNotPurchasedOtherText" />
+                    <ReferenceDataDropdown Label="Reason not purchased"
+                                           Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.ReasonNotPurchased)"
+                                           SelectedId="_reasonNotPurchasedRefId"
+                                           SelectedIdChanged="v => _reasonNotPurchasedRefId = v"
+                                           OtherText="@_reasonNotPurchasedOtherText"
+                                           OtherTextChanged="v => _reasonNotPurchasedOtherText = v"
+                                           Errors="_errors" Field="ReasonNotPurchasedRefId"
+                                           OtherField="ReasonNotPurchasedOtherText"/>
 
                     <div class="dg-field">
                         <label>Has the customer been told the price?</label>
                         <div style="display:flex; gap:8px;">
-                            <button type="button" class="dg-btn @(_customerToldPrice == true ? "dg-btn-primary" : "dg-btn-ghost")" style="flex:1;" @onclick="() => SetCustomerToldPrice(true)">Yes</button>
-                            <button type="button" class="dg-btn @(_customerToldPrice == false ? "dg-btn-primary" : "dg-btn-ghost")" style="flex:1;" @onclick="() => SetCustomerToldPrice(false)">No</button>
+                            <button type="button"
+                                    class="dg-btn @(_customerToldPrice == true ? "dg-btn-primary" : "dg-btn-ghost")"
+                                    style="flex:1;" @onclick="() => SetCustomerToldPrice(true)">Yes
+                            </button>
+                            <button type="button"
+                                    class="dg-btn @(_customerToldPrice == false ? "dg-btn-primary" : "dg-btn-ghost")"
+                                    style="flex:1;" @onclick="() => SetCustomerToldPrice(false)">No
+                            </button>
                         </div>
-                        <FieldError Errors="_errors" For="CustomerToldPrice" />
+                        <FieldError Errors="_errors" For="CustomerToldPrice"/>
                     </div>
 
-                    <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues" ReferenceData="Snapshot"
+                    <LensRangeSelector Model="_lensRange" Catalogues="ReferenceDataClient.Catalogues"
+                                       ReferenceData="Snapshot"
                                        LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
-                                       AllowNoPreference="true" Errors="_errors" SelectionChanged="OnLensSelectionChanged" />
+                                       AllowNoPreference="true" Errors="_errors"
+                                       SelectionChanged="OnLensSelectionChanged"/>
 
                     @* A Lead can order its Custom lens before the customer pays (ADR-0008). An
                        ordered lens is made with a full coating set, so ticking swaps the single
                        optional preference for the coating selector a Sale uses. *@
                     @if (LeadOrdersLens)
                     {
-                        <CoatingMultiSelector Label="Coating" AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
-                                               SelectedIds="_coatingRefIds" SelectedIdsChanged="v => _coatingRefIds = v"
-                                               Exclusions="ReferenceDataClient.CoatingExclusions"
-                                               Errors="_errors" Field="CoatingRefIds" />
+                        <CoatingMultiSelector Label="Coating"
+                                              AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
+                                              SelectedIds="_coatingRefIds" SelectedIdsChanged="v => _coatingRefIds = v"
+                                              Exclusions="ReferenceDataClient.CoatingExclusions"
+                                              Errors="_errors" Field="CoatingRefIds"/>
                     }
                     else
                     {
@@ -281,12 +333,16 @@
                     @if (_lensRange.LensRangeType == LensRangeType.Custom)
                     {
                         <div class="dg-field">
-                            <label class="dg-choice"><input type="checkbox" @bind="_orderFromDotGlasses" @bind:after="OnLeadOrderChanged" />Order this lens from Dot Glasses</label>
+                            <label class="dg-choice"><input type="checkbox" @bind="_orderFromDotGlasses"
+                                                            @bind:after="OnLeadOrderChanged"/>Order this lens from Dot
+                                Glasses</label>
                             @if (_orderFromDotGlasses)
                             {
-                                <p style="font-size:12px; color:#666; margin:4px 0 0;">The lens is ordered when this lead is saved, before the customer pays. It needs both eyes, the pupil distance and its coatings, and it can't be changed afterwards.</p>
+                                <p style="font-size:12px; color:#666; margin:4px 0 0;">The lens is ordered when this
+                                    lead is saved, before the customer pays. It needs both eyes, the pupil distance and
+                                    its coatings, and it can't be changed afterwards.</p>
                             }
-                            <FieldError Errors="_errors" For="OrderFromDotGlasses" />
+                            <FieldError Errors="_errors" For="OrderFromDotGlasses"/>
                         </div>
                     }
                 }
@@ -296,13 +352,14 @@
 
             @if (!(IsTest && _testOutcome == TestOutcome.NeedsGlasses && _contactShared == true))
             {
-                <div style="margin-top:auto; padding-top:var(--space-4);">
+                <div style="padding-top:var(--space-4);">
                     <p style="font-size:12px; color:#666; text-align:right; margin-bottom:4px;">
                         Recording at @(TokenStore.CurrentLocationName ?? "—")
                     </p>
                     <div style="display:flex; gap:8px;">
                         <a class="dg-btn dg-btn-ghost" style="flex:1; text-align:center;" href="/">Cancel</a>
-                        <button type="submit" class="dg-btn dg-btn-primary" style="flex:1;" disabled="@_saving">@(IsTest ? "Save test" : "Save")</button>
+                        <button type="submit" class="dg-btn dg-btn-primary" style="flex:1;"
+                                disabled="@_saving">@(IsTest ? "Save test" : "Save")</button>
                     </div>
                 </div>
             }
@@ -317,7 +374,8 @@
     /// <summary>Set when this Sale form was opened from the Leads worklist to convert an open
     /// Lead — see Leads.razor. Prefills name/phone/prescription/preference from the Lead, and is
     /// submitted back as CreateSaleRequest.SourceLeadId so the server links them atomically.</summary>
-    [Parameter, SupplyParameterFromQuery] public Guid? SourceLeadId { get; set; }
+    [Parameter, SupplyParameterFromQuery]
+    public Guid? SourceLeadId { get; set; }
 
     [Parameter, SupplyParameterFromQuery] public int? PrefillAge { get; set; }
     [Parameter, SupplyParameterFromQuery] public string? PrefillGender { get; set; }
@@ -333,7 +391,8 @@
     /// <summary>Set when this form was opened to correct a permanently-failed outbox record —
     /// see FailedRecords.razor. The corrected payload is re-queued under the same Id so the
     /// server's idempotent upsert still applies.</summary>
-    [Parameter, SupplyParameterFromQuery] public Guid? FixOutboxId { get; set; }
+    [Parameter, SupplyParameterFromQuery]
+    public Guid? FixOutboxId { get; set; }
 
     private bool IsTest => Type.Equals("test", StringComparison.OrdinalIgnoreCase);
     private bool IsSale => Type.Equals("sale", StringComparison.OrdinalIgnoreCase);
@@ -404,6 +463,7 @@
     /// and its coatings are then shown read-only and sent as the Lead holds them, and no second
     /// order is asked for. Null for every other Sale.</summary>
     private LeadDto? _orderedLead;
+
     private bool _hardCaseSold;
     private Guid? _hardCaseColourRefId;
     private string? _hardCaseOtherColourText;
@@ -413,8 +473,10 @@
     // Which server error keys this form has a control for. Anything outside these lands in the
     // summary band instead of being silently dropped — see FormErrors.Merge.
     private static readonly string[] TestFields =
-        ["AgeYears", "Gender", "OccupationRefId", "OccupationOtherText", "Outcome",
-         "ReferredOrTreated", "ReferralReasonRefId", "ReferralOtherText", "ReferralLocationFreeText", "TreatedInFacility"];
+    [
+        "AgeYears", "Gender", "OccupationRefId", "OccupationOtherText", "Outcome",
+        "ReferredOrTreated", "ReferralReasonRefId", "ReferralOtherText", "ReferralLocationFreeText", "TreatedInFacility"
+    ];
 
     // The referral block's keys: "Referred or treated" shows or hides all of them together.
     private static readonly string[] ReferralFields =
@@ -427,8 +489,10 @@
     private static readonly string[] FrameColourFields = ["FrameColourRefId", "FrameColourOtherText"];
 
     private static readonly string[] LeadFields =
-        [.. TestFields, .. LensFields, "FullName", "PhoneNumber", "ReasonNotPurchasedRefId", "ReasonNotPurchasedOtherText", "CustomerToldPrice", "CoatingPreferenceRefId",
-         "CoatingRefIds", "OrderFromDotGlasses"];
+    [
+        .. TestFields, .. LensFields, "FullName", "PhoneNumber", "ReasonNotPurchasedRefId", "ReasonNotPurchasedOtherText", "CustomerToldPrice", "CoatingPreferenceRefId",
+        "CoatingRefIds", "OrderFromDotGlasses"
+    ];
 
     private static readonly string[] LeadOrderFields = ["OrderFromDotGlasses", "CoatingRefIds", "CoatingPreferenceRefId", "PupilDistanceMm"];
 
@@ -443,8 +507,10 @@
     // FrameCoverage and Id are deliberately absent: neither has a control (frame coverage is
     // pinned to FullFrame, Id is a generated key), so their failures are genuinely unattributable.
     private static readonly string[] SaleFields =
-        [.. TestFields, .. LensFields, "FullName", "PhoneNumber", "CoatingRefIds", "FrameColourRefId", "FrameColourOtherText",
-         "HardCaseSold", "HardCaseColourRefId", "HardCaseOtherColourText", "OrderFromDotGlasses"];
+    [
+        .. TestFields, .. LensFields, "FullName", "PhoneNumber", "CoatingRefIds", "FrameColourRefId", "FrameColourOtherText",
+        "HardCaseSold", "HardCaseColourRefId", "HardCaseOtherColourText", "OrderFromDotGlasses"
+    ];
 
     private string[] KnownFields => IsTest ? [.. TestFields, .. LensFields] : IsSale ? SaleFields : LeadFields;
 
@@ -605,18 +671,29 @@
 
     /// <summary>The lens of a Lead that already ordered it, for information: what is being made,
     /// how far it has got, and why there is nothing to choose.</summary>
-    private RenderFragment RenderOrderedLens(LeadDto lead) => @<div class="dg-card" style="margin-bottom:var(--space-3);" id="orderedLens">
-        <p style="margin:0;"><strong>This lens is already ordered</strong> — @(lead.CustomOrderStatus?.Label() ?? "status unknown").</p>
-        <p style="font-size:13px; color:#555; margin:8px 0 0;">
-            Left eye: @FormatEye(lead.SphereLeft, lead.CylinderLeft, lead.AxisLeft, lead.AddLeft)<br />
-            Right eye: @FormatEye(lead.SphereRight, lead.CylinderRight, lead.AxisRight, lead.AddRight)<br />
-            Pupil distance: @(lead.PupilDistanceMm is { } pd ? $"{pd:0.#} mm" : "—")<br />
-            Coatings: @string.Join(", ", lead.CoatingRefIds.Select(CoatingName))
-        </p>
-        <p style="font-size:12px; color:#666; margin:8px 0 0;">The lens and its coatings can't be changed here. To sell a different lens, record a new sale.</p>
-        <FieldError Errors="_errors" For="CoatingRefIds" />
-        <FieldError Errors="_errors" For="OrderFromDotGlasses" />
-    </div>;
+    private RenderFragment RenderOrderedLens(LeadDto lead) => @<div class="dg-card"
+                                                                    style="margin-bottom:var(--space-3);"
+                                                                    id="orderedLens">
+                                                                  <p style="margin:0;"><strong>This lens is already
+                                                                          ordered</strong>
+                                                                      — @(lead.CustomOrderStatus?.Label() ?? "status unknown").
+                                                                  </p>
+                                                                  <p style="font-size:13px; color:#555; margin:8px 0 0;">
+                                                                      Left
+                                                                      eye: @FormatEye(lead.SphereLeft, lead.CylinderLeft, lead.AxisLeft, lead.AddLeft)<br/>
+                                                                      Right
+                                                                      eye: @FormatEye(lead.SphereRight, lead.CylinderRight, lead.AxisRight, lead.AddRight)<br/>
+                                                                      Pupil
+                                                                      distance: @(lead.PupilDistanceMm is { } pd ? $"{pd:0.#} mm" : "—")<br/>
+                                                                      Coatings: @string.Join(", ", lead.CoatingRefIds.Select(CoatingName))
+                                                                  </p>
+                                                                  <p style="font-size:12px; color:#666; margin:8px 0 0;">
+                                                                      The lens and its coatings can't be changed here.
+                                                                      To sell a different lens, record a new sale.</p>
+                                                                  <FieldError Errors="_errors" For="CoatingRefIds"/>
+                                                                  <FieldError Errors="_errors"
+                                                                              For="OrderFromDotGlasses"/>
+                                                              </div>;
 
     private static string FormatEye(decimal? sphere, decimal? cylinder, decimal? axis, decimal? add) =>
         sphere is { } value ? LensPowerValues.FormatLensPower(value, cylinder, axis, add) : "—";
@@ -822,29 +899,43 @@
     /// <summary>"Referred or treated" — the same block on all three forms, asked last, once the
     /// consultation is done (a Test asks it just before the contact-details question).</summary>
     private RenderFragment RenderReferral() => @<text>
-        <div class="dg-field">
-            <label><input type="checkbox" @bind="_referredOrTreated" @bind:after="() => ClearErrors(ReferralFields)" style="width:auto; margin-right:8px;" />Referred or treated</label>
-            <FieldError Errors="_errors" For="ReferredOrTreated" />
-        </div>
-        @if (_referredOrTreated)
-        {
-            <ReferenceDataDropdown Label="Reason for referral/treatment" Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.ReferralReason)"
-                                    SelectedId="_referralReasonRefId" SelectedIdChanged="v => _referralReasonRefId = v"
-                                    OtherText="@_referralOtherText" OtherTextChanged="v => _referralOtherText = v"
-                                    Errors="_errors" Field="ReferralReasonRefId" OtherField="ReferralOtherText" />
-            <div class="dg-field">
-                <label><input type="checkbox" @bind="_treatedInFacility" @bind:after="() => ClearErrors(TreatedFields)" style="width:auto; margin-right:8px;" />Treated in facility</label>
-            </div>
-            @if (!_treatedInFacility)
-            {
-                <div class="dg-field">
-                    <label>Referral location (optional)</label>
-                    <input @bind="_referralLocationFreeText" placeholder="Hospital, clinic, etc." @oninput="() => ClearErrors(nameof(CreateTestRequest.ReferralLocationFreeText))" />
-                    <FieldError Errors="_errors" For="ReferralLocationFreeText" />
-                </div>
-            }
-        }
-    </text>;
+                                                    <div class="dg-field">
+                                                        <label><input type="checkbox" @bind="_referredOrTreated"
+                                                                      @bind:after="() => ClearErrors(ReferralFields)"
+                                                                      style="width:auto; margin-right:8px;"/>Referred or
+                                                            treated</label>
+                                                        <FieldError Errors="_errors" For="ReferredOrTreated"/>
+                                                    </div>
+                                                    @if (_referredOrTreated)
+                                                    {
+                                                        <ReferenceDataDropdown Label="Reason for referral/treatment"
+                                                                               Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.ReferralReason)"
+                                                                               SelectedId="_referralReasonRefId"
+                                                                               SelectedIdChanged="v => _referralReasonRefId = v"
+                                                                               OtherText="@_referralOtherText"
+                                                                               OtherTextChanged="v => _referralOtherText = v"
+                                                                               Errors="_errors"
+                                                                               Field="ReferralReasonRefId"
+                                                                               OtherField="ReferralOtherText"/>
+                                                        <div class="dg-field">
+                                                            <label><input type="checkbox" @bind="_treatedInFacility"
+                                                                          @bind:after="() => ClearErrors(TreatedFields)"
+                                                                          style="width:auto; margin-right:8px;"/>Treated
+                                                                in facility</label>
+                                                        </div>
+                                                        @if (!_treatedInFacility)
+                                                        {
+                                                            <div class="dg-field">
+                                                                <label>Referral location (optional)</label>
+                                                                <input @bind="_referralLocationFreeText"
+                                                                       placeholder="Hospital, clinic, etc."
+                                                                       @oninput="() => ClearErrors(nameof(CreateTestRequest.ReferralLocationFreeText))"/>
+                                                                <FieldError Errors="_errors"
+                                                                            For="ReferralLocationFreeText"/>
+                                                            </div>
+                                                        }
+                                                    }
+                                                </text>;
 
     /// <summary>The optional coating preference of a Test or Lead, as radio buttons with "No
     /// preference" first (never a dropdown — ADR-0007). On a lens set it is limited to the coatings
@@ -852,34 +943,42 @@
     /// with no range chosen yet) any coating may be named. A preference has no pairing — the
     /// Sale's coating set carries the paired coating.</summary>
     private RenderFragment RenderCoatingPreference() => @<text>
-        @if (_lensRange.LensRangeType is LensRangeType.LensSet)
-        {
-            @if (PairCoatings is { Offered.Count: > 0 } pairCoatings)
-            {
-                <ReferenceDataRadios Label="Coating preference (optional)" NoneLabel="No preference"
-                                      Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating).Where(c => pairCoatings.Offered.Contains(c.Id)).ToList()"
-                                      SelectedId="_coatingPreferenceRefId" SelectedIdChanged="v => _coatingPreferenceRefId = v"
-                                      Errors="_errors" Field="CoatingPreferenceRefId" />
-            }
-        }
-        else
-        {
-            <ReferenceDataRadios Label="Coating preference (optional)" NoneLabel="No preference"
-                                  Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
-                                  SelectedId="_coatingPreferenceRefId" SelectedIdChanged="v => _coatingPreferenceRefId = v"
-                                  Errors="_errors" Field="CoatingPreferenceRefId" />
-        }
-        @RenderCoatingRemovedNote()
-    </text>;
+                                                             @if (_lensRange.LensRangeType is LensRangeType.LensSet)
+                                                             {
+                                                                 @if (PairCoatings is { Offered.Count: > 0 } pairCoatings)
+                                                                 {
+                                                                     <ReferenceDataRadios
+                                                                         Label="Coating preference (optional)"
+                                                                         NoneLabel="No preference"
+                                                                         Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating).Where(c => pairCoatings.Offered.Contains(c.Id)).ToList()"
+                                                                         SelectedId="_coatingPreferenceRefId"
+                                                                         SelectedIdChanged="v => _coatingPreferenceRefId = v"
+                                                                         Errors="_errors"
+                                                                         Field="CoatingPreferenceRefId"/>
+                                                                 }
+                                                             }
+                                                             else
+                                                             {
+                                                                 <ReferenceDataRadios
+                                                                     Label="Coating preference (optional)"
+                                                                     NoneLabel="No preference"
+                                                                     Items="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
+                                                                     SelectedId="_coatingPreferenceRefId"
+                                                                     SelectedIdChanged="v => _coatingPreferenceRefId = v"
+                                                                     Errors="_errors" Field="CoatingPreferenceRefId"/>
+                                                             }
+                                                             @RenderCoatingRemovedNote()
+                                                         </text>;
 
     /// <summary>The note left behind when a lens change unticked a coating (or cleared the coating
     /// preference) the new lens no longer offers, so nothing surprises the technician at save time.</summary>
     private RenderFragment RenderCoatingRemovedNote() => @<text>
-        @if (_coatingRemovedNote is not null)
-        {
-            <p class="dg-lens-note" role="status">@_coatingRemovedNote</p>
-        }
-    </text>;
+                                                              @if (_coatingRemovedNote is not null)
+                                                              {
+                                                                  <p class="dg-lens-note"
+                                                                     role="status">@_coatingRemovedNote</p>
+                                                              }
+                                                          </text>;
 
     /// <summary>Set when a lens change removes coatings the technician had ticked; replaced by the
     /// next lens change (null when that one removes nothing).</summary>
@@ -1400,55 +1499,68 @@
     }
 
     private RenderFragment RenderFrameSwatches() => @<div class="dg-field">
-        <label>Frame colour</label>
-        <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-start;">
-            @{
-                // The list that matches the "children's frame" tick — the rule's own choice of
-                // category. A device whose cached lists predate the children's list has none to
-                // offer for a children's frame; it says so rather than fall back to adult colours.
-                var frameColours = ReferenceDataClient.GetByCategory(ConsultationRules.FrameColourCategory(_lensRange.ChildrensFrame));
-            }
-            @if (frameColours.Count == 0)
-            {
-                <p class="dg-lens-note" role="status">
-                    @(_lensRange.ChildrensFrame
-                        ? "The children's frame colours aren't on this device yet. Connect to load them."
-                        : "The frame colours aren't on this device yet. Connect to load them.")
-                </p>
-            }
-            @foreach (var colour in frameColours.OrderBy(c => c.SortOrder))
-            {
-                var selected = _frameColourRefId == colour.Id;
-                <button type="button" title="@colour.Label" @onclick="() => { ClearErrors(FrameColourFields); _frameColourRefId = colour.Id; }"
-                        style="display:flex; flex-direction:column; align-items:center; gap:4px; width:64px; padding:4px; background:none; cursor:pointer;
-                               border-radius:var(--radius-md); border: @(selected ? "2px solid var(--dot-orange)" : "1px solid var(--border-default)");">
-                    @if (ReferenceDataClient.PictureSource(colour) is { } picture)
-                    {
-                        @* A picture that can't load — offline with no copy on this device, say — gives
+                                                        <label>Frame colour</label>
+                                                        <div
+                                                            style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-start;">
+                                                            @{
+                                                                // The list that matches the "children's frame" tick — the rule's own choice of
+                                                                // category. A device whose cached lists predate the children's list has none to
+                                                                // offer for a children's frame; it says so rather than fall back to adult colours.
+                                                                var frameColours = ReferenceDataClient.GetByCategory(ConsultationRules.FrameColourCategory(_lensRange.ChildrensFrame));
+                                                            }
+                                                            @if (frameColours.Count == 0)
+                                                            {
+                                                                <p class="dg-lens-note" role="status">
+                                                                    @(_lensRange.ChildrensFrame
+                                                                        ? "The children's frame colours aren't on this device yet. Connect to load them."
+                                                                        : "The frame colours aren't on this device yet. Connect to load them.")
+                                                                </p>
+                                                            }
+                                                            @foreach (var colour in frameColours.OrderBy(c => c.SortOrder))
+                                                            {
+                                                                var selected = _frameColourRefId == colour.Id;
+                                                                <button type="button" title="@colour.Label"
+                                                                        @onclick="() => { ClearErrors(FrameColourFields); _frameColourRefId = colour.Id; }"
+                                                                        style="display:flex; flex-direction:column; align-items:center; gap:4px; width:64px; padding:4px; background:none; cursor:pointer;
+                                                                            border-radius:var(--radius-md); border: @(selected ? "2px solid var(--dot-orange)" : "1px solid var(--border-default)");">
+                                                                    @if (ReferenceDataClient.PictureSource(colour) is { } picture)
+                                                                    {
+                                                                        @* A picture that can't load — offline with no copy on this device, say — gives
                            way to the same placeholder a colour with no picture shows. *@
-                        <img src="@picture" alt="@colour.Label" style="width:48px; height:48px; object-fit:contain;"
-                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'" />
-                        <div style="width:48px; height:48px; border-radius:50%; background:#eee; display:none; align-items:center; justify-content:center; font-size:10px; color:#888;">?</div>
-                    }
-                    else
-                    {
-                        <div style="width:48px; height:48px; border-radius:50%; background:#eee; display:flex; align-items:center; justify-content:center; font-size:10px; color:#888;">?</div>
-                    }
-                    <span style="font-size:10px; text-align:center; line-height:1.2;">@colour.Label</span>
-                </button>
-            }
-        </div>
-        <FieldError Errors="_errors" For="FrameColourRefId" />
-        @{
-            var selectedIsOther = _frameColourRefId is { } id && frameColours.FirstOrDefault(c => c.Id == id)?.IsOtherOption == true;
-        }
-        @if (selectedIsOther)
-        {
-            <div class="dg-field" style="margin-top:var(--space-2);">
-                <label>Frame colour — say which</label>
-                <input @bind="_frameColourOtherText" @oninput="() => ClearErrors(nameof(CreateSaleRequest.FrameColourOtherText))" />
-                <FieldError Errors="_errors" For="FrameColourOtherText" />
-            </div>
-        }
-    </div>;
+                                                                        <img src="@picture" alt="@colour.Label"
+                                                                             style="width:48px; height:48px; object-fit:contain;"
+                                                                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'"/>
+                                                                        <div
+                                                                            style="width:48px; height:48px; border-radius:50%; background:#eee; display:none; align-items:center; justify-content:center; font-size:10px; color:#888;">
+                                                                            ?
+                                                                        </div>
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        <div
+                                                                            style="width:48px; height:48px; border-radius:50%; background:#eee; display:flex; align-items:center; justify-content:center; font-size:10px; color:#888;">
+                                                                            ?
+                                                                        </div>
+                                                                    }
+                                                                    <span
+                                                                        style="font-size:10px; text-align:center; line-height:1.2;">@colour.Label</span>
+                                                                </button>
+                                                            }
+                                                        </div>
+                                                        <FieldError Errors="_errors" For="FrameColourRefId"/>
+                                                        @{
+                                                            var selectedIsOther = _frameColourRefId is { } id && frameColours.FirstOrDefault(c => c.Id == id)?.IsOtherOption == true;
+                                                        }
+                                                        @if (selectedIsOther)
+                                                        {
+                                                            <div class="dg-field" style="margin-top:var(--space-2);">
+                                                                <label>Frame colour — say which</label>
+                                                                <input @bind="_frameColourOtherText"
+                                                                       @oninput="() => ClearErrors(nameof(CreateSaleRequest.FrameColourOtherText))"/>
+                                                                <FieldError Errors="_errors"
+                                                                            For="FrameColourOtherText"/>
+                                                            </div>
+                                                        }
+                                                    </div>;
+
 }

@@ -228,6 +228,37 @@ public class FrameColourTests(FrameColourFactory factory) : IClassFixture<FrameC
         Assert.Equal(Png, await served.Content.ReadAsByteArrayAsync());
     }
 
+    /// <summary>A photo straight off a phone is often bigger than the whole request is allowed to
+    /// be. That used to fail inside the antiforgery check and come back as a blank 400 page; it is
+    /// now refused with the same sentence a slightly-too-big picture gets, on the screen it came
+    /// from, for a new item and for an edit alike.</summary>
+    [Fact]
+    public async Task APictureBiggerThanTheWholeRequestMayBe_IsRefusedWithTheSizeMessage_NotABlankPage()
+    {
+        var admin = factory.CreateAdminClient();
+        var before = factory.Pictures.Names.Count;
+        var label = $"Phone photo {Guid.NewGuid():N}";
+        var phonePhoto = Png.Concat(new byte[9 * 1024 * 1024]).ToArray();
+
+        var create = await PostFormAsync(admin, "/ReferenceData/Create",
+            [("Category", ((int)DomainCategory.FrameColour).ToString()), ("Label", label)],
+            ("Picture", "IMG_0001.png", "image/png", phonePhoto));
+
+        Assert.Equal(HttpStatusCode.Redirect, create.StatusCode);
+        Assert.Equal("/ReferenceData", create.Headers.Location?.ToString());
+        var landing = System.Net.WebUtility.HtmlDecode(await admin.GetStringAsync("/ReferenceData"));
+        Assert.Contains("Upload a picture of 1 MB or smaller.", landing);
+        Assert.DoesNotContain(label, landing);
+
+        var update = await PostFormAsync(admin, "/ReferenceData/Update",
+            [("Id", (await AddChildColourAsync()).ToString()), ("Label", label)],
+            ("Picture", "IMG_0002.png", "image/png", phonePhoto));
+
+        Assert.Equal(HttpStatusCode.Redirect, update.StatusCode);
+        Assert.Contains("Upload a picture of 1 MB or smaller.", System.Net.WebUtility.HtmlDecode(await admin.GetStringAsync("/ReferenceData")));
+        Assert.Equal(before, factory.Pictures.Names.Count);
+    }
+
     [Fact]
     public async Task AFileThatIsTooBig_OrNotAPicture_IsRefused_WithItsMessage_AndNothingIsStored()
     {
