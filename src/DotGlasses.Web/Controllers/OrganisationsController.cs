@@ -240,7 +240,7 @@ public class OrganisationsController(
                 top.Id,
                 top.Name,
                 top.DeactivationGroupId is { } groupId
-                    ? deactivated.Count(n => n.Id != top.Id && n.DeactivationGroupId == groupId && n.HierarchyPath.StartsWith(top.HierarchyPath, StringComparison.Ordinal))
+                    ? deactivated.Count(n => n.Id != top.Id && n.DeactivationGroupId == groupId && HierarchyPath.Parse(n.HierarchyPath).IsSelfOrDescendantOf(HierarchyPath.Parse(top.HierarchyPath)))
                     : 0))
             .ToList();
     }

@@ -42,6 +42,18 @@ public class CustomOrder : IAuditable, ISoftDeletable, IHierarchyScoped
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAtUtc { get; set; }
     public string? DeletedBy { get; set; }
+
+    /// <summary>A new order, placed now at <paramref name="hierarchyPath"/> by exactly one of a
+    /// Lead or a Sale. Every order starts Submitted.</summary>
+    public static CustomOrder Place(string hierarchyPath, Guid? leadId = null, Guid? saleId = null) => new()
+    {
+        Id = Guid.NewGuid(),
+        HierarchyPath = hierarchyPath,
+        Status = FulfilmentStatus.Submitted,
+        PlacedAtUtc = DateTimeOffset.UtcNow,
+        LeadId = leadId,
+        SaleId = saleId,
+    };
 }
 
 /// <summary>

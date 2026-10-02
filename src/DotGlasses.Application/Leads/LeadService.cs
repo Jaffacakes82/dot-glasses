@@ -145,14 +145,7 @@ public class LeadService(
                 CreatedAtUtc = DateTimeOffset.UtcNow,
             }));
 
-            order = new CustomOrder
-            {
-                Id = Guid.NewGuid(),
-                HierarchyPath = hierarchyPath,
-                Status = Domain.Enums.FulfilmentStatus.Submitted,
-                PlacedAtUtc = DateTimeOffset.UtcNow,
-                LeadId = entity.Id,
-            };
+            order = CustomOrder.Place(hierarchyPath, leadId: entity.Id);
             customOrderRepository.Add(order);
         }
 

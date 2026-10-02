@@ -21,6 +21,17 @@ public class UserEditPlanTests
     }
 
     [Fact]
+    public void AClearedName_IsAChangeToAnEmptyName_NotNoChange()
+    {
+        // MVC binds an emptied text box to null. The service refuses an empty name; if the plan
+        // read null as "untouched" the admin would be told nothing changed instead.
+        var plan = UserEditPlan.Diff("Amina Okoro", null, "User", "User", [A], [A]);
+
+        Assert.True(plan.ChangesName);
+        Assert.Equal(string.Empty, plan.NewFullName);
+    }
+
+    [Fact]
     public void OnlyTheDifferences_AreInThePlan()
     {
         var plan = UserEditPlan.Diff("Amina Okoro", "Amina O.", "User", "Admin", loadedOrgIds: [A, B], orgIds: [B, C]);

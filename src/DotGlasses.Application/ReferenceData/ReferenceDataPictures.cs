@@ -93,7 +93,8 @@ public static partial class ReferenceDataPictures
             ? imageUrl[PathPrefix.Length..]
             : null;
 
-    [GeneratedRegex("^[0-9a-f]{32}\\.(png|jpg|webp)$")]
+    // \z, not $: in .NET "$" also matches before a trailing newline.
+    [GeneratedRegex("^[0-9a-f]{32}\\.(png|jpg|webp)\\z")]
     private static partial Regex StoredName();
 }
 

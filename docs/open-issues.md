@@ -218,7 +218,35 @@ machine" rule.
   whom, what changed) from the Edit user page and the Organisations screen alike; nothing in the
   portal shows them. A change-history screen was left out as its own piece of work.
 
+- **Forgot password: three hardening gaps found in review (2026-10-02), none fixed.** (1) The
+  answer is the same for every address but the *time* is not: an address that gets an email waits
+  on the email send, one that doesn't returns after one query, so response time can still be used
+  to probe for accounts. The fix is to send off the request path. (2) The emailed link's host is
+  taken from the request (`LinkGenerator.GetUriByAction`) and `AllowedHosts` is `*`, so the only
+  thing stopping a forged `Host` header from putting another site's address in a real reset email
+  is the Container App's ingress refusing unknown hosts — which nobody has verified. Pin
+  `AllowedHosts` or build the link from configuration. The invite email is built the same way.
+  (3) After a Field App reset, the redirect goes to `FieldApp:BaseUrlByAdminHost`'s entry for the
+  host the request arrived on and falls back to `http://localhost:5253/` for any other — so a
+  reset completed through the Container App's raw `azurecontainerapps.io` address ends at
+  localhost.
+- **Two different Sales converting the same Lead at the same instant can both be saved.** Each
+  passes the "already converted?" check before the other commits; the Lead's back-link, and its
+  custom order if it has one, then point at whichever saved last, and the other Sale stands
+  unlinked. `SaleService` refuses the second in every ordinary case; closing the last gap needs a
+  concurrency token on `Lead`. Needs the Field App and the Admin Portal converting one Lead within
+  milliseconds.
+
 ## Real, visible interim gaps (the system tells the user, doesn't hide it)
+
+- **A frame colour picture over 8 MB is refused with a bare error page**, not the "keep it under
+  1 MB" message every other oversize file gets: the request size limit rejects it before the
+  controller runs.
+- **Replacing a frame colour's picture can leave the old file behind.** The item is saved first
+  and the old blob deleted after; if that delete fails the admin sees an error for a change that
+  did save, and the old file stays in storage until someone removes it.
+- **The Field App says "You're offline" for any failed location switch it can't get an answer
+  to** — including the server being down. It can't tell the two apart from a failed request.
 
 - **`FrameColour`'s seeded "Other" row** is an assumption made while seeding reference data, not
   explicitly confirmed against real DGI usage — the original call named exactly 6 fixed colours. The

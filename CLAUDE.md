@@ -80,7 +80,9 @@ are the record of *how* things got built; don't restate that here.
   it carries the Coating set it ordered with, whole, in place of a set seeded from a preference —
   and both forms then show that lens and set read-only rather than in controls. The lock itself is
   `OrderedLeadConversion` (`Rules/Sales`), one pure check over the request and the Lead that the
-  Sale endpoint, the Admin Portal's conversion and `SaleService` all ask. `SaleAssemblyTests` walks `CreateSaleRequest` by reflection and fails
+  Sale endpoint, the Admin Portal's conversion and `SaleService` all ask. On the locked fields it
+  **replaces** the ordinary Sale rules rather than adding to them (`Over`): the lens was checked
+  when it was ordered, and a coating retired since must not leave an order nobody can pay for. `SaleAssemblyTests` walks `CreateSaleRequest` by reflection and fails
   unless every property is either carried from `SaleAnswers` or listed in `DeliberatelyNotCarried`
   with a reason — so **adding a field to `CreateSaleRequest` means adding it to `SaleAnswers` and
   `Build` too**. One thing deliberately stays with each form rather than moving into the builder:

@@ -51,9 +51,17 @@ public class DashboardQueryService(DotGlassesDbContext dbContext, IUnscopedRepor
             .Where(n => filter.CountryId is not { } countryId || orgLookup.FindCountry(n.Path)?.Id == countryId)
             .ToList();
 
+        // Every retailer/distributor tier the caller can see, plus — resolved upward, as the
+        // Country is — the Retailer over anything they can see, so a retail-point caller is
+        // offered their own.
         var retailers = inChosenCountry
             .Where(n => n.Node.Level == OrganisationLevel.Intermediate)
             .Select(n => new DashboardOrgOption(n.Node.Id, n.Node.Name))
+            .Concat(inChosenCountry
+                .Select(n => orgLookup.ResolveRetailer(n.Path).Node)
+                .Where(r => r is not null)
+                .Select(r => new DashboardOrgOption(r!.Id, r.Name)))
+            .DistinctBy(r => r.Id)
             .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
 

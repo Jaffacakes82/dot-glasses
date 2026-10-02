@@ -17,25 +17,29 @@ public class HomeController(IDashboardQueryService dashboardQueryService) : Cont
     /// reason: none of the rows they can see sits under it.
     /// </summary>
     public async Task<IActionResult> Index(
-        DateOnly? fromDate, DateOnly? toDate, Guid? country, string? retailer, DashboardRanking rank = DashboardRanking.MostSales,
+        DateOnly? fromDate, DateOnly? toDate, string? country, string? retailer, DashboardRanking rank = DashboardRanking.MostSales,
         CancellationToken cancellationToken = default)
     {
         var (fromUtc, toUtcExclusive) = DateRange.ToUtcRange(fromDate, toDate);
 
+        // Bound as text, not as a Guid: an unreadable Guid would bind to null and quietly show
+        // everything. Guid.Empty names no organisation, so it matches nothing.
+        static Guid? IdOrNothing(string? value) =>
+            string.IsNullOrEmpty(value) ? null : Guid.TryParse(value, out var parsed) ? parsed : Guid.Empty;
+
         var noRetailer = string.Equals(retailer, DashboardViewModel.NoRetailerValue, StringComparison.OrdinalIgnoreCase);
-        Guid? retailerId = noRetailer || string.IsNullOrEmpty(retailer)
-            ? null
-            : Guid.TryParse(retailer, out var parsed) ? parsed : Guid.Empty;
+        var retailerId = noRetailer ? null : IdOrNothing(retailer);
+        var countryId = IdOrNothing(country);
 
         var snapshot = await dashboardQueryService.GetAsync(
-            new DashboardFilter(fromUtc, toUtcExclusive, country, retailerId, noRetailer, rank), cancellationToken);
+            new DashboardFilter(fromUtc, toUtcExclusive, countryId, retailerId, noRetailer, rank), cancellationToken);
         var figures = snapshot.Figures;
 
         var model = new DashboardViewModel
         {
             FromDate = fromDate,
             ToDate = toDate,
-            Country = country,
+            Country = countryId,
             Retailer = string.IsNullOrEmpty(retailer) ? null : retailer,
             Ranking = rank,
             Countries = snapshot.Countries,

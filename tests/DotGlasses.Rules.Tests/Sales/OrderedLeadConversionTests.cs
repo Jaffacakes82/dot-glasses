@@ -183,6 +183,67 @@ public class OrderedLeadConversionTests
             Assert.Single(OrderedLeadConversion.Check(sale, lead).Failures));
     }
 
+    // --- The lock over the ordinary Sale rules -------------------------------------------------
+
+    private static readonly RuleFailure RetiredCoating = new("CoatingRefIds", "One of the coatings is no longer offered. Choose the coatings again.");
+    private static readonly RuleFailure RetiredLensType = new("LensTypeRefId", "Choose a lens type.");
+    private static readonly RuleFailure NoFrameColour = new("FrameColourRefId", "Choose a frame colour.");
+
+    /// <summary>The lens and coatings were checked when the order was placed and are being made.
+    /// A coating or lens type retired since must not make the order impossible to pay for — the
+    /// technician can't change a locked set, and there is no cancel.</summary>
+    [Fact]
+    public void For_an_ordered_lead_the_lock_replaces_the_ordinary_rules_on_the_locked_fields()
+    {
+        var lead = AnOrderedLead();
+        var saleRules = RuleResult.From([RetiredCoating, RetiredLensType, NoFrameColour]);
+
+        var result = OrderedLeadConversion.Over(saleRules, ASaleKeeping(lead), lead);
+
+        // What the Sale itself still has to answer is untouched.
+        Assert.Equal([NoFrameColour], result.Failures);
+    }
+
+    [Fact]
+    public void A_changed_lens_is_still_refused_once_with_the_locks_own_message()
+    {
+        var lead = AnOrderedLead();
+        var sale = ASaleKeeping(lead);
+        sale.CoatingRefIds = [BlueBlock];
+
+        var result = OrderedLeadConversion.Over(RuleResult.From([RetiredCoating]), sale, lead);
+
+        Assert.Equal([new RuleFailure("CoatingRefIds", OrderedLeadConversion.CoatingsLockedMessage)], result.Failures);
+    }
+
+    [Fact]
+    public void For_a_lead_that_placed_no_order_the_ordinary_rules_stand_as_they_are()
+    {
+        var lead = AnOrderedLead();
+        lead.OrderFromDotGlasses = false;
+        lead.CoatingRefIds = [];
+        var saleRules = RuleResult.From([RetiredCoating, NoFrameColour]);
+
+        Assert.Same(saleRules, OrderedLeadConversion.Over(saleRules, ASaleKeeping(lead), lead));
+    }
+
+    [Fact]
+    public void Every_field_the_lock_compares_is_a_locked_key()
+    {
+        var lead = AnOrderedLead();
+        foreach (var (field, change) in LensChanges.Select(row => ((string)row[0], (Action<CreateSaleRequest>)row[1])))
+        {
+            Assert.Contains(field, OrderedLeadConversion.LockedKeys);
+        }
+
+        Assert.Contains("CoatingRefIds", OrderedLeadConversion.LockedKeys);
+
+        // The tick is refused by the lock but is not a locked field: an ordinary rule about it
+        // (there is none today) would still be reported.
+        Assert.DoesNotContain("OrderFromDotGlasses", OrderedLeadConversion.LockedKeys);
+        Assert.NotNull(lead);
+    }
+
     /// <summary>These reach a technician on Failed records, so they follow the same voice as every
     /// other rule message: a plain sentence, no property names.</summary>
     [Fact]

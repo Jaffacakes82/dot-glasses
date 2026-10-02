@@ -186,9 +186,7 @@ public class LeadConversionController(
         // (ADR-0008) — the rule the Sale endpoint reports beside its own source check. This form
         // shows both read-only and BuildSaleAnswers takes them from the Lead, so it holds here by
         // construction; it is asked anyway so the two write paths answer to the same rule.
-        var failures = ConsultationRules.Check(request, atLeadsLocation).Failures
-            .Concat(OrderedLeadConversion.Check(request, lead).Failures)
-            .ToList();
+        var failures = OrderedLeadConversion.Over(ConsultationRules.Check(request, atLeadsLocation), request, lead).Failures;
         if (failures.Count > 0)
         {
             // Failures come back keyed by CreateSaleRequest's own property names — LeadConversionFormModel

@@ -291,6 +291,38 @@ public class SaleServiceTests
     }
 
     [Fact]
+    public async Task ASecondSaleConvertingTheSameLead_IsRefused_AndTheFirstKeepsTheLeadAndItsOrder()
+    {
+        var sut = CreateSut(out var sales, out var leads, out _, out _, out var orders);
+        var lead = AnOrderedLead(leads, orders);
+        var first = await sut.CreateAsync(ASaleKeepingTheOrderedLens(lead), Guid.NewGuid(), RetailPoint);
+
+        var rejection = await Assert.ThrowsAsync<DomainRuleViolationException>(
+            () => sut.CreateAsync(ASaleKeepingTheOrderedLens(lead), Guid.NewGuid(), RetailPoint));
+
+        Assert.Contains("already been converted", rejection.Message);
+        Assert.Equal(1, sales.Count);
+        Assert.Equal(first.Id, leads.Inspect(lead.Id)!.SaleId);
+        Assert.Equal(first.Id, Assert.Single(orders.All).SaleId);
+    }
+
+    [Fact]
+    public async Task TheSameConversionSentTwice_IsAnsweredWithTheSaleThatExists()
+    {
+        var sut = CreateSut(out var sales, out var leads, out _, out var unitOfWork, out var orders);
+        var lead = AnOrderedLead(leads, orders);
+        var request = ASaleKeepingTheOrderedLens(lead);
+
+        var first = await sut.CreateAsync(request, Guid.NewGuid(), RetailPoint);
+        var again = await sut.CreateAsync(request, Guid.NewGuid(), RetailPoint);
+
+        Assert.Equal(first.Id, again.Id);
+        Assert.Equal(1, sales.Count);
+        Assert.Equal(1, unitOfWork.SaveCount);
+        Assert.Single(orders.All);
+    }
+
+    [Fact]
     public async Task ConvertingAnOrderedLeadWhileAskingForASecondOrder_IsRefused()
     {
         var sut = CreateSut(out _, out var leads, out _, out _, out var orders);

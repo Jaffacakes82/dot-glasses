@@ -4,6 +4,7 @@ using DotGlasses.Domain.Entities;
 using DotGlasses.Domain.Enums;
 using DotGlasses.Infrastructure.Persistence.Configurations;
 using DotGlasses.Web.Tests.DomainRejections;
+using Microsoft.EntityFrameworkCore;
 
 namespace DotGlasses.Web.Tests.Reporting;
 
@@ -248,6 +249,20 @@ public class DashboardScreenTests(AdminPortalFactory factory) : IClassFixture<Ad
     }
 
     [Fact]
+    public async Task ARetailPointAdmin_IsOfferedTheRetailerAndCountryAboveThem()
+    {
+        var tree = ACountry();
+        var outletOneId = Guid.Empty;
+        factory.Seed(db => outletOneId = db.OrganisationNodes.IgnoreQueryFilters().Single(o => o.HierarchyPath == tree.OutletOne).Id);
+        var (client, _) = factory.CreateAdminClientWithAssignments(outletOneId);
+
+        var html = await DashboardAsync(client, "rank=MostSales");
+
+        Assert.Equal(["All countries", tree.CountryName], Options(html, "country"));
+        Assert.Equal(["All retailers", tree.RetailerName], Options(html, "retailer"));
+    }
+
+    [Fact]
     public async Task ARetailerFilter_NarrowsToThatRetailersRetailPoints_AndNoRetailerToTheDirectOnes()
     {
         var tree = ACountry();
@@ -277,7 +292,7 @@ public class DashboardScreenTests(AdminPortalFactory factory) : IClassFixture<Ad
         RecordJourneys(theirs.OutletOne, 4);
         var (client, _) = factory.CreateAdminClientWithAssignments(mine.CountryId);
 
-        foreach (var query in new[] { $"country={theirs.CountryId}", $"retailer={theirs.RetailerId}", "retailer=not-a-retailer" })
+        foreach (var query in new[] { $"country={theirs.CountryId}", $"retailer={theirs.RetailerId}", "retailer=not-a-retailer", "country=not-a-country" })
         {
             var html = await DashboardAsync(client, query);
 

@@ -360,7 +360,14 @@ public class UserAdminService(
 
             await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-            var org = await dbContext.OrganisationNodes.FirstAsync(o => o.Id == orgNodeId, cancellationToken);
+            // Read past the soft-delete filter so a deactivated organisation is refused in a
+            // sentence, as the Edit user page refuses it, rather than surfacing as a missing row.
+            var org = await dbContext.OrganisationNodes.IgnoreQueryFilters().FirstAsync(o => o.Id == orgNodeId, cancellationToken);
+            if (org.IsDeleted)
+            {
+                throw new DomainRuleViolationException($"{org.Name} is deactivated, so nobody can be assigned to it.");
+            }
+
             var already = await dbContext.UserOrgAssignments
                 .Where(a => a.OrgNodeId == orgNodeId && ids.Contains(a.UserId))
                 .Select(a => a.UserId)

@@ -1005,7 +1005,8 @@ case, and last the **Referred or treated** block described in 5.3.
   sent with exactly that lens and coating set and shares the Lead's order. Frame colour, hard case
   and referral are asked as usual. The server enforces the lock on whatever is sent: a different
   lens, a different coating set or a second order request is refused against the field concerned.
-  To sell a different lens, record a new Sale.
+  To sell a different lens, record a new Sale. A coating or lens type retired after the order was
+  placed doesn't block the sale — the lens is already being made with it.
 - **Automatic match prompt** — for a fresh Sale (not already opened from a specific Lead), the app
   checks once per form visit whether the entered name + phone matches an existing open Lead. If it
   does, a card appears before the Sale is saved: *"Existing lead found — `<name>` already

@@ -130,14 +130,7 @@ public class SaleService(
         }
         else if (request.OrderFromDotGlasses)
         {
-            order = new CustomOrder
-            {
-                Id = Guid.NewGuid(),
-                HierarchyPath = hierarchyPath,
-                Status = Domain.Enums.FulfilmentStatus.Submitted,
-                PlacedAtUtc = DateTimeOffset.UtcNow,
-                SaleId = entity.Id,
-            };
+            order = CustomOrder.Place(hierarchyPath, saleId: entity.Id);
             customOrderRepository.Add(order);
         }
 
@@ -187,9 +180,20 @@ public class SaleService(
             return null;
         }
 
-        return await leadRepository.GetByIdAsync(id, cancellationToken)
+        var lead = await leadRepository.GetByIdAsync(id, cancellationToken)
             ?? throw new DomainRuleViolationException(
                 "The Lead this Sale was converted from isn't available at your location — nothing has been saved.");
+
+        // A Lead converts once. The controllers report this against the field first; this is the
+        // guard behind them, and what stops a second Sale taking over the Lead's back-link — and,
+        // for a Lead that ordered its lens, its order — from the Sale that already has them. (A
+        // retry of that same Sale never gets here: CreateAsync has already answered it.)
+        if (lead.SaleId is not null)
+        {
+            throw new DomainRuleViolationException("This lead has already been converted into a sale — nothing has been saved.");
+        }
+
+        return lead;
     }
 
     /// <summary>Exact name+phone match within the retail point — see LeadService's identical helper.</summary>

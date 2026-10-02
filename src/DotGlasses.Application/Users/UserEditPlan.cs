@@ -30,10 +30,13 @@ public record UserEditPlan(string? NewFullName, string? NewRole, IReadOnlyList<G
     {
         var loaded = loadedOrgIds.ToHashSet();
         var submitted = orgIds.ToHashSet();
-        var name = fullName?.Trim();
+        // A cleared box arrives as null. It is still a change — to an empty name, which the
+        // service refuses — and not "the name wasn't touched".
+        var name = fullName?.Trim() ?? string.Empty;
+        var loadedName = loadedFullName?.Trim() ?? string.Empty;
 
         return new UserEditPlan(
-            NewFullName: string.Equals(name, loadedFullName?.Trim(), StringComparison.Ordinal) ? null : name,
+            NewFullName: string.Equals(name, loadedName, StringComparison.Ordinal) ? null : name,
             NewRole: string.Equals(role, loadedRole, StringComparison.Ordinal) ? null : role,
             OrgsToAdd: submitted.Except(loaded).ToList(),
             OrgsToRemove: loaded.Except(submitted).ToList());

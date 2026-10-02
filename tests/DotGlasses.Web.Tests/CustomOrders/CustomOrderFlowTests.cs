@@ -333,6 +333,68 @@ public class CustomOrderFlowTests(AdminPortalFactory factory) : IClassFixture<Ad
     }
 
     [Fact]
+    public async Task TheSameConversionSentTwice_IsAnsweredNotRefused()
+    {
+        // The outbox retries a conversion whose first answer never arrived. Refusing it as
+        // "already converted" would park a Sale that saved on the Failed records screen.
+        var (path, _) = ARetailPoint();
+        var client = factory.CreateTechnicianClient(path);
+        var lead = AnOrderingLead();
+        await AssertCreatedAsync(await client.PostAsJsonAsync("api/v1/leads", lead));
+        var sale = ASaleConverting(lead);
+        await AssertCreatedAsync(await client.PostAsJsonAsync("api/v1/sales", sale));
+
+        var again = await client.PostAsJsonAsync("api/v1/sales", sale);
+
+        Assert.True(again.IsSuccessStatusCode, await again.Content.ReadAsStringAsync());
+        Assert.Equal(sale.Id, (await again.Content.ReadFromJsonAsync<SaleDto>())!.Id);
+        Assert.Single(OrdersAt(path));
+        Assert.Single(Query(db => db.Sales.IgnoreQueryFilters().Where(s => s.HierarchyPath == path).ToList()));
+
+        // A different Sale for the same Lead is still refused, against the field.
+        var another = ASaleConverting(lead);
+        Assert.Contains("SourceLeadId", (await ErrorsAsync(await client.PostAsJsonAsync("api/v1/sales", another))).Keys);
+    }
+
+    [Fact]
+    public async Task AnOrderedLead_CanStillBeConverted_AfterOneOfItsCoatingsIsRetired()
+    {
+        // Between ordering and paying, an admin retires a coating. The lens is being made with it
+        // and the form shows it read-only, so the Sale must still save — from the Field App and
+        // from the Admin Portal.
+        var retiring = Guid.NewGuid();
+        factory.Seed(db => db.ReferenceDataItems.Add(new ReferenceDataItem
+        {
+            Id = retiring,
+            Category = DomainReferenceDataCategory.Coating,
+            Code = $"retiring_{retiring:N}",
+            Label = $"Retiring {retiring:N}"[..20],
+            IsActive = true,
+            SortOrder = 99,
+        }));
+
+        var (path, _) = ARetailPoint();
+        var client = factory.CreateTechnicianClient(path);
+        var viaApi = AnOrderingLead("Esther Wambui");
+        var viaPortal = AnOrderingLead("Faith Achieng");
+        viaApi.CoatingRefIds = viaPortal.CoatingRefIds = [Clear, retiring];
+        await AssertCreatedAsync(await client.PostAsJsonAsync("api/v1/leads", viaApi));
+        await AssertCreatedAsync(await client.PostAsJsonAsync("api/v1/leads", viaPortal));
+
+        factory.Seed(db => db.ReferenceDataItems.Single(x => x.Id == retiring).IsActive = false);
+
+        await AssertCreatedAsync(await client.PostAsJsonAsync("api/v1/sales", ASaleConverting(viaApi)));
+        Assert.Equal(HttpStatusCode.Redirect, (await ConvertOnThePortalAsync(viaPortal.Id)).StatusCode);
+
+        Assert.All(OrdersAt(path), order => Assert.NotNull(order.SaleId));
+
+        // The same retired coating on a Sale that isn't converting an ordered Lead is refused as ever.
+        var fresh = ASaleConverting(viaApi);
+        fresh.SourceLeadId = null;
+        Assert.Contains("CoatingRefIds", (await ErrorsAsync(await client.PostAsJsonAsync("api/v1/sales", fresh))).Keys);
+    }
+
+    [Fact]
     public async Task ConvertingAnOrderedLeadWithAChangedLens_IsRefusedAgainstTheFieldThatChanged()
     {
         var (path, _) = ARetailPoint();

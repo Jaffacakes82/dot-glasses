@@ -1126,18 +1126,10 @@
         var result = IsTest
             ? ConsultationRules.Check(BuildTestRequest(), Snapshot)
             : IsSale
-                ? ConsultationRules.Check(BuildSaleRequest(), Snapshot)
+                ? CheckSale()
                 : ConsultationRules.Check(BuildLeadRequest(), Snapshot);
 
         _errors.AddRuleFailures(result, KnownFields);
-
-        // The lens of an ordered Lead is locked (ADR-0008) — the same rule the server asks beside
-        // its source-Lead check. The locked form can't break it; this is for a Failed record
-        // reopened while the Lead could not be read.
-        if (IsSale && _orderedLead is not null)
-        {
-            _errors.AddRuleFailures(OrderedLeadConversion.Check(BuildSaleRequest(), _orderedLead), KnownFields);
-        }
 
         if (_errors.Any || _errors.Unattributed.Count > 0)
         {
@@ -1182,7 +1174,7 @@
             ReferredOrTreated = _referredOrTreated,
             ReferralReasonRefId = _referredOrTreated ? _referralReasonRefId : null,
             ReferralOtherText = _referredOrTreated ? _referralOtherText : null,
-            ReferralLocationFreeText = _referredOrTreated && !_treatedInFacility ? _referralLocationFreeText : null,
+            ReferralLocationFreeText = _referredOrTreated && !_treatedInFacility ? BlankToNull(_referralLocationFreeText) : null,
             TreatedInFacility = _referredOrTreated && _treatedInFacility,
             LensRangeType = needsGlasses ? _lensRange.LensRangeType : null,
             PresetCatalogueId = needsGlasses ? _lensRange.PresetCatalogueId : null,
@@ -1203,6 +1195,10 @@
         };
     }
 
+    /// <summary>The referral location is optional: a box typed in and emptied again is no
+    /// location, not an empty one.</summary>
+    private static string? BlankToNull(string? text) => string.IsNullOrWhiteSpace(text) ? null : text;
+
     private CreateLeadRequest BuildLeadRequest() => new()
     {
         Id = NewRecordId(),
@@ -1217,7 +1213,7 @@
         ReferredOrTreated = _referredOrTreated,
         ReferralReasonRefId = _referredOrTreated ? _referralReasonRefId : null,
         ReferralOtherText = _referredOrTreated ? _referralOtherText : null,
-        ReferralLocationFreeText = _referredOrTreated && !_treatedInFacility ? _referralLocationFreeText : null,
+        ReferralLocationFreeText = _referredOrTreated && !_treatedInFacility ? BlankToNull(_referralLocationFreeText) : null,
         TreatedInFacility = _referredOrTreated && _treatedInFacility,
         ReasonNotPurchasedRefId = _reasonNotPurchasedRefId ?? Guid.Empty,
         ReasonNotPurchasedOtherText = _reasonNotPurchasedOtherText,
@@ -1258,6 +1254,16 @@
     /// </summary>
     private CreateSaleRequest BuildSaleRequest() => SaleAssembly.Build(NewRecordId(), SourceLeadId, BuildSaleAnswers());
 
+    /// <summary>The Sale rules, and for a Lead whose lens is already ordered the lock over them
+    /// (ADR-0008) — the same two calls the server makes, so an ordered lens whose coating has
+    /// since been retired is accepted here exactly as it is there.</summary>
+    private RuleResult CheckSale()
+    {
+        var request = BuildSaleRequest();
+        var rules = ConsultationRules.Check(request, Snapshot);
+        return _orderedLead is null ? rules : OrderedLeadConversion.Over(rules, request, _orderedLead);
+    }
+
     private SaleAnswers BuildSaleAnswers() => new SaleAnswers
     {
         FullName = _name,
@@ -1270,7 +1276,7 @@
         ReferredOrTreated = _referredOrTreated,
         ReferralReasonRefId = _referralReasonRefId,
         ReferralOtherText = _referralOtherText,
-        ReferralLocationFreeText = _referralLocationFreeText,
+        ReferralLocationFreeText = BlankToNull(_referralLocationFreeText),
         TreatedInFacility = _treatedInFacility,
         // Suppressed here, not in the builder: this form hides the checkbox outside a Custom range,
         // so a value left over from an earlier Custom selection would otherwise become an error
@@ -1418,8 +1424,11 @@
                                border-radius:var(--radius-md); border: @(selected ? "2px solid var(--dot-orange)" : "1px solid var(--border-default)");">
                     @if (ReferenceDataClient.PictureSource(colour) is { } picture)
                     {
+                        @* A picture that can't load — offline with no copy on this device, say — gives
+                           way to the same placeholder a colour with no picture shows. *@
                         <img src="@picture" alt="@colour.Label" style="width:48px; height:48px; object-fit:contain;"
-                             onerror="this.style.visibility='hidden'" />
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'" />
+                        <div style="width:48px; height:48px; border-radius:50%; background:#eee; display:none; align-items:center; justify-content:center; font-size:10px; color:#888;">?</div>
                     }
                     else
                     {

@@ -89,6 +89,12 @@ public class SalesController(
         {
             modelState.AddModelError(nameof(request.SourceLeadId), "The lead this sale converts can't be found at this location. Discard this record and record the sale again.");
         }
+        else if (lead.SaleId == request.Id)
+        {
+            // This Sale already converted this Lead: the outbox is retrying a record whose first
+            // answer never arrived. Nothing to refuse — SaleService answers with the Sale that
+            // exists and writes nothing.
+        }
         else if (lead.SaleId is not null)
         {
             modelState.AddModelError(nameof(request.SourceLeadId), "This lead has already been converted into a sale. Discard this record.");
@@ -99,6 +105,16 @@ public class SalesController(
             // ordered (ADR-0008). Reported here, field by field, for the same reason the source
             // check is: SaleService guards it too, but as one unkeyed sentence the Field App
             // can't put against a control.
+            // On the locked fields the lock replaces the ordinary rules (OrderedLeadConversion.Over):
+            // an ordered lens must stay sellable after one of its coatings is retired.
+            if (lead.OrderFromDotGlasses)
+            {
+                foreach (var key in OrderedLeadConversion.LockedKeys)
+                {
+                    modelState.Remove(key);
+                }
+            }
+
             foreach (var failure in OrderedLeadConversion.Check(request, lead).Failures)
             {
                 modelState.AddModelError(failure.Key, failure.Message);
