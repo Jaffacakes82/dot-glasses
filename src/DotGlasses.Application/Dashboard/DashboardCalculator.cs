@@ -59,8 +59,9 @@ public static class DashboardCalculator
 
         var neededTests = tests.Where(t => t.Outcome == TestOutcome.NeedsGlasses).ToList();
 
-        var maleCount = tests.Count(t => t.Gender == Gender.Male);
-        var femaleCount = tests.Count(t => t.Gender == Gender.Female);
+        // Who bought glasses, so the split is of Sales, not of everyone tested.
+        var maleCount = sales.Count(s => s.Gender == Gender.Male);
+        var femaleCount = sales.Count(s => s.Gender == Gender.Female);
         var genderTotal = maleCount + femaleCount;
         var genderMalePercent = genderTotal == 0 ? 0 : (int)Math.Round(100.0 * maleCount / genderTotal);
 

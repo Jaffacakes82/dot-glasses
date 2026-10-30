@@ -193,6 +193,12 @@ public class DashboardScreenTests(AdminPortalFactory factory) : IClassFixture<Ad
     }
 
     [Fact]
+    public async Task TheGenderSplit_SaysItIsOfSales()
+    {
+        Assert.Contains(">Gender split (sales)</div>", await DashboardAsync("rank=MostSales"));
+    }
+
+    [Fact]
     public async Task WithNoOrganisationFilter_ThereIsNoNoteUnderTheTiles()
     {
         Assert.DoesNotContain("id=\"drilldownNote\"", await DashboardAsync("rank=MostSales"));
