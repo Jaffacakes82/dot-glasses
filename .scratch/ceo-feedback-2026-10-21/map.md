@@ -25,7 +25,8 @@ tickets, or ruled out of scope.
    use is the Field App's core promise), then
    [07 — lower-ranking admins removing higher-ranking ones](issues/07-lower-admin-removes-higher.md)
    (an access hole, needs a short grilling first).
-2. **Quick builds** (`ready-for-agent`): 11, 15, 17, 18, 14, 01, 06, then 08.
+2. **Quick builds** (`ready-for-agent`, built from [Spec G](../feedback-fixes-2026-10-21/spec.md)):
+   15, 17, 18 then 14 (blocked by 18), 11, 06 then 08 (blocked by 06), then 01.
 3. **Grilling, as one session:** 03 → 05 (who can invite and assign lens sets, and where). 04
    follows once 03 settles what each level can do.
 4. **Grilling, separately:** 13 (Lead coatings), 10 (full data export), 09 (custom orders at
@@ -64,3 +65,13 @@ tickets, or ruled out of scope.
 ## Decisions so far
 
 <!-- one line per resolved ticket: [title](issues/NN-slug.md) — gist -->
+
+**Specified, 2026-10-30, not yet built:** the `ready-for-agent` tickets 01, 06, 08, 11 and 14–18
+are grouped into [Spec G — Fixes from the 21 October feedback](../feedback-fixes-2026-10-21/spec.md).
+The spec settles two things the tickets left open: the Field App's coating reconcile function
+moves into `Rules` so the auto-tick has one tested home, and the Field App changes are checked by
+hand on staging rather than through a new test project.
+
+**Questions sent to DGI:** everything else open in this round (02, 03, 04, 05, 07, 09, 10, 12 and
+13) is in one questionnaire for the CEO, kept outside the repo. Each answer that comes back moves
+its ticket on.

@@ -1,6 +1,7 @@
 # 18 — Tick the only coating automatically
 
 **Status:** ready-for-agent
+**Spec:** [Spec G — Fixes from the 21 October feedback](../../feedback-fixes-2026-10-21/spec.md). Build from this ticket and the spec together; where they differ, the spec's Implementation decisions win.
 **Category:** enhancement
 **Blocked by:** None — can start immediately
 
