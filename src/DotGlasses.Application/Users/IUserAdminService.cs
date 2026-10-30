@@ -75,9 +75,9 @@ public interface IUserAdminService
 
 /// <summary>Status is "Invited" (no password set yet), "Suspended" (see UserSuspension — not a
 /// temporary failed-sign-in lockout), or "Active" — derived from Identity's own fields, not a
-/// stored column. OrgNodeIds is parallel to OrgNames (same order), so callers acting on a specific
-/// assignment (e.g. un-assign) don't have to match by name; an assignment outside the caller's
-/// scope is named "Outside your scope" rather than disclosed.
+/// stored column. OrgNames names only the assignments inside the caller's scope; one outside it is
+/// left out rather than disclosed. OrgNodeIds is every assignment, so callers acting on a specific
+/// one (e.g. un-assign) work by Id, never by matching a name.
 ///
 /// AssignmentPaths is every org the user is assigned to, inside the caller's scope or not — what
 /// the "act on this user" rule checks: suspend, reset password and change role need all of them

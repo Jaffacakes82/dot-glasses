@@ -4,7 +4,7 @@
     var selectedId = ViewData["SelectedId"] as Guid?;
     var isSelected = Model.Id == selectedId;
 }
-<a href="?selectedId=@Model.Id" style="text-decoration:none; color:inherit; display:block;">
+<a href="?selectedId=@Model.Id#org-detail" style="text-decoration:none; color:inherit; display:block;">
     <div style="padding: 8px 12px; padding-left: @(12 + depth * 24)px; border-radius: var(--radius-sm); @(isSelected ? "background:rgba(249,103,21,0.12);" : "") display:flex; align-items:center; gap:8px;">
         @if (Model.Children.Count > 0)
         {
