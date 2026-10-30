@@ -22,15 +22,19 @@
 @inject ILeadsClient LeadsClient
 @inject ISyncQueueStore OutboxStore
 @inject ISyncService SyncService
-@inject IJSRuntime JS
 
 <PageTitle>Record @Type</PageTitle>
 
 <div class="dg-screen">
     <div class="dg-top-strip">
-        <button class="back" type="button" @onclick="NavigateBackAsync">&#8592;</button>
+        <button class="back" type="button" @onclick="NavigateBack">&#8592;</button>
         <h1>Record @Type</h1>
     </div>
+
+    <ConfirmDialog Visible="_confirmingDiscard" Title="Discard this record?"
+                   Message="Anything entered so far will be lost."
+                   CancelLabel="Keep editing" ConfirmLabel="Discard"
+                   OnCancel="() => _confirmingDiscard = false" OnConfirm="Discard"/>
 
     @if (!ReferenceDataClient.IsLoaded && ReferenceDataClient.LoadError is not null)
     {
@@ -1082,17 +1086,26 @@
         || _lensRange.SphereLeft is not null || _lensRange.SphereRight is not null
         || _lensRange.PupilDistanceMm is not null || _lensRange.PresetPupilDistanceBucket is not null;
 
+    private bool _confirmingDiscard;
+
     /// <summary>Explicit in-app back control (see CLAUDE.md ticket 02) — steps back to Home via
-    /// the app's own navigation rather than a bare history.back(), and warns before discarding a
+    /// the app's own navigation rather than a bare history.back(), and asks before discarding a
     /// part-filled form instead of silently losing it. Purely additive: the phone's native back
     /// gesture/button is untouched by this.</summary>
-    private async Task NavigateBackAsync()
+    private void NavigateBack()
     {
-        if (HasUnsavedData && !await JS.InvokeAsync<bool>("confirm", "Discard this record? Anything entered so far will be lost."))
+        if (HasUnsavedData)
         {
+            _confirmingDiscard = true;
             return;
         }
 
+        Navigation.NavigateTo("/");
+    }
+
+    private void Discard()
+    {
+        _confirmingDiscard = false;
         Navigation.NavigateTo("/");
     }
 

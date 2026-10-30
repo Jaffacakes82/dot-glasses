@@ -113,3 +113,42 @@ code {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+/* In-app confirmation (ConfirmDialog.razor) — replaces the browser's confirm(). */
+.dg-dialog-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-4);
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.dg-dialog {
+    width: 100%;
+    max-width: 360px;
+    text-align: center;
+}
+
+.dg-dialog-title {
+    font-family: var(--font-display);
+    font-weight: 900;
+    text-transform: uppercase;
+    font-size: 16px;
+}
+
+.dg-dialog-message {
+    color: #555;
+}
+
+.dg-dialog-actions {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+}
+
+    .dg-dialog-actions .dg-btn {
+        flex: 1;
+    }
