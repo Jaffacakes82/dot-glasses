@@ -43,7 +43,9 @@ are the record of *how* things got built; don't restate that here.
   validator call the same helpers — don't restate a bound, a comparison or a coating rule in a
   view, script or component (a script reads what the server rendered from Rules).
   `LensPowerValues.FormatPower`/`FormatLensPower` are the one display format,
-  `LensSets.PairedCoatings` is what a pairing ticks and locks, and a record stores each eye as
+  `LensSets.PairedCoatings` is what a pairing ticks and locks, `LensSets.CoatingSelection` is what
+  a lens change does to a coating selection (including ticking a Coating set's only offered
+  coating — the Admin Portal's script is told which by the server), and a record stores each eye as
   `LensPowerRules.Normalise` spells it.
 - **There is no consultation request validator.** `ConsultationRules.Check` holds *every* rule for
   a `Test`/`Lead`/`Sale` create — including the scalar ones (`NotEmpty`, length caps, `IsInEnum`,

@@ -84,6 +84,17 @@ public class LeadConversionController(
             form.ChildrensFrame = lead.ChildrensFrame;
         }
 
+        // A Coating set's only offered coating starts ticked, as on the Field App — here, where the
+        // form opens, and not on a re-render, where the admin may have unticked it. A Lead that
+        // ordered keeps the set it ordered with.
+        if (!lead.OrderFromDotGlasses
+            && ChosenPair(lead, form, atLeadsLocation, LeadLensCarriesOver(lead, atLeadsLocation)) is var (pairLeft, pairRight)
+            && CoatingSelection.AutoTicked(LensSetLenses.CoatingsFor(pairLeft, pairRight).Offered) is { } only
+            && !form.CoatingRefIds.Contains(only))
+        {
+            form.CoatingRefIds = [.. form.CoatingRefIds, only];
+        }
+
         return View(await BuildViewModelAsync(lead, form, cancellationToken));
     }
 
@@ -94,7 +105,8 @@ public class LeadConversionController(
     /// <see cref="PairedCoatings"/> decide. Both lenses must be in a lens set reaching the Lead's
     /// retail point; anything else answers <c>offered: null</c> ("no pair chosen — list every
     /// coating"), never an error, since half-chosen is a normal state here. With only <c>left</c>
-    /// given the one lens stands for both ("Same lens for both eyes").
+    /// given the one lens stands for both ("Same lens for both eyes"). <c>autoTicked</c> is the
+    /// coating the Coating set has ticked for it (<see cref="CoatingSelection.AutoTicked"/>), or null.
     /// </summary>
     [HttpGet("Leads/Convert/{id:guid}/coatings")]
     public async Task<IActionResult> Coatings(Guid id, Guid? left, Guid? right, CancellationToken cancellationToken)
@@ -109,7 +121,7 @@ public class LeadConversionController(
         var pair = FindPair(atLeadsLocation, left, right ?? left);
         if (pair is not var (leftLens, rightLens))
         {
-            return Json(new { offered = (Guid[]?)null, effects = new Dictionary<Guid, CoatingTickEffect>() });
+            return Json(new { offered = (Guid[]?)null, effects = new Dictionary<Guid, CoatingTickEffect>(), autoTicked = (Guid?)null });
         }
 
         var coatings = LensSetLenses.CoatingsFor(leftLens, rightLens);
@@ -117,6 +129,7 @@ public class LeadConversionController(
         {
             offered = coatings.Offered,
             effects = CoatingTickEffects.For(coatings.Offered, coatings.RequiredPairings),
+            autoTicked = lead.OrderFromDotGlasses ? null : CoatingSelection.AutoTicked(coatings.Offered),
         });
     }
 

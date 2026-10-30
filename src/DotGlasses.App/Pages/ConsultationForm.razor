@@ -468,6 +468,11 @@
     /// against a control the technician can no longer see — as BuildSaleAnswers does for a Sale.</summary>
     private bool LeadOrdersLens => !IsTest && !IsSale && _lensRange.LensRangeType == LensRangeType.Custom && _orderFromDotGlasses;
 
+    /// <summary>Whether this form asks for a Coating set, which has its only offered coating ticked
+    /// for it (CoatingSelection.AutoTicked): a Sale, unless its coatings are locked to an ordered
+    /// Lead's, and a Lead that orders its lens.</summary>
+    private bool AsksForCoatingSet => (IsSale && _orderedLead is null) || LeadOrdersLens;
+
     /// <summary>The Lead this Sale converts, when that Lead's lens is already ordered: the lens
     /// and its coatings are then shown read-only and sent as the Lead holds them, and no second
     /// order is asked for. Null for every other Sale.</summary>
@@ -1013,7 +1018,8 @@
     /// Brings the coating selection and the coating preference in line with what the lens choice
     /// offers: still-offered ticks stay, removed ones are unticked and named in a note, and the
     /// paired coating of every ticked trigger is ticked (a Lead's preference that is a trigger comes
-    /// across with its pair). Custom (and no range) offers every active coating. A lens set whose
+    /// across with its pair). A Coating set has the only offered coating ticked for it. Custom (and
+    /// no range) offers every active coating. A lens set whose
     /// pair isn't complete yet offers nothing to compare against, so the selection is left alone
     /// until both eyes have a lens — a mid-change state (the right eye emptied by a left lens of
     /// another type) shouldn't wipe the technician's ticks — and reconciled the moment it completes.
@@ -1039,7 +1045,7 @@
             pairings = [];
         }
 
-        var reconciled = CoatingSelection.Reconcile(_coatingRefIds, offered, pairings);
+        var reconciled = CoatingSelection.Reconcile(_coatingRefIds, offered, pairings, AsksForCoatingSet);
         _coatingRefIds = reconciled.Selected;
 
         if (_coatingPreferenceRefId is { } preference && !offered.Contains(preference))
