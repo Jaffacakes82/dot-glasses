@@ -123,9 +123,11 @@
             <div class="dg-field">
                 <label>Gender</label>
                 <select @bind="_gender" @bind:after="() => ClearErrors(nameof(CreateTestRequest.Gender))">
+                    <option value="">Select...</option>
                     <option value="Female">Female</option>
                     <option value="Male">Male</option>
                 </select>
+                <FieldError Errors="_errors" For="Gender"/>
             </div>
 
             @* One order on every form (Spec D): Age, Gender, Occupation open it and "Referred or
@@ -141,6 +143,7 @@
                 <div class="dg-field">
                     <label>Outcome</label>
                     <select @bind="_testOutcome" @bind:after="OnOutcomeChanged">
+                        <option value="">Select...</option>
                         <option value="NoGlassesNeeded">No glasses needed</option>
                         <option value="NeedsGlasses">Needs glasses</option>
                     </select>
@@ -398,7 +401,9 @@
     private bool IsSale => Type.Equals("sale", StringComparison.OrdinalIgnoreCase);
 
     private int? _age;
-    private Gender _gender = Gender.Female;
+    // Gender and Outcome start blank so a skipped question is caught rather than saved as the
+    // first option. A blank never reaches a request: Validate() refuses it first.
+    private Gender? _gender;
     private Guid? _occupationRefId;
     private string? _occupationOtherText;
     private bool _saving;
@@ -419,7 +424,7 @@
     private bool _summaryFollowsFieldErrors;
 
     // Test-only
-    private TestOutcome _testOutcome = TestOutcome.NoGlassesNeeded;
+    private TestOutcome? _testOutcome;
     private bool? _contactShared;
 
     // "Referred or treated" — shared across all three (Test/Lead/Sale), unconditional on outcome.
@@ -546,7 +551,7 @@
     {
         ClearErrors("Outcome");
 
-        // "No glasses needed" hides the lens section and the coating preference.
+        // Anything but "Needs glasses" hides the lens section and the coating preference.
         if (_testOutcome != TestOutcome.NeedsGlasses)
         {
             ClearErrors(LensFields);
@@ -1070,7 +1075,7 @@
     private bool HasUnsavedData =>
         _age is not null || !string.IsNullOrWhiteSpace(_name) || !string.IsNullOrWhiteSpace(_phone)
         || _occupationRefId is not null || _consentGiven
-        || (IsTest && _testOutcome != TestOutcome.NoGlassesNeeded) || _referredOrTreated
+        || _gender is not null || (IsTest && _testOutcome is not null) || _referredOrTreated
         || _reasonNotPurchasedRefId is not null || _customerToldPrice is not null || _coatingPreferenceRefId is not null
         || _frameColourRefId is not null || _coatingRefIds.Count > 0 || _hardCaseSold
         || _lensRange.LensLeftId is not null || _lensRange.LensRightId is not null
@@ -1183,7 +1188,7 @@
             new Dictionary<string, object?>
             {
                 ["sourceTestId"] = testId,
-                ["prefillGender"] = _gender.ToString(),
+                ["prefillGender"] = _gender?.ToString(),
                 ["prefillAge"] = _age,
                 ["prefillReferred"] = _referredOrTreated ? true : null,
                 ["prefillReferralReason"] = _referredOrTreated ? _referralReasonRefId : null,
@@ -1220,6 +1225,18 @@
         if (IsSale && SaleAssembly.LensRangeNotChosen(BuildSaleAnswers()) is { } notChosen)
         {
             _errors.Add(notChosen.Key, notChosen.Message);
+        }
+
+        // The two questions with no default. Added ahead of the rules for the same reason: the
+        // request below carries a stand-in value, and this message must be the one shown.
+        if (_gender is null)
+        {
+            _errors.Add(nameof(CreateTestRequest.Gender), "Choose a gender.");
+        }
+
+        if (IsTest && _testOutcome is null)
+        {
+            _errors.Add(nameof(CreateTestRequest.Outcome), "Choose an outcome.");
         }
 
         var result = IsTest
@@ -1266,10 +1283,10 @@
         {
             Id = NewRecordId(),
             AgeYears = _age,
-            Gender = _gender,
+            Gender = _gender ?? default,
             OccupationRefId = _occupationRefId,
             OccupationOtherText = _occupationOtherText,
-            Outcome = _testOutcome,
+            Outcome = _testOutcome ?? default,
             ReferredOrTreated = _referredOrTreated,
             ReferralReasonRefId = _referredOrTreated ? _referralReasonRefId : null,
             ReferralOtherText = _referredOrTreated ? _referralOtherText : null,
@@ -1305,7 +1322,7 @@
         FullName = _name,
         PhoneNumber = _phone,
         AgeYears = _age,
-        Gender = _gender,
+        Gender = _gender ?? default,
         OccupationRefId = _occupationRefId,
         OccupationOtherText = _occupationOtherText,
         ConsentGiven = _consentGiven,
@@ -1368,7 +1385,7 @@
         FullName = _name,
         PhoneNumber = _phone,
         AgeYears = _age,
-        Gender = _gender,
+        Gender = _gender ?? default,
         OccupationRefId = _occupationRefId,
         OccupationOtherText = _occupationOtherText,
         ConsentGiven = _consentGiven,
