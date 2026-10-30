@@ -285,31 +285,31 @@
         }
         else
         {
-        @* Coatings: the ones both chosen lenses come in (LensSetLenses.CoatingsFor — the same rules the
-           server checks with), with a pairing's coating ticked and locked once its trigger is ticked.
-           Every coating is rendered so the script can offer it again after a lens change; one the pair
-           doesn't offer is hidden and disabled. With no pair chosen — Custom, or a lens still to
-           pick — every coating is listed and the server's rules decide on submit. *@
-        <div style="margin-top:12px;" data-coatings data-url="@Url.Action("Coatings", "LeadConversion", new { id = Model.Lead.Id })" data-effects="@tickEffectData"
-             data-none-offered="No coating can be made on both of these lenses, so they can't be sold together on a lens set — choose another lens.">
-            <label>Coating (choose at least one)</label>
-            @foreach (var coating in Model.Coatings)
-            {
-                var offered = Model.OfferedCoatingIds is null || Model.OfferedCoatingIds.Contains(coating.Id);
-                var lockedTo = comesWith.TryGetValue(coating.Id, out var trigger) ? coatingLabels.GetValueOrDefault(trigger) : null;
-                <div class="form-check" data-coating-item data-coating-id="@coating.Id" hidden="@Hidden(!offered)">
-                    <input class="form-check-input" type="checkbox" name="Form.CoatingRefIds" value="@coating.Id" id="coating-@coating.Id"
-                           data-locked="@(lockedTo is null ? "false" : "true")"
-                           checked="@(tickedCoatings.Contains(coating.Id) ? "checked" : null)"
-                           disabled="@(offered ? null : "disabled")" />
-                    <label class="form-check-label" for="coating-@coating.Id">@coating.Label</label>
-                    <span data-lock-note style="font-size:12px; color:var(--text-muted-2); margin-left:6px;" hidden="@Hidden(lockedTo is null)">@(lockedTo is null ? "" : $"Comes with {lockedTo} on this lens")</span>
-                </div>
-            }
-            <p data-coatings-note role="status" style="font-size:12px; color:#c00; margin:4px 0 0;" hidden="@Hidden(Model.CoatingsNote is null)">@Model.CoatingsNote</p>
-            <p data-coatings-removed role="status" style="font-size:12px; color:var(--text-muted-2); margin:4px 0 0;" hidden="hidden"></p>
-            <span asp-validation-for="Form.CoatingRefIds" style="color:#c00; font-size:12px; display:block;"></span>
-        </div>
+            @* Coatings: the ones both chosen lenses come in (LensSetLenses.CoatingsFor — the same rules the
+               server checks with), with a pairing's coating ticked and locked once its trigger is ticked.
+               Every coating is rendered so the script can offer it again after a lens change; one the pair
+               doesn't offer is hidden and disabled. With no pair chosen — Custom, or a lens still to
+               pick — every coating is listed and the server's rules decide on submit. *@
+            <div style="margin-top:12px;" data-coatings data-url="@Url.Action("Coatings", "LeadConversion", new { id = Model.Lead.Id })" data-effects="@tickEffectData"
+                 data-none-offered="No coating can be made on both of these lenses, so they can't be sold together on a lens set — choose another lens.">
+                <label>Coating (choose at least one)</label>
+                @foreach (var coating in Model.Coatings)
+                {
+                    var offered = Model.OfferedCoatingIds is null || Model.OfferedCoatingIds.Contains(coating.Id);
+                    var lockedTo = comesWith.TryGetValue(coating.Id, out var trigger) ? coatingLabels.GetValueOrDefault(trigger) : null;
+                    <div class="form-check" data-coating-item data-coating-id="@coating.Id" hidden="@Hidden(!offered)">
+                        <input class="form-check-input" type="checkbox" name="Form.CoatingRefIds" value="@coating.Id" id="coating-@coating.Id"
+                               data-locked="@(lockedTo is null ? "false" : "true")"
+                               checked="@(tickedCoatings.Contains(coating.Id) ? "checked" : null)"
+                               disabled="@(offered ? null : "disabled")" />
+                        <label class="form-check-label" for="coating-@coating.Id">@coating.Label</label>
+                        <span data-lock-note style="font-size:12px; color:var(--text-muted-2); margin-left:6px;" hidden="@Hidden(lockedTo is null)">@(lockedTo is null ? "" : $"Comes with {lockedTo} on this lens")</span>
+                    </div>
+                }
+                <p data-coatings-note role="status" style="font-size:12px; color:#c00; margin:4px 0 0;" hidden="@Hidden(Model.CoatingsNote is null)">@Model.CoatingsNote</p>
+                <p data-coatings-removed role="status" style="font-size:12px; color:var(--text-muted-2); margin:4px 0 0;" hidden="hidden"></p>
+                <span asp-validation-for="Form.CoatingRefIds" style="color:#c00; font-size:12px; display:block;"></span>
+            </div>
         }
 
         @if (!Model.LensCarriedOver)
@@ -343,10 +343,10 @@
 
         @if (!Model.Lead.OrderFromDotGlasses)
         {
-        @* Last in the lens section. Rendered unconditionally with its condition in the label — the
-           Admin Portal wants ConsultationRules to say "Custom range only" on submit, unlike the Field
-           App, which hides it outside a Custom range (CLAUDE.md: deliberately not unified). *@
-        <label style="display:block; margin-top:12px;"><input type="checkbox" asp-for="Form.OrderFromDotGlasses" style="width:auto; margin-right:6px;" />Order this lens from Dot Glasses (Custom range only)</label>
+            @* Last in the lens section. Rendered unconditionally with its condition in the label — the
+               Admin Portal wants ConsultationRules to say "Custom range only" on submit, unlike the Field
+               App, which hides it outside a Custom range (CLAUDE.md: deliberately not unified). *@
+            <label style="display:block; margin-top:12px;"><input type="checkbox" asp-for="Form.OrderFromDotGlasses" style="width:auto; margin-right:6px;" />Order this lens from Dot Glasses (Custom range only)</label>
         }
     </div>
 

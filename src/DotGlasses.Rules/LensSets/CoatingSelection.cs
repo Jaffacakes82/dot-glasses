@@ -6,9 +6,9 @@ namespace DotGlasses.Rules.LensSets;
 /// What happens to a coating selection when the coatings on offer change (ADR-0007,
 /// "Coatings"). The offered coatings and the pairings come from Rules
 /// (<c>LensSetLenses.CoatingsFor</c>), and what a pairing ticks and locks is Rules' too
-/// (<see cref="PairedCoatings"/>, shared with the Admin Portal) — this is only the device's
-/// handling of a lens change, kept as a pure function so the coating selector and the consultation
-/// form can't disagree about it.
+/// (<see cref="PairedCoatings"/>) — this is what a lens change does to a selection, kept as a pure
+/// function so the Field App's form and the Admin Portal's lead conversion (which is told
+/// <see cref="AutoTicked"/> by the server) can't disagree about it.
 /// </summary>
 public static class CoatingSelection
 {

@@ -470,7 +470,13 @@
 
     /// <summary>Ticking or unticking the order swaps which coating control is on screen and
     /// whether the pupil distance is required, so messages about any of them no longer apply.</summary>
-    private void OnLeadOrderChanged() => ClearErrors(LeadOrderFields);
+    private void OnLeadOrderChanged()
+    {
+        ClearErrors(LeadOrderFields);
+
+        // Ordering turns the preference into a Coating set, which may now have a coating ticked for it.
+        ReconcileCoatings();
+    }
 
     // HardCaseSold and OrderFromDotGlasses each own a checkbox on this form, so a failure keyed to
     // either belongs against that checkbox rather than in the summary band. Both rules are
@@ -917,14 +923,7 @@
                                                        {
                                                            @if (pairCoatings.Offered.Count > 0)
                                                            {
-                                                               <CoatingMultiSelector Label="Coating"
-                                                                                     AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
-                                                                                     RestrictToIds="pairCoatings.Offered"
-                                                                                     RequiredPairings="pairCoatings.RequiredPairings"
-                                                                                     SelectedIds="_coatingRefIds"
-                                                                                     SelectedIdsChanged="v => _coatingRefIds = v"
-                                                                                     Exclusions="ReferenceDataClient.CoatingExclusions"
-                                                                                     Errors="_errors" Field="CoatingRefIds"/>
+                                                               @RenderCoatingSet(pairCoatings.Offered, pairCoatings.RequiredPairings)
                                                            }
                                                            else
                                                            {
@@ -934,13 +933,21 @@
                                                        }
                                                        @if (_lensRange.LensRangeType == LensRangeType.Custom)
                                                        {
-                                                           <CoatingMultiSelector Label="Coating"
-                                                                                 AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
-                                                                                 SelectedIds="_coatingRefIds" SelectedIdsChanged="v => _coatingRefIds = v"
-                                                                                 Exclusions="ReferenceDataClient.CoatingExclusions"
-                                                                                 Errors="_errors" Field="CoatingRefIds"/>
+                                                           @RenderCoatingSet()
                                                        }
                                                    </text>;
+
+    /// <summary>The Coating set's selector: limited to <paramref name="offered"/> with its
+    /// pairings on a lens set, or every active coating on a Custom prescription.</summary>
+    private RenderFragment RenderCoatingSet(IReadOnlyList<Guid>? offered = null,
+        IReadOnlyList<CoatingPairingRule>? pairings = null) => @<CoatingMultiSelector Label="Coating"
+                                                                                       AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
+                                                                                       RestrictToIds="offered"
+                                                                                       RequiredPairings="pairings ?? []"
+                                                                                       SelectedIds="_coatingRefIds"
+                                                                                       SelectedIdsChanged="v => _coatingRefIds = v"
+                                                                                       Exclusions="ReferenceDataClient.CoatingExclusions"
+                                                                                       Errors="_errors" Field="CoatingRefIds"/>;
 
     /// <summary>A Lead's coatings. A Lead can order its Custom lens before the customer pays
     /// (ADR-0008); an ordered lens is made with a full coating set, so ordering swaps the single
@@ -948,11 +955,7 @@
     private RenderFragment RenderLeadCoatings() => @<text>
                                                        @if (LeadOrdersLens)
                                                        {
-                                                           <CoatingMultiSelector Label="Coating"
-                                                                                 AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
-                                                                                 SelectedIds="_coatingRefIds" SelectedIdsChanged="v => _coatingRefIds = v"
-                                                                                 Exclusions="ReferenceDataClient.CoatingExclusions"
-                                                                                 Errors="_errors" Field="CoatingRefIds"/>
+                                                           @RenderCoatingSet()
                                                        }
                                                        else
                                                        {
@@ -1255,7 +1258,9 @@
             _errors.Add(notChosen.Key, notChosen.Message);
         }
 
-        // The two questions with no default. Added ahead of the rules for the same reason: the
+        // The two questions with no default. A blank is this form's own state — the request DTOs
+        // can't hold one (the server refuses an out-of-range value instead), so Rules never sees
+        // it and the check lives here. Added ahead of the rules for the same reason as above: the
         // request below carries a stand-in value, and this message must be the one shown.
         if (_gender is null)
         {

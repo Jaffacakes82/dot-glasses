@@ -422,6 +422,18 @@ public class DashboardCalculatorTests
     }
 
     [Fact]
+    public void WithNoSales_TheGenderSplitIsEmpty()
+    {
+        var rows = new Rows();
+        rows.Test(KangemiPost).Gender = Gender.Male;
+
+        var figures = rows.Calculate();
+
+        Assert.Equal(0, figures.GenderMalePercent);
+        Assert.Equal(0, figures.GenderFemalePercent);
+    }
+
+    [Fact]
     public void TheGenderSplit_FollowsTheSameFiltersAsEveryOtherFigure()
     {
         var rows = new Rows();

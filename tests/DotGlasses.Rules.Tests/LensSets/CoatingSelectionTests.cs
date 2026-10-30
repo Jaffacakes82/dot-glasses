@@ -66,6 +66,18 @@ public class CoatingSelectionTests
     }
 
     [Fact]
+    public void AnAutoTickedTrigger_BringsNoPairedCoatingThatIsNotOffered()
+    {
+        // With one coating offered, a pairing from it can only name a coating that is not: the
+        // trigger is ticked alone, as the server would accept it.
+        IReadOnlyList<CoatingPairingRule> pairings = [new(BlueBlock, Photochromic)];
+
+        var reconciled = CoatingSelection.Reconcile([], offered: [BlueBlock], pairings, asksForCoatingSet: true);
+
+        Assert.Equal([BlueBlock], reconciled.Selected);
+    }
+
+    [Fact]
     public void AutoTicked_IsTheOnlyOfferedCoating_OrNone()
     {
         Assert.Equal(Photochromic, CoatingSelection.AutoTicked([Photochromic]));
