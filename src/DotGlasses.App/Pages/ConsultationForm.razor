@@ -322,7 +322,7 @@
                         Recording at @(TokenStore.CurrentLocationName ?? "—")
                     </p>
                     <div style="display:flex; gap:8px;">
-                        <a class="dg-btn dg-btn-ghost" style="flex:1; text-align:center;" href="/">Cancel</a>
+                        <button type="button" class="dg-btn dg-btn-ghost" style="flex:1;" @onclick="NavigateBack">Cancel</button>
                         <button type="submit" class="dg-btn dg-btn-primary" style="flex:1;"
                                 disabled="@_saving">@(IsTest ? "Save test" : "Save")</button>
                     </div>
@@ -1103,7 +1103,7 @@
 
     private bool _confirmingDiscard;
 
-    /// <summary>Explicit in-app back control (see CLAUDE.md ticket 02) — steps back to Home via
+    /// <summary>The back arrow and the Cancel button (see CLAUDE.md ticket 02) — steps back to Home via
     /// the app's own navigation rather than a bare history.back(), and asks before discarding a
     /// part-filled form instead of silently losing it. Purely additive: the phone's native back
     /// gesture/button is untouched by this.</summary>
