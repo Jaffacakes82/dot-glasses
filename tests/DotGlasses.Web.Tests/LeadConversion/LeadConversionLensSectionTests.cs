@@ -382,6 +382,23 @@ public class LeadConversionLensSectionTests(AdminPortalFactory factory) : IClass
     // ---- The coatings both lenses come in ----
 
     [Fact]
+    public async Task TheCoatingsComeStraightAfterTheLens_BeforeChildrensFrameAndPupilDistance()
+    {
+        var html = await PageAsync(SeedLead());
+
+        var powerLine = html.IndexOf("data-power-line=\"right\"", StringComparison.Ordinal);
+        var coatings = html.IndexOf("data-coatings ", StringComparison.Ordinal);
+        var childrensFrame = html.IndexOf("data-childrens-frame", StringComparison.Ordinal);
+        var pupilDistance = html.IndexOf("data-pd-bucket", StringComparison.Ordinal);
+        var order = html.IndexOf("name=\"Form.OrderFromDotGlasses\"", StringComparison.Ordinal);
+
+        Assert.True(powerLine >= 0 && powerLine < coatings, "the coatings follow the lens and its power line");
+        Assert.True(coatings < childrensFrame, "children's frame follows the coatings");
+        Assert.True(childrensFrame < pupilDistance, "pupil distance follows children's frame");
+        Assert.True(pupilDistance < order, "ordering from DOT Glasses is last");
+    }
+
+    [Fact]
     public async Task ALeadWhoseLensCarriesOver_OffersOnlyTheCoatingsItsLensesComeIn_AndLocksThePairing()
     {
         var set = SeedLensSet();

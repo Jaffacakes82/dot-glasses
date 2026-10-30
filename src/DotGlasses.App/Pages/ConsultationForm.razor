@@ -160,9 +160,8 @@
                                        ReferenceData="Snapshot"
                                        LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
                                        AllowNoPreference="true" Errors="_errors"
-                                       SelectionChanged="OnLensSelectionChanged"/>
-
-                    @RenderCoatingPreference()
+                                       SelectionChanged="OnLensSelectionChanged"
+                                       Coatings="RenderCoatingPreference()"/>
                 }
 
                 @RenderReferral()
@@ -226,37 +225,11 @@
                                        LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
                                        AllowNoPreference="false" Errors="_errors"
                                        SelectionChanged="OnLensSelectionChanged"
-                                       ChildrensFrameChanged="OnChildrensFrameChanged"/>
-
-                    @RenderCoatingRemovedNote()
-
-                    @if (_lensRange.LensRangeType is LensRangeType.LensSet && PairCoatings is { } pairCoatings)
-                    {
-                        @if (pairCoatings.Offered.Count > 0)
-                        {
-                            <CoatingMultiSelector Label="Coating"
-                                                  AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
-                                                  RestrictToIds="pairCoatings.Offered"
-                                                  RequiredPairings="pairCoatings.RequiredPairings"
-                                                  SelectedIds="_coatingRefIds"
-                                                  SelectedIdsChanged="v => _coatingRefIds = v"
-                                                  Exclusions="ReferenceDataClient.CoatingExclusions"
-                                                  Errors="_errors" Field="CoatingRefIds"/>
-                        }
-                        else
-                        {
-                            <p class="dg-lens-note" role="status">No coating can be made on both of these lenses, so
-                                they can't be sold together. Choose different lenses.</p>
-                        }
-                    }
+                                       ChildrensFrameChanged="OnChildrensFrameChanged"
+                                       Coatings="RenderSaleCoatings()"/>
 
                     @if (_lensRange.LensRangeType == LensRangeType.Custom)
                     {
-                        <CoatingMultiSelector Label="Coating"
-                                              AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
-                                              SelectedIds="_coatingRefIds" SelectedIdsChanged="v => _coatingRefIds = v"
-                                              Exclusions="ReferenceDataClient.CoatingExclusions"
-                                              Errors="_errors" Field="CoatingRefIds"/>
                         @* Last in the lens section: the order is placed once everything about the
                            lens, its coatings included, has been chosen. *@
                         <div class="dg-field">
@@ -319,23 +292,8 @@
                                        ReferenceData="Snapshot"
                                        LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
                                        AllowNoPreference="true" Errors="_errors"
-                                       SelectionChanged="OnLensSelectionChanged"/>
-
-                    @* A Lead can order its Custom lens before the customer pays (ADR-0008). An
-                       ordered lens is made with a full coating set, so ticking swaps the single
-                       optional preference for the coating selector a Sale uses. *@
-                    @if (LeadOrdersLens)
-                    {
-                        <CoatingMultiSelector Label="Coating"
-                                              AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
-                                              SelectedIds="_coatingRefIds" SelectedIdsChanged="v => _coatingRefIds = v"
-                                              Exclusions="ReferenceDataClient.CoatingExclusions"
-                                              Errors="_errors" Field="CoatingRefIds"/>
-                    }
-                    else
-                    {
-                        @RenderCoatingPreference()
-                    }
+                                       SelectionChanged="OnLensSelectionChanged"
+                                       Coatings="RenderLeadCoatings()"/>
 
                     @if (_lensRange.LensRangeType == LensRangeType.Custom)
                     {
@@ -950,6 +908,57 @@
                                                         }
                                                     }
                                                 </text>;
+
+    /// <summary>A Sale's Coating set: on a lens set, the coatings both chosen lenses come in (with
+    /// a note when there are none); on a Custom prescription, any coating.</summary>
+    private RenderFragment RenderSaleCoatings() => @<text>
+                                                       @RenderCoatingRemovedNote()
+                                                       @if (_lensRange.LensRangeType is LensRangeType.LensSet && PairCoatings is { } pairCoatings)
+                                                       {
+                                                           @if (pairCoatings.Offered.Count > 0)
+                                                           {
+                                                               <CoatingMultiSelector Label="Coating"
+                                                                                     AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
+                                                                                     RestrictToIds="pairCoatings.Offered"
+                                                                                     RequiredPairings="pairCoatings.RequiredPairings"
+                                                                                     SelectedIds="_coatingRefIds"
+                                                                                     SelectedIdsChanged="v => _coatingRefIds = v"
+                                                                                     Exclusions="ReferenceDataClient.CoatingExclusions"
+                                                                                     Errors="_errors" Field="CoatingRefIds"/>
+                                                           }
+                                                           else
+                                                           {
+                                                               <p class="dg-lens-note" role="status">No coating can be made on both of these
+                                                                   lenses, so they can't be sold together. Choose different lenses.</p>
+                                                           }
+                                                       }
+                                                       @if (_lensRange.LensRangeType == LensRangeType.Custom)
+                                                       {
+                                                           <CoatingMultiSelector Label="Coating"
+                                                                                 AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
+                                                                                 SelectedIds="_coatingRefIds" SelectedIdsChanged="v => _coatingRefIds = v"
+                                                                                 Exclusions="ReferenceDataClient.CoatingExclusions"
+                                                                                 Errors="_errors" Field="CoatingRefIds"/>
+                                                       }
+                                                   </text>;
+
+    /// <summary>A Lead's coatings. A Lead can order its Custom lens before the customer pays
+    /// (ADR-0008); an ordered lens is made with a full coating set, so ordering swaps the single
+    /// optional preference for the coating selector a Sale uses.</summary>
+    private RenderFragment RenderLeadCoatings() => @<text>
+                                                       @if (LeadOrdersLens)
+                                                       {
+                                                           <CoatingMultiSelector Label="Coating"
+                                                                                 AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
+                                                                                 SelectedIds="_coatingRefIds" SelectedIdsChanged="v => _coatingRefIds = v"
+                                                                                 Exclusions="ReferenceDataClient.CoatingExclusions"
+                                                                                 Errors="_errors" Field="CoatingRefIds"/>
+                                                       }
+                                                       else
+                                                       {
+                                                           @RenderCoatingPreference()
+                                                       }
+                                                   </text>;
 
     /// <summary>The optional coating preference of a Test or Lead, as radio buttons with "No
     /// preference" first (never a dropdown — ADR-0007). On a lens set it is limited to the coatings

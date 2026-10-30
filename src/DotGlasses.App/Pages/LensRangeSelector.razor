@@ -9,10 +9,10 @@
 @using DotGlasses.Rules.LensSets
 @using DotGlasses.Rules.ReferenceData
 
-@* The lens section's first half, in the order a technician works in (ADR-0007): lens range, the lens
-   (or a Custom prescription), children's frame, pupil distance. ConsultationForm renders what
-   follows — the coatings or coating preference, then "Order this lens from Dot Glasses" (Custom
-   only, last). *@
+@* The lens section, in the order a technician works in: lens range, the lens (or a Custom
+   prescription) and its power line, the coatings (the form's own, passed in as Coatings, so they
+   sit beside the lens they belong to), children's frame, pupil distance. ConsultationForm renders
+   what follows — "Order this lens from Dot Glasses" (Custom only, last). *@
 
 <div class="dg-field">
     <label>Lens range</label>
@@ -165,6 +165,8 @@ else if (Model.LensRangeType == LensRangeType.Custom)
     }
 }
 
+@Coatings
+
 <div class="dg-field">
     <label class="dg-choice"><input type="checkbox" checked="@Model.ChildrensFrame" @onchange="OnChildrensFrameChanged" />Children's frame</label>
 </div>
@@ -229,6 +231,10 @@ else if (Model.LensRangeType == LensRangeType.Custom)
     /// <summary>Fired when "Children's frame" is ticked or unticked — the Sale form offers a
     /// different frame colour list for each, so it clears a colour chosen from the other one.</summary>
     [Parameter] public EventCallback ChildrensFrameChanged { get; set; }
+
+    /// <summary>The form's coating control (Coating set or Coating preference), rendered straight
+    /// after the lens and before children's frame.</summary>
+    [Parameter] public RenderFragment? Coatings { get; set; }
 
     // A Sale has no default lens range (ADR-0005): the first entry is an explicit "Select a lens
     // range…" whose value maps to a null model, so what the browser shows and what the model holds

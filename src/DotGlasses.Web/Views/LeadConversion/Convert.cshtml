@@ -137,8 +137,8 @@
     @Html.AntiForgeryToken()
     <script type="application/json" data-lens-sets>@Html.Raw(lensData)</script>
 
-    @* The lens section, in the Field App's order (ADR-0007): lens range, lens, children's frame, pupil
-       distance, then the coatings and "Order this lens from Dot Glasses" (Custom only, last). *@
+    @* The lens section, in the Field App's order: lens range, lens and its power line, the coatings,
+       children's frame, pupil distance, then "Order this lens from Dot Glasses" (Custom only, last). *@
     <div>
         <h3 style="font-family:var(--font-display); font-weight:900; text-transform:uppercase; margin:0 0 8px; font-size:15px;">Lens</h3>
 
@@ -268,34 +268,9 @@
                     </div>
                 </div>
             </div>
-
-            <label style="display:block; margin-top:8px;"><input type="checkbox" asp-for="Form.ChildrensFrame" data-childrens-frame style="width:auto; margin-right:6px;" />Children's frame</label>
-
-            <div class="dg-js-toggle" data-set-pd hidden="@Hidden(!isLensSet)" style="margin-top:8px;">
-                <label>Pupil distance (0–<span data-pd-max data-max-adult="@adultPdMax" data-max-childrens="@childrensPdMax">@LensPowerValues.MaxPresetPupilDistanceBucket(form.ChildrensFrame)</span>, 0–@childrensPdMax with a children's frame)</label>
-                <select class="form-select" asp-for="Form.PresetPupilDistanceBucket" data-pd-bucket>
-                    <option value="">Select...</option>
-                    @foreach (var bucket in LensPowerValues.PresetPupilDistanceBuckets(childrensFrame: false))
-                    {
-                        var adultOnly = !childrensBuckets.Contains(bucket);
-                        <option value="@bucket" data-childrens-frame-allows="@(adultOnly ? "false" : "true")" hidden="@Hidden(form.ChildrensFrame && adultOnly)" disabled="@(form.ChildrensFrame && adultOnly ? "disabled" : null)">@bucket</option>
-                    }
-                </select>
-                @if (isLensSet)
-                {
-                    <span asp-validation-for="Form.PresetPupilDistanceBucket" style="color:#c00; font-size:12px;"></span>
-                }
-            </div>
-            <div class="dg-js-toggle" data-custom-pd hidden="@Hidden(!isCustom)" style="margin-top:8px;">
-                <label>Pupil distance (mm, @LensPowerValues.PupilDistanceMmRange.Min–@LensPowerValues.PupilDistanceMmRange.Max)</label>
-                <select class="form-select" asp-for="Form.PupilDistanceMm" asp-items="PupilDistanceOptions()"><option value="">Select...</option></select>
-                @if (isCustom)
-                {
-                    <span asp-validation-for="Form.PupilDistanceMm" style="color:#c00; font-size:12px;"></span>
-                }
-            </div>
         }
 
+        @* The coatings, straight after the lens they belong to (as on the Field App). *@
         @if (Model.Lead.OrderFromDotGlasses)
         {
             @* The lens is already being made (ADR-0008): its coatings are what was ordered, shown
@@ -335,7 +310,39 @@
             <p data-coatings-removed role="status" style="font-size:12px; color:var(--text-muted-2); margin:4px 0 0;" hidden="hidden"></p>
             <span asp-validation-for="Form.CoatingRefIds" style="color:#c00; font-size:12px; display:block;"></span>
         </div>
+        }
 
+        @if (!Model.LensCarriedOver)
+        {
+            <label style="display:block; margin-top:8px;"><input type="checkbox" asp-for="Form.ChildrensFrame" data-childrens-frame style="width:auto; margin-right:6px;" />Children's frame</label>
+
+            <div class="dg-js-toggle" data-set-pd hidden="@Hidden(!isLensSet)" style="margin-top:8px;">
+                <label>Pupil distance (0–<span data-pd-max data-max-adult="@adultPdMax" data-max-childrens="@childrensPdMax">@LensPowerValues.MaxPresetPupilDistanceBucket(form.ChildrensFrame)</span>, 0–@childrensPdMax with a children's frame)</label>
+                <select class="form-select" asp-for="Form.PresetPupilDistanceBucket" data-pd-bucket>
+                    <option value="">Select...</option>
+                    @foreach (var bucket in LensPowerValues.PresetPupilDistanceBuckets(childrensFrame: false))
+                    {
+                        var adultOnly = !childrensBuckets.Contains(bucket);
+                        <option value="@bucket" data-childrens-frame-allows="@(adultOnly ? "false" : "true")" hidden="@Hidden(form.ChildrensFrame && adultOnly)" disabled="@(form.ChildrensFrame && adultOnly ? "disabled" : null)">@bucket</option>
+                    }
+                </select>
+                @if (isLensSet)
+                {
+                    <span asp-validation-for="Form.PresetPupilDistanceBucket" style="color:#c00; font-size:12px;"></span>
+                }
+            </div>
+            <div class="dg-js-toggle" data-custom-pd hidden="@Hidden(!isCustom)" style="margin-top:8px;">
+                <label>Pupil distance (mm, @LensPowerValues.PupilDistanceMmRange.Min–@LensPowerValues.PupilDistanceMmRange.Max)</label>
+                <select class="form-select" asp-for="Form.PupilDistanceMm" asp-items="PupilDistanceOptions()"><option value="">Select...</option></select>
+                @if (isCustom)
+                {
+                    <span asp-validation-for="Form.PupilDistanceMm" style="color:#c00; font-size:12px;"></span>
+                }
+            </div>
+        }
+
+        @if (!Model.Lead.OrderFromDotGlasses)
+        {
         @* Last in the lens section. Rendered unconditionally with its condition in the label — the
            Admin Portal wants ConsultationRules to say "Custom range only" on submit, unlike the Field
            App, which hides it outside a Custom range (CLAUDE.md: deliberately not unified). *@
