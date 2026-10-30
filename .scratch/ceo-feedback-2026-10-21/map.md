@@ -66,7 +66,11 @@ tickets, or ruled out of scope.
 
 <!-- one line per resolved ticket: [title](issues/NN-slug.md) — gist -->
 
-**Specified, 2026-10-30, not yet built:** the `ready-for-agent` tickets 01, 06, 08, 11 and 14–18
+**Built, 2026-10-30, not yet merged:** all nine are on branch `fix/feedback-fixes-2026-10-21`, one
+commit per ticket (06, 08 and 11 share one). Mark them resolved once it merges and the staging
+checklist passes; ticket 16 in particular can only be proven on an Android phone against staging.
+
+**Specified, 2026-10-30:** the `ready-for-agent` tickets 01, 06, 08, 11 and 14–18
 are grouped into [Spec G — Fixes from the 21 October feedback](../feedback-fixes-2026-10-21/spec.md).
 The spec settles two things the tickets left open: the Field App's coating reconcile function
 moves into `Rules` so the auto-tick has one tested home, and the Field App changes are checked by
