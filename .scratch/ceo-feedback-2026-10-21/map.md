@@ -55,6 +55,8 @@ tickets, or ruled out of scope.
 | 16 | [Refreshing offline gets stuck on "You're offline"](issues/16-offline-refresh-stuck.md) | ready-for-agent |
 | 17 | [Discard prompt shows the site address](issues/17-in-app-discard-dialog.md) | ready-for-agent |
 | 18 | [Tick the only coating automatically](issues/18-auto-tick-only-coating.md) | ready-for-agent |
+| 19 | [Dashboard is wider than a phone](issues/19-dashboard-mobile-layout.md) | ready-for-agent |
+| 20 | [User Directory table scrolls the page on a phone](issues/20-user-directory-table-mobile.md) | ready-for-agent |
 
 ## Out of scope
 
