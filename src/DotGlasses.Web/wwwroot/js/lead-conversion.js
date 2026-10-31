@@ -202,15 +202,16 @@
 
             const data = await response.json();
             if (mine === request) {
-                applyOffered(data.offered, data.effects ?? {});
+                applyOffered(data.offered, data.effects ?? {}, data.autoTicked ?? null);
             }
         } catch {
             // Offline or failed: leave the list as it is — the server checks the coatings on submit.
         }
     }
 
-    // A lens change that takes a coating off the offered list unticks it, and says so.
-    function applyOffered(offered, tickEffects) {
+    // A lens change that takes a coating off the offered list unticks it, and says so. The coating
+    // the server names as autoTicked (the pair's only one, CoatingSelection.AutoTicked) is ticked.
+    function applyOffered(offered, tickEffects, autoTicked = null) {
         effects = tickEffects;
         const removed = [];
         for (const item of items()) {
@@ -222,6 +223,10 @@
             if (!isOffered && box.checked) {
                 box.checked = false;
                 removed.push(labelOf(id));
+            }
+
+            if (isOffered && id === autoTicked) {
+                box.checked = true;
             }
         }
 

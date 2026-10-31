@@ -520,6 +520,42 @@ body {
     }
 }
 
+/* -- Two-panel screens (Organisations: the tree, then the chosen organisation) ------- */
+
+.dg-split {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: var(--space-5);
+}
+
+.dg-split > * {
+    min-width: 0;
+}
+
+@media (max-width: 991px) {
+    .dg-split {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* -- "+N more": a native disclosure that folds a long list away (User Directory) -------- */
+
+.dg-more {
+    display: inline;
+}
+
+.dg-more > summary {
+    display: inline;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted-2);
+}
+
+.dg-more[open] > summary {
+    margin-right: 4px;
+}
+
 /* -- Auth pages (login) -------------------------------------------------------------- */
 
 .dg-auth-page {

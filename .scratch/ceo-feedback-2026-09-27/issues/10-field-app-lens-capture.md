@@ -74,6 +74,11 @@ question order (referred-or-treated last, occupation earlier) is ticket 13.
   unticked with a short note, for example "Anti-glare removed: not available on +2.50". (Q7)
 
 **Order of the lens section** (Q5)
+
+> **Superseded** by [ceo-feedback-2026-10-21 ticket 14](../../ceo-feedback-2026-10-21/issues/14-coatings-after-lens.md):
+> the coatings now come straight after the lens and its power line, before children's frame and
+> pupil distance. "Order this lens from Dot Glasses" stays last. The order below is the old one.
+
 1. Lens range.
 2. The lens: a lens-set lens, or the custom prescription and then its lens type.
 3. Children's frame. This now comes before pupil distance, as the feedback asked.

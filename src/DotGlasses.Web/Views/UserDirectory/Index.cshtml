@@ -88,9 +88,21 @@
                     {
                         <span class="dg-muted">No organisation</span>
                     }
-                    @foreach (var scope in user.Scope)
+                    @* Two organisations show; the rest fold away behind "+N more", a native disclosure that
+                       opens in place with no script. *@
+                    @foreach (var scope in user.Scope.Take(2))
                     {
-                        <span class="dg-badge" style="background:var(--dot-beige); margin-right:4px;">@scope</span>
+                        <span class="dg-badge" data-org-chip style="background:var(--dot-beige); margin-right:4px;">@scope</span>
+                    }
+                    @if (user.Scope.Count > 2)
+                    {
+                        <details class="dg-more">
+                            <summary>+@(user.Scope.Count - 2) more</summary>
+                            @foreach (var scope in user.Scope.Skip(2))
+                            {
+                                <span class="dg-badge" data-org-chip style="background:var(--dot-beige); margin:4px 4px 0 0;">@scope</span>
+                            }
+                        </details>
                     }
                 </td>
                 <td class="dg-muted">@user.LastLogin</td>

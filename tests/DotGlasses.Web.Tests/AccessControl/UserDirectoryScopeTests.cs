@@ -42,6 +42,34 @@ public class UserDirectoryScopeTests(AccessControlFixture fixture) : IClassFixtu
     }
 
     [Fact]
+    public async Task AnAssignmentOutsideTheCallersScope_IsLeftOutOfTheList_NotNamedAsOutside()
+    {
+        var (straddling, _) = await fixture.CreateAccountAsync(
+            RoleNames.User, fixture.SecondCountryRetailPointId, OrganisationSeedConfiguration.KenyaRetailPointId);
+
+        var countryAdmin = await fixture.SignInAsync(AccessControlFixture.CountryAdmin);
+        var html = await DirectoryAsync(countryAdmin, straddling);
+
+        Assert.True(IsListed(html, straddling));
+        Assert.DoesNotContain("Outside your scope", html);
+    }
+
+    [Fact]
+    public async Task AUserWithMoreThanTwoOrganisations_ShowsTwo_AndFoldsTheRestAwayBehindPlusMore()
+    {
+        var (userName, _) = await fixture.CreateAccountAsync(
+            RoleNames.User, OrganisationSeedConfiguration.KenyaId, OrganisationSeedConfiguration.KenyaRetailerId,
+            OrganisationSeedConfiguration.KenyaRetailPointId);
+
+        var dgiAdmin = await fixture.SignInAsync(AccessControlFixture.DgiAdmin);
+        var html = await DirectoryAsync(dgiAdmin, userName);
+
+        // The rest stay on the page, inside a native disclosure that opens with no script.
+        Assert.Matches(new System.Text.RegularExpressions.Regex(@"<details[^>]*>\s*<summary[^>]*>\+1 more</summary>"), html);
+        Assert.Equal(3, System.Text.RegularExpressions.Regex.Matches(html, "data-org-chip").Count);
+    }
+
+    [Fact]
     public async Task AUserWithNoAssignment_IsListedForADgiAdminOnly_AndCanBeAssignedAnOrgAgain()
     {
         // The application never leaves a user with no assignment; the rows go behind its back,

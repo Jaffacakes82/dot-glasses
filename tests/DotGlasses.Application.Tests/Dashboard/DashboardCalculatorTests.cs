@@ -400,4 +400,52 @@ public class DashboardCalculatorTests
         // Only the unreferred Sale falls in the last week.
         Assert.Equal(0, rows.Calculate(new DashboardFilter(FromUtc: Now.AddDays(-5))).ReferralsLogged);
     }
+
+    // --- Gender split -------------------------------------------------------------------------
+
+    [Fact]
+    public void TheGenderSplit_CountsSales_NotTests()
+    {
+        var rows = new Rows();
+        rows.Test(KangemiPost).Gender = Gender.Female;
+        rows.Test(KangemiPost).Gender = Gender.Female;
+        rows.Test(KangemiPost).Gender = Gender.Female;
+        rows.Sale(KangemiPost).Gender = Gender.Male;
+        rows.Sale(KangemiPost).Gender = Gender.Male;
+        rows.Sale(KangemiPost).Gender = Gender.Male;
+        rows.Sale(KangemiPost).Gender = Gender.Female;
+
+        var figures = rows.Calculate();
+
+        Assert.Equal(75, figures.GenderMalePercent);
+        Assert.Equal(25, figures.GenderFemalePercent);
+    }
+
+    [Fact]
+    public void WithNoSales_TheGenderSplitIsEmpty()
+    {
+        var rows = new Rows();
+        rows.Test(KangemiPost).Gender = Gender.Male;
+
+        var figures = rows.Calculate();
+
+        Assert.Equal(0, figures.GenderMalePercent);
+        Assert.Equal(0, figures.GenderFemalePercent);
+    }
+
+    [Fact]
+    public void TheGenderSplit_FollowsTheSameFiltersAsEveryOtherFigure()
+    {
+        var rows = new Rows();
+        rows.Sale(KangemiPost).Gender = Gender.Male;
+        rows.Sale(KampalaShop).Gender = Gender.Female;
+        rows.Sale(TrainingShop).Gender = Gender.Female;
+        rows.Sale(KangemiPost, on: Now.AddDays(-60)).Gender = Gender.Female;
+
+        // Kenya only, last month: the Ugandan, training and older Sales are all left out.
+        var figures = rows.Calculate(new DashboardFilter(CountryId: Kenya.Id, FromUtc: Now.AddDays(-30)));
+
+        Assert.Equal(100, figures.GenderMalePercent);
+        Assert.Equal(0, figures.GenderFemalePercent);
+    }
 }

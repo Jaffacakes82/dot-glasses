@@ -23,10 +23,6 @@ public class UserAdminService(
     private const string OwnRoleMessage = "You can't change your own role. Ask another admin to change it.";
     private const string OwnSuspensionMessage = "You can't suspend yourself. Ask another admin.";
 
-    /// <summary>Shown in place of the name of an org the caller can't see: the assignment exists
-    /// (and is why the caller may not suspend the user), but where it is isn't theirs to know.</summary>
-    private const string OutsideScopeOrgName = "Outside your scope";
-
     public async Task<IReadOnlyList<UserAdminRow>> ListAsync(CancellationToken cancellationToken = default)
     {
         var scopePaths = currentUser.ScopePaths;
@@ -86,8 +82,12 @@ public class UserAdminService(
         {
             var roles = await userManager.GetRolesAsync(user);
             var assignedOrgIds = assignments.Where(a => a.UserId == user.Id).Select(a => a.OrgNodeId).ToList();
+            // Only what the caller can see is named; an assignment outside their scope is left out
+            // rather than shown as a placeholder (the Edit page says how many there are).
             var assignedOrgNames = assignedOrgIds
-                .Select(id => orgs.TryGetValue(id, out var org) && InScope(org.Path) ? org.Name : OutsideScopeOrgName)
+                .Select(id => orgs.GetValueOrDefault(id))
+                .Where(org => org.Name is not null && InScope(org.Path))
+                .Select(org => org.Name)
                 .ToList();
             var assignmentPaths = assignedOrgIds
                 .Where(orgs.ContainsKey)

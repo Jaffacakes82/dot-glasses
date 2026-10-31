@@ -1,0 +1,55 @@
+@* An in-app confirmation, in place of the browser's confirm(): that one shows the site's address
+   and OK/Cancel. The safe answer is the default (focused, and what Escape does), so a slip of the
+   thumb never loses anything. *@
+
+@if (Visible)
+{
+    <div class="dg-dialog-backdrop">
+        <div class="dg-card dg-dialog" role="alertdialog" aria-modal="true" aria-labelledby="dg-dialog-title"
+             aria-describedby="dg-dialog-message" @onkeydown="OnKeyDown">
+            <p id="dg-dialog-title" class="dg-dialog-title">@Title</p>
+            <p id="dg-dialog-message" class="dg-dialog-message">@Message</p>
+            <div class="dg-dialog-actions">
+                <button type="button" class="dg-btn dg-btn-primary" @ref="_cancelButton"
+                        @onclick="OnCancel">@CancelLabel</button>
+                <button type="button" class="dg-btn dg-btn-ghost" @onclick="OnConfirm">@ConfirmLabel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string Message { get; set; } = string.Empty;
+
+    /// <summary>The answer that goes ahead (e.g. "Discard").</summary>
+    [Parameter] public string ConfirmLabel { get; set; } = string.Empty;
+
+    /// <summary>The safe answer (e.g. "Keep editing"): focused when the dialog opens.</summary>
+    [Parameter] public string CancelLabel { get; set; } = string.Empty;
+
+    [Parameter] public EventCallback OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private ElementReference _cancelButton;
+    private bool _wasVisible;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Visible && !_wasVisible)
+        {
+            await _cancelButton.FocusAsync();
+        }
+
+        _wasVisible = Visible;
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            await OnCancel.InvokeAsync();
+        }
+    }
+}

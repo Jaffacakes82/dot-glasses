@@ -22,15 +22,19 @@
 @inject ILeadsClient LeadsClient
 @inject ISyncQueueStore OutboxStore
 @inject ISyncService SyncService
-@inject IJSRuntime JS
 
 <PageTitle>Record @Type</PageTitle>
 
 <div class="dg-screen">
     <div class="dg-top-strip">
-        <button class="back" type="button" @onclick="NavigateBackAsync">&#8592;</button>
+        <button class="back" type="button" @onclick="NavigateBack">&#8592;</button>
         <h1>Record @Type</h1>
     </div>
+
+    <ConfirmDialog Visible="_confirmingDiscard" Title="Discard this record?"
+                   Message="Anything entered so far will be lost."
+                   CancelLabel="Keep editing" ConfirmLabel="Discard"
+                   OnCancel="() => _confirmingDiscard = false" OnConfirm="Discard"/>
 
     @if (!ReferenceDataClient.IsLoaded && ReferenceDataClient.LoadError is not null)
     {
@@ -123,9 +127,11 @@
             <div class="dg-field">
                 <label>Gender</label>
                 <select @bind="_gender" @bind:after="() => ClearErrors(nameof(CreateTestRequest.Gender))">
+                    <option value="">Select...</option>
                     <option value="Female">Female</option>
                     <option value="Male">Male</option>
                 </select>
+                <FieldError Errors="_errors" For="Gender"/>
             </div>
 
             @* One order on every form (Spec D): Age, Gender, Occupation open it and "Referred or
@@ -141,6 +147,7 @@
                 <div class="dg-field">
                     <label>Outcome</label>
                     <select @bind="_testOutcome" @bind:after="OnOutcomeChanged">
+                        <option value="">Select...</option>
                         <option value="NoGlassesNeeded">No glasses needed</option>
                         <option value="NeedsGlasses">Needs glasses</option>
                     </select>
@@ -153,9 +160,8 @@
                                        ReferenceData="Snapshot"
                                        LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
                                        AllowNoPreference="true" Errors="_errors"
-                                       SelectionChanged="OnLensSelectionChanged"/>
-
-                    @RenderCoatingPreference()
+                                       SelectionChanged="OnLensSelectionChanged"
+                                       Coatings="RenderCoatingPreference()"/>
                 }
 
                 @RenderReferral()
@@ -219,37 +225,11 @@
                                        LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
                                        AllowNoPreference="false" Errors="_errors"
                                        SelectionChanged="OnLensSelectionChanged"
-                                       ChildrensFrameChanged="OnChildrensFrameChanged"/>
-
-                    @RenderCoatingRemovedNote()
-
-                    @if (_lensRange.LensRangeType is LensRangeType.LensSet && PairCoatings is { } pairCoatings)
-                    {
-                        @if (pairCoatings.Offered.Count > 0)
-                        {
-                            <CoatingMultiSelector Label="Coating"
-                                                  AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
-                                                  RestrictToIds="pairCoatings.Offered"
-                                                  RequiredPairings="pairCoatings.RequiredPairings"
-                                                  SelectedIds="_coatingRefIds"
-                                                  SelectedIdsChanged="v => _coatingRefIds = v"
-                                                  Exclusions="ReferenceDataClient.CoatingExclusions"
-                                                  Errors="_errors" Field="CoatingRefIds"/>
-                        }
-                        else
-                        {
-                            <p class="dg-lens-note" role="status">No coating can be made on both of these lenses, so
-                                they can't be sold together. Choose different lenses.</p>
-                        }
-                    }
+                                       ChildrensFrameChanged="OnChildrensFrameChanged"
+                                       Coatings="RenderSaleCoatings()"/>
 
                     @if (_lensRange.LensRangeType == LensRangeType.Custom)
                     {
-                        <CoatingMultiSelector Label="Coating"
-                                              AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
-                                              SelectedIds="_coatingRefIds" SelectedIdsChanged="v => _coatingRefIds = v"
-                                              Exclusions="ReferenceDataClient.CoatingExclusions"
-                                              Errors="_errors" Field="CoatingRefIds"/>
                         @* Last in the lens section: the order is placed once everything about the
                            lens, its coatings included, has been chosen. *@
                         <div class="dg-field">
@@ -312,23 +292,8 @@
                                        ReferenceData="Snapshot"
                                        LensTypes="ReferenceDataClient.GetByCategory(ReferenceDataCategory.LensType)"
                                        AllowNoPreference="true" Errors="_errors"
-                                       SelectionChanged="OnLensSelectionChanged"/>
-
-                    @* A Lead can order its Custom lens before the customer pays (ADR-0008). An
-                       ordered lens is made with a full coating set, so ticking swaps the single
-                       optional preference for the coating selector a Sale uses. *@
-                    @if (LeadOrdersLens)
-                    {
-                        <CoatingMultiSelector Label="Coating"
-                                              AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
-                                              SelectedIds="_coatingRefIds" SelectedIdsChanged="v => _coatingRefIds = v"
-                                              Exclusions="ReferenceDataClient.CoatingExclusions"
-                                              Errors="_errors" Field="CoatingRefIds"/>
-                    }
-                    else
-                    {
-                        @RenderCoatingPreference()
-                    }
+                                       SelectionChanged="OnLensSelectionChanged"
+                                       Coatings="RenderLeadCoatings()"/>
 
                     @if (_lensRange.LensRangeType == LensRangeType.Custom)
                     {
@@ -357,7 +322,7 @@
                         Recording at @(TokenStore.CurrentLocationName ?? "—")
                     </p>
                     <div style="display:flex; gap:8px;">
-                        <a class="dg-btn dg-btn-ghost" style="flex:1; text-align:center;" href="/">Cancel</a>
+                        <button type="button" class="dg-btn dg-btn-ghost" style="flex:1;" @onclick="NavigateBack">Cancel</button>
                         <button type="submit" class="dg-btn dg-btn-primary" style="flex:1;"
                                 disabled="@_saving">@(IsTest ? "Save test" : "Save")</button>
                     </div>
@@ -398,7 +363,9 @@
     private bool IsSale => Type.Equals("sale", StringComparison.OrdinalIgnoreCase);
 
     private int? _age;
-    private Gender _gender = Gender.Female;
+    // Gender and Outcome start blank so a skipped question is caught rather than saved as the
+    // first option. A blank never reaches a request: Validate() refuses it first.
+    private Gender? _gender;
     private Guid? _occupationRefId;
     private string? _occupationOtherText;
     private bool _saving;
@@ -419,7 +386,7 @@
     private bool _summaryFollowsFieldErrors;
 
     // Test-only
-    private TestOutcome _testOutcome = TestOutcome.NoGlassesNeeded;
+    private TestOutcome? _testOutcome;
     private bool? _contactShared;
 
     // "Referred or treated" — shared across all three (Test/Lead/Sale), unconditional on outcome.
@@ -458,6 +425,11 @@
     /// a tick left over from an earlier Custom choice is ignored rather than becoming an error
     /// against a control the technician can no longer see — as BuildSaleAnswers does for a Sale.</summary>
     private bool LeadOrdersLens => !IsTest && !IsSale && _lensRange.LensRangeType == LensRangeType.Custom && _orderFromDotGlasses;
+
+    /// <summary>Whether this form asks for a Coating set, which has its only offered coating ticked
+    /// for it (CoatingSelection.AutoTicked): a Sale, unless its coatings are locked to an ordered
+    /// Lead's, and a Lead that orders its lens.</summary>
+    private bool AsksForCoatingSet => (IsSale && _orderedLead is null) || LeadOrdersLens;
 
     /// <summary>The Lead this Sale converts, when that Lead's lens is already ordered: the lens
     /// and its coatings are then shown read-only and sent as the Lead holds them, and no second
@@ -498,7 +470,13 @@
 
     /// <summary>Ticking or unticking the order swaps which coating control is on screen and
     /// whether the pupil distance is required, so messages about any of them no longer apply.</summary>
-    private void OnLeadOrderChanged() => ClearErrors(LeadOrderFields);
+    private void OnLeadOrderChanged()
+    {
+        ClearErrors(LeadOrderFields);
+
+        // Ordering turns the preference into a Coating set, which may now have a coating ticked for it.
+        ReconcileCoatings();
+    }
 
     // HardCaseSold and OrderFromDotGlasses each own a checkbox on this form, so a failure keyed to
     // either belongs against that checkbox rather than in the summary band. Both rules are
@@ -546,7 +524,7 @@
     {
         ClearErrors("Outcome");
 
-        // "No glasses needed" hides the lens section and the coating preference.
+        // Anything but "Needs glasses" hides the lens section and the coating preference.
         if (_testOutcome != TestOutcome.NeedsGlasses)
         {
             ClearErrors(LensFields);
@@ -937,6 +915,54 @@
                                                     }
                                                 </text>;
 
+    /// <summary>A Sale's Coating set: on a lens set, the coatings both chosen lenses come in (with
+    /// a note when there are none); on a Custom prescription, any coating.</summary>
+    private RenderFragment RenderSaleCoatings() => @<text>
+                                                       @RenderCoatingRemovedNote()
+                                                       @if (_lensRange.LensRangeType is LensRangeType.LensSet && PairCoatings is { } pairCoatings)
+                                                       {
+                                                           @if (pairCoatings.Offered.Count > 0)
+                                                           {
+                                                               @RenderCoatingSet(pairCoatings.Offered, pairCoatings.RequiredPairings)
+                                                           }
+                                                           else
+                                                           {
+                                                               <p class="dg-lens-note" role="status">No coating can be made on both of these
+                                                                   lenses, so they can't be sold together. Choose different lenses.</p>
+                                                           }
+                                                       }
+                                                       @if (_lensRange.LensRangeType == LensRangeType.Custom)
+                                                       {
+                                                           @RenderCoatingSet()
+                                                       }
+                                                   </text>;
+
+    /// <summary>The Coating set's selector: limited to <paramref name="offered"/> with its
+    /// pairings on a lens set, or every active coating on a Custom prescription.</summary>
+    private RenderFragment RenderCoatingSet(IReadOnlyList<Guid>? offered = null,
+        IReadOnlyList<CoatingPairingRule>? pairings = null) => @<CoatingMultiSelector Label="Coating"
+                                                                                       AllItems="ReferenceDataClient.GetByCategory(ReferenceDataCategory.Coating)"
+                                                                                       RestrictToIds="offered"
+                                                                                       RequiredPairings="pairings ?? []"
+                                                                                       SelectedIds="_coatingRefIds"
+                                                                                       SelectedIdsChanged="v => _coatingRefIds = v"
+                                                                                       Exclusions="ReferenceDataClient.CoatingExclusions"
+                                                                                       Errors="_errors" Field="CoatingRefIds"/>;
+
+    /// <summary>A Lead's coatings. A Lead can order its Custom lens before the customer pays
+    /// (ADR-0008); an ordered lens is made with a full coating set, so ordering swaps the single
+    /// optional preference for the coating selector a Sale uses.</summary>
+    private RenderFragment RenderLeadCoatings() => @<text>
+                                                       @if (LeadOrdersLens)
+                                                       {
+                                                           @RenderCoatingSet()
+                                                       }
+                                                       else
+                                                       {
+                                                           @RenderCoatingPreference()
+                                                       }
+                                                   </text>;
+
     /// <summary>The optional coating preference of a Test or Lead, as radio buttons with "No
     /// preference" first (never a dropdown — ADR-0007). On a lens set it is limited to the coatings
     /// both chosen lenses come in and appears once they are chosen; on a Custom prescription (or
@@ -1004,7 +1030,8 @@
     /// Brings the coating selection and the coating preference in line with what the lens choice
     /// offers: still-offered ticks stay, removed ones are unticked and named in a note, and the
     /// paired coating of every ticked trigger is ticked (a Lead's preference that is a trigger comes
-    /// across with its pair). Custom (and no range) offers every active coating. A lens set whose
+    /// across with its pair). A Coating set has the only offered coating ticked for it. Custom (and
+    /// no range) offers every active coating. A lens set whose
     /// pair isn't complete yet offers nothing to compare against, so the selection is left alone
     /// until both eyes have a lens — a mid-change state (the right eye emptied by a left lens of
     /// another type) shouldn't wipe the technician's ticks — and reconciled the moment it completes.
@@ -1030,7 +1057,7 @@
             pairings = [];
         }
 
-        var reconciled = CoatingSelection.Reconcile(_coatingRefIds, offered, pairings);
+        var reconciled = CoatingSelection.Reconcile(_coatingRefIds, offered, pairings, AsksForCoatingSet);
         _coatingRefIds = reconciled.Selected;
 
         if (_coatingPreferenceRefId is { } preference && !offered.Contains(preference))
@@ -1070,24 +1097,33 @@
     private bool HasUnsavedData =>
         _age is not null || !string.IsNullOrWhiteSpace(_name) || !string.IsNullOrWhiteSpace(_phone)
         || _occupationRefId is not null || _consentGiven
-        || (IsTest && _testOutcome != TestOutcome.NoGlassesNeeded) || _referredOrTreated
+        || _gender is not null || (IsTest && _testOutcome is not null) || _referredOrTreated
         || _reasonNotPurchasedRefId is not null || _customerToldPrice is not null || _coatingPreferenceRefId is not null
         || _frameColourRefId is not null || _coatingRefIds.Count > 0 || _hardCaseSold
         || _lensRange.LensLeftId is not null || _lensRange.LensRightId is not null
         || _lensRange.SphereLeft is not null || _lensRange.SphereRight is not null
         || _lensRange.PupilDistanceMm is not null || _lensRange.PresetPupilDistanceBucket is not null;
 
-    /// <summary>Explicit in-app back control (see CLAUDE.md ticket 02) — steps back to Home via
-    /// the app's own navigation rather than a bare history.back(), and warns before discarding a
+    private bool _confirmingDiscard;
+
+    /// <summary>The back arrow and the Cancel button (see CLAUDE.md ticket 02) — steps back to Home via
+    /// the app's own navigation rather than a bare history.back(), and asks before discarding a
     /// part-filled form instead of silently losing it. Purely additive: the phone's native back
     /// gesture/button is untouched by this.</summary>
-    private async Task NavigateBackAsync()
+    private void NavigateBack()
     {
-        if (HasUnsavedData && !await JS.InvokeAsync<bool>("confirm", "Discard this record? Anything entered so far will be lost."))
+        if (HasUnsavedData)
         {
+            _confirmingDiscard = true;
             return;
         }
 
+        Navigation.NavigateTo("/");
+    }
+
+    private void Discard()
+    {
+        _confirmingDiscard = false;
         Navigation.NavigateTo("/");
     }
 
@@ -1183,7 +1219,7 @@
             new Dictionary<string, object?>
             {
                 ["sourceTestId"] = testId,
-                ["prefillGender"] = _gender.ToString(),
+                ["prefillGender"] = _gender?.ToString(),
                 ["prefillAge"] = _age,
                 ["prefillReferred"] = _referredOrTreated ? true : null,
                 ["prefillReferralReason"] = _referredOrTreated ? _referralReasonRefId : null,
@@ -1220,6 +1256,20 @@
         if (IsSale && SaleAssembly.LensRangeNotChosen(BuildSaleAnswers()) is { } notChosen)
         {
             _errors.Add(notChosen.Key, notChosen.Message);
+        }
+
+        // The two questions with no default. A blank is this form's own state — the request DTOs
+        // can't hold one (the server refuses an out-of-range value instead), so Rules never sees
+        // it and the check lives here. Added ahead of the rules for the same reason as above: the
+        // request below carries a stand-in value, and this message must be the one shown.
+        if (_gender is null)
+        {
+            _errors.Add(nameof(CreateTestRequest.Gender), "Choose a gender.");
+        }
+
+        if (IsTest && _testOutcome is null)
+        {
+            _errors.Add(nameof(CreateTestRequest.Outcome), "Choose an outcome.");
         }
 
         var result = IsTest
@@ -1266,10 +1316,10 @@
         {
             Id = NewRecordId(),
             AgeYears = _age,
-            Gender = _gender,
+            Gender = _gender ?? default,
             OccupationRefId = _occupationRefId,
             OccupationOtherText = _occupationOtherText,
-            Outcome = _testOutcome,
+            Outcome = _testOutcome ?? default,
             ReferredOrTreated = _referredOrTreated,
             ReferralReasonRefId = _referredOrTreated ? _referralReasonRefId : null,
             ReferralOtherText = _referredOrTreated ? _referralOtherText : null,
@@ -1305,7 +1355,7 @@
         FullName = _name,
         PhoneNumber = _phone,
         AgeYears = _age,
-        Gender = _gender,
+        Gender = _gender ?? default,
         OccupationRefId = _occupationRefId,
         OccupationOtherText = _occupationOtherText,
         ConsentGiven = _consentGiven,
@@ -1368,7 +1418,7 @@
         FullName = _name,
         PhoneNumber = _phone,
         AgeYears = _age,
-        Gender = _gender,
+        Gender = _gender ?? default,
         OccupationRefId = _occupationRefId,
         OccupationOtherText = _occupationOtherText,
         ConsentGiven = _consentGiven,

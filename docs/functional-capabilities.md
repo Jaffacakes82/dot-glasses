@@ -253,8 +253,9 @@ Right-hand column, three cards:
   the date filter above** — a "trend over time" widget re-scoped to an arbitrary custom window
   would defeat its own purpose — though it does follow the Country and Retailer. Bar height is the
   percentage; the tooltip is the raw number. No axis, no dates, no labels.
-- **Gender split** — a two-segment bar computed from `Test.Gender` only. Only Female and Male exist
-  in the domain; there is no third value or "unspecified".
+- **Gender split (sales)** — a two-segment bar computed from `Sale.Gender`: who bought glasses,
+  not everyone tested. Only Female and Male exist in the domain; there is no third value or
+  "unspecified".
 
 Main card, **Top performing** — four top-5 lists (not clickable). Each row shows a name and four
 figures: **Tests, Leads, Sales and Conversion**. Conversion is the tiles' definition applied to
@@ -293,6 +294,10 @@ applied on this screen only.
 
 **Route** `/Organisations`, `?selectedId=` to select a node · **Access** any authenticated user
 can view; write actions require `Organisations.ManageInScope`.
+
+**Layout.** The tree and the detail panel sit side by side on a wide screen; below the Admin
+Portal's mobile breakpoint (991px) the detail panel stacks under the tree, and choosing an
+organisation jumps to it.
 
 **Left panel — the tree.** Rendered recursively with 24px indentation per level, a coloured dot
 per level (DGI black, Country blue, Retailer/distributor orange, Retail Point green), the node
@@ -420,8 +425,9 @@ rules are enforced server-side and reported as a validation summary on submit, n
 show/hide.
 
 The **lens section** has the Field App's choices in the Field App's order (§5.6): lens range; the
-lens (or a Custom prescription); children's frame; pupil distance; coatings; and last, "Order this
-lens from DOT Glasses (Custom range only)", which stays unconditional as the form's own rule.
+lens (or a Custom prescription) and its power line; coatings; children's frame; pupil distance; and
+last, "Order this lens from DOT Glasses (Custom range only)", which stays unconditional as the
+form's own rule.
 - *Lens set* — "Same lens for both eyes" (ticked to start) with one **Lens** dropdown, or unticked
   a left and a right dropdown with the right one limited to the left's lens type. Lenses are listed
   by their label in the fixed display order, and the chosen lens's power reads underneath
@@ -431,9 +437,10 @@ lens from DOT Glasses (Custom range only)", which stays unconditional as the for
   when the cylinder isn't 0.00, lens type radios only with an add above 0.00 (with a text box for
   "Other"), and pupil distance as a millimetre dropdown.
 - *Coatings* — only the coatings both chosen lenses come in. A paired coating is ticked and locked
-  ("Comes with `<trigger>` on this lens"); an exclusion is enforced by the rules on submit. Before a
-  pair is chosen (Custom, or a lens still to pick) every coating is listed and the rules decide on
-  submit.
+  ("Comes with `<trigger>` on this lens"); an exclusion is enforced by the rules on submit. When
+  the pair offers exactly one coating it is ticked, on opening and whenever the lenses change
+  (unless the Lead's lens is already ordered). Before a pair is chosen (Custom, or a lens still to
+  pick) every coating is listed and the rules decide on submit.
 - *A Lead's own lens* is carried over by matching its power and lens type against the set. One that
   is no longer in the set leaves that eye empty under "The `<power>` on this Lead is no longer in
   `<set>`. Choose a lens.", and that note stands until the eye has a lens.
@@ -486,8 +493,10 @@ email), a Role filter, a Status filter and Previous/Next paging sit above it.
 - **Name** is `FullName`, falling back to username where absent.
 - **Organisations** is a set of badges listing the org names from the user's `UserOrgAssignment` rows —
   every assignment counts, there is no primary among them. A viewer sees the name of an assignment
-  that's within their own scope; one outside it renders as a badge reading "Outside your scope"
-  rather than disclosing an org name the viewer can't otherwise see. A user is listed at all if
+  that's within their own scope; one outside it is left out rather than disclosing an org name the
+  viewer can't otherwise see (the Edit page says how many there are). The first two show; the rest
+  fold away behind **"+N more"**, a native disclosure that opens in place with no script. A user is
+  listed at all if
   *any one* of their assignments is in the viewer's scope, but every action below needs *all* of
   them to be.
 - **Last login** is stamped on both sign-in paths — the Admin Portal cookie login and the Field
@@ -848,6 +857,10 @@ an "Other" row.
 A Blazor WebAssembly PWA with no persistent navigation chrome — each screen is full-bleed with its
 own back arrow. Authenticated with a JWT (default lifetime 60 minutes).
 
+Leaving a part-filled Test, Lead or Sale — by the back arrow or the form's Cancel button — asks
+first in the app's own dialog: "Discard this record?" with **Keep editing** (the default, and what
+Escape does) and **Discard**. An untouched form leaves without asking.
+
 ### 5.1 Login — `/login`
 
 Two fields: **Email** and **PIN** (a password input). Posts to the API's login endpoint; on success
@@ -919,12 +932,15 @@ treated" closes it. Fields on a Test, in order:
 | Field | Control | Rules |
 |---|---|---|
 | Age | Number input | Optional; 0–120 |
-| Gender | Select: Female / Male, defaulting to Female | — |
+| Gender | Select: Female / Male, starting blank | Required: "Choose a gender." |
 | Occupation (optional) | Reference dropdown; "Other" reveals a free-text field | Free text required when Other is chosen (≤ 200 chars) |
-| Outcome | Select: No glasses needed / Needs glasses, defaulting to *No glasses needed* | — |
+| Outcome | Select: No glasses needed / Needs glasses, starting blank | Required: "Choose an outcome." The *Needs glasses* sections stay hidden while it is blank |
+
+Gender starts blank on a Lead and a Sale too, with the same message. A Lead continued from a Test,
+a Sale converted from a Lead and a Failed record opened for fixing start with their own answers.
 
 **Needs glasses** then shows the shared **lens range selector** (5.6) with "No preference yet"
-permitted, and **Coating preference (optional)**.
+permitted, and **Coating preference (optional)** inside it, straight after the lens.
 
 **Referred or treated** comes next, whatever the outcome — a tick box that reveals:
 - *Reason for referral/treatment* — reference dropdown with Other free-text. Required when the box
@@ -1091,10 +1107,8 @@ there any more; its other lens preferences don't carry over either, since they b
   longer fits, and re-ticking "Same lens" copies the left lens across. Choosing a lens records its
   power on each eye (and the pair's lens type) — the record never holds the lens itself, so the
   admin later editing or removing that lens changes nothing already recorded.
-- *Children's frame*, then *Pupil distance (0–4)*: a coarse frame-fit bucket, **not** millimetres.
-  Drops to 0–2 when the children's-frame box is ticked, and a previously chosen out-of-range value
-  is cleared.
-- *Coating* (a Sale) or *Coating preference* (a Test or Lead): nothing is listed until both eyes
+- *Coating* (a Sale, or a Lead that orders) or *Coating preference* (a Test or Lead), straight
+  after the lens and its power line: nothing is listed until both eyes
   have a lens; then **only the coatings both lenses come in** — a coating whose paired coating one
   lens lacks is left out, since it could never be sold. A coating a chosen lens pairs with a ticked
   one is ticked with it and locked ("Comes with `<trigger>` on this lens") while that one stays
@@ -1104,7 +1118,13 @@ there any more; its other lens preferences don't carry over either, since they b
   chosen lens with no coatings at all says "No coatings are configured for this lens yet — it can't
   be sold on a lens set until DGI adds one on Lens Sets." Changing either lens (or the same-lens
   box) keeps the coatings the new pair still offers and unticks the rest, saying "Removed `<names>`
-  — not available on the lens you've now chosen."
+  — not available on the lens you've now chosen." **When a coating set is asked for and the pair
+  offers exactly one coating, it is ticked** (`CoatingSelection`, shared with the Admin Portal) —
+  on loading a record and whenever the lenses change, never after the technician unticks it. A
+  coating preference is optional and is never ticked for anyone.
+- *Children's frame*, then *Pupil distance (0–4)*: a coarse frame-fit bucket, **not** millimetres.
+  Drops to 0–2 when the children's-frame box is ticked, and a previously chosen out-of-range value
+  is cleared.
 - **A lens from a converted Lead or a Failed record** is found again by its power and lens type.
   One no longer in the set is left unchosen with "The `<power>` on this `<Lead / record>` is no
   longer in `<set>`. Choose a lens." and saving without choosing is refused against the dropdown.
@@ -1127,7 +1147,9 @@ order (`LensPowerValues`, the definition the Lens powers page shows):
   an add above 0.00 is chosen and cleared when it is removed. A lens with no add is single vision
   and is never asked.
 
-Plus *Pupil distance (mm, 54–74)* — a select of whole millimetres.
+Then the coatings (any active coating, ticked for the technician when only one is active and a
+coating set is asked for), children's frame, and *Pupil distance (mm, 54–74)* — a select of whole
+millimetres.
 
 All of these constraints are enforced twice: as generated dropdown ranges client-side, and
 independently server-side (values outside range, or off the 0.25 increment, are rejected with a

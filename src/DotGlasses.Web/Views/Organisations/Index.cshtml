@@ -30,14 +30,16 @@
     <div class="alert alert-danger" style="border-radius:var(--radius-md); margin-bottom:var(--space-4);" asp-validation-summary="All"></div>
 }
 
-<div style="display:grid; grid-template-columns: 1.4fr 1fr; gap: var(--space-5);">
+@* Two columns on a wide screen; on a phone the detail panel stacks under the tree, and choosing an
+   organisation jumps to it (#org-detail). *@
+<div class="dg-split">
     <div class="dg-card">
         @foreach (var tree in Model.Trees)
         {
             @await Html.PartialAsync("_OrgTreeNode", tree)
         }
     </div>
-    <div class="dg-card">
+    <div class="dg-card" id="org-detail">
         <span class="dg-badge" style="background:@Model.Selected.LevelColor; color:var(--dot-white);">@Model.Selected.LevelLabel</span>
         @if (Model.Selected.IsTrainingOrg)
         {

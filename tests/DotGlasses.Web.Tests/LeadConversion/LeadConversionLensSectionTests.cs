@@ -382,6 +382,23 @@ public class LeadConversionLensSectionTests(AdminPortalFactory factory) : IClass
     // ---- The coatings both lenses come in ----
 
     [Fact]
+    public async Task TheCoatingsComeStraightAfterTheLens_BeforeChildrensFrameAndPupilDistance()
+    {
+        var html = await PageAsync(SeedLead());
+
+        var powerLine = html.IndexOf("data-power-line=\"right\"", StringComparison.Ordinal);
+        var coatings = html.IndexOf("data-coatings ", StringComparison.Ordinal);
+        var childrensFrame = html.IndexOf("data-childrens-frame", StringComparison.Ordinal);
+        var pupilDistance = html.IndexOf("data-pd-bucket", StringComparison.Ordinal);
+        var order = html.IndexOf("name=\"Form.OrderFromDotGlasses\"", StringComparison.Ordinal);
+
+        Assert.True(powerLine >= 0 && powerLine < coatings, "the coatings follow the lens and its power line");
+        Assert.True(coatings < childrensFrame, "children's frame follows the coatings");
+        Assert.True(childrensFrame < pupilDistance, "pupil distance follows children's frame");
+        Assert.True(pupilDistance < order, "ordering from DOT Glasses is last");
+    }
+
+    [Fact]
     public async Task ALeadWhoseLensCarriesOver_OffersOnlyTheCoatingsItsLensesComeIn_AndLocksThePairing()
     {
         var set = SeedLensSet();
@@ -433,6 +450,44 @@ public class LeadConversionLensSectionTests(AdminPortalFactory factory) : IClass
         var unknown = await client.GetStringAsync($"/Leads/Convert/{leadId}/coatings?left={Guid.NewGuid()}");
         using var none = JsonDocument.Parse(unknown);
         Assert.Equal(JsonValueKind.Null, none.RootElement.GetProperty("offered").ValueKind);
+    }
+
+    [Fact]
+    public async Task ThePairsOnlyCoating_IsServedAsTheOneToTick()
+    {
+        var set = SeedLensSet();
+        var leadId = SeedLead();
+        var client = factory.CreateAdminClient();
+
+        // Reader 2.5 with Reader 3.0 come in Clear only: the Coating set's only valid answer.
+        var mixed = await client.GetStringAsync($"/Leads/Convert/{leadId}/coatings?left={set.Plus250}&right={set.Plus300}");
+        using (var doc = JsonDocument.Parse(mixed))
+        {
+            Assert.Equal(Clear, doc.RootElement.GetProperty("autoTicked").GetGuid());
+        }
+
+        // Two offered: the choice is the admin's.
+        var both = await client.GetStringAsync($"/Leads/Convert/{leadId}/coatings?left={set.Plus250}&right={set.Plus250}");
+        using var two = JsonDocument.Parse(both);
+        Assert.Equal(JsonValueKind.Null, two.RootElement.GetProperty("autoTicked").ValueKind);
+    }
+
+    [Fact]
+    public async Task ALeadWhoseLensCarriesOverWithOneCoating_OpensWithThatCoatingTicked()
+    {
+        var set = SeedLensSet();
+        var leadId = SeedLead(l =>
+        {
+            l.LensRangeType = LensRangeType.LensSet;
+            l.PresetCatalogueId = set.Id;
+            l.SphereLeft = 3.00m;
+            l.SphereRight = 3.00m;
+            l.PresetPupilDistanceBucket = 2;
+        });
+
+        var html = await PageAsync(leadId);
+
+        Assert.Equal([Clear.ToString()], CheckedCoatings(html));
     }
 
     [Fact]
